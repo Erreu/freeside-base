@@ -15,6 +15,15 @@ print header("Customer View", menubar(
   'Main Menu' => popurl(2)
 ));
 
+print <<END;
+<STYLE TYPE="text/css">
+.package TH { font-size: medium }
+.package TR { font-size: smaller }
+.package .pkgnum { font-size: medium }
+.package .provision { font-weight: bold }
+</STYLE>
+END
+
 die "No customer specified (bad URL)!" unless $cgi->keywords;
 my($query) = $cgi->keywords; # needs parens with my, ->keywords returns array
 $query =~ /^(\d+)$/;
@@ -223,10 +232,12 @@ if ( $conf->config('payby-default') ne 'HIDE' ) {
         '<TR><TD ALIGN="right">Billing type</TD><TD BGCOLOR="#ffffff">',
   ;
 
-  if ( $cust_main->payby eq 'CARD' ) {
+  if ( $cust_main->payby eq 'CARD' || $cust_main->payby eq 'DCRD' ) {
     my $payinfo = $cust_main->payinfo;
     $payinfo = 'x'x(length($payinfo)-4). substr($payinfo,(length($payinfo)-4));
-    print 'Credit card</TD></TR>',
+    print 'Credit card ',
+          ( $cust_main->payby eq 'CARD' ? '(automatic)' : '(on-demand)' ),
+          '</TD></TR>',
           '<TR><TD ALIGN="right">Card number</TD><TD BGCOLOR="#ffffff">',
           $payinfo, '</TD></TR>',
           '<TR><TD ALIGN="right">Expiration</TD><TD BGCOLOR="#ffffff">',
@@ -234,9 +245,11 @@ if ( $conf->config('payby-default') ne 'HIDE' ) {
           '<TR><TD ALIGN="right">Name on card</TD><TD BGCOLOR="#ffffff">',
           $cust_main->payname, '</TD></TR>'
     ;
-  } elsif ( $cust_main->payby eq 'CHEK' ) {
+  } elsif ( $cust_main->payby eq 'CHEK' || $cust_main->payby eq 'DCHK') {
     my( $account, $aba ) = split('@', $cust_main->payinfo );
-    print 'Electronic check</TD></TR>',
+    print 'Electronic check',
+          ( $cust_main->payby eq 'CHEK' ? '(automatic)' : '(on-demand)' ),
+          '</TD></TR>',
           '<TR><TD ALIGN="right">Account number</TD><TD BGCOLOR="#ffffff">',
           $account, '</TD></TR>',
           '<TR><TD ALIGN="right">ABA/Routing code</TD><TD BGCOLOR="#ffffff">',
@@ -353,149 +366,177 @@ print qq!<BR><A NAME="cust_pkg">Packages</A> !,
       qq!( <A HREF="!, popurl(2), qq!edit/cust_pkg.cgi?$custnum">Order and cancel packages</A> (preserves services) )!,
 ;
 
-#display packages
+#begin display packages
 
 #get package info
-my @packages;
-if ( $conf->exists('hidecancelledpackages') ) {
-  @packages = sort { $a->pkgnum <=> $b->pkgnum } ($cust_main->ncancelled_pkgs);
-} else {
-  @packages = sort { $a->pkgnum <=> $b->pkgnum } ($cust_main->all_pkgs);
-}
 
-if ( @packages ) {
-  #formatting
+my $packages = get_packages($cust_main, $conf);
 
-  my $colspan = $packages[0]->dbdef_table->column('last_bill') ? 6 : 5;
-  
-  print &table(), "\n",
-        qq!<TR><TH COLSPAN=2 ROWSPAN=2>Package</TH><TH COLSPAN=$colspan>!,
-        qq!Dates</TH><TH COLSPAN=2 ROWSPAN=2>Services</TH></TR>\n<TR>!,
-        qq!<TH><FONT SIZE=-1>Setup</FONT></TH>!;
-
-  print qq!<TH><FONT SIZE=-1>Last bill</FONT></TH>!
-    if $packages[0]->dbdef_table->column('last_bill');
-
-  print qq!<TH><FONT SIZE=-1>Next bill</FONT></TH>!,
-        qq!<TH><FONT SIZE=-1>Susp.</FONT></TH>!,
-        qq!<TH><FONT SIZE=-1>Expire</FONT></TH>!,
-        qq!<TH><FONT SIZE=-1>Cancel</FONT></TH>!,
-        qq!</TR>\n!;
-}
-
-my $n1 = '<TR>';
-foreach my $package (@packages) {
-  my $pkgnum = $package->pkgnum;
-  my $pkg = $package->part_pkg->pkg;
-  my $comment = $package->part_pkg->comment;
-  my $pkgview = popurl(2). "view/cust_pkg.cgi?$pkgnum";
-
-  #my @cust_svc = qsearch( 'cust_svc', { 'pkgnum' => $pkgnum } );
-  #my $rowspan = scalar(@cust_svc) || 1;
-  my @cust_svc = ();
+if ( @$packages ) {
+%>
+<TABLE CLASS="package" BORDER=1 CELLSPACING=0 CELLPADDING=2 BORDERCOLOR="#999999">
+<TR>
+  <TH COLSPAN=2>Package</TH>
+  <TH>Status</TH>
+  <TH COLSPAN=2>Services</TH>
+</TR>
+<%
+foreach my $pkg (sort pkgsort_pkgnum_cancel @$packages) {
   my $rowspan = 0;
-  my %pkg_svc = ();
-  unless ( $package->getfield('cancel') ) {
-    foreach my $pkg_svc (
-      grep { $_->quantity }
-        qsearch('pkg_svc',{'pkgpart'=> $package->pkgpart })
-    ) {
-      $rowspan += ( $pkg_svc{$pkg_svc->svcpart} = $pkg_svc->quantity );
-    }
+
+  if ($pkg->{cancel}) {
+    $rowspan = 0;
   } else {
-    #@cust_svc = qsearch( 'cust_svc', { 'pkgnum' => $pkgnum } );
-    @cust_svc = ();
-    $rowspan = scalar(@cust_svc) || 1;
+    foreach my $svcpart (@{$pkg->{svcparts}}) {
+      $rowspan += $svcpart->{count};
+      $rowspan++ if ($svcpart->{count} < $svcpart->{quantity});
+    }
+  } 
+
+%>
+<!--pkgnum: <%=$pkg->{pkgnum}%>-->
+<TR>
+  <TD ROWSPAN=<%=$rowspan%> CLASS="pkgnum"><%=$pkg->{pkgnum}%></TD>
+  <TD ROWSPAN=<%=$rowspan%>>
+    <%=$pkg->{pkg}%> - <%=$pkg->{comment}%> (&nbsp;<%=pkg_details_link($pkg)%>&nbsp;)<BR>
+<% unless ($pkg->{cancel}) { %>
+    (&nbsp;<%=pkg_change_link($pkg)%>&nbsp;)
+    (&nbsp;<%=pkg_dates_link($pkg)%>&nbsp;|&nbsp;<%=pkg_customize_link($pkg,$custnum)%>&nbsp;)
+<% } %>
+  </TD>
+<%
+  #foreach (qw(setup last_bill next_bill susp expire cancel)) {
+  #  print qq!  <TD ROWSPAN=$rowspan>! . pkg_datestr($pkg,$_,$conf) . qq!</TD>\n!;
+  #}
+  print "<TD ROWSPAN=$rowspan>". &itable('');
+
+  sub freq {
+
+    my %freq = ( #move this
+      1 => 'monthly',
+      2 => 'bi-monthly',
+      3 => 'quarterly',
+      6 => 'semi-annually',
+      12 => 'annually',
+      24 => 'bi-annually',
+      36 => 'tri-annually',
+    );
+
+    my $freq = shift;
+    exists $freq{$freq} ? $freq{$freq} : "every&nbsp;$freq&nbsp;months";
   }
-  $rowspan ||= 1;
 
-  my $button_cgi = new CGI;
-  $button_cgi->param('clone', $package->part_pkg->pkgpart);
-  $button_cgi->param('pkgnum', $package->pkgnum);
-  my $button_url = popurl(2). "edit/part_pkg.cgi?". $button_cgi->query_string;
+  #eomove
 
-  #print $n1, qq!<TD ROWSPAN=$rowspan><A HREF="$pkgview">$pkgnum</A></TD>!,
-  print $n1, qq!<TD ROWSPAN=$rowspan>$pkgnum</TD>!,
-        qq!<TD ROWSPAN=$rowspan><FONT SIZE=-1>!,
-        #qq!<A HREF="$pkgview">$pkg - $comment</A>!,
-        qq!$pkg - $comment (&nbsp;<a href="$pkgview">Details</a>&nbsp;)!;
-       # | !;
+  if ( $pkg->{cancel} ) { #status: cancelled
 
-  #false laziness with view/cust_pkg.cgi, but i'm trying to make that go away so
-  unless ( $package->getfield('cancel') ) {
-
-    print qq! (&nbsp;<A HREF="${p}misc/change_pkg.cgi?$pkgnum">!.
-          'Change&nbsp;package</A>&nbsp;)';
-
-    print ' (&nbsp;';
-    if ( $package->getfield('susp') ) {
-      print qq!<A HREF="${p}misc/unsusp_pkg.cgi?$pkgnum">Unsuspend</A>!;
+    print '<TR><TD><FONT COLOR="#ff0000"><B>Cancelled&nbsp;</B></FONT></TD>'.
+          '<TD>'. pkg_datestr($pkg,'cancel',$conf). '</TD></TR>';
+    unless ( $pkg->{setup} ) {
+      print '<TR><TD COLSPAN=2>Never billed</TD></TR>';
     } else {
-      print qq!<A HREF="${p}misc/susp_pkg.cgi?$pkgnum">Suspend</A>!;
+      print "<TR><TD>Setup&nbsp;</TD><TD>".
+            pkg_datestr($pkg, 'setup',$conf). '</TD></TR>';
+      print "<TR><TD>Last&nbsp;bill&nbsp;</TD><TD>".
+            pkg_datestr($pkg, 'last_bill',$conf). '</TD></TR>'
+        if $pkg->{'last_bill'};
+      print "<TR><TD>Suspended&nbsp;</TD><TD>".
+            pkg_datestr($pkg, 'susp',$conf). '</TD></TR>'
+        if $pkg->{'susp'};
     }
-    print '&nbsp;|&nbsp;<A HREF="javascript:cust_pkg_areyousure(\''. popurl(2).
-          'misc/cancel_pkg.cgi?'. $pkgnum.  '\')">Cancel</A>';
-  
-    print '&nbsp;) ';
 
-    print ' (&nbsp;<A HREF="'. popurl(2). 'edit/REAL_cust_pkg.cgi?'. $pkgnum.
-          '">Edit&nbsp;dates</A>&nbsp;|&nbsp;';
-        
-    print qq!<A HREF="$button_url">Customize</A>&nbsp;)!;
+  } else {
 
-  }
-  print '</FONT></TD>';
-
-  my @fields = qw( setup );
-  push @fields, qw( last_bill ) if $package->dbdef_table->column('last_bill');
-  push @fields, qw( bill susp expire cancel);
-
-  for ( @fields ) {
-    print "<TD ROWSPAN=$rowspan><FONT SIZE=-1>", ( $package->getfield($_)
-            ? time2str("%D</FONT><BR><FONT SIZE=-3>%l:%M:%S%P&nbsp;%z</FONT>",
-              $package->getfield($_) )
-            :  '&nbsp'
-          ), '</FONT></TD>',
-    ;
-  }
-
-  my $n2 = '';
-  #false laziness with view/cust_pkg.cgi, but i'm trying to make that go away so
-  #foreach my $cust_svc ( @cust_svc ) {
-  foreach my $svcpart ( sort { $a<=>$b } keys %pkg_svc ) {
-    my $svc = qsearchs('part_svc',{'svcpart'=>$svcpart})->getfield('svc');
-    $svc =~ s/ /&nbsp;/g;
-    my(@cust_svc)=qsearch('cust_svc',{'pkgnum'=>$pkgnum, 
-                                      'svcpart'=>$svcpart,
-                                    });
-    for my $enum ( 1 .. $pkg_svc{$svcpart} ) {
-      my $cust_svc;
-      if ( $cust_svc = shift @cust_svc ) {
-        my($label, $value, $svcdb) = $cust_svc->label;
-        my($svcnum) = $cust_svc->svcnum;
-        my($sview) = popurl(2). "view";
-        print $n2,qq!<TD><A HREF="$sview/$svcdb.cgi?$svcnum"><FONT SIZE=-1>$label</FONT></A></TD>!,
-              qq!<TD><FONT SIZE=-1><A HREF="$sview/$svcdb.cgi?$svcnum">$value</A><BR>(&nbsp;<A HREF="javascript:svc_areyousure('${p}misc/unprovision.cgi?$svcnum')">Unprovision</A>&nbsp;)</FONT></TD>!;
+    if ( $pkg->{susp} ) { #status: suspended
+      print '<TR><TD><FONT COLOR="#FF9900"><B>Suspended</B>&nbsp;</FONT></TD>'.
+            '<TD>'. pkg_datestr($pkg,'susp',$conf). '</TD></TR>';
+      unless ( $pkg->{setup} ) {
+        print '<TR><TD COLSPAN=2>Never billed</TD></TR>';
       } else {
-        print $n2, qq!<TD COLSPAN=2><A HREF="$uiadd{$svcpart}?pkgnum$pkgnum-svcpart$svcpart"><b><font size="+1" color="#ff0000">!.
-              qq!Provision&nbsp;$svc</A></b></font>!;
-
-        print qq!<BR><A HREF="../misc/link.cgi?pkgnum$pkgnum-svcpart$svcpart">!.
-              qq!<b><font size="+1" color="#ff0000">Link&nbsp;to&nbsp;legacy&nbsp;$svc</A></b></font>!
-          if $conf->exists('legacy_link');
-
-        print '</TD>';
+        print "<TR><TD>Setup&nbsp;</TD><TD>". 
+              pkg_datestr($pkg, 'setup',$conf). '</TD></TR>';
       }
-      $n2="</TR><TR>";
+      print "<TR><TD>Last&nbsp;bill&nbsp;</TD><TD>".
+            pkg_datestr($pkg, 'last_bill',$conf). '</TD></TR>'
+        if $pkg->{'last_bill'};
+      # next bill ??
+      print "<TR><TD>Expires&nbsp;</TD><TD>".
+            pkg_datestr($pkg, 'expire',$conf). '</TD></TR>'
+        if $pkg->{'expire'};
+      print '<TR><TD COLSPAN=2>(&nbsp;'. pkg_unsuspend_link($pkg).
+            '&nbsp;|&nbsp;'. pkg_cancel_link($pkg). '&nbsp;)</TD></TR>';
+
+    } else { #status: active
+
+      unless ( $pkg->{setup} ) { #not setup
+
+        print '<TR><TD COLSPAN=2>Not&nbsp;yet&nbsp;billed&nbsp;(';
+        unless ( $pkg->{freq} ) {
+          print 'one-time&nbsp;charge)</TD></TR>';
+          print '<TR><TD COLSPAN=2>(&nbsp;'. pkg_cancel_link($pkg).
+                '&nbsp;)</TD</TR>';
+        } else {
+          print 'billed&nbsp;'. freq($pkg->{freq}). ')</TD></TR>';
+        }
+
+      } else { #setup
+
+        unless ( $pkg->{freq} ) {
+          print "<TR><TD COLSPAN=2>One-time&nbsp;charge</TD></TR>".
+                '<TR><TD>Billed&nbsp;</TD><TD>'.
+                pkg_datestr($pkg,'setup',$conf). '</TD></TR>';
+        } else {
+          print '<TR><TD COLSPAN=2><FONT COLOR="#00CC00"><B>Active</B></FONT>'.
+                ',&nbsp;billed&nbsp;'. freq($pkg->{freq}). '</TD></TR>'.
+                '<TR><TD>Setup&nbsp;</TD><TD>'.
+                pkg_datestr($pkg, 'setup',$conf). '</TD></TR>';
+        }
+
+      }
+
+      print "<TR><TD>Last&nbsp;bill&nbsp;</TD><TD>".
+            pkg_datestr($pkg, 'last_bill',$conf). '</TD></TR>'
+        if $pkg->{'last_bill'};
+      print "<TR><TD>Next&nbsp;bill&nbsp;</TD><TD>".
+            pkg_datestr($pkg, 'next_bill',$conf). '</TD></TR>'
+        if $pkg->{'next_bill'};
+      print "<TR><TD>Expires&nbsp;</TD><TD>".
+            pkg_datestr($pkg, 'expire',$conf). '</TD></TR>'
+        if $pkg->{'expire'};
+      if ( $pkg->{freq} ) {
+        print '<TR><TD COLSPAN=2>(&nbsp;'. pkg_suspend_link($pkg).
+              '&nbsp;|&nbsp;'. pkg_cancel_link($pkg). '&nbsp;)</TD></TR>';
+      }
+
     }
+
   }
 
-  $n1="</TR><TR>";
-}  
-print "</TR>";
+  print "</TABLE></TD>\n";
 
-#formatting
-print "</TABLE>";
+  if ($rowspan == 0) { print qq!</TR>\n!; next; }
+
+  my $cnt = 0;
+  foreach my $svcpart (sort {$a->{svcpart} <=> $b->{svcpart}} @{$pkg->{svcparts}}) {
+    foreach my $service (@{$svcpart->{services}}) {
+      print '<TR>' if ($cnt > 0);
+%>
+  <TD><%=svc_link($svcpart,$service)%></TD>
+  <TD><%=svc_label_link($svcpart,$service)%><BR>(&nbsp;<%=svc_unprovision_link($service)%>&nbsp;)</TD>
+</TR>
+<%
+      $cnt++;
+    }
+    if ($svcpart->{count} < $svcpart->{quantity}) {
+      print qq!<TR>\n! if ($cnt > 0);
+      print qq!  <TD COLSPAN=2>!.svc_provision_link($pkg,$svcpart).qq!</TD>\n</TR>\n!;
+    }
+  }
+}
+print '</TABLE>'
+}
+
+#end display packages
 
 
 print <<END;
@@ -721,3 +762,188 @@ print '</BODY></HTML>';
 sub keyfield_numerically { (split(/\t/,$a))[0] <=> (split(/\t/,$b))[0]; }
 
 %>
+
+<%
+
+
+sub get_packages {
+  my $cust_main = shift or return undef;
+  my $conf = shift;
+  
+  my @packages = ();
+  
+  foreach my $cust_pkg (
+    $conf->exists('hidecancelledpackages')
+      ? $cust_main->ncancelled_pkgs
+      : $cust_main->all_pkgs
+  ) { 
+  
+    my $part_pkg = $cust_pkg->part_pkg;
+  
+    my %pkg = ();
+    $pkg{pkgnum} = $cust_pkg->pkgnum;
+    $pkg{pkg} = $part_pkg->pkg;
+    $pkg{pkgpart} = $part_pkg->pkgpart;
+    $pkg{comment} = $part_pkg->getfield('comment');
+    $pkg{freq} = $part_pkg->freq;
+    $pkg{setup} = $cust_pkg->getfield('setup');
+    $pkg{last_bill} = $cust_pkg->getfield('last_bill');
+    $pkg{next_bill} = $cust_pkg->getfield('bill');
+    $pkg{susp} = $cust_pkg->getfield('susp');
+    $pkg{expire} = $cust_pkg->getfield('expire');
+    $pkg{cancel} = $cust_pkg->getfield('cancel');
+  
+    my %svcparts = ();
+
+    foreach my $pkg_svc (
+      qsearch('pkg_svc', { 'pkgpart' => $part_pkg->pkgpart })
+    ) {
+  
+      next if ($pkg_svc->quantity == 0);
+  
+      my $part_svc = qsearchs('part_svc', { 'svcpart' => $pkg_svc->svcpart });
+  
+      my $svcpart = {};
+      $svcpart->{svcpart} = $part_svc->svcpart;
+      $svcpart->{svc} = $part_svc->svc;
+      $svcpart->{svcdb} = $part_svc->svcdb;
+      $svcpart->{quantity} = $pkg_svc->quantity;
+      $svcpart->{count} = 0;
+  
+      $svcpart->{services} = [];
+
+      $svcparts{$svcpart->{svcpart}} = $svcpart;
+
+    }
+
+    foreach my $cust_svc (
+      qsearch( 'cust_svc', {
+                             'pkgnum' => $cust_pkg->pkgnum,
+                             #'svcpart' => $part_svc->svcpart,
+                           }
+      )
+    ) {
+
+      warn "svcnum ". $cust_svc->svcnum. " / svcpart ". $cust_svc->svcpart. "\n";
+      my $svc = {
+        'svcnum' => $cust_svc->svcnum,
+        'label'  => ($cust_svc->label)[1],
+      };
+
+      #false laziness with above, to catch extraneous services.  whole
+      #damn thing should be OO...
+      my $svcpart = ( $svcparts{$cust_svc->svcpart} ||= {
+        'svcpart'  => $cust_svc->svcpart,
+        'svc'      => $cust_svc->part_svc->svc,
+        'svcdb'    => $cust_svc->part_svc->svcdb,
+        'quantity' => 0,
+        'count'    => 0,
+        'services' => [],
+      } );
+
+      push @{$svcpart->{services}}, $svc;
+
+      $svcpart->{count}++;
+
+    }
+
+    $pkg{svcparts} = [ values %svcparts ];
+
+    push @packages, \%pkg;
+  
+  }
+  
+  return \@packages;
+
+}
+
+sub svc_link {
+
+  my ($svcpart, $svc) = (shift,shift) or return '';
+  return qq!<A HREF="${p}view/$svcpart->{svcdb}.cgi?$svc->{svcnum}">$svcpart->{svc}</A>!;
+
+}
+
+sub svc_label_link {
+
+  my ($svcpart, $svc) = (shift,shift) or return '';
+  return qq!<A HREF="${p}view/$svcpart->{svcdb}.cgi?$svc->{svcnum}">$svc->{label}</A>!;
+
+}
+
+sub svc_provision_link {
+  my ($pkg, $svcpart) = (shift,shift) or return '';
+  ( my $svc_nbsp = $svcpart->{svc} ) =~ s/\s+/&nbsp;/g;
+  return qq!<A CLASS="provision" HREF="${p}edit/$svcpart->{svcdb}.cgi?! .
+         qq!pkgnum$pkg->{pkgnum}-svcpart$svcpart->{svcpart}">! .
+         "Provision&nbsp;$svc_nbsp&nbsp;(".
+         ($svcpart->{quantity} - $svcpart->{count}).
+         ')</A>';
+}
+
+sub svc_unprovision_link {
+  my $svc = shift or return '';
+  return qq!<A HREF="javascript:svc_areyousure('${p}misc/unprovision.cgi?$svc->{svcnum}')">Unprovision</A>!;
+}
+
+# This should be generalized to use config options to determine order.
+sub pkgsort_pkgnum_cancel {
+  if ($a->{cancel} and $b->{cancel}) {
+    return ($a->{pkgnum} <=> $b->{pkgnum});
+  } elsif ($a->{cancel} or $b->{cancel}) {
+    return (-1) if ($b->{cancel});
+    return (1) if ($a->{cancel});
+    return (0);
+  } else {
+    return($a->{pkgnum} <=> $b->{pkgnum});
+  }
+}
+
+sub pkg_datestr {
+  my($pkg, $field, $conf) = @_ or return '';
+  return '&nbsp;' unless $pkg->{$field};
+  my $format = $conf->exists('pkg_showtimes')
+               ? '<B>%D</B>&nbsp;<FONT SIZE=-3>%l:%M:%S%P&nbsp;%z</FONT>'
+               : '<B>%b&nbsp;%o,&nbsp;%Y</B>';
+  ( my $strip = time2str($format, $pkg->{$field}) ) =~ s/ (\d)/$1/g;
+  $strip;
+}
+
+sub pkg_details_link {
+  my $pkg = shift or return '';
+  return qq!<a href="${p}view/cust_pkg.cgi?$pkg->{pkgnum}">Details</a>!;
+}
+
+sub pkg_change_link {
+  my $pkg = shift or return '';
+  return qq!<a href="${p}misc/change_pkg.cgi?$pkg->{pkgnum}">Change&nbsp;package</a>!;
+}
+
+sub pkg_suspend_link {
+  my $pkg = shift or return '';
+  return qq!<a href="${p}misc/susp_pkg.cgi?$pkg->{pkgnum}">Suspend</a>!;
+}
+
+sub pkg_unsuspend_link {
+  my $pkg = shift or return '';
+  return qq!<a href="${p}misc/unsusp_pkg.cgi?$pkg->{pkgnum}">Unsuspend</a>!;
+}
+
+sub pkg_cancel_link {
+  my $pkg = shift or return '';
+  return qq!<A HREF="javascript:cust_pkg_areyousure('${p}misc/cancel_pkg.cgi?$pkg->{pkgnum}')">Cancel</A>!;
+}
+
+sub pkg_dates_link {
+  my $pkg = shift or return '';
+  return qq!<A HREF="${p}edit/REAL_cust_pkg.cgi?$pkg->{pkgnum}">Edit&nbsp;dates</A>!;
+}
+
+sub pkg_customize_link {
+  my $pkg = shift or return '';
+  my $custnum = shift;
+  return qq!<A HREF="${p}edit/part_pkg.cgi?keywords=$custnum;clone=$pkg->{pkgpart};pkgnum=$pkg->{pkgnum}">Customize</A>!;
+}
+
+%>
+
