@@ -33,6 +33,8 @@ An FS::ac record describes a broadband Access Concentrator, such as a DSLAM
 or a wireless access point.  FS::ac inherits from FS::Record.  The following 
 fields are currently supported:
 
+narf
+
 =over 4
 
 =item acnum - primary key
