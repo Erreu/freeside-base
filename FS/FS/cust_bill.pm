@@ -14,6 +14,7 @@ use Mail::Internet 1.44;
 use Mail::Header;
 use Text::Template;
 use File::Temp 0.14;
+use String::ShellQuote;
 use FS::UID qw( datasrc );
 use FS::Record qw( qsearch qsearchs );
 use FS::cust_main;
@@ -1592,9 +1593,10 @@ sub print_pdf {
     or die "pslatex $file.tex failed: $!";
 
   #system('dvipdf', "$file.dvi", "$file.pdf" );
+  my $sfile = shell_quote $file;
   system(
-    "dvips -q -t letter -f $file.dvi ".
-    "| gs -q -dNOPAUSE -dBATCH -sDEVICE=pdfwrite -sOutputFile=$file.pdf ".
+    "dvips -q -t letter -f $sfile.dvi ".
+    "| gs -q -dNOPAUSE -dBATCH -sDEVICE=pdfwrite -sOutputFile=$sfile.pdf ".
     "     -c save pop -"
   ) == 0
     or die "dvips | gs failed: $!";
