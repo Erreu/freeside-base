@@ -739,8 +739,17 @@ sub order {
     }
     push @cust_svc, [
       map {
-        ( $svcnum{$_} && @{ $svcnum{$_} } ) ? shift @{ $svcnum{$_} } : ();
-      } map { $_->svcpart }
+        my $svcnum = $svcnum{$_->{svcpart}};
+        if ( $svcnum && @$svcnum ) {
+          my $num = ( $_->{quantity} < scalar(@$svcnum) )
+                      ? $_->{quantity}
+                      : scalar(@$svcnum);
+          splice @$svcnum, 0, $num;
+        } else {
+          ();
+        }
+      } map { { 'svcpart'  => $_->svcpart,
+                'quantity' => $_->quantity } }
           qsearch('pkg_svc', { pkgpart  => $pkgpart,
                                quantity => { op=>'>', value=>'0', } } )
     ];
