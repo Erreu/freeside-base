@@ -108,6 +108,12 @@ tie my %events, 'Tie::IxHash',
     'weight' => 30,
   },
 
+  'realtime-check' => {
+    'name' => 'Run check with a <a href="http://search.cpan.org/search?mode=module&query=Business%3A%3AOnlinePayment">Business::OnlinePayment</a> realtime gateway',
+    'code' => '$cust_bill->realtime_ach();',
+    'weight' => 30,
+  },
+
   'realtime-card-cybercash' => {
     'name' => '(<b>deprecated</b>) Run card with <a href="http://www.cybercash.com/cashregister">CyberCash CashRegister</a> realtime gateway',
     'code' => '$cust_bill->realtime_card_cybercash();',
