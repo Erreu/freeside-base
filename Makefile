@@ -63,6 +63,8 @@ SELFSERVICE_USER = fs_selfservice
 #user with sudo access on SELFSERVICE_MACHINES for automated self-service
 #installation.
 SELFSERVICE_INSTALL_USER = ivan
+SELFSERVICE_INSTALL_USERADD = useradd
+#SELFSERVICE_INSTALL_USERADD = "pw useradd"
 
 #---
 
@@ -156,10 +158,13 @@ install-init:
 	" ${INIT_FILE}
 
 install-selfservice:
+	[ -e ~freeside/.ssh/id_dsa.pub ] || su -c 'ssh-keygen -t dsa' - freeside
 	for MACHINE in ${SELFSERVICE_MACHINES}; do \
-	  scp -r fs_selfservice/FS-SelfService ${SELFSERVICE_INSTALL_USER}@\$MACHINE:.
-	  ssh ${SELFSERVICE_INSTALL_USER}@\$MACHINE "cd FS-SelfService; perl Makefile.PL && make"
-	  ssh ${SELFSERVICE_INSTALL_USER}@\$MACHINE "cd FS-SelfService; sudo make install"
+	  scp -r fs_selfservice/FS-SelfService ${SELFSERVICE_INSTALL_USER}@$$MACHINE:.
+	  ssh ${SELFSERVICE_INSTALL_USER}@$$MACHINE "cd FS-SelfService; perl Makefile.PL && make"
+	  ssh ${SELFSERVICE_INSTALL_USER}@$$MACHINE "cd FS-SelfService; sudo make install"
+	  scp ~freeside/.ssh/id_dsa.pub ${SELFSERVICE_INSTALL_USER}@$$MACHINE:.
+	  ssh ${SELFSERVICE_INSTALL_USER}@$$MACHINE "sudo $SELFSERVICE_INSTALL_USERADD freeside; sudo install -D -o freeside -m 600 ./id_dsa.pub ~freeside/.ssh/authorized_keys"
 
 install: install-perl-modules install-docs install-init
 
