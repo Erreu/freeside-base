@@ -1184,15 +1184,13 @@ sub print_text {
 	#  );
 
   #and subroutine for the template
-
   sub FS::cust_bill::_template::invoice_lines {
-    my $lines = shift or return @buf;
+    my $lines = shift || scalar(@buf);
     map { 
       scalar(@buf) ? shift @buf : [ '', '' ];
     }
     ( 1 .. $lines );
   }
-
 
   #and fill it in
   $FS::cust_bill::_template::page = 1;
@@ -1213,7 +1211,7 @@ sub print_text {
 
 =head1 VERSION
 
-$Id: cust_bill.pm,v 1.41.2.12 2002-11-22 12:19:05 ivan Exp $
+$Id: cust_bill.pm,v 1.41.2.13 2002-12-04 12:31:50 ivan Exp $
 
 =head1 BUGS
 
