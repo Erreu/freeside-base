@@ -743,6 +743,12 @@ sub realtime_bop {
     $content{card_number} = $cust_main->payinfo;
     $cust_main->paydate =~ /^\d{2}(\d{2})[\/\-](\d+)[\/\-]\d+$/;
     $content{expiration} = "$2/$1";
+    if ( qsearch('cust_pay', { 'custnum' => $cust_main->custnum,
+                               'payby'   => 'CARD',
+                               'payinfo' => $cust_main->payinfo, } )
+    ) { 
+      $content{recurring_billing} = 'YES';
+    }
   } elsif ( $method eq 'ECHECK' ) {
     my($account_number,$routing_code) = $cust_main->payinfo;
     ( $content{account_number}, $content{routing_code} ) =
