@@ -1,9 +1,11 @@
 #!/usr/bin/perl -Tw
 #
-# $Id: signup.cgi,v 1.29.2.7 2003-07-04 00:51:30 ivan Exp $
+# $Id: signup.cgi,v 1.29.2.8 2003-07-04 01:37:44 ivan Exp $
 
 use strict;
-use vars qw( @payby $cgi $locales $packages $pops $init_data $error
+use vars qw( @payby $cgi $locales $packages
+             $pops %pop %popnum2pop
+             $init_data $error
              $last $first $ss $company $address1 $address2 $city $state $county
              $country $zip $daytime $night $fax $invoicing_list $payby $payinfo
              $paydate $payname $referral_custnum
@@ -137,6 +139,13 @@ if ( -e $decline_html ) {
 ( $locales, $packages, $pops, $init_data ) = signup_info();
 @payby = @{$init_data->{'payby'}} if @{$init_data->{'payby'}};
 $packages = $init_data->{agentnum2part_pkg}{$agentnum} if $agentnum;
+%pop = ();
+%popnum2pop = ();
+foreach (@$pops) {
+  #push @{ $pop{ $_->{state} }->{ $_->{ac} } }, $_;
+  push @{ $pop{ $_->{state} } }, $_;
+  $popnum2pop{$_->{popnum}} = $_;
+}
 
 $cgi = new CGI;
 
@@ -327,7 +336,7 @@ sub print_okay {
     or die "fatal: invalid email_name got past FS::SignupClient::new_customer";
   $email_name = $1; #global for template
 
-  my $pop = pop_info($cgi->param('popnum'));
+  my $pop = $popnum2pop{$cgi->param('popnum')};
     #or die "fatal: invalid popnum got past FS::SignupClient::new_customer";
   if ( $pop ) {
     ( $ac, $exch, $loc ) = ( $pop->{'ac'}, $pop->{'exch'}, $pop->{'loc'} );
@@ -365,15 +374,6 @@ sub print_okay {
   }
 }
 
-sub pop_info {
-  my $popnum = shift;
-  my $pop;
-  foreach $pop ( @{$pops} ) {
-    if ( $pop->{'popnum'} == $popnum ) { return $pop; }
-  }
-  '';
-}
-
 #horrible false laziness with FS/FS/svc_acct_pop.pm::popselector
 sub popselector {
   my( $popnum, $state ) = @_;
@@ -384,8 +384,8 @@ sub popselector {
          '<INPUT TYPE="hidden" NAME="popnum" VALUE="'. $pops->[0]{popnum}. '">'
     if scalar(@$pops) == 1;
 
-  my %pop = ();
-  push @{ $pop{$_->{state}} }, $_ foreach @$pops;
+  #my %pop = ();
+  #push @{ $pop{$_->{state}} }, $_ foreach @$pops;
 
   my $text = <<END;
     <SCRIPT>
@@ -423,7 +423,14 @@ END
   $text .= '</SELECT>'; #callback? return 3 html pieces?  #'</TD><TD>';
 
   $text .= qq!<SELECT NAME="popnum" SIZE=1><OPTION> !;
-  foreach my $pop ( @$pops ) {
+
+  #comment this block to disable initial list population
+  if ( scalar( @$pops ) > 100 ) {
+    @initial_select = ( $popnum2pop{$popnum} );
+  } else {
+    @initial_select = $@pops;
+  }
+  foreach my $pop ( sort { $a->{state} cmp $b->{state} } @initial_select ) {
     $text .= qq!<OPTION VALUE="!. $pop->{popnum}. '"'.
              ( ( $popnum && $pop->{popnum} == $popnum ) ? ' SELECTED' : '' ). ">".
              $pop->{city}. ', '. $pop->{state}.
