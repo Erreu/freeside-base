@@ -22,7 +22,16 @@ $socket =  "/usr/local/freeside/selfservice_socket";
   'login'         => 'MyAccount/login',
   'customer_info' => 'MyAccount/customer_info',
   'invoice'       => 'MyAccount/invoice',
+  'start'         => 'MyAccount/start',
+  'update'        => 'MyAccount/update',
+  'collect'       => 'MyAccount/collect',
+  'cancel'        => 'MyAccount/cancel',
+  'uncancel'      => 'MyAccount/uncancel',
+  'getinfo'       => 'MyAccount/getinfo',
+  'charge'        => 'MyAccount/charge',
+  'new_customer'  => 'MyAccount/new_customer',
 );
+
 @EXPORT_OK = keys %autoload;
 
 $ENV{'PATH'} ='/usr/bin:/usr/ucb:/bin';

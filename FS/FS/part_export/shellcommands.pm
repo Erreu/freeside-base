@@ -39,6 +39,9 @@ sub _export_command {
     no strict 'refs';
     ${$_} = $svc_acct->getfield($_) foreach $svc_acct->fields;
   }
+  $email = ( grep { $_ ne 'POST' }
+             $svc_acct->cust_svc->cust_pkg->cust_main->invoicing_list
+             )[0];
   $finger = shell_quote $finger;
   $quoted_password = shell_quote $_password;
   $domain = $svc_acct->domain;

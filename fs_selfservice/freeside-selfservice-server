@@ -19,6 +19,7 @@ use Net::SSH qw(sshopen2);
 use FS::UID qw(adminsuidsetup forksuidsetup);
 use FS::ClientAPI;
 
+$ENV{SELFSERVICE_SERVER} = 'TRUE';
 $Debug = 2; # >= 2 will log packet contents, including potentially compromising
             # information
 

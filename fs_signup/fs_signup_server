@@ -18,6 +18,7 @@ use FS::Msgcat qw(gettext);
 
 use vars qw( $opt $Debug );
 
+$ENV{SIGNUP_SERVER} = 'TRUE';
 $Debug = 2;
 
 my $user = shift or die &usage;
@@ -94,11 +95,7 @@ while (1) {
 
     'msgcat' => { map { $_=>gettext($_) } qw(
       passwords_dont_match invalid_card unknown_card_type not_a
-    ) },
-
-    'statedefault' => $conf->config('statedefault') || 'CA',
-
-    'countrydefault' => $conf->config('countrydefault') || 'US',
+    ) }
 
   };
 
@@ -136,16 +133,13 @@ while (1) {
 
       map { $_ => $signup_data->{$_} } qw(
         last first ss company address1 address2 city county state zip country
-        daytime night fax payby payinfo paydate payname referral_custnum
+        daytime night fax payby payinfo paydate payname referral_custnum comments
       ),
 
     } );
 
     $error ||= "Illegal payment type"
       unless grep { $_ eq $signup_data->{'payby'} } @payby;
-
-    $cust_main->payinfo($cust_main->daytime)
-      if $cust_main->payby eq 'LECB' && ! $cust_main->payinfo;
 
     my @invoicing_list = split( /\s*\,\s*/, $signup_data->{'invoicing_list'} );
 
