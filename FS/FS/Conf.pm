@@ -974,6 +974,13 @@ httemplate/docs/config.html
     'select_enum' => [ '', 'CARD', 'BILL', 'COMP', 'HIDE' ],
   },
 
+  {
+    'key'         => 'svc_acct-notes',
+    'section'     => 'UI',
+    'description' => 'Extra HTML to be displayed on the Account View screen.',
+    'type'        => 'textarea',
+  },
+
 );
 
 1;
