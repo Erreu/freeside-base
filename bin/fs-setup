@@ -1,6 +1,6 @@
 #!/usr/bin/perl -Tw
 #
-# $Id: fs-setup,v 1.96.4.1 2002-10-04 12:56:36 ivan Exp $
+# $Id: fs-setup,v 1.96.4.2 2002-11-19 20:36:46 ivan Exp $
 
 #to delay loading dbdef until we're ready
 BEGIN { $FS::Record::setup_hack = 1; }
@@ -821,10 +821,12 @@ sub tables_hash_hack {
       'columns' => [
         'recnum',    'int',     '',  '',
         'svcnum',    'int',     '',  '',
-        'reczone',   'varchar', '',  $char_d,
+        #'reczone',   'varchar', '',  $char_d,
+        'reczone',   'varchar', '',  255,
         'recaf',     'char',    '',  2,
         'rectype',   'char',    '',  5,
-        'recdata',   'varchar', '',  $char_d,
+        #'recdata',   'varchar', '',  $char_d,
+        'recdata',   'varchar', '',  255,
       ],
       'primary_key' => 'recnum',
       'unique'      => [],
