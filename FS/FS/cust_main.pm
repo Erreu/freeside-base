@@ -1324,7 +1324,15 @@ sub collect {
       warn "calling invoice event (". $part_bill_event->eventcode. ")\n"
         if $Debug;
       my $cust_main = $self; #for callback
-      my $error = eval $part_bill_event->eventcode;
+
+      my $error;
+      {
+        $FS::cust_bill::realtime_bop_decline_quiet; #supress "used only once"
+                                                    # warning
+        local $FS::cust_bill::realtime_bop_decline_quiet = 1
+          if $options{'quiet'};
+        $error = eval $part_bill_event->eventcode;
+      }
 
       my $status = '';
       my $statustext = '';
