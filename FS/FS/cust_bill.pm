@@ -841,6 +841,8 @@ sub realtime_bop {
   # (though that probably violates cardholder agreements)
   if ( defined $cust_main->dbdef_table->column('paycvv')
        && length($cust_main->paycvv)
+       && ! grep { $_ eq cardtype($cust_main->payinfo) } $conf->config('cvv-save')
+
   ) {
     my $new = new FS::cust_main { $cust_main->hash };
     $new->paycvv('');
