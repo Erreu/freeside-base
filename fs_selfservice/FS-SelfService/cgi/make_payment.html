@@ -5,17 +5,15 @@
 <A HREF="<%= $url %>myaccount">MyAccount</A><BR>
 <!-- <A HREF="<%= $url %>other">SomethingElse</A><BR> -->
 </TD><TD VALIGN="top">
-
-<A HREF="<%= $url %>myaccount"><-- back to MyAccount</A><BR><BR>
-
-<FONT SIZE="-1"><PRE>
-<%= $invoice_text %>
-</FONT></PRE>
-
+<FONT SIZE=4>Make a payment</FONT><BR><BR>
+<FORM METHOD="POST" ACTION="<%=$selfurl%>">
+<INPUT TYPE="hidden" NAME="session" VALUE="<%=$session_id%>">
+<INPUT TYPE="hidden" NAME="action" VALUE="process_payment">
+Amount: <INPUT TYPE="text" VALUE="<%=sprintf("%.2f",$balance)%>"><BR><BR>
+<INPUT TYPE="submit" VALUE="Process payment">
+</FORM>
 </TD></TR></TABLE>
 <HR>
 <FONT SIZE="-2">powered by <a href="http://www.sisd.com/freeside">freeside</a></FONT>
 </BODY></HTML>
-
-
 
