@@ -76,6 +76,11 @@
 # s/suidsetup/adminsuidsetup/, s/FS::Search/FS::Record/, added some batch
 # exporting stuff (which still needs to be generalized) and removed &idiot
 # ivan@sisd.com 98-may-27
+#
+# $Log: bill,v $
+# Revision 1.4  1998-11-07 08:21:26  ivan
+# missing use
+#
 
 # setup
 
@@ -85,7 +90,7 @@ use Date::Parse;
 use Getopt::Std;
 use FS::UID qw(adminsuidsetup swapuid);
 use FS::Record qw(qsearch qsearchs);
-use FS::Bill;
+use FS::cust_main;
 
 my($batchfile)="/var/spool/freeside/batch";
 my($batchlock)="/var/spool/freeside/batch.lock";
@@ -118,7 +123,7 @@ foreach $cust_main (
 
   print "Billing customer #" . $cust_main->getfield('custnum') . "\n";
 
-  bless($cust_main,"FS::Bill");
+  bless($cust_main,"FS::cust_main");
 
   my($error);
 
