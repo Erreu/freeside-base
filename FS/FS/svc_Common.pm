@@ -67,9 +67,11 @@ sub insert {
 
   my $svcnum = $self->svcnum;
   my $cust_svc;
-  unless ( $svcnum ) {
+  #unless ( $svcnum ) {
+  if ( ! $svcnum || ! qsearchs('cust_svc',{'svcnum'=>$self->svcnum} ) ) {
     $cust_svc = new FS::cust_svc ( {
       #hua?# 'svcnum'  => $svcnum,
+      'svcnum'  => $self->svcnum,
       'pkgnum'  => $self->pkgnum,
       'svcpart' => $self->svcpart,
     } );
@@ -378,7 +380,7 @@ sub cancel { ''; }
 
 =head1 VERSION
 
-$Id: svc_Common.pm,v 1.12.4.1 2003-10-25 02:05:41 ivan Exp $
+$Id: svc_Common.pm,v 1.12.4.2 2003-11-11 14:21:32 ivan Exp $
 
 =head1 BUGS
 
