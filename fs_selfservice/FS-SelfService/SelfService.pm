@@ -15,14 +15,17 @@ $VERSION = '0.03';
 
 $socket =  "/usr/local/freeside/selfservice_socket";
 
+#maybe should ask ClientAPI for this list
 %autoload = (
-  'passwd'        => 'passwd/passwd',
-  'chfn'          => 'passwd/passwd',
-  'chsh'          => 'passwd/passwd',
-  'login'         => 'MyAccount/login',
-  'customer_info' => 'MyAccount/customer_info',
-  'invoice'       => 'MyAccount/invoice',
-  'cancel'        => 'MyAccount/cancel',
+  'passwd'          => 'passwd/passwd',
+  'chfn'            => 'passwd/passwd',
+  'chsh'            => 'passwd/passwd',
+  'login'           => 'MyAccount/login',
+  'customer_info'   => 'MyAccount/customer_info',
+  'invoice'         => 'MyAccount/invoice',
+  'cancel'          => 'MyAccount/cancel',
+  'signup_info'     => 'Signup/signup_info',
+  'new_customer'    => 'Signup/new_customer',
 );
 @EXPORT_OK = keys %autoload;
 
