@@ -1242,6 +1242,14 @@ httemplate/docs/config.html
     'type'        => 'textarea',
   },
 
+  {
+    'key'         => 'global_unique-username',
+    'section'     => 'username',
+    'description' => 'Global username uniqueness control: none (usual setting - check uniqueness per exports), username (all usernames are globally unique, regardless of domain or exports), or username@domain (all username@domain pairs are globally unique, regardless of exports)',
+    'type'        => 'select',
+    'select_enum' => [ 'none', 'username', 'username@domain' ],
+  },
+
 );
 
 1;
