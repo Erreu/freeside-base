@@ -402,11 +402,23 @@ sub unapplied {
   sprintf("%.2f", $amount );
 }
 
+=item cust_main
+
+Returns the parent customer object (see L<FS::cust_main>).
+
+=cut
+
+sub cust_main {
+  my $self = shift;
+  qsearchs( 'cust_main', { 'custnum' => $self->custnum } );
+}
+
+
 =back
 
 =head1 VERSION
 
-$Id: cust_pay.pm,v 1.21.4.2 2002-11-19 09:52:02 ivan Exp $
+$Id: cust_pay.pm,v 1.21.4.3 2003-09-10 10:54:47 ivan Exp $
 
 =head1 BUGS
 
