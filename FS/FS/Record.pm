@@ -210,34 +210,40 @@ sub qsearch {
     $statement .= ' WHERE '. join(' AND ', map {
 
       my $op = '=';
+      my $column = $_;
       if ( ref($record->{$_}) ) {
         $op = $record->{$_}{'op'} if $record->{$_}{'op'};
-        $op = 'LIKE' if $op =~ /^ILIKE$/i && driver_name !~ /^Pg$/i;
+        #$op = 'LIKE' if $op =~ /^ILIKE$/i && driver_name !~ /^Pg$/i;
+        if ( uc($op) eq 'ILIKE' ) {
+          $op = 'LIKE';
+          $record->{$_}{'value'} = lc($record->{$_}{'value'});
+          $column = "LOWER($_)";
+        }
         $record->{$_} = $record->{$_}{'value'}
       }
 
       if ( ! defined( $record->{$_} ) || $record->{$_} eq '' ) {
         if ( $op eq '=' ) {
           if ( driver_name =~ /^Pg$/i ) {
-            qq-( $_ IS NULL OR $_ = '' )-;
+            qq-( $column IS NULL OR $column = '' )-;
           } else {
-            qq-( $_ IS NULL OR $_ = "" )-;
+            qq-( $column IS NULL OR $column = "" )-;
           }
         } elsif ( $op eq '!=' ) {
           if ( driver_name =~ /^Pg$/i ) {
-            qq-( $_ IS NOT NULL AND $_ != '' )-;
+            qq-( $column IS NOT NULL AND $column != '' )-;
           } else {
-            qq-( $_ IS NOT NULL AND $_ != "" )-;
+            qq-( $column IS NOT NULL AND $column != "" )-;
           }
         } else {
           if ( driver_name =~ /^Pg$/i ) {
-            qq-( $_ $op '' )-;
+            qq-( $column $op '' )-;
           } else {
-            qq-( $_ $op "" )-;
+            qq-( $column $op "" )-;
           }
         }
       } else {
-        "$_ $op ?";
+        "$column $op ?";
       }
     } @fields );
   }
