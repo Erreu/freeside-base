@@ -1,6 +1,6 @@
 #!/usr/bin/perl -Tw
 #
-# $Id: fs-setup,v 1.96.4.6 2002-12-24 22:41:21 ivan Exp $
+# $Id: fs-setup,v 1.96.4.7 2003-06-14 02:02:25 ivan Exp $
 
 #to delay loading dbdef until we're ready
 BEGIN { $FS::Record::setup_hack = 1; }
@@ -377,7 +377,7 @@ sub tables_hash_hack {
       ],
       'primary_key' => 'invnum',
       'unique' => [],
-      'index' => [ ['custnum'] ],
+      'index' => [ ['custnum'], ['_date'] ],
     },
 
     'cust_bill_event' => {
