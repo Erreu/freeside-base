@@ -8,6 +8,7 @@
 
 use strict;
 use vars qw(%part_svc);
+use Getopt::Std;
 use Term::Query qw(query);
 use Net::SCP qw(iscp);
 use FS::UID qw(adminsuidsetup datasrc);
