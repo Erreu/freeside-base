@@ -28,7 +28,7 @@ inherit from, i.e. FS::svc_acct.  FS::svc_Common inherits from FS::Record.
 
 =over 4
 
-=item insert [ JOBNUM_ARRAYREF ]
+=item insert [ JOBNUM_ARRAYREF [ OBJECTS_ARRAYREF ] ]
 
 Adds this record to the database.  If there is an error, returns the error,
 otherwise returns false.
@@ -39,11 +39,16 @@ defined.  An FS::cust_svc record will be created and inserted.
 If an arrayref is passed as parameter, the B<jobnum>s of any export jobs will
 be added to the array.
 
+If an arrayref of FS::tablename objects (for example, FS::acct_snarf objects)
+is passed as the optional second parameter, they will have their svcnum fields
+set and will be inserted after this record, but before any exports are run.
+
 =cut
 
 sub insert {
   my $self = shift;
   local $FS::queue::jobnums = shift if @_;
+  my $objects = scalar(@_) ? shift : [];
   my $error;
 
   local $SIG{HUP} = 'IGNORE';
@@ -88,6 +93,15 @@ sub insert {
   if ( $error ) {
     $dbh->rollback if $oldAutoCommit;
     return $error;
+  }
+
+  foreach my $object ( @$objects ) {
+    $object->svcnum($self->svcnum);
+    $error = $object->insert;
+    if ( $error ) {
+      $dbh->rollback if $oldAutoCommit;
+      return $error;
+    }
   }
 
   #new-style exports!
@@ -364,7 +378,7 @@ sub cancel { ''; }
 
 =head1 VERSION
 
-$Id: svc_Common.pm,v 1.12 2002-06-14 11:22:53 ivan Exp $
+$Id: svc_Common.pm,v 1.12.4.1 2003-10-25 02:05:41 ivan Exp $
 
 =head1 BUGS
 
