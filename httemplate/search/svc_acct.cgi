@@ -50,7 +50,7 @@ if ( $query eq 'svcnum' ) {
   $sortby=\*uid_sort;
   $orderby = ( $unlinked ? 'AND' : 'WHERE' ).
              " ${tblname}uid IS NOT NULL ORDER BY ${tblname}uid";
-} elsif ( $query =~ /popnum=(\d+)/ ) {
+} elsif ( $query =~ /^popnum=(\d+)$/ ) {
   my $popnum = $1;
   $unlinked .= ( $unlinked ? 'AND' : 'WHERE' ).
                " popnum = $popnum";
@@ -65,7 +65,7 @@ if ( $query eq 'svcnum' ) {
 if (    $query eq 'svcnum'
      || $query eq 'username'
      || $query eq 'uid'
-     || $query eq 'popnum'
+     || $query =~ /^popnum=(\d+)$/ ) {
    ) {
 
   my $statement = "SELECT COUNT(*) FROM svc_acct $unlinked";
