@@ -347,7 +347,7 @@ sub insert {
   if ( $conf->exists('emailinvoiceauto') ) {
     my @invoicing_list = $cust_main->invoicing_list;
     push @invoicing_list, $self->email;
-    $cust_main->invoicing_list(@invoicing_list);
+    $cust_main->invoicing_list(\@invoicing_list);
   }
 
   #welcome email
