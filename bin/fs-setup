@@ -1,6 +1,6 @@
 #!/usr/bin/perl -Tw
 #
-# $Id: fs-setup,v 1.37 2001-06-03 14:16:11 ivan Exp $
+# $Id: fs-setup,v 1.37.2.1 2001-08-08 17:45:35 jeff Exp $
 #
 # ivan@sisd.com 97-nov-8,9
 #
@@ -32,7 +32,18 @@
 # fix radius attributes ivan@sisd.com 98-sep-27
 #
 # $Log: fs-setup,v $
-# Revision 1.37  2001-06-03 14:16:11  ivan
+# Revision 1.37.2.1  2001-08-08 17:45:35  jeff
+# initial vpopmail support
+#
+# Revision 1.2  2001/08/07 22:05:42  jeff
+#
+#
+#   Initial vpopmail changes
+#
+# Revision 1.1.1.1  2001/07/17 18:08:43  jeff
+# Import of Freeside 1.3.1 pre
+#
+# Revision 1.37  2001/06/03 14:16:11  ivan
 # allow empty refund reasons
 #
 # Revision 1.36  2001/04/15 12:56:31  ivan
@@ -244,7 +255,7 @@ my($part_svc)=$dbdef->table('part_svc');
 #because of svc_acct_pop
 #foreach (grep /^svc_/, $dbdef->tables) { 
 #foreach (qw(svc_acct svc_acct_sm svc_charge svc_domain svc_wo)) {
-foreach (qw(svc_acct svc_acct_sm svc_domain svc_www)) {
+foreach (qw(svc_acct svc_acct_sm svc_domain svc_forward svc_www)) {
   my($table)=$dbdef->table($_);
   my($col);
   foreach $col ( $table->columns ) {
@@ -665,10 +676,11 @@ sub tables_hash_hack {
         'quota',     'varchar',   'NULL',   $char_d,
         'slipip',    'varchar',   'NULL',   15, #four TINYINTs, bah.
         'seconds',   'int', 'NULL',   '', #uhhhh
+        'domsvc',    'int', '',   '',
       ],
       'primary_key' => 'svcnum',
       'unique' => [ [] ],
-      'index' => [ ['username'] ],
+      'index' => [ ['username'], ['domsvc'] ],
     },
 
     'svc_acct_sm' => {
@@ -697,6 +709,7 @@ sub tables_hash_hack {
       'columns' => [
         'svcnum',    'int',    '',   '',
         'domain',    'varchar',    '',   $char_d,
+        'catchall',  'int',    '',    '',
       ],
       'primary_key' => 'svcnum',
       'unique' => [ ['domain'] ],
@@ -715,6 +728,18 @@ sub tables_hash_hack {
       'primary_key' => 'recnum',
       'unique'      => [ [] ],
       'index'       => [ ['svcnum'] ],
+    },
+
+    'svc_forward' => {
+      'columns' => [
+        'svcnum',   'int',    '',  '',
+        'srcsvc',   'int',    '',  '',
+        'dstsvc',   'int',    '',  '',
+        'dst',      'varchar',    'NULL',  $char_d,
+      ],
+      'primary_key' => 'svcnum',
+      'unique'      => [ [] ],
+      'index'       => [ ['srcsvc'], ['dstsvc'] ],
     },
 
     'svc_www' => {

@@ -82,6 +82,10 @@ FS::svc_acct - Object methods for svc_acct records
 
   %hash = $record->radius;
 
+  %hash = $record->radius_reply;
+
+  %hash = $record->radius_check;
+
 =head1 DESCRIPTION
 
 An FS::svc_acct object represents an account.  FS::svc_acct inherits from
@@ -112,6 +116,8 @@ FS::svc_Common.  The following fields are currently supported:
 =item slipip - IP address
 
 =item radius_I<Radius_Attribute> - I<Radius-Attribute>
+
+=item domsvc - service number of svc_domain with which to associate
 
 =back
 
@@ -169,7 +175,9 @@ sub insert {
   return $error if $error;
 
   return "Username ". $self->username. " in use"
-    if qsearchs( 'svc_acct', { 'username' => $self->username } );
+    if qsearchs( 'svc_acct', { 'username' => $self->username,
+                               'domsvc'   => $self->domsvc,
+                             } );
 
   my $part_svc = qsearchs( 'part_svc', { 'svcpart' => $self->svcpart } );
   return "Unknown svcpart" unless $part_svc;
@@ -542,7 +550,7 @@ sub radius_check {
 
 =head1 VERSION
 
-$Id: svc_acct.pm,v 1.17 2001-06-03 12:36:10 ivan Exp $
+$Id: svc_acct.pm,v 1.17.2.1 2001-08-08 17:45:34 jeff Exp $
 
 =head1 BUGS
 
