@@ -879,15 +879,20 @@ sub realtime_bop {
     } );
     my $error = $cust_pay->insert;
     if ( $error ) {
-      # gah, even with transactions.
-      my $e = 'WARNING: Card/ACH debited but database not updated - '.
-              'error applying payment, invnum #' . $self->invnum.
-              " ($processor): $error";
-      warn $e;
-      return $e;
-    } else {
-      return '';
+      $cust_pay->invnum(''); #try again with no specific invnum
+      my $error2 = $cust_pay->insert;
+      if ( $error2 ) {
+        # gah, even with transactions.
+        my $e = 'WARNING: Card/ACH debited but database not updated - '.
+                "error inserting payment ($processor): $error2".
+                ' (previously tried insert with invnum #' . $self->invnum.
+                ": $error )";
+        warn $e;
+        return $e;
+      }
     }
+    return ''; #no error
+
   #} elsif ( $options{'report_badcard'} ) {
   } else {
 
