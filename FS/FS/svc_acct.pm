@@ -436,6 +436,8 @@ sub delete {
       if $self->uid && qsearch( 'svc_acct_sm', { 'domuid' => $self->uid } );
   }
 
+  return "can't delete system account" if $self->_check_system;
+
   return "Can't delete an account which is a (svc_forward) source!"
     if qsearch( 'svc_forward', { 'srcsvc' => $self->svcnum } );
 
@@ -523,6 +525,8 @@ sub replace {
   my ( $new, $old ) = ( shift, shift );
   my $error;
   warn "$me replacing $old with $new\n" if $DEBUG;
+
+  return "can't modify system account" if $old->_check_system;
 
   return "Username in use"
     if $old->username ne $new->username &&
@@ -625,6 +629,7 @@ Calls any export-specific suspend hooks.
 
 sub suspend {
   my $self = shift;
+  return "can't suspend system account" if $self->_check_system;
   my %hash = $self->hash;
   unless ( $hash{_password} =~ /^\*SUSPENDED\* /
            || $hash{_password} eq '*'
@@ -851,6 +856,18 @@ sub check {
 
   ''; #no error
 }
+
+=item _check_system
+ 
+=cut
+ 
+sub _check_system {
+  my $self = shift;
+  scalar( grep { $self->username eq $_ || $self->email eq $_ }
+               $conf->config('system_usernames')
+        );
+}
+
 
 =item radius
 
