@@ -190,7 +190,7 @@ sub sqlradius_insert { #subroutine, not method
         "INSERT INTO rad$table ( UserName, Attribute, Value ) ".
           "VALUES ( ?, ?, ? )"
       ) or die $dbh->errstr;
-      $i_sth->execute( '', $username, $attribute, $attributes{$attribute} )
+      $i_sth->execute( $username, $attribute, $attributes{$attribute} )
         or die $i_sth->errstr;
 
     }
@@ -207,7 +207,7 @@ sub sqlradius_usergroup_insert { #subroutine, not method
     "INSERT INTO usergroup ( UserName, GroupName ) VALUES ( ?, ? )"
   ) or die $dbh->errstr;
   foreach my $group ( @groups ) {
-    $sth->execute( '', $username, $group )
+    $sth->execute( $username, $group )
       or die "can't insert into groupname table: ". $sth->errstr;
   }
   $dbh->disconnect;
