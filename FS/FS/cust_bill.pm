@@ -999,7 +999,6 @@ sub batch_card {
     'state'    => $cust_main->getfield('state'),
     'zip'      => $cust_main->getfield('zip'),
     'country'  => $cust_main->getfield('country'),
-    'trancode' => 77,
     'cardnum'  => $cust_main->getfield('payinfo'),
     'exp'      => $cust_main->getfield('paydate'),
     'payname'  => $cust_main->getfield('payname'),
@@ -1228,7 +1227,7 @@ sub print_text {
 
 =head1 VERSION
 
-$Id: cust_bill.pm,v 1.41.2.22 2003-09-19 04:25:33 ivan Exp $
+$Id: cust_bill.pm,v 1.41.2.23 2003-09-21 07:31:26 ivan Exp $
 
 =head1 BUGS
 
