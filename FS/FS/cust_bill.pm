@@ -839,6 +839,7 @@ sub realtime_bop {
   #remove paycvv after initial transaction
   #make this disable-able via a config option if anyone insists?  
   # (though that probably violates cardholder agreements)
+  use Business::CreditCard;
   if ( defined $cust_main->dbdef_table->column('paycvv')
        && length($cust_main->paycvv)
        && ! grep { $_ eq cardtype($cust_main->payinfo) } $conf->config('cvv-save')
