@@ -1019,6 +1019,18 @@ sub attribute_since_sqlradacct {
 }
 
 
+=item get_session_history TIMESTAMP_START TIMESTAMP_END
+
+Returns an array of hash references of this customers login history for the
+given time range.  (document this better)
+
+=cut
+
+sub get_session_history {
+  my $self = shift;
+  $self->cust_svc->get_session_history(@_);
+}
+
 =item radius_groups
 
 Returns all RADIUS groups for this account (see L<FS::radius_usergroup>).
