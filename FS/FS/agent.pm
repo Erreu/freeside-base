@@ -50,6 +50,12 @@ from FS::Record.  The following fields are currently supported:
 
 =item freq - For future use.
 
+=item disabled - Disabled flag, empty or 'Y'
+
+=item username - Username for the Agent interface
+
+=item _password - Password for the Agent interface
+
 =back
 
 =head1 METHODS
@@ -110,6 +116,21 @@ sub check {
   ;
   return $error if $error;
 
+  if ( $self->dbdef_table->column('disabled') ) {
+    $error = $self->ut_enum('disabled', [ '', 'Y' ] );
+    return $error if $error;
+  }
+
+  if ( $self->dbdef_table->column('username') ) {
+    $error = $self->ut_alphan('username');
+    return $error if $error;
+    if ( length($self->username) ) {
+      $error = $self->ut_text('password'); # ut_text... arbitrary choice
+    } else {
+      $self->_password('');
+    }
+  }
+
   return "Unknown typenum!"
     unless $self->agent_type;
 
@@ -145,7 +166,7 @@ sub pkgpart_hashref {
 
 =head1 VERSION
 
-$Id: agent.pm,v 1.3 2002-03-24 18:23:47 ivan Exp $
+$Id: agent.pm,v 1.3.4.1 2003-09-29 05:51:48 ivan Exp $
 
 =head1 BUGS
 
