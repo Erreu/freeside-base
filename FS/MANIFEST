@@ -152,6 +152,8 @@ t/part_export_option.t
 t/part_export-bind.t
 t/part_export-bind_slave.t
 t/part_export-bsdshell.t
+t/part_export-communigate_pro.t
+t/part_export-communigate_pro_singledomain.t
 t/part_export-cp.t
 t/part_export-cyrus.t
 t/part_export-domain_shellcommands.t
