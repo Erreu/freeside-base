@@ -38,6 +38,8 @@ The following fields are currently supported:
 
 =item referral - Text name of this advertising source
 
+=item disabled - Disabled flag, empty or 'Y'
+
 =back
 
 =head1 NOTE
@@ -91,9 +93,17 @@ replace methods.
 sub check {
   my $self = shift;
 
-  $self->ut_numbern('refnum')
+  my $error = $self->ut_numbern('refnum')
     || $self->ut_text('referral')
   ;
+  return $error if $error;
+
+  if ( $self->dbdef_table->column('disabled') ) {
+    $error = $self->ut_enum('disabled', [ '', 'Y' ] );
+    return $error if $error;
+  }
+
+  '';
 }
 
 =back
