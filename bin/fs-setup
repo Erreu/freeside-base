@@ -1,6 +1,6 @@
 #!/usr/bin/perl -Tw
 #
-# $Id: fs-setup,v 1.96 2002-07-06 12:13:49 ivan Exp $
+# $Id: fs-setup,v 1.96.4.1 2002-10-04 12:56:36 ivan Exp $
 
 #to delay loading dbdef until we're ready
 BEGIN { $FS::Record::setup_hack = 1; }
@@ -106,8 +106,9 @@ my($dbdef) = new DBIx::DBSchema ( map {
 my $cust_main = $dbdef->table('cust_main');
 unless ($ship) { #remove ship_ from cust_main
   $cust_main->delcolumn($_) foreach ( grep /^ship_/, $cust_main->columns );
-} else { #add indices on ship_last and ship_company
-  push @{$cust_main->index->lol_ref}, ( ['ship_last'], ['ship_company'] ) 
+} else { #add indices
+  push @{$cust_main->index->lol_ref},
+    map { [ "ship_$_" ] } qw( last company daytime night fax );
 }
 
 #add radius attributes to svc_acct
@@ -501,7 +502,9 @@ sub tables_hash_hack {
       'primary_key' => 'custnum',
       'unique' => [],
       #'index' => [ ['last'], ['company'] ],
-      'index' => [ ['last'], [ 'company' ], [ 'referral_custnum' ] ],
+      'index' => [ ['last'], [ 'company' ], [ 'referral_custnum' ],
+                   [ 'daytime' ], [ 'night' ], [ 'fax' ],
+                 ],
     },
 
     'cust_main_invoice' => {
