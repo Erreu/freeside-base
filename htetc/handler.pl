@@ -28,20 +28,25 @@ use strict;
 
 # Create Mason objects
 #
-my $parser = new HTML::Mason::Parser;
-my $interp = new HTML::Mason::Interp (parser=>$parser,
-                                      comp_root=>'/var/www/masondocs',
-                                      data_dir=>'/home/ivan/freeside_current/masondata',
-                                      out_mode=>'stream',
-                                     );
-my $ah = new HTML::Mason::ApacheHandler ( interp => $interp,
-                                          #auto_send_headers => 0,
-                                        );
+
+#my $parser = new HTML::Mason::Parser;
+#my $interp = new HTML::Mason::Interp (parser=>$parser,
+#                                      comp_root=>'/var/www/masondocs',
+#                                      data_dir=>'/usr/local/etc/freeside/masondata',
+#                                      out_mode=>'stream',
+#                                     );
+my $ah = new HTML::Mason::ApacheHandler (
+  #interp => $interp,
+  #auto_send_headers => 0,
+  comp_root=>'/var/www/masonside',
+  data_dir=>'/usr/local/etc/freeside/masondata',
+  #out_mode=>'stream',
+);
 
 # Activate the following if running httpd as root (the normal case).
 # Resets ownership of all files created by Mason at startup.
 #
-chown (Apache->server->uid, Apache->server->gid, $interp->files_written);
+#chown (Apache->server->uid, Apache->server->gid, $interp->files_written);
 
 sub handler
 {
@@ -111,7 +116,7 @@ sub handler
 
       *CGI::redirect = sub {
         my( $self, $location ) = @_;
-
+        use vars qw($m);
         #http://www.masonhq.com/docs/faq/#how_do_i_do_an_external_redirect
         $m->clear_buffer;
         # The next two lines are necessary to stop Apache from re-reading
