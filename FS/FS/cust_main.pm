@@ -1,7 +1,7 @@
 package FS::cust_main;
 
 use strict;
-use vars qw( @ISA $conf $Debug $import );
+use vars qw( @ISA $conf $DEBUG $import );
 use Safe;
 use Carp;
 BEGIN {
@@ -38,8 +38,8 @@ use FS::Msgcat qw(gettext);
 
 @ISA = qw( FS::Record );
 
-$Debug = 0;
-#$Debug = 1;
+$DEBUG = 0;
+#$DEBUG = 1;
 
 $import = 0;
 
@@ -223,10 +223,16 @@ invoicing_list destination to the newly-created svc_acct.  Here's an example:
 
   $cust_main->insert( {}, [ $email, 'POST' ] );
 
-Currently available options are: I<noexport>
+Currently available options are: I<depend_jobnum> and I<noexport>.
 
-If I<noexport> is set true, no provisioning jobs (exports) are scheduled.
-(You can schedule them later with the B<reexport> method.)
+If I<depend_jobnum> is set, all provisioning jobs will have a dependancy
+on the supplied jobnum (they will not run until the specific job completes).
+This can be used to defer provisioning until some action completes (such
+as running the customer's credit card sucessfully).
+
+The I<noexport> option is deprecated.  If I<noexport> is set true, no
+provisioning jobs (exports) are scheduled.  (You can schedule them later with
+the B<reexport> method.)
 
 =cut
 
@@ -235,6 +241,9 @@ sub insert {
   my $cust_pkgs = @_ ? shift : {};
   my $invoicing_list = @_ ? shift : '';
   my %options = @_;
+  warn "FS::cust_main::insert called with options ".
+       join(', ', map { "$_: $options{$_}" } keys %options ). "\n"
+    if $DEBUG;
 
   local $SIG{HUP} = 'IGNORE';
   local $SIG{INT} = 'IGNORE';
@@ -286,7 +295,6 @@ sub insert {
   }
 
   # packages
-  #local $FS::svc_Common::noexport_hack = 1 if $options{'noexport'};
   $error = $self->order_pkgs($cust_pkgs, \$seconds, %options);
   if ( $error ) {
     $dbh->rollback if $oldAutoCommit;
@@ -321,7 +329,7 @@ sub insert {
 
 }
 
-=item order_pkgs HASHREF, [ , OPTION => VALUE ... ] ]
+=item order_pkgs HASHREF, [ SECONDSREF, [ , OPTION => VALUE ... ] ]
 
 Like the insert method on an existing record, this method orders a package
 and included services atomicaly.  Pass a Tie::RefHash data structure to this
@@ -334,14 +342,20 @@ be a better explanation of this, but until then, here's an example:
     $cust_pkg => [ $svc_acct ],
     ...
   );
-  $cust_main->order_pkgs( \%hash, 'noexport'=>1 );
+  $cust_main->order_pkgs( \%hash, \'0', 'noexport'=>1 );
 
-Currently available options are: I<noexport>
+Currently available options are: I<depend_jobnum> and I<noexport>.
 
-If I<noexport> is set true, no provisioning jobs (exports) are scheduled.
-(You can schedule them later with the B<reexport> method for each
-cust_pkg object.  Using the B<reexport> method on the cust_main object is not
-recommended, as existing services will also be reexported.)
+If I<depend_jobnum> is set, all provisioning jobs will have a dependancy
+on the supplied jobnum (they will not run until the specific job completes).
+This can be used to defer provisioning until some action completes (such
+as running the customer's credit card sucessfully).
+
+The I<noexport> option is deprecated.  If I<noexport> is set true, no
+provisioning jobs (exports) are scheduled.  (You can schedule them later with
+the B<reexport> method for each cust_pkg object.  Using the B<reexport> method
+on the cust_main object is not recommended, as existing services will also be
+reexported.)
 
 =cut
 
@@ -350,6 +364,12 @@ sub order_pkgs {
   my $cust_pkgs = shift;
   my $seconds = shift;
   my %options = @_;
+  my %svc_options = ();
+  $svc_options{'depend_jobnum'} = $options{'depend_jobnum'}
+    if exists $options{'depend_jobnum'};
+  warn "FS::cust_main::order_pkgs called with options ".
+       join(', ', map { "$_: $options{$_}" } keys %options ). "\n"
+    if $DEBUG;
 
   local $SIG{HUP} = 'IGNORE';
   local $SIG{INT} = 'IGNORE';
@@ -377,7 +397,7 @@ sub order_pkgs {
         $svc_something->seconds( $svc_something->seconds + $$seconds );
         $$seconds = 0;
       }
-      $error = $svc_something->insert;
+      $error = $svc_something->insert(%svc_options);
       if ( $error ) {
         $dbh->rollback if $oldAutoCommit;
         #return "inserting svc_ (transaction rolled back): $error";
@@ -392,6 +412,9 @@ sub order_pkgs {
 
 =item reexport
 
+This method is deprecated.  See the I<depend_jobnum> option to the insert and
+order_pkgs methods for a better way to defer provisioning.
+
 Re-schedules all exports by calling the B<reexport> method of all associated
 packages (see L<FS::cust_pkg>).  If there is an error, returns the error;
 otherwise returns false.
@@ -400,6 +423,9 @@ otherwise returns false.
 
 sub reexport {
   my $self = shift;
+
+  carp "warning: FS::cust_main::reexport is deprectated; ".
+       "use the depend_jobnum option to insert or order_pkgs to delay export";
 
   local $SIG{HUP} = 'IGNORE';
   local $SIG{INT} = 'IGNORE';
@@ -1454,7 +1480,7 @@ sub collect {
   my $dbh = dbh;
 
   my $balance = $self->balance;
-  warn "collect customer". $self->custnum. ": balance $balance" if $Debug;
+  warn "collect customer". $self->custnum. ": balance $balance" if $DEBUG;
   unless ( $balance > 0 ) { #redundant?????
     $dbh->rollback if $oldAutoCommit; #hmm
     return '';
@@ -1480,7 +1506,7 @@ sub collect {
     last if $self->balance <= 0;
 
     warn "invnum ". $cust_bill->invnum. " (owed ". $cust_bill->owed. ")"
-      if $Debug;
+      if $DEBUG;
 
     foreach my $part_bill_event (
       sort {    $a->seconds   <=> $b->seconds
@@ -1501,7 +1527,7 @@ sub collect {
            || $self->balance   <= 0; # or if balance<=0
 
       warn "calling invoice event (". $part_bill_event->eventcode. ")\n"
-        if $Debug;
+        if $DEBUG;
       my $cust_main = $self; #for callback
 
       my $error;

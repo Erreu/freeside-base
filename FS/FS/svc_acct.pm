@@ -36,6 +36,7 @@ use FS::Msgcat qw(gettext);
 @ISA = qw( FS::svc_Common );
 
 $DEBUG = 0;
+#$DEBUG = 1;
 $me = '[FS::svc_acct]';
 
 #ask FS::UID to run this stuff for us later
@@ -180,7 +181,7 @@ Creates a new account.  To add the account to the database, see L<"insert">.
 
 sub table { 'svc_acct'; }
 
-=item insert
+=item insert [ , OPTION => VALUE ... ]
 
 Adds this account to the database.  If there is an error, returns the error,
 otherwise returns false.
@@ -197,15 +198,21 @@ should contain an arrayref of FS::tablename objects.  They will have their
 svcnum fields set and will be inserted after this record, but before any
 exports are run.
 
+Currently available options are: I<depend_jobnum>
+
+If I<depend_jobnum> is set (to a scalar jobnum or an array reference of
+jobnums), all provisioning jobs will have a dependancy on the supplied
+jobnum(s) (they will not run until the specific job(s) complete(s)).
+
 (TODOC: L<FS::queue> and L<freeside-queued>)
 
 (TODOC: new exports!)
-
 
 =cut
 
 sub insert {
   my $self = shift;
+  my %options = @_;
   my $error;
 
   local $SIG{HUP} = 'IGNORE';
@@ -329,7 +336,11 @@ sub insert {
   #see?  i told you it was more complicated
 
   my @jobnums;
-  $error = $self->SUPER::insert(\@jobnums, $self->child_objects || [] );
+  $error = $self->SUPER::insert(
+    'jobnums'       => \@jobnums,
+    'child_objects' => $self->child_objects,
+    %options,
+  );
   if ( $error ) {
     $dbh->rollback if $oldAutoCommit;
     return $error;
@@ -397,6 +408,22 @@ sub insert {
         if ( $error ) {
           $dbh->rollback if $oldAutoCommit;
           return "error queuing welcome email: $error";
+        }
+
+        if ( $options{'depend_jobnum'} ) {
+          warn "$me depend_jobnum found; adding to welcome email dependancies"
+            if $DEBUG;
+          if ( ref($options{'depend_jobnum'}) ) {
+            warn "$me adding jobs ". join(', ', @{$options{'depend_jobnum'}} ).
+                 "to welcome email dependancies"
+              if $DEBUG;
+            push @jobnums, @{ $options{'depend_jobnum'} };
+          } else {
+            warn "$me adding job $options{'depend_jobnum'} ".
+                 "to welcome email dependancies"
+              if $DEBUG;
+            push @jobnums, $options{'depend_jobnum'};
+          }
         }
 
         foreach my $jobnum ( @jobnums ) {
@@ -1290,6 +1317,9 @@ counterintuitive.
 
 radius_usergroup_selector?  putting web ui components in here?  they should
 probably live somewhere else...
+
+insertion of RADIUS group stuff in insert could be done with child_objects now
+(would probably clean up export of them too)
 
 =head1 SEE ALSO
 
