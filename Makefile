@@ -6,16 +6,15 @@ DATASOURCE = DBI:Pg:dbname=freeside
 DB_USER = freeside
 DB_PASSWORD=
 
-#TEMPLATE = asp
-TEMPLATE = mason
+TEMPLATE = asp
+#TEMPLATE = mason
 
 ASP_GLOBAL = /usr/local/etc/freeside/asp-global
 MASON_HANDLER = /usr/local/etc/freeside/handler.pl
 MASONDATA = /usr/local/etc/freeside/masondata
 
 #deb, others?
-#FREESIDE_DOCUMENT_ROOT = /var/www/freeside
-FREESIDE_DOCUMENT_ROOT = /var/www/masonside
+FREESIDE_DOCUMENT_ROOT = /var/www/freeside
 #freebsd
 #FREESIDE_DOCUMENT_ROOT = /usr/local/www/data/freeside
 
