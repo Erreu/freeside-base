@@ -220,12 +220,13 @@ clean:
 
 #these are probably only useful if you're me...
 
-upload-docs: forcehtmlman
-	ssh pouncequick.420.am rm -rf /var/www/www.sisd.com/freeside/docs
-	scp -pr httemplate/docs pouncequick.420.am:/var/www/www.sisd.com/freeside/docs
+#no more doc uploads from maintenance branch
+#upload-docs: forcehtmlman
+#	ssh pouncequick.420.am rm -rf /var/www/www.sisd.com/freeside/docs
+#	scp -pr httemplate/docs pouncequick.420.am:/var/www/www.sisd.com/freeside/docs
 
 #release: upload-docs update-webdemo
-release: upload-docs
+release: 
 	cd /home/ivan/freeside1.4
 	#cvs tag ${TAG}
 	cvs tag -F ${TAG}
