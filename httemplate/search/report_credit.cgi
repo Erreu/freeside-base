@@ -1,7 +1,8 @@
 <!-- mason kludge -->
 <%
 
-my $user = getotaker;
+#my $user = getotaker;
+my $user = $FS::UID::user; #dumb 1.4 8-char workaround
 
 $cgi->param('beginning') =~ /^([ 0-9\-\/]{0,10})$/;
 my $beginning = $1;
