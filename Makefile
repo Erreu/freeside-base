@@ -6,8 +6,8 @@ DATASOURCE = DBI:Pg:dbname=freeside
 DB_USER = freeside
 DB_PASSWORD=
 
-TEMPLATE = asp
-#TEMPLATE = mason
+#TEMPLATE = asp
+TEMPLATE = mason
 
 ASP_GLOBAL = /usr/local/etc/freeside/asp-global
 MASON_HANDLER = /usr/local/etc/freeside/handler.pl
@@ -17,6 +17,8 @@ MASONDATA = /usr/local/etc/freeside/masondata
 FREESIDE_DOCUMENT_ROOT = /var/www/freeside
 #freebsd
 #FREESIDE_DOCUMENT_ROOT = /usr/local/www/data/freeside
+#openbsd
+#FREESIDE_DOCUMENT_ROOT = /var/www/htdocs/freeside
 
 #deb, others?
 INIT_FILE = /etc/init.d/freeside
@@ -27,12 +29,14 @@ INIT_FILE = /etc/init.d/freeside
 HTTPD_RESTART = /etc/init.d/apache restart
 #freebsd
 #HTTPD_RESTART = /usr/local/etc/rc.d/apache.sh stop; sleep 1; /usr/local/etc/rc.d/apache.sh start
+#openbsd
+#HTTPD_RESTART = kill -TERM `cat /var/www/logs/httpd.pid`; sleep 1; /usr/sbin/httpd -u -DSSL
 
 FREESIDE_RESTART = ${INIT_FILE} restart
 
 #deb, others?
 INSTALLGROUP = root
-#freebsd
+#freebsd,openbsd
 #INSTALLGROUP = wheel
 
 #edit the stuff below to have the daemons start
@@ -58,8 +62,8 @@ SELFSERVICE_MACHINE = localhost
 #not changable yet
 FREESIDE_CONF = /usr/local/etc/freeside
 
-VERSION=1.4.1
-TAG=freeside_1_4_1
+VERSION=1.4.2beta1
+TAG=freeside_1_4_2beta1
 
 help:
 	@echo "supported targets: aspdocs masondocs alldocs docs install-docs"
