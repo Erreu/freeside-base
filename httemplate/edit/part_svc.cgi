@@ -191,7 +191,7 @@ my %defs = (
           $html .=
             qq!<TD><INPUT TYPE="radio" NAME="${layer}__${field}_flag" VALUE=""!.
             ' CHECKED'x($flag eq ''). ">Off</TD>".
-            '<TD>'
+            '<TD>';
           unless ( $def->{type} eq 'disabled' ) {
             $html .= 
               qq!<INPUT TYPE="radio" NAME="${layer}__${field}_flag" VALUE="D"!.
