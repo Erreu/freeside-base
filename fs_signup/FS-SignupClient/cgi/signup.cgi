@@ -1,6 +1,6 @@
 #!/usr/bin/perl -Tw
 #
-# $Id: signup.cgi,v 1.29.2.8 2003-07-04 01:37:44 ivan Exp $
+# $Id: signup.cgi,v 1.29.2.9 2003-07-04 01:48:29 ivan Exp $
 
 use strict;
 use vars qw( @payby $cgi $locales $packages
@@ -425,10 +425,11 @@ END
   $text .= qq!<SELECT NAME="popnum" SIZE=1><OPTION> !;
 
   #comment this block to disable initial list population
+  my @initial_select;
   if ( scalar( @$pops ) > 100 ) {
     @initial_select = ( $popnum2pop{$popnum} );
   } else {
-    @initial_select = $@pops;
+    @initial_select = @$pops;
   }
   foreach my $pop ( sort { $a->{state} cmp $b->{state} } @initial_select ) {
     $text .= qq!<OPTION VALUE="!. $pop->{popnum}. '"'.
