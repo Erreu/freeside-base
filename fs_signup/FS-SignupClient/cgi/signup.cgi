@@ -1,6 +1,6 @@
 #!/usr/bin/perl -Tw
 #
-# $Id: signup.cgi,v 1.29.2.13 2003-07-04 03:19:14 ivan Exp $
+# $Id: signup.cgi,v 1.29.2.14 2003-07-04 03:21:41 ivan Exp $
 
 use strict;
 use vars qw( @payby $cgi $locales $packages
@@ -393,7 +393,8 @@ sub popselector {
   my $text;
 
   if ( $init_popstate ) {
-    $text .='<INPUT TYPE="hidden" NAME="init_popstate" VALUE="$init_popstate">';
+    $text .= '<INPUT TYPE="hidden" NAME="init_popstate" VALUE="'.
+             $init_popstate. '">';
   } else {
     $text .= <<END;
       <SCRIPT>
