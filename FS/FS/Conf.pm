@@ -298,8 +298,8 @@ httemplate/docs/config.html
 
   {
     'key'         => 'cybercash3.2',
-    'section'     => 'billing',
-    'description' => '<a href="http://www.cybercash.com/cashregister/">CyberCash Cashregister v3.2</a> support.  Two lines: the full path and name of your merchant_conf file, and the transaction type (`mauthonly\' or `mauthcapture\').',
+    'section'     => 'deprecated',
+    'description' => '<b>DEPRECATED</b>, CyberCash no longer exists.  Used to enable <a href="http://www.cybercash.com/cashregister/">CyberCash Cashregister v3.2</a> support.  Two lines: the full path and name of your merchant_conf file, and the transaction type (`mauthonly\' or `mauthcapture\').',
     'type'        => 'textarea',
   },
 
