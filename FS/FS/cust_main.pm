@@ -158,7 +158,7 @@ FS::Record.  The following fields are currently supported:
 
 =item ship_fax - phone (optional)
 
-=item payby - `CARD' (credit cards), `CHEK' (electronic check), `LECB' (Phone bill billing), `BILL' (billing), `COMP' (free), or `PREPAY' (special billing type: applies a credit - see L<FS::prepay_credit> and sets billing type to BILL)
+=item payby - `CARD' (credit cards), `CHEK' (electronic check), `BILL' (billing), `COMP' (free), or `PREPAY' (special billing type: applies a credit - see L<FS::prepay_credit> and sets billing type to BILL)
 
 =item payinfo - card number, P.O., comp issuer (4-8 lowercase alphanumerics; think username) or prepayment identifier (see L<FS::prepay_credit>)
 
@@ -482,15 +482,14 @@ sub replace {
     $self->invoicing_list( $invoicing_list );
   }
 
-  if ( $self->payby =~ /^(CARD|CHEK|LECB)$/ &&
+  if ( $self->payby =~ /^(CARD|CHEK)$/ &&
        grep { $self->get($_) ne $old->get($_) } qw(payinfo paydate payname) ) {
     # card info has changed, want to retry realtime_card invoice events
     #false laziness w/collect
     foreach my $cust_bill_event (
       grep {
              #$_->part_bill_event->plan eq 'realtime-card'
-             $_->part_bill_event->eventcode =~
-                 /^\$cust_bill\->realtime_(card|ach|lec)\(\);$/
+             $_->part_bill_event->eventcode eq '$cust_bill->realtime_card();'
                && $_->status eq 'done'
                && $_->statustext
            }
@@ -665,14 +664,14 @@ sub check {
     }
   }
 
-  $self->payby =~ /^(CARD|CHEK|LECB|BILL|COMP|PREPAY)$/
+  $self->payby =~ /^(CARD|CHEK|BILL|COMP|PREPAY)$/
     or return "Illegal payby: ". $self->payby;
   $self->payby($1);
 
   if ( $self->payby eq 'CARD' ) {
 
     my $payinfo = $self->payinfo;
-    $payinfo =~ s/\D//g;
+    $payinfo =~ s/[^\d\@]//g;
     $payinfo =~ /^(\d{13,16})$/
       or return gettext('invalid_card'); # . ": ". $self->payinfo;
     $payinfo = $1;
@@ -685,17 +684,9 @@ sub check {
   } elsif ( $self->payby eq 'CHEK' ) {
 
     my $payinfo = $self->payinfo;
-    $payinfo =~ s/[^\d\@]//g;
+    #$payinfo =~ s/[\D\@]//g;
     $payinfo =~ /^(\d+)\@(\d{9})$/ or return 'invalid echeck account@aba';
     $payinfo = "$1\@$2";
-    $self->payinfo($payinfo);
-
-  } elsif ( $self->payby eq 'LECB' ) {
-
-    my $payinfo = $self->payinfo;
-    $payinfo =~ s/\D//g;
-    $payinfo =~ /^1?(\d{10})$/ or return 'invalid btn billing telephone number';
-    $payinfo = $1;
     $self->payinfo($payinfo);
 
   } elsif ( $self->payby eq 'BILL' ) {
@@ -722,7 +713,7 @@ sub check {
 
   if ( $self->paydate eq '' || $self->paydate eq '-' ) {
     return "Expriation date required"
-      unless $self->payby =~ /^(BILL|PREPAY|CHEK|LECB)$/;
+      unless $self->payby =~ /^(BILL|PREPAY|CHEK)$/;
     $self->paydate('');
   } else {
     $self->paydate =~ /^(\d{1,2})[\/\-](\d{2}(\d{2})?)$/
@@ -1054,25 +1045,26 @@ sub bill {
                  || $self->payby eq 'COMP'
                  || $taxable_charged == 0 ) {
 
-          my $cust_main_county = qsearchs('cust_main_county',{
+          my $cust_main_county =
+            qsearchs('cust_main_county',{
               'state'    => $self->state,
               'county'   => $self->county,
               'country'  => $self->country,
               'taxclass' => $part_pkg->taxclass,
-          } );
-          $cust_main_county ||= qsearchs('cust_main_county',{
+            } )
+            or qsearchs('cust_main_county',{
               'state'    => $self->state,
               'county'   => $self->county,
               'country'  => $self->country,
               'taxclass' => '',
-          } );
-          unless ( $cust_main_county ) {
-            $dbh->rollback if $oldAutoCommit;
-            return
-              "fatal: can't find tax rate for state/county/country/taxclass ".
-              join('/', ( map $self->$_(), qw(state county country) ),
-                        $part_pkg->taxclass ).  "\n";
-          }
+            } )
+            or do {
+              $dbh->rollback if $oldAutoCommit;
+              return
+                "fatal: can't find tax rate for state/county/country/taxclass ".
+                join('/', ( map $self->$_(), qw(state county country) ),
+                          $part_pkg->taxclass ).  "\n";
+            };
 
           if ( $cust_main_county->exempt_amount ) {
             my ($mon,$year) = (localtime($sdate) )[4,5];

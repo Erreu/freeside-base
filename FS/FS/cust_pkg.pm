@@ -20,6 +20,13 @@ use FS::svc_domain;
 use FS::svc_www;
 use FS::svc_forward;
 
+# need all this for sending cancel emails in sub cancel
+
+use FS::Conf;
+use Date::Format;
+use Mail::Internet 1.44;
+use Mail::Header;
+
 @ISA = qw( FS::Record );
 
 sub _cache {
@@ -291,7 +298,45 @@ sub cancel {
 
   $dbh->commit or die $dbh->errstr if $oldAutoCommit;
 
+  my $conf = new FS::Conf;
+
+  if ( !($ENV{SIGNUP_SERVER} && $conf->exists('signup_server-quiet'))
+       && !($ENV{SELFSERVICE_SERVER} && $conf->exists('selfservice_server-quiet'))
+       && $conf->exists('emailcancel')
+       && grep { $_ ne 'POST' } $self->cust_main->invoicing_list) {
+  
+      my @invoicing_list = $self->cust_main->invoicing_list;
+  
+      my $invoice_from = $conf->config('invoice_from');
+      my @print_text = map "$_\n", $conf->config('cancelmessage');
+      my $subject = $conf->config('cancelsubject');
+      my $smtpmachine = $conf->config('smtpmachine');
+      
+      if ( grep { $_ ne 'POST' } @invoicing_list ) { #email invoice
+	  #false laziness w/FS::cust_pay::delete & fs_signup_server && ::realtime_card
+	  #$ENV{SMTPHOSTS} = $smtpmachine;
+	  $ENV{MAILADDRESS} = $invoice_from;
+	  my $header = new Mail::Header ( [
+              "From: $invoice_from",
+	      "To: ". join(', ', grep { $_ ne 'POST' } @invoicing_list ),
+              "Sender: $invoice_from",
+              "Reply-To: $invoice_from",
+              "Date: ". time2str("%a, %d %b %Y %X %z", time),
+              "Subject: $subject",           
+                                     ] );
+	  my $message = new Mail::Internet (
+              'Header' => $header,
+              'Body' => [ @print_text ],      
+                                      );
+	  $!=0;
+	  $message->smtpsend( Host => $smtpmachine )
+	      or $message->smtpsend( Host => $smtpmachine, Debug => 1 );
+	  #should this return an error?
+	  }
+  }
+
   ''; #no errors
+
 }
 
 =item suspend
