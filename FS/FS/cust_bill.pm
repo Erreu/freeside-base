@@ -1463,7 +1463,7 @@ sub print_ps {
   system('pslatex', "$file.tex");
   system('pslatex', "$file.tex");
   #system('dvips', '-t', 'letter', "$file.dvi", "$file.ps");
-  system('dvips', '-t', 'letter', "$file.dvi" );
+  system('dvips', '-t', 'letter', "$file.dvi", '-o', "$file.ps" );
 
   open(POSTSCRIPT, "<$file.ps") or die "can't open $file.ps (probable error in LaTeX template): $!\n";
 
