@@ -1,6 +1,6 @@
 #!/usr/bin/perl -Tw
 #
-# $Id: signup.cgi,v 1.29.2.14 2003-07-04 03:21:41 ivan Exp $
+# $Id: signup.cgi,v 1.29.2.15 2003-09-29 06:22:14 ivan Exp $
 
 use strict;
 use vars qw( @payby $cgi $locales $packages
@@ -486,7 +486,7 @@ sub regionselector {
   my ( $selected_county, $selected_state, $selected_country,
        $prefix, $onchange ) = @_;
 
-  my $prefix = '' unless defined $prefix;
+  $prefix = '' unless defined $prefix;
 
   my $countyflag = 0;
 
