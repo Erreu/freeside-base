@@ -175,8 +175,7 @@ upload-docs: forcehtmlman
 	ssh cleanwhisker.420.am rm -rf /var/www/www.sisd.com/freeside/docs
 	scp -pr httemplate/docs cleanwhisker.420.am:/var/www/www.sisd.com/freeside/docs
 
-#release: upload-docs update-webdemo
-release:
+release: upload-docs update-webdemo
 	cd /home/ivan/freeside1.4
 	#cvs tag ${TAG}
 	cvs tag -F ${TAG}
