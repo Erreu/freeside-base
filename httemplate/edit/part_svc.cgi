@@ -209,12 +209,20 @@ my %defs = (
           if ( $def->{type} eq 'select' ) {
             $html .= qq!<SELECT NAME="${layer}__${field}">!;
             $html .= '<OPTION> </OPTION>' unless $value;
-            foreach my $record ( qsearch( $def->{select_table}, {} ) ) {
-              my $rvalue = $record->getfield($def->{select_key});
-              $html .= qq!<OPTION VALUE="$rvalue"!.
-                       ( $rvalue==$value ? ' SELECTED>' : '>' ).
-                       $record->getfield($def->{select_label}). '</OPTION>';
-            }
+            if ( $def->{select_table} ) {
+              foreach my $record ( qsearch( $def->{select_table}, {} ) ) {
+                my $rvalue = $record->getfield($def->{select_key});
+                $html .= qq!<OPTION VALUE="$rvalue"!.
+                         ( $rvalue==$value ? ' SELECTED>' : '>' ).
+                         $record->getfield($def->{select_label}). '</OPTION>';
+              } #next $record
+            } else { # select_list
+              foreach my $item ( @{$def->{select_list}} ) {
+                $html .= qq!<OPTION VALUE="$item"!.
+                         ( $item eq $value ? ' SELECTED>' : '>' ).
+                         $item. '</OPTION>';
+              } #next $item
+            } #endif
             $html .= '</SELECT>';
           } elsif ( $def->{type} eq 'radius_usergroup_selector' ) {
             $html .= FS::svc_acct::radius_usergroup_selector(
