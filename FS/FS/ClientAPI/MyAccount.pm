@@ -275,7 +275,7 @@ sub order_pkg {
     $cust_pkg->reexport;
   }
 
-  return { error => '' };
+  return { error => '', pkgnum => $cust_pkg->pkgnum };
 
 }
 
