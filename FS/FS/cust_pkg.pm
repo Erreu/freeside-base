@@ -1,7 +1,7 @@
 package FS::cust_pkg;
 
 use strict;
-use vars qw(@ISA $quiet $disable_agentcheck);
+use vars qw(@ISA $disable_agentcheck);
 use FS::UID qw( getotaker dbh );
 use FS::Record qw( qsearch qsearchs );
 use FS::cust_svc;
@@ -253,18 +253,22 @@ sub check {
   ''; #no error
 }
 
-=item cancel
+=item cancel [ OPTION => VALUE ... ]
 
 Cancels and removes all services (see L<FS::cust_svc> and L<FS::part_svc>)
 in this package, then cancels the package itself (sets the cancel field to
 now).
+
+Available options are: I<quiet>
+
+I<quiet> can be set true to supress email cancellation notices.
 
 If there is an error, returns the error, otherwise returns false.
 
 =cut
 
 sub cancel {
-  my $self = shift;
+  my( $self, %options ) = @_;
   my $error;
 
   local $SIG{HUP} = 'IGNORE';
@@ -305,7 +309,7 @@ sub cancel {
 
   my $conf = new FS::Conf;
 
-  if ( !$quiet && $conf->exists('emailcancel')
+  if ( !$options{'quiet'} && $conf->exists('emailcancel')
        && grep { $_ ne 'POST' } $self->cust_main->invoicing_list) {
   
       my @invoicing_list = $self->cust_main->invoicing_list;

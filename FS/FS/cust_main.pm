@@ -1246,6 +1246,8 @@ report_badcard - This option is deprecated.
 
 force_print - This option is deprecated; see the invoice events web interface.
 
+quiet - set true to surpress email card/ACH decline notices.
+
 =cut
 
 sub collect {
