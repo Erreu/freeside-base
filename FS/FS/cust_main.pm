@@ -699,6 +699,21 @@ sub check {
       or return gettext('invalid_card'); # . ": ". $self->payinfo;
     return gettext('unknown_card_type')
       if cardtype($self->payinfo) eq "Unknown";
+    if ( defined $self->dbdef_table->column('paycvv') ) {
+      if ( length($self->paycvv) ) {
+        if ( cardtype($self->payinfo) eq 'American Express card' ) {
+          $self->paycvv =~ /^(\d{4})$/
+            or return "CVV2 (CID) for American Express cards is four digits.";
+          $self->paycvv($1);
+        } else {
+          $self->paycvv =~ /^(\d{3})$/
+            or return "CVV2 (CVC2/CID) is three digits.";
+          $self->paycvv($1);
+        }
+      } else {
+        $self->paycvv('');
+      }
+    }
 
   } elsif ( $self->payby eq 'CHEK' ) {
 
@@ -707,6 +722,7 @@ sub check {
     $payinfo =~ /^(\d+)\@(\d{9})$/ or return 'invalid echeck account@aba';
     $payinfo = "$1\@$2";
     $self->payinfo($payinfo);
+    $self->paycvv('') if $self->dbdef_table->column('paycvv');
 
   } elsif ( $self->payby eq 'LECB' ) {
 
@@ -715,11 +731,13 @@ sub check {
     $payinfo =~ /^1?(\d{10})$/ or return 'invalid btn billing telephone number';
     $payinfo = $1;
     $self->payinfo($payinfo);
+    $self->paycvv('') if $self->dbdef_table->column('paycvv');
 
   } elsif ( $self->payby eq 'BILL' ) {
 
     $error = $self->ut_textn('payinfo');
     return "Illegal P.O. number: ". $self->payinfo if $error;
+    $self->paycvv('') if $self->dbdef_table->column('paycvv');
 
   } elsif ( $self->payby eq 'COMP' ) {
 
@@ -730,6 +748,7 @@ sub check {
 
     $error = $self->ut_textn('payinfo');
     return "Illegal comp account issuer: ". $self->payinfo if $error;
+    $self->paycvv('') if $self->dbdef_table->column('paycvv');
 
   } elsif ( $self->payby eq 'PREPAY' ) {
 
@@ -740,6 +759,7 @@ sub check {
     return "Illegal prepayment identifier: ". $self->payinfo if $error;
     return "Unknown prepayment identifier"
       unless qsearchs('prepay_credit', { 'identifier' => $self->payinfo } );
+    $self->paycvv('') if $self->dbdef_table->column('paycvv');
 
   }
 

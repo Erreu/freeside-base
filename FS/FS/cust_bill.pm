@@ -740,15 +740,20 @@ sub realtime_bop {
 
   my %content;
   if ( $method eq 'CC' ) { 
+
     $content{card_number} = $cust_main->payinfo;
     $cust_main->paydate =~ /^\d{2}(\d{2})[\/\-](\d+)[\/\-]\d+$/;
     $content{expiration} = "$2/$1";
-    if ( qsearch('cust_pay', { 'custnum' => $cust_main->custnum,
+
+    $content{cvv2} = $cust_main->paycvv
+      if defined $cust_main->dbdef_table->column('paycvv')
+         && length($cust_main->paycvv);
+
+    $content{recurring_billing} = 'YES'
+      if qsearch('cust_pay', { 'custnum' => $cust_main->custnum,
                                'payby'   => 'CARD',
-                               'payinfo' => $cust_main->payinfo, } )
-    ) { 
-      $content{recurring_billing} = 'YES';
-    }
+                               'payinfo' => $cust_main->payinfo, } );
+
   } elsif ( $method eq 'ECHECK' ) {
     my($account_number,$routing_code) = $cust_main->payinfo;
     ( $content{account_number}, $content{routing_code} ) =
@@ -831,6 +836,21 @@ sub realtime_bop {
 
   }
 
+  #remove paycvv after initial transaction
+  #make this disable-able via a config option if anyone insists?  
+  # (though that probably violates cardholder agreements)
+  if ( defined $cust_main->dbdef_table->column('paycvv')
+       && length($cust_main->paycvv)
+  ) {
+    my $new = new FS::cust_main { $cust_main->hash };
+    $new->paycvv('');
+    my $error = $new->replace($cust_main);
+    if ( $error ) {
+      warn "error removing cvv: $error\n";
+    }
+  }
+
+  #result handling
   if ( $transaction->is_success() ) {
 
     my %method2payby = (
