@@ -66,6 +66,7 @@ sub handler
       #use CGI::Carp qw(fatalsToBrowser);
       use Date::Format;
       use Date::Parse;
+      use Time::Local;
       use Tie::IxHash;
       use HTML::Entities;
       use IO::Handle;
