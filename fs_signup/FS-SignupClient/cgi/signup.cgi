@@ -1,6 +1,6 @@
 #!/usr/bin/perl -Tw
 #
-# $Id: signup.cgi,v 1.29.2.12 2003-07-04 03:15:41 ivan Exp $
+# $Id: signup.cgi,v 1.29.2.13 2003-07-04 03:19:14 ivan Exp $
 
 use strict;
 use vars qw( @payby $cgi $locales $packages
@@ -390,19 +390,18 @@ sub popselector {
   #my %pop = ();
   #push @{ $pop{$_->{state}} }, $_ foreach @$pops;
 
-  my $text = <<END;
-    <SCRIPT>
-    function opt(what,href,text) {
-      var optionName = new Option(text, href, false, false)
-      var length = what.length;
-      what.options[length] = optionName;
-    }
-END
+  my $text;
 
   if ( $init_popstate ) {
     $text .='<INPUT TYPE="hidden" NAME="init_popstate" VALUE="$init_popstate">';
   } else {
     $text .= <<END;
+      <SCRIPT>
+      function opt(what,href,text) {
+        var optionName = new Option(text, href, false, false)
+        var length = what.length;
+        what.options[length] = optionName;
+      }
       function popstate_changed(what) {
         state = what.options[what.selectedIndex].text;
         what.form.popnum.options.length = 0;
