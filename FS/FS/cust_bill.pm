@@ -697,7 +697,10 @@ sub realtime_bop {
   pop @$options if scalar(@$options) % 2 && $options->[-1] =~ /^\s*$/;
 
   my $cust_main = $self->cust_main;
-  my $amount = $self->owed;
+  my $balance = $cust_main->balance;
+  my $amount = ( $balance < $self->owed ) ? $balance : $self->owed;
+  $amount = sprintf("%.2f", $amount);
+  return "not run (balance $balance)" unless $amount > 0;
 
   my $address = $cust_main->address1;
   $address .= ", ". $cust_main->address2 if $cust_main->address2;
