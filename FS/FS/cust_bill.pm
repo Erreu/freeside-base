@@ -746,6 +746,10 @@ sub realtime_bop {
     ( $content{account_number}, $content{routing_code} ) =
       split('@', $cust_main->payinfo);
     $content{bank_name} = $cust_main->payname;
+    $content{account_type} = 'CHECKING';
+    $content{account_name} = $payname;
+    $content{customer_org} = $self->company ? 'B' : 'I';
+    $content{customer_ssn} = $self->ss;
   } elsif ( $method eq 'LEC' ) {
     $content{phone} = $cust_main->payinfo;
   }
@@ -1222,7 +1226,7 @@ sub print_text {
 
 =head1 VERSION
 
-$Id: cust_bill.pm,v 1.41.2.20 2003-01-10 07:42:39 ivan Exp $
+$Id: cust_bill.pm,v 1.41.2.21 2003-06-30 18:56:02 ivan Exp $
 
 =head1 BUGS
 
