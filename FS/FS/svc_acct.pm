@@ -830,6 +830,8 @@ sub check {
     $recref->{_password} = $1.$3;
   } elsif ( $recref->{_password} eq '*' ) {
     $recref->{_password} = '*';
+  } elsif ( $recref->{_password} eq '!' ) {
+    $recref->{_password} = '!';
   } elsif ( $recref->{_password} eq '!!' ) {
     $recref->{_password} = '!!';
   } else {
