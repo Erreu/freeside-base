@@ -1,6 +1,6 @@
 #!/usr/bin/perl -Tw
 #
-# $Id: signup.cgi,v 1.29.2.10 2003-07-04 01:54:21 ivan Exp $
+# $Id: signup.cgi,v 1.29.2.11 2003-07-04 03:12:13 ivan Exp $
 
 use strict;
 use vars qw( @payby $cgi $locales $packages
@@ -8,7 +8,7 @@ use vars qw( @payby $cgi $locales $packages
              $init_data $error
              $last $first $ss $company $address1 $address2 $city $state $county
              $country $zip $daytime $night $fax $invoicing_list $payby $payinfo
-             $paydate $payname $referral_custnum
+             $paydate $payname $referral_custnum $initial_popstate
              $pkgpart $username $password $password2 $sec_phrase $popnum
              $agentnum
              $ieak_file $ieak_template $cck_file $cck_template
@@ -213,6 +213,7 @@ if ( defined $cgi->param('magic') ) {
     $password         = $cgi->param('_password');
     $popnum           = $cgi->param('popnum');
     #$agentnum, #         = $cgi->param('agentnum'),
+    $initial_poptate  = $cgi->param('initial_popstate');
 
     if ( $cgi->param('_password') ne $cgi->param('_password2') ) {
       $error = $init_data->{msgcat}{passwords_dont_match}; #msgcat
@@ -284,7 +285,7 @@ if ( defined $cgi->param('magic') ) {
   $address1 = '';
   $address2 = '';
   $city = '';
-  $state = $init_data->{statedefault};
+  $state = $cgi->param('init_popstate') || $init_data->{statedefault};
   $county = '';
   $country = $init_data->{countrydefault};
   $zip = '';
@@ -303,12 +304,14 @@ if ( defined $cgi->param('magic') ) {
   $sec_phrase = '';
   $popnum = '';
   $referral_custnum = $cgi->param('ref') || '';
+  $init_popstate = $cgi->param('init_popstate') || '';
   print_form;
 }
 
 sub print_form {
 
   $cgi->delete('ref');
+  $cgi->delete('init_popstate');
   $self_url = $cgi->self_url;
 
   $error = "Error: $error" if $error;
@@ -394,42 +397,52 @@ sub popselector {
       var length = what.length;
       what.options[length] = optionName;
     }
-    
-    function popstate_changed(what) {
-      state = what.options[what.selectedIndex].text;
-      what.form.popnum.options.length = 0;
-      what.form.popnum.options[0] = new Option("", "", false, true);
 END
 
-  foreach my $popstate ( sort { $a cmp $b } keys %pop ) {
-    $text .= "\nif ( state == \"$popstate\" ) {\n";
+  if ( $init_popstate ) {
+    $text .='<INPUT TYPE="hidden" NAME="init_popstate" VALUE="$init_popstate">';
+  } else {
+    $text .= <<END;
+      function popstate_changed(what) {
+        state = what.options[what.selectedIndex].text;
+        what.form.popnum.options.length = 0;
+        what.form.popnum.options[0] = new Option("", "", false, true);
+END
 
-    foreach my $pop ( @{$pop{$popstate}}) {
-      my $o_popnum = $pop->{popnum};
-      my $poptext =  $pop->{city}. ', '. $pop->{state}.
-                     ' ('. $pop->{ac}. ')/'. $pop->{exch}. '-'. $pop->{loc};
+    foreach my $popstate ( sort { $a cmp $b } keys %pop ) {
+      $text .= "\nif ( state == \"$popstate\" ) {\n";
 
-      $text .= "opt(what.form.popnum, \"$o_popnum\", \"$poptext\");\n"
+      foreach my $pop ( @{$pop{$popstate}}) {
+        my $o_popnum = $pop->{popnum};
+        my $poptext =  $pop->{city}. ', '. $pop->{state}.
+                       ' ('. $pop->{ac}. ')/'. $pop->{exch}. '-'. $pop->{loc};
+
+        $text .= "opt(what.form.popnum, \"$o_popnum\", \"$poptext\");\n"
+      }
+      $text .= "}\n";
     }
-    $text .= "}\n";
+
+    $text .= "}\n</SCRIPT>\n";
+
+    $text .=
+      qq!<SELECT NAME="popstate" SIZE=1 onChange="popstate_changed(this)">!.
+      qq!<OPTION> !;
+    $text .= "<OPTION>$_" foreach sort { $a cmp $b } keys %pop;
+    $text .= '</SELECT>'; #callback? return 3 html pieces?  #'</TD><TD>';
+
   }
-
-  $text .= "}\n</SCRIPT>\n";
-
-  $text .=
-    qq!<SELECT NAME="popstate" SIZE=1 onChange="popstate_changed(this)">!.
-    qq!<OPTION> !;
-  $text .= "<OPTION>$_" foreach sort { $a cmp $b } keys %pop;
-  $text .= '</SELECT>'; #callback? return 3 html pieces?  #'</TD><TD>';
-
   $text .= qq!<SELECT NAME="popnum" SIZE=1><OPTION> !;
 
   #comment this block to disable initial list population
   my @initial_select = ();
-  if ( scalar( @$pops ) > 100 ) {
-    push @initial_select, $popnum2pop{$popnum} if $popnum2pop{$popnum};
+  if ( $initial_popstate ) {
+    @initial_select = grep { $_->{state} eq $initial_popstate } @$pops;
   } else {
-    @initial_select = @$pops;
+    if ( scalar( @$pops ) > 100 ) {
+      push @initial_select, $popnum2pop{$popnum} if $popnum2pop{$popnum};
+    } else {
+      @initial_select = @$pops;
+    }
   }
   foreach my $pop ( sort { $a->{state} cmp $b->{state} } @initial_select ) {
     $text .= qq!<OPTION VALUE="!. $pop->{popnum}. '"'.
