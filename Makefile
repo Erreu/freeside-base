@@ -35,6 +35,9 @@ SIGNUP_MACHINE = localhost
 SIGNUP_AGENTNUM = 2
 SIGNUP_REFNUM = 2
 
+SELFSERVICE_USER = nostart
+SELFSERVICE_MACHINE = localhost
+
 #---
 
 #not changable yet
