@@ -376,11 +376,35 @@ methods.  Called by the cancel method of FS::cust_pkg (see L<FS::cust_pkg>).
 
 sub cancel { ''; }
 
+=item clone_suspended
+
+Constructor used by FS::part_export::_export_suspend fallback.  Stub returning
+same object for svc_ classes which don't implement a suspension fallback
+(everything except svc_acct at the moment).  Document better.
+
+=cut
+
+sub clone_suspended {
+  shift;
+}
+
+=item clone_kludge_unsuspend 
+
+Constructor used by FS::part_export::_export_unsuspend fallback.  Stub returning
+same object for svc_ classes which don't implement a suspension fallback
+(everything except svc_acct at the moment).  Document better.
+
+=cut
+
+sub clone_kludge_unsuspend {
+  shift;
+}
+
 =back
 
 =head1 VERSION
 
-$Id: svc_Common.pm,v 1.12.4.4 2003-11-12 12:29:55 ivan Exp $
+$Id: svc_Common.pm,v 1.12.4.5 2004-02-23 08:12:54 ivan Exp $
 
 =head1 BUGS
 
