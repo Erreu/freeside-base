@@ -27,7 +27,7 @@ foreach my $msgcode ( keys %messages ) {
   }
 }
 
-print "Message catalog initialized sucessfully\n";
+#print "Message catalog initialized sucessfully\n";
 
 sub messages {
 
@@ -108,6 +108,14 @@ sub messages {
 
     'expired_card' => {
       'en_US' => 'Expired card',
+    },
+
+    'daytime' => {
+      'en_US' => 'Day Phone',
+    },
+
+    'night' => {
+      'en_US' => 'Night Phone',
     },
 
   );
