@@ -65,6 +65,9 @@ blank <B>slipip</B> as well as a fixed shell something like <B>/bin/true</B> or
 <BR><BR>
 
 <%
+
+my %vfields;
+
 #these might belong somewhere else for other user interfaces 
 #pry need to eventually create stuff that's shared amount UIs
 my %defs = (
@@ -130,6 +133,7 @@ my %defs = (
 
   foreach $svcdb (keys(%defs)) {
     my $self = "FS::$svcdb"->new;
+    $vfields{$svcdb} = {};
     foreach my $field ($self->virtual_fields) { # svc_Common::virtual_fields with a null svcpart returns all of them
       my $pvf = $self->pvf($field);
       my @list = $pvf->list;
@@ -138,13 +142,13 @@ my %defs = (
                                     type        => 'select',
                                     select_list => \@list };
       } else {
-        warn "$field";
         $defs{$svcdb}->{$field} = $pvf->label;
       } #endif
+      $vfields{$svcdb}->{$field} = $pvf;
+      warn "\$vfields{$svcdb}->{$field} = $pvf";
     } #next $field
   } #next $svcdb
-    
-
+  
   my @dbs = $hashref->{svcdb}
              ? ( $hashref->{svcdb} )
              : qw( svc_acct svc_domain svc_forward svc_www svc_broadband );
@@ -170,7 +174,7 @@ my %defs = (
       $html .= '<BR><BR>'. table().
                table(). "<TR><TH COLSPAN=$columns>Exports</TH></TR><TR>";
       foreach my $part_export ( @part_export ) {
-        $html .= '<TD><INPUT TYPE="checkbox"'.
+        $html .= '<TD><INPUT TYPE="checbox"'.
                  ' NAME="exportnum'. $part_export->exportnum. '"  VALUE="1" ';
         $html .= 'CHECKED'
           if ( $clone || $part_svc->svcpart ) #null svcpart search causing error
@@ -215,8 +219,8 @@ my %defs = (
             qq!<INPUT TYPE="radio" NAME="${layer}__${field}_flag" VALUE="D"!.
             ' CHECKED'x($flag eq 'D'). ">Default ".
             qq!<INPUT TYPE="radio" NAME="${layer}__${field}_flag" VALUE="F"!.
-            ' CHECKED'x($flag eq 'F'). ">Fixed ".
-            '<BR>';
+            ' CHECKED'x($flag eq 'F'). ">Fixed ";
+          $html .= '<BR>';
         }
         if ( ref($def) ) {
           if ( $def->{type} eq 'select' ) {
@@ -249,6 +253,11 @@ my %defs = (
         } else {
           $html .=
             qq!<INPUT TYPE="text" NAME="${layer}__${field}" VALUE="$value">!;
+        }
+
+        if($vfields{$layer}->{$field}) {
+          $html .= qq!<BR><INPUT TYPE="radio" NAME="${layer}__${field}_flag" VALUE="X"!.
+          ' CHECKED'x($flag eq 'X'). ">Excluded ";
         }
         $html .= "</TD></TR>\n";
       }

@@ -326,12 +326,14 @@ sub qsearch {
   my %result;
   tie %result, "Tie::IxHash";
   @virtual_fields = "FS::$table"->virtual_fields;
+
+  my @stuff = @{ $sth->fetchall_arrayref( {} ) };
   if($pkey) {
-    %result = %{ $sth->fetchall_hashref( $pkey ) };
+    %result = map { $_->{$pkey}, $_ } @stuff;
   } else {
-    my @stuff = @{ $sth->fetchall_arrayref( {} ) };
     @result{@stuff} = @stuff;
   }
+
   $sth->finish;
   if ( keys(%result) and @virtual_fields ) {
     $statement =

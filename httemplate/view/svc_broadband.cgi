@@ -64,6 +64,11 @@ print header('Broadband Service View', menubar(
         qq!<TD BGCOLOR="#ffffff">$ip_addr</TD></TR>!.
       '</TD></TR><TR ROWSPAN="1"><TD></TD></TR>';
 
+foreach (sort { $a cmp $b } $svc_broadband->virtual_fields) {
+  print $svc_broadband->pvf($_)->widget('HTML', 'view', 
+      $svc_broadband->getfield($_)), "\n";
+}
+
 
 #  foreach my $sb_field 
 #      ( qsearch('sb_field', { svcnum => $svcnum }) ) {
