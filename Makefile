@@ -37,7 +37,7 @@ INSTALLGROUP = root
 
 #edit the stuff below to have the daemons start
 
-QUEUED_USER=ivan
+QUEUED_USER=fs_queue
 
 #eventually this shouldn't be needed
 FREESIDE_PATH = `pwd`
