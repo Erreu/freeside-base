@@ -1,6 +1,6 @@
 #!/usr/bin/perl -Tw
 #
-# $Id: signup.cgi,v 1.29.2.5 2002-12-24 23:03:25 ivan Exp $
+# $Id: signup.cgi,v 1.29.2.6 2003-06-24 15:34:41 ivan Exp $
 
 use strict;
 use vars qw( @payby $cgi $locales $packages $pops $init_data $error
@@ -380,7 +380,7 @@ sub popselector {
 
   return '<INPUT TYPE="hidden" NAME="popnum" VALUE="">' unless @$pops;
   return $pops->[0]{city}. ', '. $pops->[0]{state}.
-         ' ('. $pops->[0]{ac}. ')/'. $pops->[0]{exch}.
+         ' ('. $pops->[0]{ac}. ')/'. $pops->[0]{exch}. '-'. $pops->[0]{loc}.
          '<INPUT TYPE="hidden" NAME="popnum" VALUE="'. $pops->[0]{popnum}. '">'
     if scalar(@$pops) == 1;
 
@@ -408,7 +408,7 @@ END
     foreach my $pop ( @{$pop{$popstate}}) {
       my $o_popnum = $pop->{popnum};
       my $poptext =  $pop->{city}. ', '. $pop->{state}.
-                     ' ('. $pop->{ac}. ')/'. $pop->{exch};
+                     ' ('. $pop->{ac}. ')/'. $pop->{exch}. '-'. $pop->{loc};
 
       $text .= "opt(what.form.popnum, \"$o_popnum\", \"$poptext\");\n"
     }
@@ -428,7 +428,7 @@ END
     $text .= qq!<OPTION VALUE="!. $pop->{popnum}. '"'.
              ( ( $popnum && $pop->{popnum} == $popnum ) ? ' SELECTED' : '' ). ">".
              $pop->{city}. ', '. $pop->{state}.
-               ' ('. $pop->{ac}. ')/'. $pop->{exch};
+               ' ('. $pop->{ac}. ')/'. $pop->{exch}. '-'. $pop->{loc};
   }
   $text .= '</SELECT>';
 
