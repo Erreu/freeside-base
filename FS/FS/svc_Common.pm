@@ -446,10 +446,6 @@ sub clone_kludge_unsuspend {
 
 =back
 
-=head1 VERSION
-
-$Id: svc_Common.pm,v 1.12.4.6 2004-03-03 13:44:27 ivan Exp $
-
 =head1 BUGS
 
 The setfixed method return value.

@@ -420,10 +420,6 @@ END
 
 =back
 
-=head1 VERSION
-
-$Id: queue.pm,v 1.15.4.2 2004-05-04 18:44:49 ivan Exp $
-
 =head1 BUGS
 
 $jobnums global

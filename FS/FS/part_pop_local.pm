@@ -98,10 +98,6 @@ sub check {
 
 =back
 
-=head1 VERSION
-
-$Id: part_pop_local.pm,v 1.1 2001-09-26 09:17:06 ivan Exp $
-
 =head1 BUGS
 
 US/CA-centric.

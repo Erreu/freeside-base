@@ -185,10 +185,6 @@ END
 
 =back
 
-=head1 VERSION
-
-$Id: svc_acct_pop.pm,v 1.7.4.2 2003-07-04 01:37:44 ivan Exp $
-
 =head1 BUGS
 
 It should be renamed to part_pop.

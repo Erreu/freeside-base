@@ -167,10 +167,6 @@ sub pkgpart_hashref {
 
 =back
 
-=head1 VERSION
-
-$Id: agent.pm,v 1.3.4.2 2003-09-30 15:01:42 ivan Exp $
-
 =head1 BUGS
 
 =head1 SEE ALSO

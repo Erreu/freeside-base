@@ -148,10 +148,6 @@ sub pkgpart {
 
 =back
 
-=head1 VERSION
-
-$Id: agent_type.pm,v 1.1 1999-08-04 09:03:53 ivan Exp $
-
 =head1 BUGS
 
 =head1 SEE ALSO

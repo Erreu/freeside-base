@@ -416,10 +416,6 @@ sub cust_main {
 
 =back
 
-=head1 VERSION
-
-$Id: cust_pay.pm,v 1.21.4.3 2003-09-10 10:54:47 ivan Exp $
-
 =head1 BUGS
 
 Delete and replace methods.

@@ -236,10 +236,6 @@ sub check {
 
 =back
 
-=head1 VERSION
-
-$Id: svc_acct_sm.pm,v 1.5 2001-09-06 20:41:59 ivan Exp $
-
 =head1 BUGS
 
 The remote commands should be configurable.

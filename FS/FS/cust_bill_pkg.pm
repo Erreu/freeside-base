@@ -138,10 +138,6 @@ sub cust_pkg {
 
 =back
 
-=head1 VERSION
-
-$Id: cust_bill_pkg.pm,v 1.3 2002-04-06 22:32:43 ivan Exp $
-
 =head1 BUGS
 
 =head1 SEE ALSO

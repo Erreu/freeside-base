@@ -268,10 +268,6 @@ sub check {
 
 =back
 
-=head1 VERSION
-
-$Id: cust_refund.pm,v 1.18.4.3 2004-07-06 14:22:57 ivan Exp $
-
 =head1 BUGS
 
 Delete and replace methods.

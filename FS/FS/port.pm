@@ -131,10 +131,6 @@ sub session {
 
 =back
 
-=head1 VERSION
-
-$Id: port.pm,v 1.5 2001-02-14 04:33:06 ivan Exp $
-
 =head1 BUGS
 
 The author forgot to customize this manpage.

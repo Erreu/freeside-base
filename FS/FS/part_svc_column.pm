@@ -100,10 +100,6 @@ sub check {
 
 =back
 
-=head1 VERSION
-
-$Id: part_svc_column.pm,v 1.1 2001-09-07 20:49:15 ivan Exp $
-
 =head1 BUGS
 
 =head1 SEE ALSO
