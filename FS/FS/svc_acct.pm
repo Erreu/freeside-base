@@ -954,7 +954,7 @@ sub seconds_since {
 Returns the numbers of seconds this account has been online between
 TIMESTAMP_START (inclusive) and TIMESTAMP_END (exclusive), according to an
 external SQL radacct table, specified via sqlradius export.  Sessions which
-started in the specified range but are still open are countedfrom session
+started in the specified range but are still open are counted from session
 start to the end of the range (unless they are over 1 day old, in which case
 they are presumed missing their stop record and not counted).  Also, sessions
 which end in the range but started earlier are counted from the start of the
