@@ -1,6 +1,6 @@
 #!/usr/bin/perl -Tw
 #
-# $Id: signup.cgi,v 1.29.2.6 2003-06-24 15:34:41 ivan Exp $
+# $Id: signup.cgi,v 1.29.2.7 2003-07-04 00:51:30 ivan Exp $
 
 use strict;
 use vars qw( @payby $cgi $locales $packages $pops $init_data $error
@@ -397,8 +397,7 @@ sub popselector {
     
     function popstate_changed(what) {
       state = what.options[what.selectedIndex].text;
-      for (var i = what.form.popnum.length;i > 0;i--)
-                what.form.popnum.options[i] = null;
+      what.form.popnum.options.length = 0;
       what.form.popnum.options[0] = new Option("", "", false, true);
 END
 
