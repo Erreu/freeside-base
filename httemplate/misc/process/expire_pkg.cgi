@@ -20,6 +20,6 @@ my $new = new FS::cust_pkg ( \%hash );
 my $error = $new->replace($cust_pkg);
 &eidiot($error) if $error;
 
-print $cgi->redirect(popurl(2). "view/cust_main.cgi?".$cust_pkg->getfield('custnum'));
+print $cgi->redirect(popurl(3). "view/cust_main.cgi?".$cust_pkg->getfield('custnum'));
 
 %>
