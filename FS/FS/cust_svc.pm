@@ -384,7 +384,7 @@ sub seconds_since_sqlradacct {
                                WHERE UserName = ?
                                  AND $str2time AcctStartTime) >= ?
                                  AND $str2time AcctStopTime ) <  ?
-                                 AND $str2time AcctStopTime ) =! 0
+                                 AND $str2time AcctStopTime ) > 0
                                  AND AcctStopTime IS NOT NULL"
     ) or die $dbh->errstr;
     $sth->execute($username, $start, $end) or die $sth->errstr;
@@ -410,7 +410,7 @@ sub seconds_since_sqlradacct {
                               AND $str2time AcctStartTime ) < ?
                               AND $str2time AcctStopTime  ) >= ?
                               AND $str2time AcctStopTime  ) <  ?
-                              AND $str2time AcctStopTime ) != 0
+                              AND $str2time AcctStopTime ) > 0
                               AND AcctStopTime IS NOT NULL"
     ) or die $dbh->errstr;
     $sth->execute($start, $username, $start, $start, $end ) or die $sth->errstr;
