@@ -44,6 +44,8 @@ inherits from FS::Record.  The following fields are currently supported:
 
 =item refund - Amount of the refund
 
+=item reason - Reason for the refund
+
 =item _date - specified as a UNIX timestamp; see L<perlfunc/"time">.  Also see
 L<Time::Local> and L<Date::Parse> for conversion functions.
 
@@ -221,6 +223,7 @@ sub check {
     $self->ut_numbern('refundnum')
     || $self->ut_numbern('custnum')
     || $self->ut_money('refund')
+    || $self->ut_text('reason')
     || $self->ut_numbern('_date')
     || $self->ut_textn('paybatch')
     || $self->ut_enum('closed', [ '', 'Y' ])
@@ -267,7 +270,7 @@ sub check {
 
 =head1 VERSION
 
-$Id: cust_refund.pm,v 1.18.4.2 2002-11-19 09:52:02 ivan Exp $
+$Id: cust_refund.pm,v 1.18.4.3 2004-07-06 14:22:57 ivan Exp $
 
 =head1 BUGS
 
