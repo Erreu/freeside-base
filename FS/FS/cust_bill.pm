@@ -13,7 +13,7 @@ use Date::Format;
 use Mail::Internet 1.44;
 use Mail::Header;
 use Text::Template;
-use File::Temp;
+use File::Temp 0.14;
 use FS::UID qw( datasrc );
 use FS::Record qw( qsearch qsearchs );
 use FS::cust_main;
@@ -1540,9 +1540,9 @@ sub print_ps {
   chdir($dir);
 
   system("pslatex $file.tex >/dev/null 2>&1") == 0
-    or die "pslatex failed: $!";
+    or die "pslatex $file.tex failed: $!";
   system("pslatex $file.tex >/dev/null 2>&1") == 0
-    or die "pslatex failed: $!";
+    or die "pslatex $file.tex failed: $!";
 
   system('dvips', '-q', '-t', 'letter', "$file.dvi", '-o', "$file.ps" ) == 0
     or die "dbips failed: $!";
@@ -1587,9 +1587,9 @@ sub print_pdf {
   #! LaTeX Error: Unknown graphics extension: .eps.
 
   system("pslatex $file.tex >/dev/null 2>&1") == 0
-    or die "pslatex failed: $!";
+    or die "pslatex $file.tex failed: $!";
   system("pslatex $file.tex >/dev/null 2>&1") == 0
-    or die "pslatex failed: $!";
+    or die "pslatex $file.tex failed: $!";
 
   #system('dvipdf', "$file.dvi", "$file.pdf" );
   system(
@@ -1597,7 +1597,7 @@ sub print_pdf {
     "| gs -q -dNOPAUSE -dBATCH -sDEVICE=pdfwrite -sOutputFile=$file.pdf ".
     "     -c save pop -"
   ) == 0
-    or die "dvips failed: $!";
+    or die "dvips | gs failed: $!";
 
   open(PDF, "<$file.pdf")
     or die "can't open $file.pdf: $! (error in LaTeX template?)\n";
