@@ -630,16 +630,6 @@ Calls any export-specific suspend hooks.
 sub suspend {
   my $self = shift;
   return "can't suspend system account" if $self->_check_system;
-  my %hash = $self->hash;
-  unless ( $hash{_password} =~ /^\*SUSPENDED\* /
-           || $hash{_password} eq '*'
-         ) {
-    $hash{_password} = '*SUSPENDED* '.$hash{_password};
-    my $new = new FS::svc_acct ( \%hash );
-    my $error = $new->replace($self);
-    return $error if $error;
-  }
-
   $self->SUPER::suspend;
 }
 
