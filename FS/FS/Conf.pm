@@ -499,6 +499,13 @@ httemplate/docs/config.html
   },
 
   {
+    'key'         => 'invoice_send_receipts',
+    'section'     => 'billing',
+    'description' => 'Send receipts for payments and credits.',
+    'type'        => 'checkbox',
+  },
+
+  {
     'key'         => 'lpr',
     'section'     => 'required',
     'description' => 'Print command for paper invoices, for example `lpr -h\'',
