@@ -54,7 +54,7 @@ FS::UID->install_callback( sub {
 } );
 
 sub send_email {
-  my(%options) = @_;
+  my(%options) = shift;
 
   $ENV{MAILADDRESS} = $options{'from'};
   my $to = ref($options{to}) ? join(', ', @{ $options{to} } ) : $options{to};
@@ -77,16 +77,9 @@ sub send_email {
 
   my $smtpmachine = $conf->config('smtpmachine');
   $!=0;
-
-  my $rv = $message->smtpsend( 'Host' => $smtpmachine )
-    or $message->smtpsend( Host => $smtpmachine, Debug => 1 );
-
-  if ($rv) { #smtpsend returns a list of addresses, not true/false
-    return '';
-  } else {
-    return "can't send email to $to via server $smtpmachine with SMTP: $!";
-  }  
-
+  $message->smtpsend( 'Host' => $smtpmachine )
+    or $message->smtpsend( Host => $smtpmachine, Debug => 1 )
+      or return "can't send email to $to via server $smtpmachine with SMTP: $!";
 }
 
 =head1 BUGS
