@@ -171,7 +171,7 @@ install-selfservice:
 	done
 
 update-selfservice:
- 	for MACHINE in ${SELFSERVICE_MACHINES}; do \
+	for MACHINE in ${SELFSERVICE_MACHINES}; do \
  	  rsync -rlptz fs_selfservice/FS-SelfService/ ${SELFSERVICE_INSTALL_USER}@$$MACHINE:FS-SelfService ;\
  	  ssh ${SELFSERVICE_INSTALL_USER}@$$MACHINE "cd FS-SelfService; perl Makefile.PL && make" ;\
  	  ssh ${SELFSERVICE_INSTALL_USER}@$$MACHINE "cd FS-SelfService; sudo make install" ;\
