@@ -1,6 +1,6 @@
 #!/usr/bin/perl -Tw
 #
-# $Id: signup.cgi,v 1.29.2.16 2003-09-29 06:51:17 ivan Exp $
+# $Id: signup.cgi,v 1.29.2.17 2003-10-14 16:59:54 ivan Exp $
 
 use strict;
 use vars qw( @payby $cgi $locales $packages
@@ -609,7 +609,7 @@ Signup information for <%= $email_name %>:
 <BR><BR>
 Username: <%= $username %><BR>
 Password: <%= $password %><BR>
-Access number: (<%= $ac %>) / $exch - $local<BR>
+Access number: (<%= $ac %>) / <%= $exch %> - <%= $local %><BR>
 Package: <%= $pkg %><BR>
 </BODY></HTML>
 END
