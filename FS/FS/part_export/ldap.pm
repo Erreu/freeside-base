@@ -31,12 +31,14 @@ sub _export_insert {
                  grep { /^\s*(\w+)\s+(.*\S)\s*$/ }
                    split("\n", $self->option('attributes'));
 
-  foreach my $table (qw(reply check)) {
-    my $method = "radius_$table";
-    my %radius = $svc_acct->$method();
-    foreach my $radius ( keys %radius ) {
-      ( my $ldap = $radius ) =~ s/\-//g;
-      $attrib{$ldap} = $radius{$radius};
+  if ( $self->option('radius') ) {
+    foreach my $table (qw(reply check)) {
+      my $method = "radius_$table";
+      my %radius = $svc_acct->$method();
+      foreach my $radius ( keys %radius ) {
+        ( my $ldap = $radius ) =~ s/\-//g;
+        $attrib{$ldap} = $radius{$radius};
+      }
     }
   }
 

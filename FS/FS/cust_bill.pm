@@ -656,6 +656,28 @@ sub realtime_ach {
   );
 }
 
+=item realtime_lec
+
+Attempts to pay this invoice with phone bill (LEC) payment via a
+Business::OnlinePayment realtime gateway.  See
+http://search.cpan.org/search?mode=module&query=Business%3A%3AOnlinePayment
+for supported processors.
+
+=cut
+
+sub realtime_ach {
+  my $self = shift;
+  $self->realtime_bop(
+    'LEC',
+    $bop_processor,
+    $bop_login,
+    $bop_password,
+    $bop_action,
+    \@bop_options,
+    @_
+  );
+}
+
 sub realtime_bop {
   my( $self, $method, $processor, $login, $password, $action, $options ) = @_;
   my $cust_main = $self->cust_main;
@@ -714,12 +736,13 @@ sub realtime_bop {
     ( $content{account_number}, $content{routing_code} ) =
       split('@', $cust_main->payinfo);
     $content{bank_name} = $cust_main->payname;
+  } elsif ( $method eq 'LEC' ) {
+    $content{phone} = $cust_main->payinfo;
   }
   
   my $transaction =
     new Business::OnlinePayment( $processor, @$options );
   $transaction->content(
-    %content,
     'type'           => $method,
     'login'          => $login,
     'password'       => $password,
@@ -739,6 +762,7 @@ sub realtime_bop {
     'referer'        => 'http://cleanwhisker.420.am/',
     'email'          => $email,
     'phone'          => $cust_main->daytime || $cust_main->night,
+    %content, #after
   );
   $transaction->submit();
 
@@ -790,6 +814,7 @@ sub realtime_bop {
     my %method2payby = (
       'CC'    => 'CARD',
       'CHECK' => 'CHEK',
+      'LEC'   => 'LECB',
     );
 
     my $cust_pay = new FS::cust_pay ( {
@@ -1188,7 +1213,7 @@ sub print_text {
 
 =head1 VERSION
 
-$Id: cust_bill.pm,v 1.41.2.8 2002-11-16 10:33:17 ivan Exp $
+$Id: cust_bill.pm,v 1.41.2.9 2002-11-19 09:52:01 ivan Exp $
 
 =head1 BUGS
 
