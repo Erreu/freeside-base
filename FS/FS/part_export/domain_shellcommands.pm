@@ -28,17 +28,15 @@ sub _export_command {
     no strict 'refs';
     ${$_} = $svc_domain->getfield($_) foreach $svc_domain->fields;
   }
+  ( $qdomain = $domain ) =~ s/\./:/g; #see dot-qmail(5): EXTENSION ADDRESSES
 
-#  my $domain_record = $svc_www->domain_record; # or die ?
-#  my $zone = $domain_record->reczone; # or die ?
-#  unless ( $zone =~ /\.$/ ) {
-#    my $svc_domain = $domain_record->svc_domain; # or die ?
-#    $zone .= '.'. $svc_domain->domain;
-#  }
-
-#  my $svc_acct = $svc_www->svc_acct; # or die ?
-#  my $username = $svc_acct->username;
-#  my $homedir = $svc_acct->dir; # or die ?
+  if ( $svc_domain->catchall ) {
+    no strict 'refs';
+    my $svc_acct = $svc_domain->catchall_svc_acct;
+    ${$_} = $svc_acct->getfield($_) foreach qw(uid gid dir);
+  } else {
+    ${$_} = '' foreach qw(uid gid dir);
+  }
 
   #done setting variables for the command
 
