@@ -1,0 +1,151 @@
+#!/usr/bin/perl -w
+
+use strict;
+use Fcntl qw(:flock);
+use Date::Parse;
+use Getopt::Std;
+use FS::UID qw(adminsuidsetup driver_name dbh datasrc);
+use FS::Record qw(qsearch qsearchs);
+use FS::Conf;
+use FS::cust_main;
+
+&untaint_argv;	#what it sounds like  (eww)
+use vars qw($opt_d $opt_v $opt_p $opt_s $opt_y);
+getopts("p:d:vsy:");
+my $user = shift or die &usage;
+
+adminsuidsetup $user;
+
+$FS::cust_main::DEBUG = 1 if $opt_v;
+
+my %search;
+$search{'payby'} = $opt_p if $opt_p;
+
+my @cust_main = @ARGV
+  ? map { qsearchs('cust_main', { custnum => $_, %search } ) } @ARGV
+  : qsearch('cust_main', \%search )
+;
+
+#we're at now now (and later).
+my($time)= $opt_d ? str2time($opt_d) : $^T;
+$time += $opt_y * 86400 if $opt_y;
+
+my($cust_main,%saw);
+foreach $cust_main ( @cust_main ) {
+
+  # $^T not $time because -d is for pre-printing invoices
+  foreach my $cust_pkg (
+    grep { $_->expire && $_->expire <= $^T } $cust_main->ncancelled_pkgs
+  ) {
+    my $error = $cust_pkg->cancel;
+    warn "Error cancelling expired pkg ". $cust_pkg->pkgnum. " for custnum ".
+         $cust_main->custnum. ": $error"
+      if $error;
+  }
+
+  my $error = $cust_main->bill( 'time'    => $time,
+                                'resetup' => $opt_s, );
+  warn "Error billing, custnum ". $cust_main->custnum. ": $error" if $error;
+
+  $cust_main->apply_payments;
+  $cust_main->apply_credits;
+
+  $error = $cust_main->collect( 'invoice_time' => $time );
+  warn "Error collecting, custnum". $cust_main->custnum. ": $error" if $error;
+
+}
+
+if ( driver_name eq 'Pg' ) {
+  dbh->{AutoCommit} = 1; #so we can vacuum
+  foreach my $statement ( 'vacuum', 'vacuum analyze' ) {
+    my $sth = dbh->prepare($statement) or die dbh->errstr;
+    $sth->execute or die $sth->errstr;
+  }
+}
+
+my $conf = new FS::Conf;
+my $dest = $conf->config('dump-scpdest');
+if ( $dest ) {
+  datasrc =~ /dbname=([\w\.]+)$/ or die "unparsable datasrc ". datasrc;
+  my $database = $1;
+  eval "use Net::SCP qw(scp);";
+  if ( driver_name eq 'Pg' ) {
+    system("pg_dump $database >/var/tmp/$database.sql")
+  } else {
+    die "database dumps not yet supported for ". driver_name;
+  }
+  if ( $conf->config('dump-pgpid') ) {
+    eval 'use GnuPG';
+    my $gpg = new GnuPG;
+    $gpg->encrypt( plaintext => "/var/tmp/$database.sql",
+                   output    => "/var/tmp/$database.gpg",
+                   recipient => $conf->config('dump-pgpid'),
+                 );
+    scp("/var/tmp/$database.gpg", $dest);
+    unlink "/var/tmp/$database.gpg" or die $!;
+  } else {
+    scp("/var/tmp/$database.sql", $dest);
+  }
+  unlink "/var/tmp/$database.sql" or die $!;
+}
+
+# subroutines
+
+sub untaint_argv {
+  foreach $_ ( $[ .. $#ARGV ) { #untaint @ARGV
+    #$ARGV[$_] =~ /^([\w\-\/]*)$/ || die "Illegal arguement \"$ARGV[$_]\"";
+    # Date::Parse
+    $ARGV[$_] =~ /^(.*)$/ || die "Illegal arguement \"$ARGV[$_]\"";
+    $ARGV[$_]=$1;
+  }
+}
+
+sub usage {
+  die "Usage:\n\n  freeside-daily [ -d 'date' ] user [ custnum custnum ... ]\n";
+}
+
+=head1 NAME
+
+freeside-daily - Run daily billing and invoice collection events.
+
+=head1 SYNOPSIS
+
+  freeside-daily [ -d 'date' ] [ -y days ] [ -p 'payby' ] [ -s ] [ -v ] user [ custnum custnum ... ]
+
+=head1 DESCRIPTION
+
+Bills customers and runs invoice collection events.  Should be run from
+crontab daily.
+
+This script replaces freeside-bill from 1.3.1.
+
+Bills customers.  Searches for customers who are due for billing and calls
+the bill and collect methods of a cust_main object.  See L<FS::cust_main>.
+
+  -d: Pretend it's 'date'.  Date is in any format Date::Parse is happy with,
+      but be careful.
+
+  -y: In addition to -d, which specifies an absolute date, the -y switch
+      specifies an offset, in days.  For example, "-y 15" would increment the
+      "pretend date" 15 days from whatever was specified by the -d switch
+      (or now, if no -d switch was given).
+
+  -p: Only process customers with the specified payby (I<CARD>, I<DCRD>, I<CHEK>, I<DCHK>, I<BILL>, I<COMP>, I<LECB>)
+
+  -s: re-charge setup fees
+
+  -v: enable debugging
+
+user: From the mapsecrets file - see config.html from the base documentation
+
+custnum: if one or more customer numbers are specified, only bills those
+customers.  Otherwise, bills all customers.
+
+=head1 BUGS
+
+=head1 SEE ALSO
+
+L<FS::cust_main>, config.html from the base documentation
+
+=cut
+
