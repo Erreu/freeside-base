@@ -258,7 +258,7 @@ sub setx {
 
   #get part_svc
   my $svcpart;
-  if ( $self->svcnum ) {
+  if ( $self->svcnum && qsearchs('cust_svc', {'svcnum'=>$self->svcnum}) ) {
     my $cust_svc = $self->cust_svc;
     return "Unknown svcnum" unless $cust_svc; 
     $svcpart = $cust_svc->svcpart;
@@ -380,7 +380,7 @@ sub cancel { ''; }
 
 =head1 VERSION
 
-$Id: svc_Common.pm,v 1.12.4.2 2003-11-11 14:21:32 ivan Exp $
+$Id: svc_Common.pm,v 1.12.4.3 2003-11-11 15:04:24 ivan Exp $
 
 =head1 BUGS
 
