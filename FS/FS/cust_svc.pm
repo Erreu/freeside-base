@@ -13,6 +13,7 @@ use FS::svc_acct_sm;
 use FS::svc_domain;
 use FS::svc_forward;
 use FS::domain_record;
+use FS::part_export;
 
 @ISA = qw( FS::Record );
 
@@ -340,93 +341,108 @@ sub seconds_since {
   $sth->fetchrow_arrayref->[0];
 }
 
-=item seconds_since_sqlradacct TIMESTAMP_START TIMESTAMP_END ( DBI_DATABASE_HANDLE | DATASRC DB_USERNAME DB_PASSWORD )
+=item seconds_since_sqlradacct TIMESTAMP_START TIMESTAMP_END
 
 See L<FS::svc_acct/seconds_since_sqlradacct>.  Equivalent to
 $cust_svc->svc_x->seconds_since, but more efficient.  Meaningless for records
 where B<svcdb> is not "svc_acct".
 
-NOTE: specifying a DATASRC/USERNAME/PASSWORD instead of a DBI database handle
-is not yet implemented.
-
 =cut
 
 #note: implementation here, POD in FS::svc_acct
 sub seconds_since_sqlradacct {
-  my($self, $start, $end, $dbh) = @_;
+  my($self, $start, $end) = @_;
 
   my $username = $self->svc_x->username;
+  
+  my @part_export = $self->part_svc->part_export('sqlradius')
+    or die "no sqlradius export configured for this service type";
+    #or return undef;
 
-  #select a unix time conversion function based on database type
-  my $str2time;
-  if ( $dbh->{Driver}->{Name} eq 'mysql' ) {
-    $str2time = 'UNIX_TIMESTAMP(';
-  } elsif ( $dbh->{Driver}->{Name} eq 'Pg' ) {
-    $str2time = 'EXTRACT( EPOCH FROM ';
-  } else {
-    warn "warning: unknown database type ". $dbh->{Driver}->{Name}.
-         "; guessing how to convert to UNIX timestamps";
-    $str2time = 'extract(epoch from ';
+  my $seconds = 0;
+  foreach my $part_export ( @part_export ) {
+
+    my $dbh = DBI->connect( map { $part_export->option($_) }
+                            qw(datasrc username password)    )
+      or die "can't connect to sqlradius database: ". $DBI::errstr;
+
+    #select a unix time conversion function based on database type
+    my $str2time;
+    if ( $dbh->{Driver}->{Name} eq 'mysql' ) {
+      $str2time = 'UNIX_TIMESTAMP(';
+    } elsif ( $dbh->{Driver}->{Name} eq 'Pg' ) {
+      $str2time = 'EXTRACT( EPOCH FROM ';
+    } else {
+      warn "warning: unknown database type ". $dbh->{Driver}->{Name}.
+           "; guessing how to convert to UNIX timestamps";
+      $str2time = 'extract(epoch from ';
+    }
+  
+    #find closed sessions completely within the given range
+    my $sth = $dbh->prepare("SELECT SUM(acctsessiontime)
+                               FROM radacct
+                               WHERE UserName = ?
+                                 AND $str2time AcctStartTime) >= ?
+                                 AND $str2time AcctStopTime ) <  ?
+                                 AND AcctStopTime =! 0
+                                 AND AcctStopTime IS NOT NULL"
+    ) or die $dbh->errstr;
+    $sth->execute($username, $start, $end) or die $sth->errstr;
+    my $regular = $sth->fetchrow_arrayref->[0];
+  
+    #find open sessions which start in the range, count session start->range end
+    $sth = $dbh->prepare("SELECT SUM( ? - $str2time AcctStartTime ) )
+                            FROM radacct
+                            WHERE UserName = ?
+                              AND $str2time AcctStartTime ) >= ?
+                              AND ( ? - $str2time AcctStartTime ) < 86400
+                              AND (    AcctStopTime = 0
+                                    OR AcctStopTime IS NULL )"
+    ) or die $dbh->errstr;
+    $sth->execute($end, $username, $start, $end) or die $sth->errstr;
+    my $start_during = $sth->fetchrow_arrayref->[0];
+  
+    #find closed sessions which start before the range but stop during,
+    #count range start->session end
+    $sth = $dbh->prepare("SELECT SUM( $str2time AcctStopTime ) - ? ) 
+                            FROM radacct
+                            WHERE UserName = ?
+                              AND $str2time AcctStartTime ) < ?
+                              AND $str2time AcctStopTime  ) >= ?
+                              AND $str2time AcctStopTime  ) <  ?
+                              AND AcctStopTime != 0
+                              AND AcctStopTime IS NOT NULL"
+    ) or die $dbh->errstr;
+    $sth->execute($start, $username, $start, $start, $end ) or die $sth->errstr;
+    my $end_during = $sth->fetchrow_arrayref->[0];
+  
+    #find closed (not anymore - or open) sessions which start before the range
+    # but stop after, or are still open, count range start->range end
+    # don't count open sessions (probably missing stop record)
+    $sth = $dbh->prepare("SELECT COUNT(*)
+                            FROM radacct
+                            WHERE UserName = ?
+                              AND $str2time AcctStartTime ) < ?
+                              AND ( $str2time AcctStopTime ) >= ?
+                                                             )"
+                              #      OR AcctStopTime =  0
+                              #      OR AcctStopTime IS NULL )"
+    ) or die $dbh->errstr;
+    $sth->execute($username, $start, $end ) or die $sth->errstr;
+    my $entire_range = ($end-$start) * $sth->fetchrow_arrayref->[0];
+
+    $seconds += $regular + $end_during + $start_during + $entire_range;
   }
 
-  #find sessions completely within the given range
-  my $sth = $dbh->prepare("SELECT SUM(acctsessiontime)
-                             FROM radacct
-                             WHERE UserName = ?
-                               AND $str2time AcctStartTime) >= ?
-                               AND $str2time AcctStopTime ) <  ?
-                               AND AcctStopTime =! 0
-                               AND AcctStopTime IS NOT NULL"
-  ) or die $dbh->errstr;
-  $sth->execute($username, $start, $end) or die $sth->errstr;
-  my $regular = $sth->fetchrow_arrayref->[0];
+  $seconds;
 
-  #find open sessions which start in the range, count session start->range end
-  $sth = $dbh->prepare("SELECT SUM( ? - $str2time AcctStartTime ) )
-                          FROM radacct
-                          WHERE UserName = ?
-                            AND AcctStartTime >= ?
-                            AND (    AcctStopTime = 0
-                                  OR AcctStopTime IS NULL )"
-  ) or die $dbh->errstr;
-  $sth->execute($end, $username, $start) or die $sth->errstr;
-  my $start_during = $sth->fetchrow_arrayref->[0];
-
-  #find closed sessions which start before the range but stop during,
-  #count range start->session end
-  $sth = $dbh->prepare("SELECT SUM( $str2time AcctStopTime ) - ? ) 
-                          FROM radacct
-                          WHERE UserName = ?
-                            AND AcctStartTime < ?
-                            AND AcctStopTime >= ?
-                            AND AcctStopTime <  ?
-                            AND AcctStopTime != 0
-                            AND AcctStopTime IS NOT NULL"
-  ) or die $dbh->errstr;
-  $sth->execute($start, $username, $start, $start, $end ) or die $sth->errstr;
-  my $end_during = $sth->fetchrow_arrayref->[0];
-
-  #find closed or open sessions which start before the range but stop
-  # after, or are still open, count range start->range end
-  $sth = $dbh->prepare("SELECT COUNT(*)
-                          FROM radacct
-                          WHERE UserName = ?
-                            AND AcctStartTime < ?
-                            AND (    AcctStopTime >= ?
-                                  OR AcctStopTime =  0
-                                  OR AcctStopTime IS NULL )"
-  ) or die $dbh->errstr;
-  $sth->execute($username, $start, $end ) or die $sth->errstr;
-  my $entire_range = ($end-$start) * $sth->fetchrow_arrayref->[0];
-
-  $regular + $end_during + $start_during + $entire_range;
 }
 
 =back
 
 =head1 VERSION
 
-$Id: cust_svc.pm,v 1.15.4.1 2002-10-12 13:26:44 ivan Exp $
+$Id: cust_svc.pm,v 1.15.4.2 2002-10-17 14:16:20 ivan Exp $
 
 =head1 BUGS
 
