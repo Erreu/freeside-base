@@ -1,6 +1,6 @@
 #!/usr/bin/perl -Tw
 #
-# $Id: signup.cgi,v 1.29.2.11 2003-07-04 03:12:13 ivan Exp $
+# $Id: signup.cgi,v 1.29.2.12 2003-07-04 03:15:41 ivan Exp $
 
 use strict;
 use vars qw( @payby $cgi $locales $packages
@@ -8,7 +8,7 @@ use vars qw( @payby $cgi $locales $packages
              $init_data $error
              $last $first $ss $company $address1 $address2 $city $state $county
              $country $zip $daytime $night $fax $invoicing_list $payby $payinfo
-             $paydate $payname $referral_custnum $initial_popstate
+             $paydate $payname $referral_custnum $init_popstate
              $pkgpart $username $password $password2 $sec_phrase $popnum
              $agentnum
              $ieak_file $ieak_template $cck_file $cck_template
@@ -213,7 +213,7 @@ if ( defined $cgi->param('magic') ) {
     $password         = $cgi->param('_password');
     $popnum           = $cgi->param('popnum');
     #$agentnum, #         = $cgi->param('agentnum'),
-    $initial_poptate  = $cgi->param('initial_popstate');
+    $init_popstate  = $cgi->param('init_popstate');
 
     if ( $cgi->param('_password') ne $cgi->param('_password2') ) {
       $error = $init_data->{msgcat}{passwords_dont_match}; #msgcat
@@ -435,8 +435,8 @@ END
 
   #comment this block to disable initial list population
   my @initial_select = ();
-  if ( $initial_popstate ) {
-    @initial_select = grep { $_->{state} eq $initial_popstate } @$pops;
+  if ( $init_popstate ) {
+    @initial_select = grep { $_->{state} eq $init_popstate } @$pops;
   } else {
     if ( scalar( @$pops ) > 100 ) {
       push @initial_select, $popnum2pop{$popnum} if $popnum2pop{$popnum};
