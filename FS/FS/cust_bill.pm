@@ -423,6 +423,10 @@ sub send {
 
   }
 
+  if ( $conf->config('invoice_latex') ) {
+    @print_text = $self->print_ps('', $template);
+  }
+
   if ( grep { $_ eq 'POST' } @invoicing_list ) { #postal
     open(LPR, "|$lpr")
       or return "Can't open pipe to $lpr: $!";
