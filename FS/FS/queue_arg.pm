@@ -100,14 +100,14 @@ sub check {
   ;
   return $error if $error;
 
-  ''; #no error
+  $self->SUPER::check;
 }
 
 =back
 
 =head1 VERSION
 
-$Id: queue_arg.pm,v 1.1 2001-09-11 00:08:18 ivan Exp $
+$Id: queue_arg.pm,v 1.1.8.1 2003-06-23 22:19:35 khoff Exp $
 
 =head1 BUGS
 

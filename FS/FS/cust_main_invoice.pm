@@ -107,7 +107,7 @@ sub check {
   return "Unknown customer"
     unless qsearchs('cust_main',{ 'custnum' => $self->custnum });
 
-  ''; #noerror
+  $self->SUPER::check;
 }
 
 =item checkdest
@@ -163,7 +163,7 @@ sub address {
 
 =head1 VERSION
 
-$Id: cust_main_invoice.pm,v 1.13 2002-09-18 22:50:44 ivan Exp $
+$Id: cust_main_invoice.pm,v 1.13.2.1 2003-06-23 22:19:31 khoff Exp $
 
 =head1 BUGS
 

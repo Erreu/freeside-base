@@ -185,14 +185,14 @@ sub check {
 
   #check invnum, custnum, ?
 
-  ''; #no error
+  $self->SUPER::check;
 }
 
 =back
 
 =head1 VERSION
 
-$Id: cust_pay_batch.pm,v 1.6 2002-02-22 23:08:11 ivan Exp $
+$Id: cust_pay_batch.pm,v 1.6.6.1 2003-06-23 22:19:32 khoff Exp $
 
 =head1 BUGS
 

@@ -127,7 +127,7 @@ sub check {
   return "Cannot apply more than remaining value of invoice"
     unless $self->amount <= $cust_bill->owed;
 
-  ''; #no error
+  $self->SUPER::check;
 }
 
 =item sub cust_credit
@@ -145,7 +145,7 @@ sub cust_credit {
 
 =head1 VERSION
 
-$Id: cust_credit_bill.pm,v 1.7 2002-01-24 16:58:47 ivan Exp $
+$Id: cust_credit_bill.pm,v 1.7.8.1 2003-06-23 22:19:31 khoff Exp $
 
 =head1 BUGS
 

@@ -174,7 +174,7 @@ sub check {
 
   $self->otaker(getotaker);
 
-  ''; #no error
+  $self->SUPER::check;
 }
 
 =item cust_refund
@@ -242,7 +242,7 @@ sub credited {
 
 =head1 VERSION
 
-$Id: cust_credit.pm,v 1.16 2002-06-04 14:35:52 ivan Exp $
+$Id: cust_credit.pm,v 1.16.6.1 2003-06-23 22:19:31 khoff Exp $
 
 =head1 BUGS
 

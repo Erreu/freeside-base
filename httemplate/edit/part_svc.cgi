@@ -109,28 +109,41 @@ my %defs = (
     'dstsvc'    => 'service to which mail is to be forwarded',
     'dst'       => 'someone@another.domain.com to use when dstsvc is 0',
   },
-  'svc_charge' => {
-    'amount'    => 'amount',
-  },
-  'svc_wo' => {
-    'worker'    => 'Worker',
-    '_date'      => 'Date',
-  },
+#  'svc_charge' => {
+#    'amount'    => 'amount',
+#  },
+#  'svc_wo' => {
+#    'worker'    => 'Worker',
+#    '_date'      => 'Date',
+#  },
   'svc_www' => {
     #'recnum' => '',
     #'usersvc' => '',
   },
   'svc_broadband' => {
-    'actypenum' => 'This is the actypenum that refers to the type of AC that can be provisioned for this service.  This field must be set fixed.',
     'speed_down' => 'Maximum download speed for this service in Kbps.  0 denotes unlimited.',
     'speed_up' => 'Maximum upload speed for this service in Kbps.  0 denotes unlimited.',
-    'acnum' => 'acnum of a specific AC that this service is restricted to.  Not required',
     'ip_addr' => 'IP address.  Leave blank for automatic assignment.',
-    'ip_netmask' => 'Mask length, aka. netmask bits.  (Eg. 255.255.255.0 == 24)',
-    'mac_addr' => 'MAC address which is used by some ACs for access control.  Specified by 6 colon seperated hex octets. (Eg. 00:00:0a:bc:1a:2b)',
-    'location' => 'Defines the physically location at which this service was installed.  This is not necessarily the billing address',
+    'blocknum' => 'Address block.',
   },
 );
+
+  foreach $svcdb (keys(%defs)) {
+    my $self = "FS::$svcdb"->new;
+    foreach my $field ($self->virtual_fields) { # svc_Common::virtual_fields with a null svcpart returns all of them
+      my $pvf = $self->pvf($field);
+      my @list = $pvf->list;
+      if (scalar @list) {
+        $defs{$svcdb}->{$field} = { desc        => $pvf->label,
+                                    type        => 'select',
+                                    select_list => \@list };
+      } else {
+        warn "$field";
+        $defs{$svcdb}->{$field} = $pvf->label;
+      } #endif
+    } #next $field
+  } #next $svcdb
+    
 
   my @dbs = $hashref->{svcdb}
              ? ( $hashref->{svcdb} )
@@ -209,12 +222,20 @@ my %defs = (
           if ( $def->{type} eq 'select' ) {
             $html .= qq!<SELECT NAME="${layer}__${field}">!;
             $html .= '<OPTION> </OPTION>' unless $value;
-            foreach my $record ( qsearch( $def->{select_table}, {} ) ) {
-              my $rvalue = $record->getfield($def->{select_key});
-              $html .= qq!<OPTION VALUE="$rvalue"!.
-                       ( $rvalue==$value ? ' SELECTED>' : '>' ).
-                       $record->getfield($def->{select_label}). '</OPTION>';
-            }
+            if ( $def->{select_table} ) {
+              foreach my $record ( qsearch( $def->{select_table}, {} ) ) {
+                my $rvalue = $record->getfield($def->{select_key});
+                $html .= qq!<OPTION VALUE="$rvalue"!.
+                         ( $rvalue==$value ? ' SELECTED>' : '>' ).
+                         $record->getfield($def->{select_label}). '</OPTION>';
+              } #next $record
+            } else { # select_list
+              foreach my $item ( @{$def->{select_list}} ) {
+                $html .= qq!<OPTION VALUE="$item"!.
+                         ( $item eq $value ? ' SELECTED>' : '>' ).
+                         $item. '</OPTION>';
+              } #next $item
+            } #endif
             $html .= '</SELECT>';
           } elsif ( $def->{type} eq 'radius_usergroup_selector' ) {
             $html .= FS::svc_acct::radius_usergroup_selector(

@@ -271,7 +271,7 @@ sub check {
     die "ack!";
   }
 
-  ''; #no error
+  $self->SUPER::check;
 }
 
 =item increment_serial
@@ -332,7 +332,7 @@ sub zone {
 
 =head1 VERSION
 
-$Id: domain_record.pm,v 1.15 2003-04-29 18:28:50 khoff Exp $
+$Id: domain_record.pm,v 1.15.2.1 2003-06-23 22:19:32 khoff Exp $
 
 =head1 BUGS
 

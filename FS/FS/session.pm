@@ -216,7 +216,7 @@ sub check {
   return $error if $error;
   return "Unknown svcnum"
     unless qsearchs('svc_acct', { 'svcnum' => $self->svcnum } );
-  '';
+  $self->SUPER::check;
 }
 
 =item nas_heartbeat
@@ -247,7 +247,7 @@ sub svc_acct {
 
 =head1 VERSION
 
-$Id: session.pm,v 1.7 2001-04-15 13:35:12 ivan Exp $
+$Id: session.pm,v 1.7.14.1 2003-06-23 22:19:36 khoff Exp $
 
 =head1 BUGS
 

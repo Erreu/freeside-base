@@ -92,6 +92,7 @@ sub check {
       or $self->ut_text('state')
       or $self->ut_number('npa')
       or $self->ut_number('nxx')
+      or $self->SUPER::check
   ;
 
 }
@@ -100,7 +101,7 @@ sub check {
 
 =head1 VERSION
 
-$Id: part_pop_local.pm,v 1.1 2001-09-26 09:17:06 ivan Exp $
+$Id: part_pop_local.pm,v 1.1.8.1 2003-06-23 22:19:34 khoff Exp $
 
 =head1 BUGS
 
