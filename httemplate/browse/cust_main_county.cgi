@@ -21,9 +21,10 @@ print '<BR><BR>'. &table(). <<END;
         <TH><FONT SIZE=-1>Country</FONT></TH>
         <TH><FONT SIZE=-1>State</FONT></TH>
         <TH>County</TH>
-        <TH>Taxclass</TH>
+        <TH>Taxclass<BR><FONT SIZE=-1>(per-package classification)</FONT></TH>
+        <TH>Tax name<BR><FONT SIZE=-1>(printed on invoices)</FONT></TH>
         <TH><FONT SIZE=-1>Tax</FONT></TH>
-        <TH><FONT SIZE=-1>Exempt<BR>per<BR>month</TH>
+        <TH><FONT SIZE=-1>Exemption</TH>
       </TR>
 END
 
@@ -53,7 +54,9 @@ END
       last if $hashref->{country} ne $regions[$i+$j]->country
            || $hashref->{state} ne $regions[$i+$j]->state
            || $hashref->{tax} != $regions[$i+$j]->tax
-           || $hashref->{exempt_amount} != $regions[$i+$j]->exempt_amount;
+           || $hashref->{exempt_amount} != $regions[$i+$j]->exempt_amount
+           || $hashref->{setuptax} ne $regions[$i+$j]->setuptax
+           || $hashref->{recurtax} ne $regions[$i+$j]->recurtax;
     }
 
     my $newsup=0;
@@ -111,10 +114,22 @@ END
   }
   print "</TD>";
 
+  print "<TD";
+  if ( $hashref->{taxname} ) {
+    print ' BGCOLOR="#ffffff">'. $hashref->{taxname};
+  } else {
+    print ' BGCOLOR="#cccccc">Tax';
+  }
+  print "</TD>";
+
   print "<TD BGCOLOR=\"#ffffff\">$hashref->{tax}%</TD>".
-        '<TD BGCOLOR="#ffffff">$'.
-          sprintf("%.2f", $hashref->{exempt_amount} || 0). '</TD>'.
-        '</TR>';
+        '<TD BGCOLOR="#ffffff">';
+  print '$'. sprintf("%.2f", $hashref->{exempt_amount} ).
+        '&nbsp;per&nbsp;month<BR>'
+    if $hashref->{exempt_amount};
+  print 'Setup&nbsp;fee<BR>' if $hashref->{setuptax} =~ /^Y$/i;
+  print 'Recurring&nbsp;fee<BR>' if $hashref->{recurtax} =~ /^Y$/i;
+  print '</TD></TR>';
 
 }
 
