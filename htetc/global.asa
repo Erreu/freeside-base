@@ -66,7 +66,7 @@ sub Script_OnStart {
 
 sub Script_OnFlush {
   my $ref = $Response->{BinaryRef};
-  $$ref = $cgi->header( @FS::CGI::header ) . $$ref;
+  #$$ref = $cgi->header( @FS::CGI::header ) . $$ref;
   if ( dbh->can('sprintProfile') ) {
 
     $$ref =~ s/<\/BODY>[\s\n]*<\/HTML>[\s\n]*$//i
