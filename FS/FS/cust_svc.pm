@@ -296,7 +296,7 @@ sub label {
     $tag = $svc_x->getfield('domain');
   } elsif ( $svcdb eq 'svc_www' ) {
     my $domain = qsearchs( 'domain_record', { 'recnum' => $svc_x->recnum } );
-    $tag = $domain->reczone;
+    $tag = $domain->zone;
   } else {
     cluck "warning: asked for label of unsupported svcdb; using svcnum";
     $tag = $svc_x->getfield('svcnum');

@@ -309,11 +309,30 @@ sub svc_domain {
   qsearchs('svc_domain', { svcnum => $self->svcnum } );
 }
 
+=item zone
+
+Returns the canonical zone name.
+
+=cut
+
+sub zone {
+  my $self = shift;
+  my $zone = $self->reczone; # or die ?
+  if ( $zone =~ /\.$/ ) {
+    $zone =~ s/\.$//;
+  } else {
+    my $svc_domain = $self->svc_domain; # or die ?
+    $zone .= '.'. $svc_domain->domain;
+    $zone =~ s/^\@\.//;
+  }
+  $zone;
+}
+
 =back
 
 =head1 VERSION
 
-$Id: domain_record.pm,v 1.11.4.1 2003-03-20 03:42:51 ivan Exp $
+$Id: domain_record.pm,v 1.11.4.2 2003-03-29 04:52:35 ivan Exp $
 
 =head1 BUGS
 
