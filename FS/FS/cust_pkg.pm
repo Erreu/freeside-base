@@ -485,7 +485,7 @@ Useful for billing metered services.
 
 sub last_bill {
   my $self = shift;
-  if ( $self->dbdef_table->column('manual_flag') ) {
+  if ( $self->dbdef_table->column('last_bill') ) {
     return $self->setfield('last_bill', $_[1]) if @_;
     return $self->getfield('last_bill') if $self->getfield('last_bill');
   }    
