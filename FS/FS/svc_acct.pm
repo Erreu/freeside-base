@@ -1,7 +1,7 @@
 package FS::svc_acct;
 
 use strict;
-use vars qw( @ISA $DEBUG $me $noexport_hack $conf
+use vars qw( @ISA $DEBUG $me $conf
              $dir_prefix @shells $usernamemin
              $usernamemax $passwordmin $passwordmax
              $username_ampersand $username_letter $username_letterfirst
@@ -190,7 +190,7 @@ sqlradius export only)
 
 (TODOC: L<FS::queue> and L<freeside-queued>)
 
-(TODOC: new exports! $noexport_hack)
+(TODOC: new exports!)
 
 =cut
 
@@ -415,7 +415,7 @@ error, otherwise returns false.
 
 The corresponding FS::cust_svc record will be deleted as well.
 
-(TODOC: new exports! $noexport_hack)
+(TODOC: new exports!)
 
 =cut
 
