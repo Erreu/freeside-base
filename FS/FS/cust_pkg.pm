@@ -1,8 +1,7 @@
 package FS::cust_pkg;
 
 use strict;
-use vars qw(@ISA);
-use vars qw( $quiet );
+use vars qw(@ISA $quiet $disable_agentcheck);
 use FS::UID qw( getotaker dbh );
 use FS::Record qw( qsearch qsearchs );
 use FS::cust_svc;
@@ -29,6 +28,8 @@ use Mail::Internet 1.44;
 use Mail::Header;
 
 @ISA = qw( FS::Record );
+
+$disable_agentcheck = 0;
 
 sub _cache {
   my $self = shift;
@@ -151,10 +152,13 @@ sub insert {
   my $cust_main = $self->cust_main;
   return "Unknown customer ". $self->custnum unless $cust_main;
 
-  my $agent = qsearchs( 'agent', { 'agentnum' => $cust_main->agentnum } );
-  my $pkgpart_href = $agent->pkgpart_hashref;
-  return "agent ". $agent->agentnum. " can't purchase pkgpart ". $self->pkgpart
-    unless $pkgpart_href->{ $self->pkgpart };
+  unless ( $disable_agentcheck ) {
+    my $agent = qsearchs( 'agent', { 'agentnum' => $cust_main->agentnum } );
+    my $pkgpart_href = $agent->pkgpart_hashref;
+    return "agent ". $agent->agentnum.
+           " can't purchase pkgpart ". $self->pkgpart
+      unless $pkgpart_href->{ $self->pkgpart };
+  }
 
   $self->SUPER::insert;
 
