@@ -206,11 +206,6 @@ foreach (sort { $a cmp $b } $svc_acct->virtual_fields) {
 %>
 </TABLE></TD></TR></TABLE>
 <%
-foreach (sort { $a cmp $b } keys(%{$sb_field})) {
-  print q!<TR><TD ALIGN="right">! . $_ .
-        q!</TD><TD BGCOLOR="#ffffff">! . $sb_field->{$_} .
-        q!</TD></TR>!;
-}
 
 print '<BR><BR>';
 

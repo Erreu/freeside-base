@@ -26,7 +26,7 @@ if($cgi->param('error')) {
 %> <FONT SIZE="+1" COLOR="#ff0000">Error: <%=$cgi->param('error')%></FONT>
 <% } %>
 
-<FORM ACTION="<%=popurl(1)%>process/generic.cgi" METHOD=POST>
+<FORM ACTION="<%=popurl(1)%>process/router.cgi" METHOD=POST>
   <INPUT TYPE="hidden" NAME="table" VALUE="router">
   <INPUT TYPE="hidden" NAME="redirect_ok" VALUE="<%=$p3%>/browse/router.cgi">
   <INPUT TYPE="hidden" NAME="redirect_error" VALUE="<%=$p3%>/edit/router.cgi">
@@ -59,7 +59,7 @@ foreach my $part_svc ( qsearch('part_svc', { svcdb    => 'svc_broadband',
   <BR>
   <INPUT TYPE="checkbox" NAME="svcpart_<%=$part_svc->svcpart%>"<%=
       qsearchs('part_svc_router', { svcpart   => $part_svc->svcpart, 
-                                    routernum => $routernum } ) ? 'CHECKED' : ''%> VALUE="ON">
+                                    routernum => $routernum } ) ? ' CHECKED' : ''%> VALUE="ON">
   <A HREF="<%=${p}%>edit/part_svc.cgi?<%=$part_svc->svcpart%>">
     <%=$part_svc->svcpart%>: <%=$part_svc->svc%></A>
   <% } %>
