@@ -1,6 +1,6 @@
 #!/usr/bin/perl -Tw
 #
-# $Id: signup.cgi,v 1.29.2.9 2003-07-04 01:48:29 ivan Exp $
+# $Id: signup.cgi,v 1.29.2.10 2003-07-04 01:54:21 ivan Exp $
 
 use strict;
 use vars qw( @payby $cgi $locales $packages
@@ -425,9 +425,9 @@ END
   $text .= qq!<SELECT NAME="popnum" SIZE=1><OPTION> !;
 
   #comment this block to disable initial list population
-  my @initial_select;
+  my @initial_select = ();
   if ( scalar( @$pops ) > 100 ) {
-    @initial_select = ( $popnum2pop{$popnum} );
+    push @initial_select, $popnum2pop{$popnum} if $popnum2pop{$popnum};
   } else {
     @initial_select = @$pops;
   }
