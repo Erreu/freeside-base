@@ -137,7 +137,7 @@ sub part_svc {
 
 =head1 VERSION
 
-$Id: pkg_svc.pm,v 1.3 2002-06-10 01:39:50 khoff Exp $
+$Id: pkg_svc.pm,v 1.1 1999-08-04 09:03:53 ivan Exp $
 
 =head1 BUGS
 
