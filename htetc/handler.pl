@@ -71,6 +71,8 @@ sub handler
       use HTML::Entities;
       use IO::Handle;
       use IO::File;
+      use Net::Whois::Raw qw(whois);
+      use Business::CreditCard;
       use String::Approx qw(amatch);
       use HTML::Widgets::SelectLayers 0.03;
       use FS::UID qw(cgisuidsetup dbh getotaker datasrc driver_name);
