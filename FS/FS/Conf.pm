@@ -1200,6 +1200,20 @@ httemplate/docs/config.html
     'type'        => 'checkbox',
   },
 
+  {
+    'key'         => 'svc_www-enable_subdomains',
+    'section'     => '',
+    'description' => 'Enable selection of specific subdomains for virtual host creation.',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'svc_www-usersvc_svcpart',
+    'section'     => '',
+    'description' => 'Allowable service definition svcparts for virtual hosts, one per line.',
+    'type'        => 'textarea',
+  },
+
 );
 
 1;
