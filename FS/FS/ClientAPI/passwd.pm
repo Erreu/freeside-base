@@ -15,7 +15,8 @@ FS::ClientAPI->register_handlers(
 sub passwd {
   my $packet = shift;
 
-  my $domain = qsearchs('svc_domain', { 'domain' => $packet->{'domain'} } )
+  my $domain = $FS::ClientAPI::domain || $packet->{'domain'};
+  my $svc_domain = qsearchs('svc_domain', { 'domain' => $domain } )
     or return { error => "Domain $domain not found" };
 
   my $old_password = $packet->{'old_password'};
@@ -23,14 +24,14 @@ sub passwd {
   my $new_gecos = $packet->{'new_gecos'};
   my $new_shell = $packet->{'new_shell'};
 
-   #false laziness w/FS::ClientAPI::MyAccount::login
- 
-   my $svc_acct = qsearchs( 'svc_acct', { 'username'  => $packet->{'username'},
-                                          'domsvc'    => $svc_domain->svcnum, }
-                          );
-   return { error => 'User not found.' } unless $svc_acct;
-   return { error => 'Incorrect password.' }
-     unless $svc_acct->check_password($old_password);
+  #false laziness w/FS::ClientAPI::MyAccount::login
+
+  my $svc_acct = qsearchs( 'svc_acct', { 'username'  => $packet->{'username'},
+                                         'domsvc'    => $svc_domain->svcnum, }
+                         );
+  return { error => 'User not found.' } unless $svc_acct;
+  return { error => 'Incorrect password.' }
+    unless $svc_acct->check_password($old_password);
 
   my %hash = $svc_acct->hash;
   my $new_svc_acct = new FS::svc_acct ( \%hash );
