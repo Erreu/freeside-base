@@ -92,7 +92,7 @@ inherits from FS::Record.  The following fields are currently supported:
 
 =item setup - date
 
-=item bill - date
+=item bill - date (next bill date)
 
 =item susp - date
 
@@ -531,12 +531,47 @@ sub seconds_since_sqlradacct {
   my $seconds = 0;
 
   foreach my $cust_svc (
-    grep { $_->part_svc->svcdb eq 'svc_acct' } $self->cust_svc
+    grep {
+      my $part_svc = $_->part_svc;
+      $part_svc->svcdb eq 'svc_acct'
+        && scalar($part_svc->part_export('sqlradius'));
+    } $self->cust_svc
   ) {
     $seconds += $cust_svc->seconds_since_sqlradacct($start, $end);
   }
 
   $seconds;
+
+}
+
+=item attribute_since_sqlradacct TIMESTAMP_START TIMESTAMP_END ATTRIBUTE
+
+Returns the sum of the given attribute for all accounts (see L<FS::svc_acct>)
+in this package for sessions ending between TIMESTAMP_START (inclusive) and
+TIMESTAMP_END (exclusive).
+
+TIMESTAMP_START and TIMESTAMP_END are specified as UNIX timestamps; see
+L<perlfunc/"time">.  Also see L<Time::Local> and L<Date::Parse> for conversion
+functions.
+
+=cut
+
+sub attribute_since_sqlradacct {
+  my($self, $start, $end, $attrib) = @_;
+
+  my $sum = 0;
+
+  foreach my $cust_svc (
+    grep {
+      my $part_svc = $_->part_svc;
+      $part_svc->svcdb eq 'svc_acct'
+        && scalar($part_svc->part_export('sqlradius'));
+    } $self->cust_svc
+  ) {
+    $sum += $cust_svc->attribute_since_sqlradacct($start, $end, $attrib);
+  }
+
+  $sum;
 
 }
 
@@ -719,10 +754,6 @@ sub order {
 }
 
 =back
-
-=head1 VERSION
-
-$Id: cust_pkg.pm,v 1.23.4.3 2002-10-17 14:16:20 ivan Exp $
 
 =head1 BUGS
 
