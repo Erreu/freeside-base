@@ -312,8 +312,8 @@ sub insert {
       if ( exists($conflict_user_svcpart{$dup_svcpart})
            || exists($conflict_userdomain_svcpart{$dup_svcpart}) ) {
         $dbh->rollback if $oldAutoCommit;
-        return "duplicate uid: conflicts with svcnum". $dup_uid->svcnum.
-               "via exportnum ". $conflict_user_svcpart{$dup_svcpart}
+        return "duplicate uid: conflicts with svcnum ". $dup_uid->svcnum.
+               " via exportnum ". $conflict_user_svcpart{$dup_svcpart}
                                  || $conflict_userdomain_svcpart{$dup_svcpart};
       }
     }
