@@ -297,7 +297,7 @@ sub payby {
 
 =head1 VERSION
 
-$Id: part_pkg.pm,v 1.16 2002-06-10 01:39:50 khoff Exp $
+$Id: part_pkg.pm,v 1.14 2002-05-09 12:38:39 ivan Exp $
 
 =head1 BUGS
 
