@@ -896,7 +896,7 @@ sub realtime_bop {
 
     if ( !$realtime_bop_decline_quiet && $conf->exists('emaildecline')
          && grep { $_ ne 'POST' } $cust_main->invoicing_list
-         && ! grep { $_ eq $transaction->error_message }
+         && ! grep { $transaction->error_message =~ /$_/ }
                    $conf->config('emaildecline-exclude')
     ) {
       my @templ = $conf->config('declinetemplate');
