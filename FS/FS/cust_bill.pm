@@ -686,6 +686,10 @@ sub realtime_lec {
 
 sub realtime_bop {
   my( $self, $method, $processor, $login, $password, $action, $options ) = @_;
+
+  #trim an extraneous blank line
+  pop @$options if scalar(@$options) % 2 && $options->[-1] =~ /^\s*$/;
+
   my $cust_main = $self->cust_main;
   my $amount = $self->owed;
 
@@ -1218,7 +1222,7 @@ sub print_text {
 
 =head1 VERSION
 
-$Id: cust_bill.pm,v 1.41.2.19 2002-12-28 09:16:47 ivan Exp $
+$Id: cust_bill.pm,v 1.41.2.20 2003-01-10 07:42:39 ivan Exp $
 
 =head1 BUGS
 
