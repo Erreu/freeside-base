@@ -656,6 +656,28 @@ sub realtime_ach {
   );
 }
 
+=item realtime_lec
+
+Attempts to pay this invoice with phone bill (LEC) payment via a
+Business::OnlinePayment realtime gateway.  See
+http://search.cpan.org/search?mode=module&query=Business%3A%3AOnlinePayment
+for supported processors.
+
+=cut
+
+sub realtime_lec {
+  my $self = shift;
+  $self->realtime_bop(
+    'LEC',
+    $bop_processor,
+    $bop_login,
+    $bop_password,
+    $bop_action,
+    \@bop_options,
+    @_
+  );
+}
+
 sub realtime_bop {
   my( $self, $method, $processor, $login, $password, $action, $options ) = @_;
   my $cust_main = $self->cust_main;
@@ -714,12 +736,13 @@ sub realtime_bop {
     ( $content{account_number}, $content{routing_code} ) =
       split('@', $cust_main->payinfo);
     $content{bank_name} = $cust_main->payname;
+  } elsif ( $method eq 'LEC' ) {
+    $content{phone} = $cust_main->payinfo;
   }
   
   my $transaction =
     new Business::OnlinePayment( $processor, @$options );
   $transaction->content(
-    %content,
     'type'           => $method,
     'login'          => $login,
     'password'       => $password,
@@ -739,6 +762,7 @@ sub realtime_bop {
     'referer'        => 'http://cleanwhisker.420.am/',
     'email'          => $email,
     'phone'          => $cust_main->daytime || $cust_main->night,
+    %content, #after
   );
   $transaction->submit();
 
@@ -790,6 +814,7 @@ sub realtime_bop {
     my %method2payby = (
       'CC'     => 'CARD',
       'ECHECK' => 'CHEK',
+      'LEC'    => 'LECB',
     );
 
     my $cust_pay = new FS::cust_pay ( {
@@ -817,11 +842,9 @@ sub realtime_bop {
     my $perror = "$processor error, invnum #". $self->invnum. ': '.
                  $transaction->result_code. ": ". $transaction->error_message;
 
-    if ( !($ENV{SIGNUP_SERVER} && $conf->exists('signup_server-quiet'))
-         && !($ENV{SELFSERVICE_SERVER} && $conf->exists('selfservice_server-quiet'))
-         && $conf->exists('emaildecline')
+    if ( $conf->exists('emaildecline')
          && grep { $_ ne 'POST' } $cust_main->invoicing_list
-	 ) {
+    ) {
       my @templ = $conf->config('declinetemplate');
       my $template = new Text::Template (
         TYPE   => 'ARRAY',
@@ -1161,15 +1184,13 @@ sub print_text {
 	#  );
 
   #and subroutine for the template
-
   sub FS::cust_bill::_template::invoice_lines {
-    my $lines = shift or return @buf;
+    my $lines = shift || scalar(@buf);
     map { 
       scalar(@buf) ? shift @buf : [ '', '' ];
     }
     ( 1 .. $lines );
   }
-
 
   #and fill it in
   $FS::cust_bill::_template::page = 1;
@@ -1190,7 +1211,7 @@ sub print_text {
 
 =head1 VERSION
 
-$Id: cust_bill.pm,v 1.41.2.14 2002-12-14 11:13:53 steve Exp $
+$Id: cust_bill.pm,v 1.41.2.15 2002-12-14 12:19:16 steve Exp $
 
 =head1 BUGS
 
