@@ -1,7 +1,7 @@
 package FS::cust_pkg;
 
 use strict;
-use vars qw(@ISA $disable_agentcheck);
+use vars qw(@ISA $disable_agentcheck $DEBUG);
 use FS::UID qw( getotaker dbh );
 use FS::Record qw( qsearch qsearchs );
 use FS::cust_svc;
@@ -28,6 +28,8 @@ use Mail::Internet 1.44;
 use Mail::Header;
 
 @ISA = qw( FS::Record );
+
+$DEBUG = 0;
 
 $disable_agentcheck = 0;
 
@@ -718,6 +720,12 @@ sub order {
       push @{ $svcnum{$cust_svc->getfield('svcpart')} }, $cust_svc;
     }
   }
+  if ( $DEBUG ) {
+    foreach my $svcpart ( keys %svcnum ) {
+      warn "initial svcpart $svcpart: existing svcnums ".
+           join(', ', map { $_->svcnum } @{$svcnum{$svcpart}} ). "\n";
+    }
+  }
   
   my @cust_svc;
   #generate @cust_svc
@@ -736,6 +744,13 @@ sub order {
           qsearch('pkg_svc', { pkgpart  => $pkgpart,
                                quantity => { op=>'>', value=>'0', } } )
     ];
+  }
+
+  if ( $DEBUG ) {
+    foreach my $svcpart ( keys %svcnum ) {
+      warn "after regular move svcpart $svcpart: existing svcnums ".
+           join(', ', map { $_->svcnum } @{$svcnum{$svcpart}} ). "\n";
+    }
   }
 
   #special-case until this can be handled better
@@ -774,7 +789,15 @@ sub order {
     }
 
   }
-  
+
+  if ( $DEBUG ) {
+    foreach my $svcpart ( keys %svcnum ) {
+      warn "after special-case move svcpart $svcpart: existing svcnums ".
+           join(', ', map { $_->svcnum } @{$svcnum{$svcpart}} ). "\n";
+    }
+  }
+
+
   #check for leftover services
   foreach (keys %svcnum) {
     next unless @{ $svcnum{$_} };
