@@ -417,9 +417,9 @@ sub send {
     $!=0;
     $message->smtpsend( Host => $smtpmachine )
       or $message->smtpsend( Host => $smtpmachine, Debug => 1 )
-        or return "(customer # ". $self->custnum. ") can't send invoice email".
-                  " to ". join(', ', grep { $_ ne 'POST' } @invoicing_list ).
-                  " via server $smtpmachine with SMTP: $!";
+        or die "(customer # ". $self->custnum. ") can't send invoice email".
+               " to ". join(', ', grep { $_ ne 'POST' } @invoicing_list ).
+               " via server $smtpmachine with SMTP: $!\n";
 
   }
 
@@ -429,11 +429,11 @@ sub send {
 
   if ( grep { $_ eq 'POST' } @invoicing_list ) { #postal
     open(LPR, "|$lpr")
-      or return "Can't open pipe to $lpr: $!";
+      or die "Can't open pipe to $lpr: $!\n";
     print LPR @print_text;
     close LPR
-      or return $! ? "Error closing $lpr: $!"
-                   : "Exit status $? from $lpr";
+      or die $! ? "Error closing $lpr: $!\n"
+                : "Exit status $? from $lpr\n";
   }
 
   '';
