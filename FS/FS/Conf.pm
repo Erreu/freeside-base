@@ -1151,6 +1151,13 @@ httemplate/docs/config.html
                      ],
   },
 
+  {
+    'key'         => 'allow_negative_charges',
+    'section'     => 'billing',
+    'description' => 'Allow negative charges.  Normally not used unless importing data from a legacy system that requires this.',
+    'type'        => 'checkbox',
+  },
+
 );
 
 1;
