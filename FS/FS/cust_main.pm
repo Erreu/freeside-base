@@ -1369,8 +1369,8 @@ sub collect {
 
       my $error;
       {
-        $FS::cust_bill::realtime_bop_decline_quiet; #supress "used only once"
-                                                    # warning
+        #supress "used only once" warning
+        $FS::cust_bill::realtime_bop_decline_quiet += 0;
         local $FS::cust_bill::realtime_bop_decline_quiet = 1
           if $options{'quiet'};
         $error = eval $part_bill_event->eventcode;
