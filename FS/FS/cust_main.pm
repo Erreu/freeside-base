@@ -4,7 +4,7 @@ use strict;
 use vars qw( @ISA $conf $Debug $import );
 use Safe;
 use Carp;
-use Time::Local;
+use Time::Local qw(timelocal_nocheck);
 use Date::Format;
 #use Date::Manip;
 use Business::CreditCard;
@@ -953,6 +953,7 @@ sub bill {
                ": $setup_prog";
       };
       $setup_prog = $1;
+      $setup_prog = '0' if $setup_prog =~ /^\s*$/;
 
         #my $cpt = new Safe;
         ##$cpt->permit(); #what is necessary?
@@ -982,6 +983,7 @@ sub bill {
                ": $recur_prog";
       };
       $recur_prog = $1;
+      $recur_prog = '0' if $recur_prog =~ /^\s*$/;
 
       # shared with $recur_prog
       $sdate = $cust_pkg->bill || $cust_pkg->setup || $time;
@@ -1011,7 +1013,7 @@ sub bill {
       $mon += $part_pkg->freq;
       until ( $mon < 12 ) { $mon -= 12; $year++; }
       $cust_pkg->setfield('bill',
-        timelocal($sec,$min,$hour,$mday,$mon,$year));
+        timelocal_nocheck($sec,$min,$hour,$mday,$mon,$year));
       $cust_pkg_mod_flag = 1; 
     }
 
