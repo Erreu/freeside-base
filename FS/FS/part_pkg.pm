@@ -1,7 +1,7 @@
 package FS::part_pkg;
 
 use strict;
-use vars qw( @ISA );
+use vars qw( @ISA $DEBUG );
 use FS::Record qw( qsearch dbh dbdef );
 use FS::pkg_svc;
 use FS::part_svc;
@@ -11,6 +11,8 @@ use FS::type_pkgs;
 use FS::Conf;
 
 @ISA = qw( FS::Record );
+
+$DEBUG = 0;
 
 =head1 NAME
 
