@@ -1,6 +1,7 @@
+#!/usr/bin/perl -T
 #!/usr/bin/perl -Tw
 #
-# $Id: signup.cgi,v 1.29.2.21 2004-01-04 03:52:57 ivan Exp $
+# $Id: signup.cgi,v 1.29.2.22 2004-10-01 01:38:03 ivan Exp $
 
 use strict;
 use vars qw( @payby $cgi $locales $packages
