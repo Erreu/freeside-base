@@ -373,7 +373,11 @@ sub send {
   my @print_text = $self->print_text('', $template);
   my @invoicing_list = $self->cust_main->invoicing_list;
 
-  if ( grep { $_ ne 'POST' } @invoicing_list ) { #email invoice
+  if ( grep { $_ ne 'POST' } @invoicing_list or !@invoicing_list ) { #email
+
+    #better to notify this person than silence
+    @invoicing_list = ($invoice_from) unless @invoicing_list;
+
     #false laziness w/FS::cust_pay::delete & fs_signup_server && ::realtime_card
     #$ENV{SMTPHOSTS} = $smtpmachine;
     $ENV{MAILADDRESS} = $invoice_from;
@@ -398,7 +402,7 @@ sub send {
 
   }
 
-  if ( ! @invoicing_list || grep { $_ eq 'POST' } @invoicing_list ) { #postal
+  if ( grep { $_ eq 'POST' } @invoicing_list ) { #postal
     open(LPR, "|$lpr")
       or return "Can't open pipe to $lpr: $!";
     print LPR @print_text;
@@ -1130,7 +1134,7 @@ sub print_text {
 
 =head1 VERSION
 
-$Id: cust_bill.pm,v 1.41.2.3 2002-09-17 00:40:05 ivan Exp $
+$Id: cust_bill.pm,v 1.41.2.4 2002-10-04 12:10:37 ivan Exp $
 
 =head1 BUGS
 
