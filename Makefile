@@ -166,11 +166,11 @@ clean:
 #these are probably only useful if you're me...
 
 upload-docs: forcehtmlman
-	ssh cleanwhisker.420.am rm -rf /var/www/www.sisd.com/freeside/devdocs
-	scp -pr httemplate/docs cleanwhisker.420.am:/var/www/www.sisd.com/freeside/devdocs
+	ssh cleanwhisker.420.am rm -rf /var/www/www.sisd.com/freeside/docs
+	scp -pr httemplate/docs cleanwhisker.420.am:/var/www/www.sisd.com/freeside/docs
 
-release: upload-docs
-	cd /home/ivan/freeside_current
+release: upload-docs update-webdemo
+	cd /home/ivan/freeside1.4
 	#cvs tag ${TAG}
 	cvs tag -F ${TAG}
 
@@ -182,7 +182,7 @@ release: upload-docs
 	mv freeside-${VERSION} freeside-${VERSION}.tar.gz ..
 
 update-webdemo:
-	ssh ivan@pouncequick.420.am '( cd freeside; cvs update -d -P )'
+	ssh ivan@pouncequick.420.am '( cd freeside; cvs update -r FREESIDE_1_4_BRANCH -d -P )'
 	#ssh root@pouncequick.420.am '( cd /home/ivan/freeside; make clean; make deploy )'
 	ssh root@pouncequick.420.am '( cd /home/ivan/freeside; make deploy )'
 
