@@ -46,7 +46,7 @@ QUEUED_USER=fs_queue
 #eventually this shouldn't be needed
 FREESIDE_PATH = `pwd`
 
-SELFSERVICE_USER = nostart
+SELFSERVICE_USER = fs_selfservice
 SELFSERVICE_MACHINE = localhost
 
 #---
