@@ -286,10 +286,15 @@ sub label {
     my $domain = $svc_domain->domain;
     $tag = "$domuser\@$domain";
   } elsif ( $svcdb eq 'svc_forward' ) {
-    my $svc_acct = qsearchs( 'svc_acct', { 'svcnum' => $svc_x->srcsvc } );
-    $tag = $svc_acct->email. '->';
+    if ( $svc_x->srcsvc ) {
+      my $svc_acct = $svc_x->srcsvc_acct;
+      $tag = $svc_acct->email;
+    } else {
+      $tag = $svc_x->src;
+    }
+    $tag .= '->';
     if ( $svc_x->dstsvc ) {
-      $svc_acct = qsearchs( 'svc_acct', { 'svcnum' => $svc_x->dstsvc } );
+      my $svc_acct = $svc_x->dstsvc_acct;
       $tag .= $svc_acct->email;
     } else {
       $tag .= $svc_x->dst;
