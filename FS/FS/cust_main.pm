@@ -1098,6 +1098,7 @@ If there is an error, returns the error, otherwise returns false.
 
 sub bill {
   my( $self, %options ) = @_;
+  return '' if $self->payby eq 'COMP';
   my $time = $options{'time'} || time;
 
   my $error;
