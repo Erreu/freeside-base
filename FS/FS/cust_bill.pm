@@ -37,6 +37,11 @@ $FS::UID::callback{'FS::cust_bill'} = sub {
   $invoice_from = $conf->config('invoice_from');
   $smtpmachine = $conf->config('smtpmachine');
 
+  ( $bop_processor,$bop_login, $bop_password, $bop_action ) = ( '', '', '', '');
+  @bop_options = ();
+  ( $ach_processor,$ach_login, $ach_password, $ach_action ) = ( '', '', '', '');
+  @ach_options = ();
+
   if ( $conf->exists('cybercash3.2') ) {
     require CCMckLib3_2;
       #qw($MCKversion %Config InitConfig CCError CCDebug CCDebug2);
@@ -1213,7 +1218,7 @@ sub print_text {
 
 =head1 VERSION
 
-$Id: cust_bill.pm,v 1.41.2.18 2002-12-23 15:22:46 ivan Exp $
+$Id: cust_bill.pm,v 1.41.2.19 2002-12-28 09:16:47 ivan Exp $
 
 =head1 BUGS
 
