@@ -3,7 +3,7 @@ package FS::ClientAPI::passwd;
 use strict;
 use FS::Record qw(qsearchs);
 use FS::svc_acct;
-#use FS::svc_domain;
+use FS::svc_domain;
 
 use FS::ClientAPI; #hmm
 FS::ClientAPI->register_handlers(
@@ -15,8 +15,8 @@ FS::ClientAPI->register_handlers(
 sub passwd {
   my $packet = shift;
 
-  #my $domain = qsearchs('svc_domain', { 'domain' => $packet->{'domain'} } )
-  #  or return { error => "Domain $domain not found" };
+  my $domain = qsearchs('svc_domain', { 'domain' => $packet->{'domain'} } )
+    or return { error => "Domain $domain not found" };
 
   my $old_password = $packet->{'old_password'};
   my $new_password = $packet->{'new_password'};
