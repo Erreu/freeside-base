@@ -1,6 +1,6 @@
 #!/usr/bin/perl -Tw
 #
-# $Id: fs-setup,v 1.94 2002-06-10 01:39:50 khoff Exp $
+# $Id: fs-setup,v 1.92 2002-05-31 22:37:06 ivan Exp $
 
 #to delay loading dbdef until we're ready
 BEGIN { $FS::Record::setup_hack = 1; }
