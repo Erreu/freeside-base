@@ -1,5 +1,5 @@
 
-# $Id: dbd-pg.pod,v 1.1 2004-04-29 09:21:28 ivan Exp $
+# $Id: dbd-pg.pod,v 1.1.2.1 2004-04-29 09:40:07 ivan Exp $
 
 =head1 NAME
 
@@ -408,4 +408,4 @@ It's also free Open Source Software with an active community of developers.
 
 # This driver summary for DBD::Pg is Copyright (c) 1999 Tim Bunce
 # and Edmund Mergl.
-# $Id: dbd-pg.pod,v 1.1 2004-04-29 09:21:28 ivan Exp $
+# $Id: dbd-pg.pod,v 1.1.2.1 2004-04-29 09:40:07 ivan Exp $

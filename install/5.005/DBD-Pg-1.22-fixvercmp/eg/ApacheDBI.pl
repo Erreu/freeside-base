@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl
 
-# $Id: ApacheDBI.pl,v 1.1 2004-04-29 09:21:28 ivan Exp $
+# $Id: ApacheDBI.pl,v 1.1.2.1 2004-04-29 09:40:07 ivan Exp $
 
 # don't forget to create in postgres the user who is running 
 # the httpd, eg 'createuser nobody' !

@@ -1,6 +1,6 @@
 package App::Info;
 
-# $Id: Info.pm,v 1.1 2004-04-29 09:21:28 ivan Exp $
+# $Id: Info.pm,v 1.1.2.1 2004-04-29 09:40:08 ivan Exp $
 
 =head1 NAME
 

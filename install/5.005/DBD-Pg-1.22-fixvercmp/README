@@ -1,7 +1,7 @@
 
 DBD::Pg  --  the DBI PostgreSQL interface for Perl
 
-# $Id: README,v 1.1 2004-04-29 09:21:28 ivan Exp $
+# $Id: README,v 1.1.2.1 2004-04-29 09:40:07 ivan Exp $
 
 DESCRIPTION:
 ------------

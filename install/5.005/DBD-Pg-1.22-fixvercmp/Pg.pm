@@ -1,5 +1,5 @@
 
-#  $Id: Pg.pm,v 1.1 2004-04-29 09:21:28 ivan Exp $
+#  $Id: Pg.pm,v 1.1.2.1 2004-04-29 09:40:07 ivan Exp $
 #
 #  Copyright (c) 1997,1998,1999,2000 Edmund Mergl
 #  Copyright (c) 2002 Jeffrey W. Baker

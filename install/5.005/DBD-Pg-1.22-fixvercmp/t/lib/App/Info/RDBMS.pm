@@ -1,6 +1,6 @@
 package App::Info::RDBMS;
 
-# $Id: RDBMS.pm,v 1.1 2004-04-29 09:21:28 ivan Exp $
+# $Id: RDBMS.pm,v 1.1.2.1 2004-04-29 09:40:08 ivan Exp $
 
 use strict;
 use App::Info;
