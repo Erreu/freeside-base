@@ -485,11 +485,11 @@ my $widget = new HTML::Widgets::SelectLayers(
              '<TR><TD>'.
              '<FONT SIZE="1">Setup expression<BR>'.
              '<INPUT TYPE="text" NAME="setup" SIZE="160" VALUE="'.
-               $hashref->{setup}. '" onLoad="fchanged(this)">'.
+               encode_entities($hashref->{setup}). '" onLoad="fchanged(this)">'.
              '</FONT><BR>'.
              '<FONT SIZE="1">Recurring espression<BR>'.
              '<INPUT TYPE="text" NAME="recur" SIZE="160" VALUE="'.
-               $hashref->{recur}. '" onLoad="fchanged(this)">'.
+               encode_entities($hashref->{recur}). '" onLoad="fchanged(this)">'.
              '</FONT>'.
              '</TR></TD>'.
              '</TABLE>';
