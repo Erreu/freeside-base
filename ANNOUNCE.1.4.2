@@ -1,60 +1,75 @@
-New in 1.4.2beta1:
+New in 1.4.2:
 
-- Main customer view backported from 1.5, much nicer date/status view
-- communigate_pro export
-- hide display of disabled packages from agent type browse
-- package search skips cancelled packages when searching by date range
-- agent list now includes number of active and cancelled customers, links to
-  a list of the specified customers (should have as report...)
-- popup calendar option added to date inputs
-- access number list now includes number of accounts, links to a list of the
-  specified accounts
-- Business::OnlinePayment "recurring_billing" flag is set for subsequent
-  credit card transactions; some processors (AuthorizeNet, others?) use this
-  to waive the CVV2 requirement.
-- advertising source browse now includes the number of signups in
-  various time periods: today, past week, 30/60/90 days, 6 months, 1 year
-  and grand total.
-- payment reports broken down by Visa/MC / Amex / Discover
-- New report!  A/R Aging Summary
-- fix time online view for time/data charging for sqlradius_withdomain exports
-- CVV2-capable w/schema changes
-  ALTER TABLE cust_main ADD paycvv varchar(4) NULL;
-  ALTER TABLE h_cust_main ADD paycvv varchar(4) NULL;
-  ./dbdef-create ivan
+- Customer self-service server and interface.  Signup and passwd servers
+  integrated into self-service server.
+  (more self-service functionality in 1.5)
+
+- Billing:
+ - typeset postscript invoices using LaTeX templates, 
+   http://www.sisd.com/~ivan/invoice.pdf
+ - CVV2/CID support
+ - Business::OnlinePayment "recurring_billing" flag is set for
+   subsequent credit card transactions; some processors (AuthorizeNet,
+   others?) use this to waive the CVV2 requirement.
+ - Explicit invoice terms ("payable upon receipt" / Net XX) and a
+   calculated due date if used
+ - per-agent invoice templates (VISPs...)
+   (per-agent email From: addresses in 1.5)
+ - per-package suspend
+ - remove spurious "Setup" printed on invoice line items on one-time
+   package charges
+
+- New/updated reports:
+ - Financial: A/R Aging Summary, prepaid income, payment reports broken
+   down by credit card type, expired credit cards
+ - Resller:
+   - agent list now includes number of active and cancelled customers,
+     links to a list of the specified customers
+   - per-agent reporting for packages
+   - hide display of disabled packages from agent type browse
+ - number of signups in various time periods broken down by advertising
+   source: today, past week, 30/60/90 days, 6 months, 1 year and grand
+   total.
+ - Package and service definitions by # active
+
+- Exports:
+  - DNS automatic synchronization of reverse-ARPA records
+  - postfix export updated, communigate_pro export added
+  - shellcommands defaults now have commands for suspension and
+    unsuspension on Linux and FreeBSD
+  - ISPMan integration
+  - sql_generic price plan for charging based on a configurable SQL
+    query
+  - export module change - modules are now self contained, add new
+    exports in one file.
+
+- Back office interface:
+ - Customer view backported from 1.5, much nicer date/status view, no
+   longer separates payments/credits applied against multiple invoices,
+   package view removed and integrated into customer view
+ - popup calendar option added to date inputs
+ - access number list now includes number of accounts and links to a
+   list
+ - re-email invoice link
+ - redid mail forward edit screen
+
+Bugfixes, misc:
 - fix html quoting problems editing complicated exports
-- Explicit invoice terms ("payable upon receipt" / Net XX) and a calculated
-  due date if used
-- remove spurious "Setup" printed on invoice line items on one-time package
-  charges
-- typeset postscript invoices using LaTeX templates!
-- sql_generic price plan for charging based on a configurable sql query
-- per-agent reporting for packages
-- system_usernames configuration value to prohibit modification/deletion of
-  specific usernames
-- prepaid income report
-- report: package definitions by # of active packages now includes suspended & cancelled packages
-- new report: service definitions by # of active services
-- self-service server!
-- signup and passwd servers integrated into self-service server.  selfservice server has simple Makefile support for multiple machines
-- suspensions no longer change the password.  make sure all your exports
-  have the ability to suspend accounts
-- work around bug in FreeBSD pw(1) command which could corrupt passwd / master.passwd files
-- shellcommands defaults now have commands for suspension and unsuspension on Linux and FreeBSD
-- schema patchkits: tax, CVV, pkg_svc?, svc_forward?
-- re-email invoice link
-- sendmail import
-- postfix export
-- redid mail forward edit screen
-- reworked customer view payment history: no longer splits up payments/credits
-- removed separate package view (everything accessable from customer view)
-- export module change - modules are now more self contained, easier to add
-  new exports
-- ISPMan integration
+
+- work around bug in FreeBSD pw(1) command which could corrupt
+  passwd / master.passwd files
+- fix time online view for time/data charging for sqlradius_withdomain
+  exports
 - Do our own whois query instead of linking to geektools
-- automatic synchronization of reverse-ARPA records
-- expired credit card report
-- per-agent invoice templates (VISPs...)
-  (per-agent email From: addresses in 1.5)
-- per-package suspend
 - in service definitions, shell field is now a dropdown of legal shells
+- system_usernames configuration value to prohibit modification/deletion
+  of specific usernames
+- sendmail import
+
+- schema patchkits to enable functionality for current installs:
+  tax, CVV, pkg_svc?, svc_forward?
+  CVV:
+   ALTER TABLE cust_main ADD paycvv varchar(4) NULL;
+   ALTER TABLE h_cust_main ADD paycvv varchar(4) NULL;
+   ./dbdef-create ivan
+
