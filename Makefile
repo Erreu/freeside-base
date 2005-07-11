@@ -235,7 +235,7 @@ release:
 	cvs export -r ${TAG} -d freeside-${VERSION} freeside
 	tar czvf freeside-${VERSION}.tar.gz freeside-${VERSION}
 
-	scp freeside-${VERSION}.tar.gz ivan@pouncequick.420.am:/var/www/sisd.420.am/freeside/
+	scp freeside-${VERSION}.tar.gz ivan@420.am:/var/www/sisd.420.am/freeside/
 	mv freeside-${VERSION} freeside-${VERSION}.tar.gz ..
 
 update-webdemo:
