@@ -73,8 +73,8 @@ SELFSERVICE_INSTALL_USERADD = /usr/sbin/useradd
 #not changable yet
 FREESIDE_CONF = /usr/local/etc/freeside
 
-VERSION=1.4.2beta1
-TAG=freeside_1_4_2beta1
+VERSION=1.4.2
+TAG=freeside_1_4_2
 
 help:
 	@echo "supported targets: aspdocs masondocs alldocs docs install-docs"
