@@ -3,9 +3,8 @@ package FS::cust_pkg;
 use strict;
 use vars qw(@ISA $disable_agentcheck @SVCDB_CANCEL_SEQ $DEBUG);
 use FS::UID qw( getotaker dbh );
-use FS::Misc qw( send_email );
 use FS::Record qw( qsearch qsearchs );
-use FS::cust_main_Mixin;
+use FS::Misc qw( send_email );
 use FS::cust_svc;
 use FS::part_pkg;
 use FS::cust_main;
@@ -13,11 +12,10 @@ use FS::type_pkgs;
 use FS::pkg_svc;
 use FS::cust_bill_pkg;
 use FS::h_cust_svc;
-use FS::reg_code;
 
 # need to 'use' these instead of 'require' in sub { cancel, suspend, unsuspend,
 # setup }
-# because they load configuration by setting FS::UID::callback (see TODO)
+# because they load configuraion by setting FS::UID::callback (see TODO)
 use FS::svc_acct;
 use FS::svc_domain;
 use FS::svc_www;
@@ -26,7 +24,7 @@ use FS::svc_forward;
 # for sending cancel emails in sub cancel
 use FS::Conf;
 
-@ISA = qw( FS::cust_main_Mixin FS::Record );
+@ISA = qw( FS::Record );
 
 $DEBUG = 0;
 
@@ -142,14 +140,8 @@ Create a new billing item.  To add the item to the database, see L<"insert">.
 =cut
 
 sub table { 'cust_pkg'; }
-sub cust_linked { $_[0]->cust_main_custnum; } 
-sub cust_unlinked_msg {
-  my $self = shift;
-  "WARNING: can't find cust_main.custnum ". $self->custnum.
-  ' (cust_pkg.pkgnum '. $self->pkgnum. ')';
-}
 
-=item insert [ OPTION => VALUE ... ]
+=item insert
 
 Adds this billing item to the database ("Orders" the item).  If there is an
 error, returns the error, otherwise returns false.
@@ -157,82 +149,6 @@ error, returns the error, otherwise returns false.
 If the additional field I<promo_code> is defined instead of I<pkgpart>, it
 will be used to look up the package definition and agent restrictions will be
 ignored.
-
-The following options are available: I<change>
-
-I<change>, if set true, supresses any referral credit to a referring customer.
-
-=cut
-
-sub insert {
-  my( $self, %options ) = @_;
-
-  local $SIG{HUP} = 'IGNORE';
-  local $SIG{INT} = 'IGNORE';
-  local $SIG{QUIT} = 'IGNORE';
-  local $SIG{TERM} = 'IGNORE';
-  local $SIG{TSTP} = 'IGNORE';
-  local $SIG{PIPE} = 'IGNORE';
-
-  my $oldAutoCommit = $FS::UID::AutoCommit;
-  local $FS::UID::AutoCommit = 0;
-  my $dbh = dbh;
-
-  my $error = $self->SUPER::insert;
-  if ( $error ) {
-    $dbh->rollback if $oldAutoCommit;
-    return $error;
-  }
-
-  #if ( $self->reg_code ) {
-  #  my $reg_code = qsearchs('reg_code', { 'code' => $self->reg_code } );
-  #  $error = $reg_code->delete;
-  #  if ( $error ) {
-  #    $dbh->rollback if $oldAutoCommit;
-  #    return $error;
-  #  }
-  #}
-
-  my $conf = new FS::Conf;
-  my $cust_main = $self->cust_main;
-  my $part_pkg = $self->part_pkg;
-  if ( $conf->exists('referral_credit')
-       && $cust_main->referral_custnum
-       && ! $options{'change'}
-       && $part_pkg->freq !~ /^0\D?$/
-     )
-  {
-    my $referring_cust_main = $cust_main->referring_cust_main;
-    if ( $referring_cust_main->status ne 'cancelled' ) {
-      my $error;
-      if ( $part_pkg->freq !~ /^\d+$/ ) {
-        warn 'WARNING: Not crediting customer '. $cust_main->referral_custnum.
-             ' for package '. $self->pkgnum.
-             ' ( customer '. $self->custnum. ')'.
-             ' - One-time referral credits not (yet) available for '.
-             ' packages with '. $part_pkg->freq_pretty. ' frequency';
-      } else {
-
-        my $amount = sprintf( "%.2f", $part_pkg->base_recur / $part_pkg->freq );
-        my $error =
-          $referring_cust_main->credit( $amount,
-                                        'Referral credit for '. $cust_main->name
-                                      );
-        if ( $error ) {
-          $dbh->rollback if $oldAutoCommit;
-          return "Error crediting customer ". $cust_main->referral_custnum.
-               " for referral: $error";
-        }
-
-      }
-
-    }
-  }
-
-  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
-  '';
-
-}
 
 =item delete
 
@@ -264,8 +180,6 @@ suspend is normally updated by the suspend and unsuspend methods.
 cancel is normally updated by the cancel method (and also the order subroutine
 in some cases).
 
-Calls 
-
 =cut
 
 sub replace {
@@ -283,51 +197,7 @@ sub replace {
 
   local($disable_agentcheck) = 1 if $old->pkgpart == $new->pkgpart;
 
-  local $SIG{HUP} = 'IGNORE';
-  local $SIG{INT} = 'IGNORE';
-  local $SIG{QUIT} = 'IGNORE';
-  local $SIG{TERM} = 'IGNORE';
-  local $SIG{TSTP} = 'IGNORE';
-  local $SIG{PIPE} = 'IGNORE';
-
-  my $oldAutoCommit = $FS::UID::AutoCommit;
-  local $FS::UID::AutoCommit = 0;
-  my $dbh = dbh;
-
-  #save off and freeze RADIUS attributes for any associated svc_acct records
-  my @svc_acct = ();
-  if ( $old->part_pkg->is_prepaid || $new->part_pkg->is_prepaid ) {
-
-                #also check for specific exports?
-                # to avoid spurious modify export events
-    @svc_acct = map  { $_->svc_x }
-                grep { $_->part_svc->svcdb eq 'svc_acct' }
-                     $old->cust_svc;
-
-    $_->snapshot foreach @svc_acct;
-
-  }
-
-  my $error = $new->SUPER::replace($old);
-  if ( $error ) {
-    $dbh->rollback if $oldAutoCommit;
-    return $error;
-  }
-
-  #for prepaid packages,
-  #trigger export of new RADIUS Expiration attribute when cust_pkg.bill changes
-  foreach my $old_svc_acct ( @svc_acct ) {
-    my $new_svc_acct = new FS::svc_acct { $old_svc_acct->hash };
-    my $s_error = $new_svc_acct->replace($old_svc_acct);
-    if ( $s_error ) {
-      $dbh->rollback if $oldAutoCommit;
-      return $s_error;
-    }
-  }
-
-  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
-  '';
-
+  $new->SUPER::replace($old);
 }
 
 =item check
@@ -352,17 +222,7 @@ sub check {
   ;
   return $error if $error;
 
-  if ( $self->reg_code ) {
-
-    unless ( grep { $self->pkgpart == $_->pkgpart }
-             map  { $_->reg_code_pkg }
-             qsearchs( 'reg_code', { 'code'     => $self->reg_code,
-                                     'agentnum' => $self->cust_main->agentnum })
-           ) {
-      return "Unknown registration code";
-    }
-
-  } elsif ( $self->promo_code ) {
+  if ( $self->promo_code ) {
 
     my $promo_part_pkg =
       qsearchs('part_pkg', {
@@ -370,6 +230,7 @@ sub check {
         'promo_code' => { op=>'ILIKE', value=>$self->promo_code },
       } );
     return 'Unknown promotional code' unless $promo_part_pkg;
+    $self->pkgpart($promo_part_pkg->pkgpart);
 
   } else { 
 
@@ -448,20 +309,6 @@ sub cancel {
     }
   }
 
-  # Add a credit for remaining service
-  my $remaining_value = $self->calc_remain();
-  if ( $remaining_value > 0 ) {
-    my $error = $self->cust_main->credit(
-      $remaining_value,
-      'Credit for unused time on '. $self->part_pkg->pkg,
-    );
-    if ($error) {
-      $dbh->rollback if $oldAutoCommit;
-      return "Error crediting customer \$$remaining_value for unused time on".
-             $self->part_pkg->pkg. ": $error";
-    }                                                                          
-  }                                                                            
-
   unless ( $self->getfield('cancel') ) {
     my %hash = $self->hash;
     $hash{'cancel'} = time;
@@ -476,7 +323,7 @@ sub cancel {
   $dbh->commit or die $dbh->errstr if $oldAutoCommit;
 
   my $conf = new FS::Conf;
-  my @invoicing_list = grep { $_ !~ /^(POST|FAX)$/ } $self->cust_main->invoicing_list;
+  my @invoicing_list = grep { $_ ne 'POST' } $self->cust_main->invoicing_list;
   if ( !$options{'quiet'} && $conf->exists('emailcancel') && @invoicing_list ) {
     my $conf = new FS::Conf;
     my $error = send_email(
@@ -678,30 +525,6 @@ sub calc_recur {
   $self->part_pkg->calc_recur($self, @_);
 }
 
-=item calc_remain
-
-Calls the I<calc_remain> of the FS::part_pkg object associated with this
-billing item.
-
-=cut
-
-sub calc_remain {
-  my $self = shift;
-  $self->part_pkg->calc_remain($self, @_);
-}
-
-=item calc_cancel
-
-Calls the I<calc_cancel> of the FS::part_pkg object associated with this
-billing item.
-
-=cut
-
-sub calc_cancel {
-  my $self = shift;
-  $self->part_pkg->calc_cancel($self, @_);
-}
-
 =item cust_svc [ SVCPART ]
 
 Returns the services for this package, as FS::cust_svc objects (see
@@ -799,54 +622,6 @@ sub available_part_svc {
           $part_svc;
         }
       $self->part_pkg->pkg_svc;
-}
-
-=item status
-
-Returns a short status string for this package, currently:
-
-=over 4
-
-=item not yet billed
-
-=item one-time charge
-
-=item active
-
-=item suspended
-
-=item cancelled
-
-=back
-
-=cut
-
-sub status {
-  my $self = shift;
-
-  return 'cancelled' if $self->get('cancel');
-  return 'suspended' if $self->susp;
-  return 'not yet billed' unless $self->setup;
-  return 'one-time charge' if $self->part_pkg->freq =~ /^(0|$)/;
-  return 'active';
-}
-
-=item statuscolor
-
-Returns a hex triplet color string for this package's status.
-
-=cut
-
-my %statuscolor = (
-  'not yet billed'  => '000000',
-  'one-time charge' => '000000',
-  'active'          => '00CC00',
-  'suspended'       => 'FF9900',
-  'cancelled'       => 'FF0000',
-);
-sub statuscolor {
-  my $self = shift;
-  $statuscolor{$self->status};
 }
 
 =item labels
@@ -1163,60 +938,6 @@ sub reexport {
 
 =back
 
-=head1 CLASS METHOD
-
-=over 4
-
-=item recurring_sql
-
-Returns an SQL expression identifying recurring packages.
-
-=cut
-
-sub recurring_sql { "
-  '0' != ( select freq from part_pkg
-             where cust_pkg.pkgpart = part_pkg.pkgpart )
-"; }
-
-=item active_sql
-
-Returns an SQL expression identifying active packages.
-
-=cut
-
-sub active_sql { "
-  ". $_[0]->recurring_sql(). "
-  AND ( cust_pkg.cancel IS NULL OR cust_pkg.cancel = 0 )
-  AND ( cust_pkg.susp   IS NULL OR cust_pkg.susp   = 0 )
-"; }
-
-=item susp_sql
-=item suspended_sql
-
-Returns an SQL expression identifying suspended packages.
-
-=cut
-
-sub suspended_sql { susp_sql(@_); }
-sub susp_sql { "
-  ". $_[0]->recurring_sql(). "
-  AND ( cust_pkg.cancel IS NULL OR cust_pkg.cancel = 0 )
-  AND cust_pkg.susp IS NOT NULL AND cust_pkg.susp != 0
-"; }
-
-=item cancel_sql
-=item cancelled_sql
-
-Returns an SQL exprression identifying cancelled packages.
-
-=cut
-
-sub cancelled_sql { cancel_sql(@_); }
-sub cancel_sql { "
-  ". $_[0]->recurring_sql(). "
-  AND cust_pkg.cancel IS NOT NULL AND cust_pkg.cancel != 0
-"; }
-
 =head1 SUBROUTINES
 
 =over 4
@@ -1261,24 +982,12 @@ sub order {
   my $cust_main = qsearchs('cust_main', { custnum => $custnum });
   return "Customer not found: $custnum" unless $cust_main;
 
-  my @old_cust_pkg = map { qsearchs('cust_pkg', { pkgnum => $_ }) }
-                         @$remove_pkgnum;
-
-  my $change = scalar(@old_cust_pkg) != 0;
-
-  my %hash = (); 
-  if ( scalar(@old_cust_pkg) == 1 ) {
-    #$hash{$_} = $old_cust_pkg[0]->$_() foreach qw( last_bill bill );
-    $hash{'setup'} = time;
-  }
-
   # Create the new packages.
-  foreach my $pkgpart (@$pkgparts) {
-    my $cust_pkg = new FS::cust_pkg { custnum => $custnum,
-                                      pkgpart => $pkgpart,
-                                      %hash,
-                                    };
-    $error = $cust_pkg->insert( 'change' => $change );
+  my $cust_pkg;
+  foreach (@$pkgparts) {
+    $cust_pkg = new FS::cust_pkg { custnum => $custnum,
+                                   pkgpart => $_ };
+    $error = $cust_pkg->insert;
     if ($error) {
       $dbh->rollback if $oldAutoCommit;
       return $error;
@@ -1289,7 +998,8 @@ sub order {
   # created packages.
 
   # Transfer services and cancel old packages.
-  foreach my $old_pkg (@old_cust_pkg) {
+  foreach my $old_pkgnum (@$remove_pkgnum) {
+    my $old_pkg = qsearchs ('cust_pkg', { pkgnum => $old_pkgnum });
 
     foreach my $new_pkg (@$return_cust_pkg) {
       $error = $old_pkg->transfer($new_pkg);

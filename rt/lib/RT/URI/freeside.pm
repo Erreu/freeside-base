@@ -28,170 +28,143 @@ package RT::URI::freeside;
 
 use RT::URI::base;
 use strict;
-use vars qw(@ISA $IntegrationType $URL);
+use vars qw(@ISA);
+
 @ISA = qw/RT::URI::base/;
 
 
 =head1 NAME
 
-RT::URI::freeside
+RT::URI::base
 
 =head1 DESCRIPTION
 
 URI handler for freeside URIs.  See http://www.sisd.com/freeside/ for
 more information on freeside.
 
-
-=head1 Public subroutines
-
-=over 4
-
-=item FreesideGetConfig CONFKEY
-
-Subroutine that returns the freeside's configuration value(s) for CONFKEY
-as a scalar or list.
-
 =cut
 
-sub FreesideGetConfig { return undef; }
 
-
-=item FreesideURL
-
-Returns the URL for freeside's web interface.
-
-=cut
-
-sub FreesideURL { return $URL; }
-
-
-=item FreesideVersion
-
-Returns a string describing the freeside version being used.
-
-=cut
-
-sub FreesideVersion { return undef; }
-
-
-=item smart_search
-
-A wrapper for the FS::cust_main::smart_search subroutine.
-
-=cut
-
-sub smart_search { return undef; }
-
-
-=item small_custview
-
-A wrapper for the FS::CGI::small_custview subroutine.
-
-=cut
-
-sub small_custview { return 'Freeside integration error!</A>'; }
-
-
-=back
-
-=head1 Private methods
-
-=over 4
-
-=item _FreesideGetRecord
-
-Method returns a hashref of the freeside record referenced in the URI.
-Must be called after ParseURI.
-
-=cut
-
-sub _FreesideGetRecord { return undef; }
-
-
-=item _FreesideURIPrefix
-
-Method that returns the URI prefix for freeside URIs.
-
-=cut
-
-sub _FreesideURIPrefix {
+sub FreesideURIPrefix {
 
   my $self = shift;
   return($self->Scheme . '://freeside');
 
 }
 
-=item _FreesideURILabel
-
-Method that returns a short string describing the customer referenced
-in the URI.
-
-=cut
-
-sub _FreesideURILabel {
+sub FreesideURILabel {
 
   my $self = shift;
 
-  $RT::Logger->debug("Called _FreesideURILabel()");
-
-  return unless (exists($self->{'fstable'}) and
-                 exists($self->{'fspkey'}));
+  return(undef) unless (exists($self->{'fstable'}) and
+                        exists($self->{'fspkey'}));
 
   my $label;
   my ($table, $pkey) = ($self->{'fstable'}, $self->{'fspkey'});
 
-  if ($table ne 'cust_main') {
-    warn "FS::${table} not currently supported";
-    return;
-  }
+  eval {
+    use FS::UID qw(dbh);
+    use FS::Record qw(qsearchs qsearch dbdef);
+    eval "use FS::$table;";
+    use FS::cust_svc;
 
-  my $rec = $self->_FreesideGetRecord();
+    my $dbdef = dbdef or die "No dbdef";
+    my $pkeyfield = $dbdef->table($table)->primary_key
+      or die "No primary key for table $table";
 
-  if (ref($rec) eq 'HASH' and $table eq 'cust_main') {
-    my $name = $rec->{'last'} . ', ' . $rec->{'first'};
-    $name = $rec->{'company'} . " ($name)" if $rec->{'company'};
-    $label = "$pkey: $name";
-  } else {
-    $label = "$pkey: $table";
-  }
+    my $rec = qsearchs($table, { $pkeyfield => $pkey })
+      or die "Record with $pkeyfield == $pkey does not exist in table $table";
+
+    if ($table =~ /^svc_/) {
+      if ($rec->can('cust_svc')) {
+        my $cust_svc = $rec->cust_svc or die '$rec->cust_svc failed';
+        my ($svc, $tag, $svcdb) = $cust_svc->label;
+        $label = "Freeside service ${svc}: ${tag}";
+      }
+    } elsif ($table eq 'cust_main') {
+      #my ($last, $first, $company) = map { $rec->getfield($_) }
+      #                                   qw(last first company);
+      #$label = "Freeside customer ${last}, ${first}";
+      #$label .= ($company ne '') ? " with ${company}" : '';
+      $label = "$pkey: ". $rec->name;
+    } else {
+      $label = "Freeside ${table}, ${pkeyfield} == ${pkey}";
+    }
+
+    #... other cases
+
+  };
 
   if ($label and !$@) {
     return($label);
   } else {
-    return;
+    return(undef);
   }
+      
 
 }
 
-=item _FreesideURILabelLong
-
-Method that returns a longer string describing the customer referenced
-in the URI.
-
-=cut
-
-sub _FreesideURILabelLong {
+sub FreesideURILabelLong {
 
   my $self = shift;
 
-  return $self->_FreesideURILabel();
+  return(undef) unless (exists($self->{'fstable'}) and
+                        exists($self->{'fspkey'}));
+
+  my $label;
+  my ($table, $pkey) = ($self->{'fstable'}, $self->{'fspkey'});
+
+  eval {
+    use FS::UID qw(dbh);
+    use FS::Record qw(qsearchs qsearch dbdef);
+    eval "use FS::$table;";
+    use FS::cust_svc;
+
+    my $dbdef = dbdef or die "No dbdef";
+    my $pkeyfield = $dbdef->table($table)->primary_key
+      or die "No primary key for table $table";
+
+    my $rec = qsearchs($table, { $pkeyfield => $pkey })
+      or die "Record with $pkeyfield == $pkey does not exist in table $table";
+
+    if ($table =~ /^svc_/) {
+      #if ($rec->can('cust_svc')) {
+      #  my $cust_svc = $rec->cust_svc or die '$rec->cust_svc failed';
+      #  my ($svc, $tag, $svcdb) = $cust_svc->label;
+      #  $label = "Freeside service ${svc}: ${tag}";
+      #}
+      $label = '';
+    } elsif ($table eq 'cust_main') {
+      use FS::CGI qw(small_custview);
+      $label = small_custview( $rec,
+                               scalar(FS::Conf->new->config('countrydefault')),
+                               1 #nobalance
+                             );
+    } else {
+      #$label = "Freeside ${table}, ${pkeyfield} == ${pkey}";
+      $label = '';
+    }
+
+    #... other cases
+
+  };
+
+  if ($label and !$@) {
+    return($label);
+  } else {
+    warn $@;
+    return(undef);
+  }
+      
 
 }
-
-=back
-
-=head1 Public methods
-
-=over 4
-
-=cut
 
 sub ParseURI { 
     my $self = shift;
     my $uri = shift;
     my ($table, $pkey);
 
-    my $uriprefix = $self->_FreesideURIPrefix;
+    my $uriprefix = $self->FreesideURIPrefix;
     if ($uri =~ /^$uriprefix\/(\w+)\/(\d+)$/) {
       $table = $1;
       $pkey = $2;
@@ -204,13 +177,22 @@ sub ParseURI {
     $self->{'fstable'} = $table;
     $self->{'fspkey'} = $pkey;
 
+    my $p;
 
-    my $url = $self->FreesideURL();
+    eval {
+      use FS::UID qw(dbh);
+      use FS::CGI qw(popurl);
 
-    if ($url ne '') {
-      $self->{'href'} = "${url}/view/${table}.cgi?${pkey}";
-    } else {
+      if (dbh) {
+	$p = popurl(3);
+      }
+
+    };
+
+    if ($@ or (!$p)) {
       $self->{'href'} = $self->{'uri'};
+    } else {
+      $self->{'href'} = "${p}view/${table}.cgi?${pkey}";
     }
 
     $self->{'uri'};
@@ -233,7 +215,7 @@ sub IsLocal {
     return undef;
 }
 
-=item AsString
+=head2 AsString
 
 Return a "pretty" string representing the URI object.
 
@@ -247,14 +229,14 @@ This is meant to be used like this:
 sub AsString {
     my $self = shift;
     my $prettystring;
-    if ($prettystring = $self->_FreesideURILabel) {
+    if ($prettystring = $self->FreesideURILabel) {
       return $prettystring;
     } else {
       return $self->URI;
     }
 }
 
-=item AsStringLong
+=head2 AsStringLong
 
 Return a longer (HTML) string representing the URI object.
 
@@ -263,23 +245,16 @@ Return a longer (HTML) string representing the URI object.
 sub AsStringLong {
     my $self = shift;
     my $prettystring;
-    if ($prettystring = $self->_FreesideURILabelLong || $self->_FreesideURILabel){
+    if ($prettystring = $self->FreesideURILabelLong || $self->FreesideURILabel){
       return $prettystring;
     } else {
       return $self->URI;
     }
 }
 
-$IntegrationType ||= 'Internal';
-eval "require RT::URI::freeside::${RT::URI::freeside::IntegrationType}";
-warn $@ if $@;
-if ($@ &&
-    $@ !~ qr(^Can't locate RT/URI/freeside/${RT::URI::freeside::IntegrationType}.pm)) {
-  die $@;
-};
-
-=back
-
-=cut
+eval "require RT::URI::base_Vendor";
+die $@ if ($@ && $@ !~ qr{^Can't locate RT/URI/base_Vendor.pm});
+eval "require RT::URI::base_Local";
+die $@ if ($@ && $@ !~ qr{^Can't locate RT/URI/base_Local.pm});
 
 1;

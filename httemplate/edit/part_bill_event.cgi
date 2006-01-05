@@ -83,19 +83,15 @@ sub select_pkgpart {
 
 sub select_agentnum {
   my $plandata = shift;
-  #my $agentnum = $plandata->{'agentnum'};
-  my %agentnums = map { $_=>1 } split(/,\s*/, $plandata->{'agentnum'});
-  '<SELECT NAME="agentnum" MULTIPLE>'.
+  my $agentnum = $plandata->{'agentnum'};
+  '<SELECT NAME="agentnum">'.
   join("\n", map {
     '<OPTION VALUE="'. $_->agentnum. '"'.
-    ( $agentnums{$_->agentnum} ? ' SELECTED' : '' ).
+    ( $_->agentnum == $agentnum ? ' SELECTED' : '' ).
     '>'. $_->agent
   } qsearch('agent', { 'disabled' => '' } ) ).
   '</SELECT>';
 }
-
-my $conf = new FS::Conf;
-my $money_char = $conf->config('money_char') || '$';
 
 #this is pretty kludgy right here.
 tie my %events, 'Tie::IxHash',
@@ -111,12 +107,6 @@ tie my %events, 'Tie::IxHash',
   'suspend' => {
     'name'   => 'Suspend',
     'code'   => '$cust_main->suspend();',
-    'weight' => 10,
-  },
-  'suspend' => {
-    'name'   => 'Suspend if balance (this invoice and previous) over',
-    'code'   => '$cust_bill->cust_suspend_if_balance_over( %%%balanceover%%% );',
-    'html'   => " $money_char ". '<INPUT TYPE="text" SIZE="7" NAME="balanceover" VALUE="%%%balanceover%%%">',
     'weight' => 10,
   },
   'suspend-if-pkgpart' => {
@@ -197,11 +187,11 @@ tie my %events, 'Tie::IxHash',
 
   'send_agent' => {
     'name' => 'Send invoice (email/print) ',
-    'code' => '$cust_bill->send(\'%%%agent_templatename%%%\', [ %%%agentnum%%% ], \'%%%agent_invoice_from%%%\');',
+    'code' => '$cust_bill->send(\'%%%agent_templatename%%%\', %%%agentnum%%%, \'%%%agent_invoice_from%%%\');',
     'html' => sub {
         '<TABLE BORDER=0>
           <TR>
-            <TD ALIGN="right">only for agent(s) </TD>
+            <TD ALIGN="right">only for agent </TD>
             <TD>'. &select_agentnum(@_). '</TD>
           </TR>
           <TR>
@@ -223,26 +213,13 @@ tie my %events, 'Tie::IxHash',
 
   'send_csv_ftp' => {
     'name' => 'Upload CSV invoice data to an FTP server',
-    'code' => '$cust_bill->send_csv( protocol   => \'ftp\',
-                                     server     => \'%%%ftpserver%%%\',
-                                     username   => \'%%%ftpusername%%%\',
-                                     password   => \'%%%ftppassword%%%\',
-                                     dir        => \'%%%ftpdir%%%\',
-                                     \'format\' => \'%%%ftpformat%%%\',
-                                   );',
+    'code' => '$cust_bill->send_csv( protocol => \'ftp\',
+                                     server   => \'%%%ftpserver%%%\',
+                                     username => \'%%%ftpusername%%%\',
+                                     password => \'%%%ftppassword%%%\',
+                                     dir      => \'%%%ftpdir%%%\'       );',
     'html' =>
-        '<TABLE BORDER=0>'.
-        '<TR><TD ALIGN="right">Format ("default" or "billco"): </TD>'.
-          '<TD>'.
-            '<!--'.
-            '<SELECT NAME="ftpformat">'.
-              '<OPTION VALUE="default">Default'.
-              '<OPTION VALUE="billco">Billco'.
-            '</SELECT>'.
-            '-->'.
-            '<INPUT TYPE="text" NAME="ftpformat" VALUE="%%%ftpformat%%%">'.
-          '</TD></TR>'.
-        '<TR><TD ALIGN="right">FTP server: </TD>'.
+        '<TABLE BORDER=0><TR><TD ALIGN="right">FTP server: </TD>'.
           '<TD><INPUT TYPE="text" NAME="ftpserver" VALUE="%%%ftpserver%%%">'.
           '</TD></TR>'.
         '<TR><TD ALIGN="right">FTP username: </TD><TD>'.
@@ -255,63 +232,6 @@ tie my %events, 'Tie::IxHash',
           '<TD><INPUT TYPE="text" NAME="ftpdir" VALUE="%%%ftpdir%%%">'.
           '</TD></TR>'.
         '</TABLE>',
-    'weight' => 50,
-  },
-
-  'spool_csv' => {
-    'name' => 'Spool CSV invoice data',
-    'code' => '$cust_bill->spool_csv(
-                 \'format\' => \'%%%spoolformat%%%\',
-                 \'dest\'   => \'%%%spooldest%%%\',
-                 \'agent_spools\' => \'%%%spoolagent_spools%%%\',
-               );',
-    'html' => sub {
-       my $plandata = shift;
-
-       my $html =
-       '<TABLE BORDER=0>'.
-       '<TR><TD ALIGN="right">Format: </TD>'.
-         '<TD>'.
-           '<SELECT NAME="spoolformat">';
-
-       foreach my $option (qw( default billco )) {
-         $html .= qq(<OPTION VALUE="$option");
-         $html .= ' SELECTED' if $option eq $plandata->{'spoolformat'};
-         $html .= ">\u$option";
-       }
-
-       $html .= 
-           '</SELECT>'.
-         '</TD></TR>'.
-       '<TR><TD ALIGN="right">For destination: </TD>'.
-         '<TD>'.
-           '<SELECT NAME="spooldest">';
-
-       tie my %dest, 'Tie::IxHash', 
-         ''      => '(all)',
-         'POST'  => 'Postal Mail',
-         'EMAIL' => 'Email',
-         'FAX'   => 'Fax',
-       ;
-
-       foreach my $dest (keys %dest) {
-         $html .= qq(<OPTION VALUE="$dest");
-         $html .= ' SELECTED' if $dest eq $plandata->{'spooldest'};
-         $html .= '>'. $dest{$dest};
-       }
-
-       $html .=
-           '</SELECT>'.
-         '</TD></TR>'.
-       '<TR><TD ALIGN="right">Individual per-agent spools? </TD>'.
-         '<TD><INPUT TYPE="checkbox" NAME="spoolagent_spools" VALUE="1" '.
-           ( $plandata->{'spoolagent_spools'} ? 'CHECKED' : '' ).
-           '>'.
-         '</TD></TR>'.
-       '</TABLE>';
-
-       $html;
-    },
     'weight' => 50,
   },
 

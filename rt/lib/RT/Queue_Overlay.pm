@@ -1,8 +1,8 @@
-# BEGIN BPS TAGGED BLOCK {{{
+# {{{ BEGIN BPS TAGGED BLOCK
 # 
 # COPYRIGHT:
 #  
-# This software is Copyright (c) 1996-2005 Best Practical Solutions, LLC 
+# This software is Copyright (c) 1996-2004 Best Practical Solutions, LLC 
 #                                          <jesse@bestpractical.com>
 # 
 # (Except where explicitly superseded by other copyright notices)
@@ -42,8 +42,7 @@
 # works based on those contributions, and sublicense and distribute
 # those contributions and any derivatives thereof.
 # 
-# END BPS TAGGED BLOCK }}}
-
+# }}} END BPS TAGGED BLOCK
 =head1 NAME
 
   RT::Queue - an RT Queue object
@@ -65,20 +64,18 @@ use RT::Queue;
 
 =cut
 
-
-package RT::Queue;
-
 use strict;
 no warnings qw(redefine);
 
-use vars qw(@DEFAULT_ACTIVE_STATUS @DEFAULT_INACTIVE_STATUS $RIGHTS);
-
+use vars qw(@STATUS @ACTIVE_STATUS @INACTIVE_STATUS $RIGHTS);
 use RT::Groups;
 use RT::ACL;
-use RT::Interface::Email;
+use RT::EmailParser;
 
-@DEFAULT_ACTIVE_STATUS = qw(new open stalled);
-@DEFAULT_INACTIVE_STATUS = qw(resolved rejected deleted);  
+
+@ACTIVE_STATUS = qw(new open stalled);
+@INACTIVE_STATUS = qw(resolved rejected deleted);
+@STATUS = (@ACTIVE_STATUS, @INACTIVE_STATUS);
 
 # $self->loc('new'); # For the string extractor to get a string to localize
 # $self->loc('open'); # For the string extractor to get a string to localize
@@ -94,7 +91,7 @@ $RIGHTS = {
     ShowACL             => 'Display Access Control List',             # loc_pair
     ModifyACL           => 'Modify Access Control List',              # loc_pair
     ModifyQueueWatchers => 'Modify the queue watchers',               # loc_pair
-    AssignCustomFields  => 'Assign and remove custom fields',         # loc_pair
+    AdminCustomFields   => 'Create, delete and modify custom fields', # loc_pair
     ModifyTemplate      => 'Modify Scrip templates for this queue',   # loc_pair
     ShowTemplate        => 'Display Scrip templates for this queue',  # loc_pair
 
@@ -183,12 +180,7 @@ Returns an array of all ActiveStatuses for this queue
 
 sub ActiveStatusArray {
     my $self = shift;
-    if (@RT::ActiveStatus) {
-    	return (@RT::ActiveStatus)
-    } else {
-        $RT::Logger->warning("RT::ActiveStatus undefined, falling back to deprecated defaults");
-        return (@DEFAULT_ACTIVE_STATUS);
-    }
+    return (@ACTIVE_STATUS);
 }
 
 # }}}
@@ -203,12 +195,7 @@ Returns an array of all InactiveStatuses for this queue
 
 sub InactiveStatusArray {
     my $self = shift;
-    if (@RT::InactiveStatus) {
-    	return (@RT::InactiveStatus)
-    } else {
-        $RT::Logger->warning("RT::InactiveStatus undefined, falling back to deprecated defaults");
-        return (@DEFAULT_INACTIVE_STATUS);
-    }
+    return (@INACTIVE_STATUS);
 }
 
 # }}}
@@ -223,7 +210,7 @@ Returns an array of all statuses for this queue
 
 sub StatusArray {
     my $self = shift;
-    return ($self->ActiveStatusArray(), $self->InactiveStatusArray());
+    return (@STATUS);
 }
 
 # }}}
@@ -232,15 +219,12 @@ sub StatusArray {
 
 =head2 IsValidStatus VALUE
 
-Returns true if VALUE is a valid status.  Otherwise, returns 0.
+Returns true if VALUE is a valid status.  Otherwise, returns 0
 
-=begin testing
-
+=for testing
 my $q = RT::Queue->new($RT::SystemUser);
 ok($q->IsValidStatus('new')== 1, 'New is a valid status');
 ok($q->IsValidStatus('f00')== 0, 'f00 is not a valid status');
-
-=end testing
 
 =cut
 
@@ -248,7 +232,7 @@ sub IsValidStatus {
     my $self  = shift;
     my $value = shift;
 
-    my $retval = grep ( $_ eq $value, $self->StatusArray );
+    my $retval = grep ( /^$value$/, $self->StatusArray );
     return ($retval);
 
 }
@@ -261,14 +245,11 @@ sub IsValidStatus {
 
 Returns true if VALUE is a Active status.  Otherwise, returns 0
 
-=begin testing
-
+=for testing
 my $q = RT::Queue->new($RT::SystemUser);
 ok($q->IsActiveStatus('new')== 1, 'New is a Active status');
 ok($q->IsActiveStatus('rejected')== 0, 'Rejected is an inactive status');
 ok($q->IsActiveStatus('f00')== 0, 'f00 is not a Active status');
-
-=end testing
 
 =cut
 
@@ -276,7 +257,7 @@ sub IsActiveStatus {
     my $self  = shift;
     my $value = shift;
 
-    my $retval = grep ( $_ eq $value, $self->ActiveStatusArray );
+    my $retval = grep ( /^$value$/, $self->ActiveStatusArray );
     return ($retval);
 
 }
@@ -289,14 +270,11 @@ sub IsActiveStatus {
 
 Returns true if VALUE is a Inactive status.  Otherwise, returns 0
 
-=begin testing
-
+=for testing
 my $q = RT::Queue->new($RT::SystemUser);
 ok($q->IsInactiveStatus('new')== 0, 'New is a Active status');
 ok($q->IsInactiveStatus('rejected')== 1, 'rejeected is an Inactive status');
 ok($q->IsInactiveStatus('f00')== 0, 'f00 is not a Active status');
-
-=end testing
 
 =cut
 
@@ -304,7 +282,7 @@ sub IsInactiveStatus {
     my $self  = shift;
     my $value = shift;
 
-    my $retval = grep ( $_ eq $value, $self->InactiveStatusArray );
+    my $retval = grep ( /^$value$/, $self->InactiveStatusArray );
     return ($retval);
 
 }
@@ -314,33 +292,10 @@ sub IsInactiveStatus {
 
 # {{{ sub Create
 
+=head2 Create
 
-
-
-=head2 Create(ARGS)
-
-Arguments: ARGS is a hash of named parameters.  Valid parameters are:
-
-  Name (required)
-  Description
-  CorrespondAddress
-  CommentAddress
-  InitialPriority
-  FinalPriority
-  DefaultDueIn
- 
+Create takes the name of the new queue 
 If you pass the ACL check, it creates the queue and returns its queue id.
-
-=begin testing
-
-my $queue = RT::Queue->new($RT::SystemUser);
-my ($id, $val) = $queue->Create( Name => 'Test1');
-ok($id, $val);
-
-($id, $val) = $queue->Create( Name => '66');
-ok(!$id, $val);
-
-=end testing
 
 =cut
 
@@ -402,8 +357,8 @@ sub Delete {
 =head2 SetDisabled
 
 Takes a boolean.
-1 will cause this queue to no longer be available for tickets.
-0 will re-enable this queue.
+1 will cause this queue to no longer be avaialble for tickets.
+0 will re-enable this queue
 
 =cut
 
@@ -454,14 +409,20 @@ sub ValidateName {
     my $tempqueue = new RT::Queue($RT::SystemUser);
     $tempqueue->Load($name);
 
+    #If we couldn't load it :)
+    unless ( $tempqueue->id() ) {
+        return (1);
+    }
+
     #If this queue exists, return undef
-    if ( $tempqueue->Name() && $tempqueue->id != $self->id)  {
+    #Avoid the ACL check.
+    if ( $tempqueue->Name() ) {
         return (undef);
     }
 
     #If the queue doesn't exist, return 1
     else {
-        return ($self->SUPER::ValidateName($name));
+        return (1);
     }
 
 }
@@ -494,7 +455,7 @@ sub Templates {
 
 # {{{  CustomField
 
-=head2 CustomField NAME
+=item CustomField NAME
 
 Load the queue-specific custom field named NAME
 
@@ -511,38 +472,18 @@ sub CustomField {
 
 # {{{ CustomFields
 
-=head2 CustomFields
+=item CustomFields
 
 Returns an RT::CustomFields object containing all global custom fields, as well as those tied to this queue
 
 =cut
 
-# XXX TODO - this should become TicketCustomFields
-
 sub CustomFields {
     my $self = shift;
-    warn "Queue->CustomFields is deprecated, use Queue->TicketCustomFields instead";
-    return $self->TicketCustomFields(@_);
-}
-
-sub TicketCustomFields {
-    my $self = shift;
 
     my $cfs = RT::CustomFields->new( $self->CurrentUser );
     if ( $self->CurrentUserHasRight('SeeQueue') ) {
-	$cfs->LimitToGlobalOrObjectId( $self->Id );
-	$cfs->LimitToLookupType( 'RT::Queue-RT::Ticket' );
-    }
-    return ($cfs);
-}
-
-sub TicketTransactionCustomFields {
-    my $self = shift;
-
-    my $cfs = RT::CustomFields->new( $self->CurrentUser );
-    if ( $self->CurrentUserHasRight('SeeQueue') ) {
-	$cfs->LimitToGlobalOrObjectId( $self->Id );
-	$cfs->LimitToLookupType( 'RT::Queue-RT::Ticket-RT::Transaction' );
+        $cfs->LimitToGlobalOrQueue( $self->Id );
     }
     return ($cfs);
 }
@@ -669,7 +610,7 @@ sub AddWatcher {
             }
         }
      else {
-            $RT::Logger->warning( "$self -> AddWatcher got passed a bogus type");
+            $RT::Logger->warn( "$self -> AddWatcher got passed a bogus type");
             return ( 0, $self->loc('Error in parameters to Queue->AddWatcher') );
         }
     }
@@ -721,7 +662,7 @@ sub _AddWatcher {
              my $new_user = RT::User->new($RT::SystemUser);
 
             my ( $Address, $Name ) =  
-               RT::Interface::Email::ParseAddressFromHeader($args{'Email'});
+               RT::EmailParser::ParseAddressFromHeader('', $args{'Email'});
 
             my ( $Val, $Message ) = $new_user->Create(
                 Name => $Address,
@@ -830,7 +771,7 @@ sub DeleteWatcher {
             }
         }
         else {
-            $RT::Logger->warning( "$self -> DeleteWatcher got passed a bogus type");
+            $RT::Logger->warn( "$self -> DeleteWatcher got passed a bogus type");
             return ( 0, $self->loc('Error in parameters to Queue->DeleteWatcher') );
         }
     }
@@ -1001,8 +942,8 @@ sub IsWatcher {
 
 =head2 IsCc PRINCIPAL_ID
 
-Takes an RT::Principal id.
-Returns true if the principal is a requestor of the current queue.
+  Takes an RT::Principal id.
+  Returns true if the principal is a requestor of the current queue.
 
 
 =cut
@@ -1021,8 +962,8 @@ sub IsCc {
 
 =head2 IsAdminCc PRINCIPAL_ID
 
-Takes an RT::Principal id.
-Returns true if the principal is a requestor of the current queue.
+  Takes an RT::Principal id.
+  Returns true if the principal is a requestor of the current queue.
 
 =cut
 
@@ -1123,7 +1064,7 @@ sub HasRight {
     }
     return (
         $args{'Principal'}->HasRight(
-            Object => $self->Id ? $self : $RT::System,
+            Object => $self,
             Right    => $args{'Right'}
           )
     );

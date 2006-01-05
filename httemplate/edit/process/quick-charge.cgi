@@ -9,24 +9,15 @@ $cgi->param('amount') =~ /^\s*(\d+(\.\d{1,2})?)\s*$/
   or die 'illegal amount '. $cgi->param('amount');
 my $amount = $1;
 
-my( $error, $cust_main);
-if ( $cgi->param('taxclass') eq '(select)' ) {
+my $cust_main = qsearchs('cust_main', { 'custnum' => $custnum } )
+  or die "unknown custnum $custnum";
 
-
- $error = 'Must select a tax class';
-} else {
-
-  my $cust_main = qsearchs('cust_main', { 'custnum' => $custnum } )
-    or die "unknown custnum $custnum";
-
-  $error = $cust_main->charge(
-    $amount,
-    $cgi->param('pkg'),
-    '$'. sprintf("%.2f",$amount),
-    $cgi->param('taxclass')
-  );
-
-}
+my $error = $cust_main->charge(
+  $amount,
+  $cgi->param('pkg'),
+  '$'. sprintf("%.2f",$amount),
+  $cgi->param('taxclass')
+);
 
 if ($error) {
 %>

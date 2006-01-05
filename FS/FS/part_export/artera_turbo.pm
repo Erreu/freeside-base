@@ -25,9 +25,6 @@ tie my %options, 'Tie::IxHash',
   'debug'      => { 'label' => 'Enable debug logging',
                     'type'  => 'checkbox',
                   },
-  'enable_edit' => { 'label' => 'Enable local editing of Artera serial numbers and key codes (note that the changes will NOT be exported to Artera)',
-                     'type'  => 'checkbox',
-                   },
 ;
 
 %info = (
@@ -43,7 +40,7 @@ Reseller API.  Requires installation of
 <a href="http://search.cpan.org/dist/Net-Artera">Net::Artera</a>
 from CPAN.  You probably also want to:
 <UL>
-  <LI>In the configuration UI section: set the <B>svc_external-skip_manual</B> and <B>svc_external-display_type</B> configuration values.
+  <LI>In the configuraiton UI section: set the <B>svc_external-skip_manual</B> and <B>svc_external-display_type</B> configuration values.
   <LI>In the message catalog: set <B>svc_external-id</B> to <I>Artera Serial Number</I> and set <B>svc_external-title</B> to <I>Artera Key Code</I>.
 </UL>
 END
@@ -103,8 +100,8 @@ sub _export_insert {
 
   if ( $result->{'id'} == 1 ) {
     my $new = new FS::svc_external { $svc_external->hash };
-    $new->id(sprintf('%010d', $result->{'ASN'}));
-    $new->title( substr('0000000000'.uc($result->{'AKC'}), -10) );
+    $new->id($result->{'ASN'});
+    $new->title($result->{'AKC'});
     $new->replace($svc_external);
   } else {
     $result->{'message'} || 'No response from Artera';
@@ -113,7 +110,6 @@ sub _export_insert {
 
 sub _export_replace {
   my( $self, $new, $old ) = (shift, shift, shift);
-  return '' if $self->option('enable_edit');
   return "can't change serial number with Artera"
     if $old->id != $new->id && $old->id;
   return "can't change key code with Artera"
@@ -123,58 +119,36 @@ sub _export_replace {
 
 sub _export_delete {
   my( $self, $svc_external ) = (shift, shift);
-  $self->queue_statusChange(17, $svc_external);
+  $self->statusChange(17, $svc_external);
 }
 
 sub _export_suspend {
   my( $self, $svc_external ) = (shift, shift);
-  $self->queue_statusChange(16, $svc_external);
+  $self->statusChange(16, $svc_external);
 }
 
 sub _export_unsuspend {
   my( $self, $svc_external ) = (shift, shift);
-  $self->queue_statusChange(15, $svc_external);
-}
-
-sub queue_statusChange {
-  my( $self, $status, $svc_external ) = @_;
-
-  my $queue = new FS::queue {
-    'svcnum' => $svc_external->svcnum,
-    'job'    => 'FS::part_export::artera_turbo::statusChange',
-  };
-  $queue->insert(
-    ( map { $self->option($_) }
-          qw( rid username password production ) ),
-    $status,
-    $svc_external->id,
-    $svc_external->title,
-    $self->option('debug'),
-  );
+  $self->statusChange(15, $svc_external);
 }
 
 sub statusChange {
-  my( $rid, $username, $password, $prod, $status, $id, $title, $debug ) = @_;
+  my( $self, $status, $svc_external ) = @_;
 
   eval "use Net::Artera;";
   return $@ if $@;
-  $Net::Artera::DEBUG = 1 if $debug;
-
-  my $artera = new Net::Artera (
-    'rid'        => $rid,
-    'username'   => $username,
-    'password'   => $password,
-    'production' => $prod,
-  );
+  $Net::Artera::DEBUG = 1 if $self->option('debug');
+  my $artera = $self->_new_Artera;
 
   my $result = $artera->statusChange(
-    'asn'      => sprintf('%010d', $id),
-    'akc'      => substr("0000000000$title", -10),
+    'asn'      => sprintf('%010d', $svc_external->id),
+    'akc'      => $svc_external->title,
     'statusid' => $status,
   );
 
-  die $result->{'message'} unless $result->{'id'} == 1;
-
+  $result->{'id'} == 1
+    ? ''
+    : $result->{'message'};
 }
 
 1;

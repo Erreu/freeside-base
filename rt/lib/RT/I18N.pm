@@ -1,8 +1,8 @@
-# BEGIN BPS TAGGED BLOCK {{{
+# {{{ BEGIN BPS TAGGED BLOCK
 # 
 # COPYRIGHT:
 #  
-# This software is Copyright (c) 1996-2005 Best Practical Solutions, LLC 
+# This software is Copyright (c) 1996-2004 Best Practical Solutions, LLC 
 #                                          <jesse@bestpractical.com>
 # 
 # (Except where explicitly superseded by other copyright notices)
@@ -42,8 +42,7 @@
 # works based on those contributions, and sublicense and distribute
 # those contributions and any derivatives thereof.
 # 
-# END BPS TAGGED BLOCK }}}
-
+# }}} END BPS TAGGED BLOCK
 =head1 NAME
 
 RT::I18N - a base class for localization of RT
@@ -99,11 +98,9 @@ ok(RT::I18N->Init);
 =cut
 
 sub Init {
-    require File::Glob;
-
     # Load language-specific functions
-    foreach my $language ( File::Glob::bsd_glob(substr(__FILE__, 0, -3) . "/*.pm")) {
-        if ($language =~ /^([-\w\s.\/\\~:]+)$/) {
+    foreach my $language ( glob(substr(__FILE__, 0, -3) . "/*.pm")) {
+        if ($language =~ /^([-\w.\/\\~:]+)$/) {
             require $1;
         }
         else {
@@ -120,7 +117,6 @@ sub Init {
 	    $_	=> [
 		Gettext => (substr(__FILE__, 0, -3) . "/$_.po"),
 		Gettext => "$RT::LocalLexiconPath/*/$_.po",
-		Gettext => "$RT::LocalLexiconPath/$_.po",
 	    ],
 	} @lang
     });
@@ -322,20 +318,6 @@ sub DecodeMIMEWordsToEncoding {
 	    }
 	}
 
-        # XXX TODO: RT doesn't currently do the right thing with mime-encoded headers
-        # We _should_ be preserving them encoded until after parsing is completed and
-        # THEN undo the mime-encoding.
-        #
-        # This routine should be translating the existing mimeencoding to utf8 but leaving
-        # things encoded.
-        #
-        # It's legal for headers to contain mime-encoded commas and semicolons which
-        # should not be treated as address separators. (Encoding == quoting here)
-        #
-        # until this is fixed, we must escape any string containing a comma or semicolon
-        # this is only a bandaid
-
-        $enc_str = qq{"$enc_str"} if ($enc_str =~ /[,;]/);                                     
 	$str .= $prefix . $enc_str . $trailing;
     }
 
@@ -374,6 +356,7 @@ sub _FindOrGuessCharset {
 }
 
 # }}}
+
 
 # {{{ _GuessCharset
 
@@ -440,7 +423,6 @@ sub SetMIMEHeadToEncoding {
     return if $charset eq $enc and $preserve_words;
 
     foreach my $tag ( $head->tags ) {
-        next unless $tag; # seen in wild: headers with no name
         my @values = $head->get_all($tag);
         $head->delete($tag);
         foreach my $value (@values) {

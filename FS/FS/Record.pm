@@ -1,44 +1,35 @@
 package FS::Record;
 
 use strict;
-use vars qw( $AUTOLOAD @ISA @EXPORT_OK $DEBUG
-             $me %virtual_fields_cache $nowarn_identical );
+use vars qw( $dbdef_file $dbdef $setup_hack $AUTOLOAD @ISA @EXPORT_OK $DEBUG
+             $me %dbdef_cache %virtual_fields_cache );
+use subs qw(reload_dbdef);
 use Exporter;
 use Carp qw(carp cluck croak confess);
 use File::CounterFile;
 use Locale::Country;
 use DBI qw(:sql_types);
-use DBIx::DBSchema 0.25;
+use DBIx::DBSchema 0.23;
 use FS::UID qw(dbh getotaker datasrc driver_name);
-use FS::Schema qw(dbdef);
 use FS::SearchCache;
 use FS::Msgcat qw(gettext);
-use FS::Conf;
 
 use FS::part_virtual_field;
 
 use Tie::IxHash;
 
 @ISA = qw(Exporter);
-
-#export dbdef for now... everything else expects to find it here
 @EXPORT_OK = qw(dbh fields hfields qsearch qsearchs dbdef jsearch);
 
 $DEBUG = 0;
 $me = '[FS::Record]';
 
-$nowarn_identical = 0;
-
-my $conf;
-my $rsa_module;
-my $rsa_loaded;
-my $rsa_encrypt;
-my $rsa_decrypt;
-
-FS::UID->install_callback( sub {
-  $conf = new FS::Conf; 
+#ask FS::UID to run this stuff for us later
+$FS::UID::callback{'FS::Record'} = sub { 
   $File::CounterFile::DEFAULT_DIR = "/usr/local/etc/freeside/counters.". datasrc;
-} );
+  $dbdef_file = "/usr/local/etc/freeside/dbdef.". datasrc;
+  &reload_dbdef unless $setup_hack; #$setup_hack needed now?
+};
 
 =head1 NAME
 
@@ -47,7 +38,7 @@ FS::Record - Database record objects
 =head1 SYNOPSIS
 
     use FS::Record;
-    use FS::Record qw(dbh fields qsearch qsearchs);
+    use FS::Record qw(dbh fields qsearch qsearchs dbdef);
 
     $record = new FS::Record 'table', \%hash;
     $record = new FS::Record 'table', { 'column' => 'value', ... };
@@ -92,6 +83,10 @@ FS::Record - Database record objects
     $error = $record->ut_phonen('column');
     $error = $record->ut_anything('column');
     $error = $record->ut_name('column');
+
+    $dbdef = reload_dbdef;
+    $dbdef = reload_dbdef "/non/standard/filename";
+    $dbdef = dbdef;
 
     $quoted_value = _quote($value,'table','field');
 
@@ -185,35 +180,12 @@ sub create {
   }
 }
 
-=item qsearch PARAMS_HASHREF | TABLE, HASHREF, SELECT, EXTRA_SQL, CACHE_OBJ, ADDL_FROM
+=item qsearch TABLE, HASHREF, SELECT, EXTRA_SQL, CACHE_OBJ, AS
 
 Searches the database for all records matching (at least) the key/value pairs
 in HASHREF.  Returns all the records found as `FS::TABLE' objects if that
 module is loaded (i.e. via `use FS::cust_main;'), otherwise returns FS::Record
 objects.
-
-The preferred usage is to pass a hash reference of named parameters:
-
-  my @records = qsearch( {
-                           'table'     => 'table_name',
-                           'hashref'   => { 'field' => 'value'
-                                            'field' => { 'op'    => '<',
-                                                         'value' => '420',
-                                                       },
-                                          },
-
-                           #these are optional...
-                           'select'    => '*',
-                           'extra_sql' => 'AND field ',
-                           #'cache_obj' => '', #optional
-                           'addl_from' => 'LEFT JOIN othtable USING ( field )',
-                         }
-                       );
-
-Much code still uses old-style positional parameters, this is also probably
-fine in the common case where there are only two parameters:
-
-  my @records = qsearch( 'table', { 'field' => 'value' } );
 
 ###oops, argh, FS::Record::new only lets us create database fields.
 #Normal behaviour if SELECT is not specified is `*', as in
@@ -227,28 +199,16 @@ fine in the common case where there are only two parameters:
 =cut
 
 sub qsearch {
-  my($stable, $record, $select, $extra_sql, $cache, $addl_from );
-  if ( ref($_[0]) ) { #hashref for now, eventually maybe accept a list too
-    my $opt = shift;
-    $stable    = $opt->{'table'}     or die "table name is required";
-    $record    = $opt->{'hashref'}   || {};
-    $select    = $opt->{'select'}    || '*';
-    $extra_sql = $opt->{'extra_sql'} || '';
-    $cache     = $opt->{'cache_obj'} || '';
-    $addl_from = $opt->{'addl_from'} || '';
-  } else {
-    ($stable, $record, $select, $extra_sql, $cache, $addl_from ) = @_;
-    $select ||= '*';
-  }
-
+  my($stable, $record, $select, $extra_sql, $cache, $as ) = @_;
   #$stable =~ /^([\w\_]+)$/ or die "Illegal table: $table";
   #for jsearch
   $stable =~ /^([\w\s\(\)\.\,\=]+)$/ or die "Illegal table: $stable";
   $stable = $1;
+  $select ||= '*';
   my $dbh = dbh;
 
   my $table = $cache ? $cache->table : $stable;
-  my $dbdef_table = dbdef->table($table)
+  my $dbdef_table = $dbdef->table($table)
     or die "No schema for table $table found - ".
            "do you need to create it or run dbdef-create?";
   my $pkey = $dbdef_table->primary_key;
@@ -263,7 +223,7 @@ sub qsearch {
   }
 
   my $statement = "SELECT $select FROM $stable";
-  $statement .= " $addl_from" if $addl_from;
+  $statement .= " AS $as" if $as;
   if ( @real_fields or @virtual_fields ) {
     $statement .= ' WHERE '. join(' AND ',
       ( map {
@@ -284,7 +244,7 @@ sub qsearch {
       if ( ! defined( $record->{$_} ) || $record->{$_} eq '' ) {
         if ( $op eq '=' ) {
           if ( driver_name eq 'Pg' ) {
-            my $type = dbdef->table($table)->column($column)->type;
+            my $type = $dbdef->table($table)->column($column)->type;
             if ( $type =~ /(int|serial)/i ) {
               qq-( $column IS NULL )-;
             } else {
@@ -295,7 +255,7 @@ sub qsearch {
           }
         } elsif ( $op eq '!=' ) {
           if ( driver_name eq 'Pg' ) {
-            my $type = dbdef->table($table)->column($column)->type;
+            my $type = $dbdef->table($table)->column($column)->type;
             if ( $type =~ /(int|serial)/i ) {
               qq-( $column IS NOT NULL )-;
             } else {
@@ -365,7 +325,7 @@ sub qsearch {
     grep defined( $record->{$_} ) && $record->{$_} ne '', @real_fields
   ) {
     if ( $record->{$field} =~ /^\d+(\.\d+)?$/
-         && dbdef->table($table)->column($field)->type =~ /(int|serial)/i
+         && $dbdef->table($table)->column($field)->type =~ /(int|serial)/i
     ) {
       $sth->bind_param($bind++, $record->{$field}, { TYPE => SQL_INTEGER } );
     } else {
@@ -419,71 +379,32 @@ sub qsearch {
       }
     }
   }
-  my @return;
+  
   if ( eval 'scalar(@FS::'. $table. '::ISA);' ) {
     if ( eval 'FS::'. $table. '->can(\'new\')' eq \&new ) {
       #derivied class didn't override new method, so this optimization is safe
       if ( $cache ) {
-        @return = map {
+        map {
           new_or_cached( "FS::$table", { %{$_} }, $cache )
         } values(%result);
       } else {
-        @return = map {
+        map {
           new( "FS::$table", { %{$_} } )
         } values(%result);
       }
     } else {
-      #okay, its been tested
-      # warn "untested code (class FS::$table uses custom new method)";
-      @return = map {
+      warn "untested code (class FS::$table uses custom new method)";
+      map {
         eval 'FS::'. $table. '->new( { %{$_} } )';
       } values(%result);
     }
-
-    # Check for encrypted fields and decrypt them.
-    if ($conf->exists('encryption') && eval 'defined(@FS::'. $table . '::encrypted_fields)') {
-      foreach my $record (@return) {
-        foreach my $field (eval '@FS::'. $table . '::encrypted_fields') {
-          # Set it directly... This may cause a problem in the future...
-          $record->setfield($field, $record->decrypt($record->getfield($field)));
-        }
-      }
-    }
   } else {
     cluck "warning: FS::$table not loaded; returning FS::Record objects";
-    @return = map {
+    map {
       FS::Record->new( $table, { %{$_} } );
     } values(%result);
   }
-  return @return;
-}
 
-=item by_key PRIMARY_KEY_VALUE
-
-This is a class method that returns the record with the given primary key
-value.  This method is only useful in FS::Record subclasses.  For example:
-
-  my $cust_main = FS::cust_main->by_key(1); # retrieve customer with custnum 1
-
-is equivalent to:
-
-  my $cust_main = qsearchs('cust_main', { 'custnum' => 1 } );
-
-=cut
-
-sub by_key {
-  my ($class, $pkey_value) = @_;
-
-  my $table = $class->table
-    or croak "No table for $class found";
-
-  my $dbdef_table = dbdef->table($table)
-    or die "No schema for table $table found - ".
-           "do you need to create it or run dbdef-create?";
-  my $pkey = $dbdef_table->primary_key
-    or die "No primary key for table $table";
-
-  return qsearchs($table, { $pkey => $pkey_value });
 }
 
 =item jsearch TABLE, HASHREF, SELECT, EXTRA_SQL, PRIMARY_TABLE, PRIMARY_KEY
@@ -507,7 +428,7 @@ sub jsearch {
   );
 }
 
-=item qsearchs PARAMS_HASHREF | TABLE, HASHREF, SELECT, EXTRA_SQL, CACHE_OBJ, ADDL_FROM
+=item qsearchs TABLE, HASHREF
 
 Same as qsearch, except that if more than one record matches, it B<carp>s but
 returns the first.  If this happens, you either made a logic error in asking
@@ -518,7 +439,7 @@ for a single item, or your data is corrupted.
 sub qsearchs { # $result_record = &FS::Record:qsearchs('table',\%hash);
   my $table = $_[0];
   my(@result) = qsearch(@_);
-  cluck "warning: Multiple records in scalar search ($table)"
+  carp "warning: Multiple records in scalar search ($table)"
     if scalar(@result) > 1;
   #should warn more vehemently if the search was on a primary key?
   scalar(@result) ? ($result[0]) : ();
@@ -551,7 +472,7 @@ Returns the DBIx::DBSchema::Table object for the table.
 sub dbdef_table {
   my($self)=@_;
   my($table)=$self->table;
-  dbdef->table($table);
+  $dbdef->table($table);
 }
 
 =item get, getfield COLUMN
@@ -677,7 +598,6 @@ otherwise returns false.
 
 sub insert {
   my $self = shift;
-  my $saved = {};
 
   my $error = $self->check;
   return $error if $error;
@@ -708,17 +628,6 @@ sub insert {
   }
 
   my $table = $self->table;
-
-  
-  # Encrypt before the database
-  if ($conf->exists('encryption') && defined(eval '@FS::'. $table . 'encrypted_fields')) {
-    foreach my $field (eval '@FS::'. $table . '::encrypted_fields') {
-      $self->{'saved'} = $self->getfield($field);
-      $self->setfield($field, $self->enrypt($self->getfield($field)));
-    }
-  }
-
-
   #false laziness w/delete
   my @real_fields =
     grep defined($self->getfield($_)) && $self->getfield($_) ne "",
@@ -745,32 +654,18 @@ sub insert {
 
   $sth->execute or return $sth->errstr;
 
-  # get inserted id from the database, if applicable & needed
-  if ( $db_seq && ! $self->getfield($primary_key) ) {
+  my $insertid = '';
+  if ( $db_seq ) { # get inserted id from the database, if applicable
     warn "[debug]$me retreiving sequence from database\n" if $DEBUG;
-  
-    my $insertid = '';
-
     if ( driver_name eq 'Pg' ) {
 
-      #my $oid = $sth->{'pg_oid_status'};
-      #my $i_sql = "SELECT $primary_key FROM $table WHERE oid = ?";
-
-      my $default = $self->dbdef_table->column($primary_key)->default;
-      unless ( $default =~ /^nextval\('"?([\w\.]+)"?'/i ) {
-        dbh->rollback if $FS::UID::AutoCommit;
-        return "can't parse $table.$primary_key default value".
-               " for sequence name: $default";
-      }
-      my $sequence = $1;
-
-      my $i_sql = "SELECT currval('$sequence')";
+      my $oid = $sth->{'pg_oid_status'};
+      my $i_sql = "SELECT $primary_key FROM $table WHERE oid = ?";
       my $i_sth = dbh->prepare($i_sql) or do {
         dbh->rollback if $FS::UID::AutoCommit;
         return dbh->errstr;
       };
-      #$i_sth->execute($oid) or do {
-      $i_sth->execute() or do {
+      $i_sth->execute($oid) or do {
         dbh->rollback if $FS::UID::AutoCommit;
         return $i_sth->errstr;
       };
@@ -796,15 +691,11 @@ sub insert {
       }
 
     } else {
-
       dbh->rollback if $FS::UID::AutoCommit;
       return "don't know how to retreive inserted ids from ". driver_name. 
              ", try using counterfiles (maybe run dbdef-create?)";
-
     }
-
     $self->setfield($primary_key, $insertid);
-
   }
 
   my @virtual_fields = 
@@ -836,7 +727,7 @@ sub insert {
 
 
   my $h_sth;
-  if ( defined dbdef->table('h_'. $table) ) {
+  if ( defined $dbdef->table('h_'. $table) ) {
     my $h_statement = $self->_h_statement('insert');
     warn "[debug]$me $h_statement\n" if $DEBUG > 2;
     $h_sth = dbh->prepare($h_statement) or do {
@@ -849,12 +740,6 @@ sub insert {
   $h_sth->execute or return $h_sth->errstr if $h_sth;
 
   dbh->commit or croak dbh->errstr if $FS::UID::AutoCommit;
-
-  # Now that it has been saved, reset the encrypted fields so that $new 
-  # can still be used.
-  foreach my $field (keys %{$saved}) {
-    $self->setfield($field, $saved->{$field});
-  }
 
   '';
 }
@@ -897,7 +782,7 @@ sub delete {
   my $sth = dbh->prepare($statement) or return dbh->errstr;
 
   my $h_sth;
-  if ( defined dbdef->table('h_'. $self->table) ) {
+  if ( defined $dbdef->table('h_'. $self->table) ) {
     my $h_statement = $self->_h_statement('delete');
     warn "[debug]$me $h_statement\n" if $DEBUG > 2;
     $h_sth = dbh->prepare($h_statement) or return dbh->errstr;
@@ -960,9 +845,11 @@ returns the error, otherwise returns false.
 
 sub replace {
   my $new = shift;
-  my $old = shift;  
 
-  if (!defined($old)) { 
+  my $old;
+  if ( @_ ) { 
+    $old = shift;
+  } else {
     warn "[debug]$me replace called with no arguments; autoloading old record\n"
      if $DEBUG;
     my $primary_key = $new->dbdef_table->primary_key;
@@ -980,31 +867,19 @@ sub replace {
   return "Records not in same table!" unless $new->table eq $old->table;
 
   my $primary_key = $old->dbdef_table->primary_key;
-  return "Can't change primary key $primary_key ".
-         'from '. $old->getfield($primary_key).
-         ' to ' . $new->getfield($primary_key)
+  return "Can't change $primary_key"
     if $primary_key
        && ( $old->getfield($primary_key) ne $new->getfield($primary_key) );
 
   my $error = $new->check;
   return $error if $error;
-  
-  # Encrypt for replace
-  my $saved = {};
-  if ($conf->exists('encryption') && defined(eval '@FS::'. $new->table . 'encrypted_fields')) {
-    foreach my $field (eval '@FS::'. $new->table . '::encrypted_fields') {
-      $saved->{$field} = $new->getfield($field);
-      $new->setfield($field, $new->encrypt($new->getfield($field)));
-    }
-  }
 
   #my @diff = grep $new->getfield($_) ne $old->getfield($_), $old->fields;
   my %diff = map { ($new->getfield($_) ne $old->getfield($_))
                    ? ($_, $new->getfield($_)) : () } $old->fields;
                    
   unless ( keys(%diff) ) {
-    carp "[warning]$me $new -> replace $old: records identical"
-      unless $nowarn_identical;
+    carp "[warning]$me $new -> replace $old: records identical";
     return '';
   }
 
@@ -1015,25 +890,13 @@ sub replace {
   ). ' WHERE '.
     join(' AND ',
       map {
-
-        if ( $old->getfield($_) eq '' ) {
-
-         #false laziness w/qsearch
-         if ( driver_name eq 'Pg' ) {
-            my $type = $old->dbdef_table->column($_)->type;
-            if ( $type =~ /(int|serial)/i ) {
-              qq-( $_ IS NULL )-;
-            } else {
-              qq-( $_ IS NULL OR $_ = '' )-;
-            }
-          } else {
-            qq-( $_ IS NULL OR $_ = "" )-;
-          }
-
-        } else {
-          "$_ = ". _quote($old->getfield($_),$old->table,$_);
-        }
-
+        $old->getfield($_) eq ''
+          #? "( $_ IS NULL OR $_ = \"\" )"
+          ? ( driver_name eq 'Pg'
+                ? "( $_ IS NULL OR $_ = '' )"
+                : "( $_ IS NULL OR $_ = \"\" )"
+            )
+          : "$_ = ". _quote($old->getfield($_),$old->table,$_)
       } ( $primary_key ? ( $primary_key ) : real_fields($old->table) )
     )
   ;
@@ -1041,7 +904,7 @@ sub replace {
   my $sth = dbh->prepare($statement) or return dbh->errstr;
 
   my $h_old_sth;
-  if ( defined dbdef->table('h_'. $old->table) ) {
+  if ( defined $dbdef->table('h_'. $old->table) ) {
     my $h_old_statement = $old->_h_statement('replace_old');
     warn "[debug]$me $h_old_statement\n" if $DEBUG > 2;
     $h_old_sth = dbh->prepare($h_old_statement) or return dbh->errstr;
@@ -1050,7 +913,7 @@ sub replace {
   }
 
   my $h_new_sth;
-  if ( defined dbdef->table('h_'. $new->table) ) {
+  if ( defined $dbdef->table('h_'. $new->table) ) {
     my $h_new_statement = $new->_h_statement('replace_new');
     warn "[debug]$me $h_new_statement\n" if $DEBUG > 2;
     $h_new_sth = dbh->prepare($h_new_statement) or return dbh->errstr;
@@ -1127,12 +990,6 @@ sub replace {
 
   dbh->commit or croak dbh->errstr if $FS::UID::AutoCommit;
 
-  # Now that it has been saved, reset the encrypted fields so that $new 
-  # can still be used.
-  foreach my $field (keys %{$saved}) {
-    $new->setfield($field, $saved->{$field});
-  }
-
   '';
 
 }
@@ -1182,9 +1039,7 @@ sub check {
 }
 
 sub _h_statement {
-  my( $self, $action, $time ) = @_;
-
-  $time ||= time;
+  my( $self, $action ) = @_;
 
   my @fields =
     grep defined($self->getfield($_)) && $self->getfield($_) ne "",
@@ -1195,7 +1050,7 @@ sub _h_statement {
   "INSERT INTO h_". $self->table. " ( ".
       join(', ', qw(history_date history_user history_action), @fields ).
     ") VALUES (".
-      join(', ', $time, dbh->quote(getotaker()), dbh->quote($action), @values).
+      join(', ', time, dbh->quote(getotaker()), dbh->quote($action), @values).
     ")"
   ;
 }
@@ -1489,8 +1344,6 @@ Check/untaint zip codes.
 
 =cut
 
-my @zip_reqd_countries = qw( CA ); #US implicit...
-
 sub ut_zip {
   my( $self, $field, $country ) = @_;
   if ( $country eq 'US' ) {
@@ -1499,10 +1352,7 @@ sub ut_zip {
                 $self->getfield($field);
     $self->setfield($field,$1);
   } else {
-    if ( $self->getfield($field) =~ /^\s*$/
-         && ( !$country || ! grep { $_ eq $country } @zip_reqd_countries )
-       )
-    {
+    if ( $self->getfield($field) =~ /^\s*$/ ) {
       $self->setfield($field,'');
     } else {
       $self->getfield($field) =~ /^\s*(\w[\w\-\s]{2,8}\w)\s*$/
@@ -1606,9 +1456,9 @@ sub virtual_fields {
   my $table;
   $table = $self->table or confess "virtual_fields called on non-table";
 
-  confess "Unknown table $table" unless dbdef->table($table);
+  confess "Unknown table $table" unless $dbdef->table($table);
 
-  return () unless dbdef->table('part_virtual_field');
+  return () unless $self->dbdef->table('part_virtual_field');
 
   unless ( $virtual_fields_cache{$table} ) {
     my $query = 'SELECT name from part_virtual_field ' .
@@ -1676,10 +1526,39 @@ fields() and other subroutines elsewhere in FS::Record.
 sub real_fields {
   my $table = shift;
 
-  my($table_obj) = dbdef->table($table);
+  my($table_obj) = $dbdef->table($table);
   confess "Unknown table $table" unless $table_obj;
   $table_obj->columns;
 }
+
+=item reload_dbdef([FILENAME])
+
+Load a database definition (see L<DBIx::DBSchema>), optionally from a
+non-default filename.  This command is executed at startup unless
+I<$FS::Record::setup_hack> is true.  Returns a DBIx::DBSchema object.
+
+=cut
+
+sub reload_dbdef {
+  my $file = shift || $dbdef_file;
+
+  unless ( exists $dbdef_cache{$file} ) {
+    warn "[debug]$me loading dbdef for $file\n" if $DEBUG;
+    $dbdef_cache{$file} = DBIx::DBSchema->load( $file )
+                            or die "can't load database schema from $file";
+  } else {
+    warn "[debug]$me re-using cached dbdef for $file\n" if $DEBUG;
+  }
+  $dbdef = $dbdef_cache{$file};
+}
+
+=item dbdef
+
+Returns the current database definition.  See L<DBIx::DBSchema>.
+
+=cut
+
+sub dbdef { $dbdef; }
 
 =item _quote VALUE, TABLE, COLUMN
 
@@ -1691,16 +1570,11 @@ type (see L<DBIx::DBSchema::Column>) does not end in `char' or `binary'.
 
 sub _quote {
   my($value, $table, $column) = @_;
-  my $column_obj = dbdef->table($table)->column($column);
+  my $column_obj = $dbdef->table($table)->column($column);
   my $column_type = $column_obj->type;
-  my $nullable = $column_obj->null;
-
-  warn "  $table.$column: $value ($column_type".
-       ( $nullable ? ' NULL' : ' NOT NULL' ).
-       ")\n" if $DEBUG > 2;
 
   if ( $value eq '' && $column_type =~ /^int/ ) {
-    if ( $nullable ) {
+    if ( $column_obj->null ) {
       'NULL';
     } else {
       cluck "WARNING: Attempting to set non-null integer $table.$column null; ".
@@ -1726,7 +1600,7 @@ sub vfieldpart_hashref {
   my $self = shift;
   my $table = $self->table;
 
-  return {} unless dbdef->table('part_virtual_field');
+  return {} unless $self->dbdef->table('part_virtual_field');
 
   my $dbh = dbh;
   my $statement = "SELECT vfieldpart, name FROM part_virtual_field WHERE ".
@@ -1762,79 +1636,6 @@ sub _dump {
   join("\n", map {
     "$_: ". $self->getfield($_). "|"
   } (fields($self->table)) );
-}
-
-sub encrypt {
-  my ($self, $value) = @_;
-  my $encrypted;
-
-  if ($conf->exists('encryption')) {
-    if ($self->is_encrypted($value)) {
-      # Return the original value if it isn't plaintext.
-      $encrypted = $value;
-    } else {
-      $self->loadRSA;
-      if (ref($rsa_encrypt) =~ /::RSA/) { # We Can Encrypt
-        # RSA doesn't like the empty string so let's pack it up
-        # The database doesn't like the RSA data so uuencode it
-        my $length = length($value)+1;
-        $encrypted = pack("u*",$rsa_encrypt->encrypt(pack("Z$length",$value)));
-      } else {
-        die ("You can't encrypt w/o a valid RSA engine - Check your installation or disable encryption");
-      }
-    }
-  }
-  return $encrypted;
-}
-
-sub is_encrypted {
-  my ($self, $value) = @_;
-  # Possible Bug - Some work may be required here....
-
-  if (length($value) > 80) {
-    return 1;
-  } else {
-    return 0;
-  }
-}
-
-sub decrypt {
-  my ($self,$value) = @_;
-  my $decrypted = $value; # Will return the original value if it isn't encrypted or can't be decrypted.
-  if ($conf->exists('encryption') && $self->is_encrypted($value)) {
-    $self->loadRSA;
-    if (ref($rsa_decrypt) =~ /::RSA/) {
-      my $encrypted = unpack ("u*", $value);
-      $decrypted =  unpack("Z*", $rsa_decrypt->decrypt($encrypted));
-    }
-  }
-  return $decrypted;
-}
-
-sub loadRSA {
-    my $self = shift;
-    #Initialize the Module
-    $rsa_module = 'Crypt::OpenSSL::RSA'; # The Default
-
-    if ($conf->exists('encryptionmodule') && $conf->config('encryptionmodule') ne '') {
-      $rsa_module = $conf->config('encryptionmodule');
-    }
-
-    if (!$rsa_loaded) {
-	eval ("require $rsa_module"); # No need to import the namespace
-	$rsa_loaded++;
-    }
-    # Initialize Encryption
-    if ($conf->exists('encryptionpublickey') && $conf->config('encryptionpublickey') ne '') {
-      my $public_key = join("\n",$conf->config('encryptionpublickey'));
-      $rsa_encrypt = $rsa_module->new_public_key($public_key);
-    }
-    
-    # Intitalize Decryption
-    if ($conf->exists('encryptionprivatekey') && $conf->config('encryptionprivatekey') ne '') {
-      my $private_key = join("\n",$conf->config('encryptionprivatekey'));
-      $rsa_decrypt = $rsa_module->new_private_key($private_key);
-    }
 }
 
 sub DESTROY { return; }

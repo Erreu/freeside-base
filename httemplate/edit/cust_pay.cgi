@@ -1,13 +1,7 @@
+<!-- mason kludge -->
 <%
 
 my $conf = new FS::Conf;
-
-my %payby = (
-  'BILL' => 'Check',
-  'CASH' => 'Cash',
-  'WEST' => 'Western Union',
-  'MCRD' => 'Manual credit card',
-);
 
 my($link, $linknum, $paid, $payby, $payinfo, $quickpay, $_date); 
 if ( $cgi->param('error') ) {
@@ -18,21 +12,23 @@ if ( $cgi->param('error') ) {
   $payinfo  = $cgi->param('payinfo');
   $quickpay = $cgi->param('quickpay');
   $_date    = $cgi->param('_date') ? str2time($cgi->param('_date')) : time;
-} elsif ( $cgi->param('custnum') =~ /^(\d+)$/ ) {
-  $link     = 'custnum';
-  $linknum  = $1;
-  $paid     = '';
-  $payby    = $cgi->param('payby') || 'BILL';
-  $payinfo  = '';
-  $quickpay = $cgi->param('quickpay');
-  $_date    = time;
-} elsif ( $cgi->param('invnum') =~ /^(\d+)$/ ) {
+} elsif ($cgi->keywords) {
+  my($query) = $cgi->keywords;
+  $query =~ /^(\d+)$/;
   $link     = 'invnum';
   $linknum  = $1;
   $paid     = '';
-  $payby    = $cgi->param('payby') || 'BILL';
+  $payby    = 'BILL';
   $payinfo  = "";
   $quickpay = '';
+  $_date    = time;
+} elsif ( $cgi->param('custnum')  =~ /^(\d+)$/ ) {
+  $link     = 'custnum';
+  $linknum  = $1;
+  $paid     = '';
+  $payby    = 'BILL';
+  $payinfo  = '';
+  $quickpay = $cgi->param('quickpay');
   $_date    = time;
 } else {
   die "illegal query ". $cgi->keywords;
@@ -40,12 +36,9 @@ if ( $cgi->param('error') ) {
 
 my $paybatch = "webui-$_date-$$-". rand() * 2**32;
 
-my $title = 'Post '. $payby{$payby}. ' payment';
-$title .= " against Invoice #$linknum" if $link eq 'invnum';
-
 %>
 
-<%=  header($title, '') %>
+<%=  header("Post payment", '') %>
 
 <% if ( $cgi->param('error') ) { %>
 <FONT SIZE="+1" COLOR="#ff0000">Error: <%= $cgi->param('error') %></FONT>
@@ -65,12 +58,49 @@ $title .= " against Invoice #$linknum" if $link eq 'invnum';
 <INPUT TYPE="hidden" NAME="quickpay" VALUE="<%= $quickpay %>">
 
 <% 
-my $money_char = $conf->config('money_char') || '$';
 my $custnum;
 if ( $link eq 'invnum' ) {
+
   my $cust_bill = qsearchs('cust_bill', { 'invnum' => $linknum } )
     or die "unknown invnum $linknum";
+  print "Invoice #<B>$linknum</B>". ntable("#cccccc",2).
+        '<TR><TD ALIGN="right">Date</TD><TD BGCOLOR="#ffffff">'.
+        time2str("%D", $cust_bill->_date). '</TD></TR>'.
+        '<TR><TD ALIGN="right" VALIGN="top">Items</TD><TD BGCOLOR="#ffffff">';
+  foreach ( $cust_bill->cust_bill_pkg ) { #false laziness with FS::cust_bill
+    if ( $_->pkgnum ) {
+
+      my($cust_pkg)=qsearchs('cust_pkg', { 'pkgnum', $_->pkgnum } );
+      my($part_pkg)=qsearchs('part_pkg',{'pkgpart'=>$cust_pkg->pkgpart});
+      my($pkg)=$part_pkg->pkg;
+
+      if ( $_->setup != 0 ) {
+        print "$pkg Setup<BR>"; # $money_char. sprintf("%10.2f",$_->setup);
+        print join('<BR>',
+          map { "  ". $_->[0]. ": ". $_->[1] } $cust_pkg->labels
+        ). '<BR>';
+      }
+
+      if ( $_->recur != 0 ) {
+        print
+          "$pkg (" . time2str("%x",$_->sdate) . " - " .
+                                time2str("%x",$_->edate) . ")<BR>";
+          #$money_char. sprintf("%10.2f",$_->recur)
+        print join('<BR>',
+          map { '--->'. $_->[0]. ": ". $_->[1] } $cust_pkg->labels
+        ). '<BR>';
+      }
+
+    } else { #pkgnum Tax
+      print "Tax<BR>" # $money_char. sprintf("%10.2f",$_->setup)
+        if $_->setup != 0;
+    }
+
+  }
+  print '</TD></TR></TABLE><BR><BR>';
+
   $custnum = $cust_bill->custnum;
+
 } elsif ( $link eq 'custnum' ) {
   $custnum = $linknum;
 }
@@ -100,28 +130,16 @@ Payment
 </SCRIPT>
 <TR>
   <TD ALIGN="right">Amount</TD>
-  <TD BGCOLOR="#ffffff" ALIGN="right"><%= $money_char %></TD>
-  <TD><INPUT TYPE="text" NAME="paid" VALUE="<%= $paid %>" SIZE=8 MAXLENGTH=8> by <B><%= $payby{$payby} %></B></TD>
+  <TD BGCOLOR="#ffffff" ALIGN="right">$</TD>
+  <TD><INPUT TYPE="text" NAME="paid" VALUE="<%= $paid %>" SIZE=8 MAXLENGTH=8></TD>
 </TR>
-
-<% if ( $payby eq 'BILL' ) { %>
-
-  <TR>
-    <TD ALIGN="right">Check #</TD>
-    <TD COLSPAN=2><INPUT TYPE="text" NAME="payinfo" VALUE="<%= $payinfo %>" SIZE=10></TD>
-  </TR>
-
-<% } %>
-
 <TR>
-<% if ( $link eq 'custnum' ) { %>
+  <TD ALIGN="right">Check #</TD>
+  <TD COLSPAN=2><INPUT TYPE="text" NAME="payinfo" VALUE="<%= $payinfo %>" SIZE=10></TD>
+</TR>
+<TR>
   <TD ALIGN="right">Auto-apply<BR>to invoices</TD>
   <TD COLSPAN=2><SELECT NAME="apply"><OPTION VALUE="yes" SELECTED>yes<OPTION>no</SELECT></TD>
-<% } elsif ( $link eq 'invnum' ) { %>
-  <TD ALIGN="right">Apply to</TD>
-  <TD COLSPAN=2 BGCOLOR="#ffffff">Invoice #<B><%= $linknum %></B> only</TD>
-  <INPUT TYPE="hidden" NAME="apply" VALUE="no">
-<% } %>
 </TR>
 
 </TABLE>

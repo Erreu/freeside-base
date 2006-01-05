@@ -1,63 +1,13 @@
 <%
   my( $cust_main ) = @_;
-  my $custnum = $cust_main->custnum;
-
   my $conf = new FS::Conf;
-
-  my @payby = grep /\w/, $conf->config('payby');
-  #@payby = (qw( CARD DCRD CHEK DCHK LECB BILL CASH WEST COMP ))
-  @payby = (qw( CARD DCRD CHEK DCHK LECB BILL CASH COMP ))
-    unless @payby;
-  my %payby = map { $_=>1 } @payby;
-
-  my $s = 0;
-
+  my $custnum = $cust_main->custnum;
 %>
 
 <BR><BR><A NAME="history"><FONT SIZE="+2">Payment History</FONT></A><BR>
-
-<% if ( $payby{'BILL'} ) { %>
-
-  <%= $s++ ? ' | ' : '' %>
-  <A HREF="<%= $p %>edit/cust_pay.cgi?payby=BILL;custnum=<%= $custnum %>">Post check payment</A>
-
-<% } %>
-
-<% if ( $payby{'CASH'} ) { %>
-
-  <%= $s++ ? ' | ' : '' %>
-  <A HREF="<%= $p %>edit/cust_pay.cgi?payby=CASH;custnum=<%= $custnum %>">Post cash payment</A>
-
-<% } %>
-
-<% if ( $payby{'WEST'} ) { %>
-
-  <%= $s++ ? ' | ' : '' %>
-  <A HREF="<%= $p %>edit/cust_pay.cgi?payby=WEST;custnum=<%= $custnum %>">Post Western Union payment</A>
-
-<% } %>
-
-<% if ( $payby{'CARD'} || $payby{'DCRD'} ) { %>
-
-  <%= $s++ ? ' | ' : '' %>
-  <A HREF="<%= $p %>misc/payment.cgi?payby=CARD;custnum=<%= $custnum %>">Process credit card payment</A>
-
-<% } %>
-
-<% if ( $payby{'CHEK'} || $payby{'DCHK'} ) { %>
-
-  <%= $s++ ? ' | ' : '' %>
-  <A HREF="<%= $p %>misc/payment.cgi?payby=CHEK;custnum=<%= $custnum %>">Process electronic check (ACH) payment</A>
-
-<% } %>
-
-<% if ( $payby{'MCRD'} ) { %>
-
-  <%= $s++ ? ' | ' : '' %>
-  <A HREF="<%= $p %>edit/cust_pay.cgi?payby=MCRD;custnum=<%= $custnum %>">Post manual credit card payment</A>
-
-<% } %>
-
+<A HREF="<%= $p %>edit/cust_pay.cgi?custnum=<%= $custnum %>">Post cash/check payment</A>
+| <A HREF="<%= $p %>misc/payment.cgi?payby=CARD;custnum=<%= $custnum %>">Process credit card payment</A>
+| <A HREF="<%= $p %>misc/payment.cgi?payby=CHEK;custnum=<%= $custnum %>">Process electronic check (ACH) payment</A>
 <BR><A HREF="<%= $p %>edit/cust_credit.cgi?<%= $custnum %>">Post credit</A>
 <BR>
 
@@ -100,13 +50,8 @@ foreach my $cust_pay ($cust_main->cust_pay) {
   my $target = "$payby$payinfo";
   $payby =~ s/^BILL$/Check #/ if $payinfo;
   $payby =~ s/^CHEK$/Electronic check /;
-  $payby =~ s/^PREP$/Prepaid card /;
-  $payby =~ s/^CARD$/Credit card #/; 
-  $payby =~ s/^COMP$/Complimentary by /; 
-  $payby =~ s/^CASH$/Cash/;
-  $payby =~ s/^WEST$/Western Union/;
-  $payby =~ s/^MCRD$/Manual credit card/;
   $payby =~ s/^BILL$//;
+  $payby =~ s/^(CARD|COMP)$/$1 /;
   my $info = $payby ? " ($payby$payinfo)" : '';
 
   my( $pre, $post, $desc, $apply, $ext ) = ( '', '', '', '', '' );
@@ -172,14 +117,14 @@ foreach my $cust_pay ($cust_main->cust_pay) {
 
   my $void = '';
   if (    $cust_pay->closed !~ /^Y/i
-       && ( $cust_pay->payby ne 'CARD' || $conf->exists('cc-void')     )
+       && $cust_pay->payby ne 'CARD'
        && ( $cust_pay->payby ne 'CHEK' || $conf->exists('echeck-void') ) 
      ) {
     $void = qq! (<A HREF="javascript:areyousure('!.
             qq!${p}misc/void-cust_pay.cgi?!. $cust_pay->paynum.
             qq!', 'Are you sure you want to void this payment?')"!.
             qq! TITLE="Void this payment from the database!.
-              ( $cust_pay->payby =~ /^(CARD|CHEK)$/
+              ( $cust_pay->payby eq 'CHEK'
                 ? ' (do not send anything to the payment gateway)'
                 : '' 
               ). '"'.
@@ -229,24 +174,11 @@ foreach my $cust_pay_void ($cust_main->cust_pay_void) {
   $payby =~ s/^(CARD|COMP)$/$1 /;
   my $info = $payby ? " ($payby$payinfo)" : '';
 
-  my $unvoid = '';
-  if ( $cust_pay_void->closed !~ /^Y/i && $conf->exists('unvoid') ) {
-    $unvoid = qq! (<A HREF="javascript:areyousure('!.
-              qq!${p}misc/unvoid-cust_pay_void.cgi?!. $cust_pay_void->paynum.
-              qq!', 'Are you sure you want to unvoid this payment?')"!.
-              qq! TITLE="Unvoid this payment from the database!.
-                ( $cust_pay_void->payby =~ /^(CARD|CHEK)$/
-                  ? ' (do not send anything to the payment gateway)'
-                  : '' 
-                ). '"'.
-              qq!>unvoid</A>)!;
-  }
-
   push @history, {
     'date'   => $cust_pay_void->_date,
     'desc'   => "<DEL>Payment $info</DEL> <I>voided ".
                 time2str("%D", $cust_pay_void->void_date).
-                " by ". $cust_pay_void->otaker. '</i>'. $unvoid,
+                " by ". $cust_pay_void->otaker. '</i>',
     'void_payment' => $cust_pay_void->paid,
   };
 
@@ -326,10 +258,7 @@ foreach my $cust_credit ($cust_main->cust_credit) {
   push @history, {
     'date'   => $cust_credit->_date,
     'desc'   => $pre. "Credit$post by ". $cust_credit->otaker.
-                ( $cust_credit->reason
-		    ? ' ('. $cust_credit->reason. ')'
-		    : ''
-		).
+                ' ('. $cust_credit->reason. ')'.
                 "$desc$apply$delete$unapply",
     'credit' => $cust_credit->amount,
   };

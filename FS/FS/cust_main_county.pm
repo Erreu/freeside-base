@@ -196,9 +196,8 @@ END
   foreach my $country ( sort keys %cust_main_county ) {
     $script_html .= "\nif ( country == \"$country\" ) {\n";
     foreach my $state ( sort keys %{$cust_main_county{$country}} ) {
-      ( my $dstate = $state ) =~ s/[\n\r]//g;
-      my $text = $dstate || '(n/a)';
-      $script_html .= qq!opt(what.form.${prefix}state, "$dstate", "$text");\n!;
+      my $text = $state || '(n/a)';
+      $script_html .= qq!opt(what.form.${prefix}state, "$state", "$text");\n!;
     }
     $script_html .= "}\n";
   }
@@ -251,7 +250,7 @@ END
   foreach my $state ( sort keys %{ $cust_main_county{$selected_country} } ) {
     my $text = $state || '(n/a)';
     my $selected = $state eq $selected_state ? 'SELECTED' : '';
-    $state_html .= qq(\n<OPTION $selected VALUE="$state">$text</OPTION>);
+    $state_html .= "\n<OPTION $selected VALUE=$state>$text</OPTION>"
   }
   $state_html .= '</SELECT>';
 
@@ -265,7 +264,7 @@ END
       keys %cust_main_county
   ) {
     my $selected = $country eq $selected_country ? ' SELECTED' : '';
-    $country_html .= qq(\n<OPTION$selected VALUE="$country">$country</OPTION>");
+    $country_html .= "\n<OPTION$selected>$country</OPTION>"
   }
   $country_html .= '</SELECT>';
 

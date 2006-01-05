@@ -1,22 +1,19 @@
 package FS::cust_pay;
 
 use strict;
-use vars qw( @ISA $conf $unsuspendauto $ignore_noapply );
+use vars qw( @ISA $conf $unsuspendauto );
 use Date::Format;
 use Business::CreditCard;
 use Text::Template;
-use FS::Misc qw(send_email);
 use FS::Record qw( dbh qsearch qsearchs );
-use FS::cust_main_Mixin;
+use FS::Misc qw(send_email);
 use FS::cust_bill;
 use FS::cust_bill_pay;
 use FS::cust_pay_refund;
 use FS::cust_main;
 use FS::cust_pay_void;
 
-@ISA = qw( FS::cust_main_Mixin FS::Record );
-
-$ignore_noapply = 0;
+@ISA = qw( FS::Record );
 
 #ask FS::UID to run this stuff for us later
 FS::UID->install_callback( sub { 
@@ -61,9 +58,7 @@ currently supported:
 L<Time::Local> and L<Date::Parse> for conversion functions.
 
 =item payby - `CARD' (credit cards), `CHEK' (electronic check/ACH),
-`LECB' (phone bill billing), `BILL' (billing), `PREP` (prepaid card),
-`CASH' (cash), `WEST' (Western Union), `MCRD' (Manual credit card), or
-`COMP' (free)
+`LECB' (phone bill billing), `BILL' (billing), or `COMP' (free)
 
 =item payinfo - card number, check #, or comp issuer (4-8 lowercase alphanumerics; think username), respectively
 
@@ -84,12 +79,6 @@ Creates a new payment.  To add the payment to the databse, see L<"insert">.
 =cut
 
 sub table { 'cust_pay'; }
-sub cust_linked { $_[0]->cust_main_custnum; } 
-sub cust_unlinked_msg {
-  my $self = shift;
-  "WARNING: can't find cust_main.custnum ". $self->custnum.
-  ' (cust_pay.paynum '. $self->paynum. ')';
-}
 
 =item insert
 
@@ -124,12 +113,11 @@ sub insert {
     $self->custnum($cust_bill->custnum );
   }
 
+  my $cust_main = $self->cust_main;
+  my $old_balance = $cust_main->balance;
 
   my $error = $self->check;
   return $error if $error;
-
-  my $cust_main = $self->cust_main;
-  my $old_balance = $cust_main->balance;
 
   $error = $self->SUPER::insert;
   if ( $error ) {
@@ -146,13 +134,8 @@ sub insert {
     };
     $error = $cust_bill_pay->insert;
     if ( $error ) {
-      if ( $ignore_noapply ) {
-        warn "warning: error inserting $cust_bill_pay: $error ".
-             "(ignore_noapply flag set; inserting cust_pay record anyway)\n";
-      } else {
-        $dbh->rollback if $oldAutoCommit;
-        return "error inserting $cust_bill_pay: $error";
-      }
+      $dbh->rollback if $oldAutoCommit;
+      return "error inserting $cust_bill_pay: $error";
     }
   }
 
@@ -184,7 +167,7 @@ sub insert {
 
   #my $cust_main = $self->cust_main;
   if ( $conf->exists('payment_receipt_email')
-       && grep { $_ !~ /^(POST|FAX)$/ } $cust_main->invoicing_list
+       && grep { $_ ne 'POST' } $cust_main->invoicing_list
   ) {
 
     my $receipt_template = new Text::Template (
@@ -195,13 +178,12 @@ sub insert {
       return '';
     };
 
-    my @invoicing_list = grep { $_ !~ /^(POST|FAX)$/ } $cust_main->invoicing_list;
+    my @invoicing_list = grep { $_ ne 'POST' } $cust_main->invoicing_list;
 
     my $payby = $self->payby;
     my $payinfo = $self->payinfo;
     $payby =~ s/^BILL$/Check/ if $payinfo;
-    $payinfo = $self->payinfo_masked if $payby eq 'CARD' || $payby eq 'CHEK';
-    $payby =~ s/^CHEK$/Electronic check/;
+    $payinfo = $self->payinfo_masked if $payby eq 'CARD';
 
     my $error = send_email(
       'from'    => $conf->config('invoice_from'), #??? well as good as any
@@ -375,8 +357,7 @@ sub check {
 
   $self->_date(time) unless $self->_date;
 
-  $self->payby =~ /^(CARD|CHEK|LECB|BILL|COMP|PREP|CASH|WEST|MCRD)$/
-    or return "Illegal payby";
+  $self->payby =~ /^(CARD|CHEK|LECB|BILL|COMP)$/ or return "Illegal payby";
   $self->payby($1);
 
   #false laziness with cust_refund::check
@@ -400,61 +381,6 @@ sub check {
   }
 
   $self->SUPER::check;
-}
-
-=item batch_insert CUST_PAY_OBJECT, ...
-
-Class method which inserts multiple payments.  Takes a list of FS::cust_pay
-objects.  Returns a list, each element representing the status of inserting the
-corresponding payment - empty.  If there is an error inserting any payment, the
-entire transaction is rolled back, i.e. all payments are inserted or none are.
-
-For example:
-
-  my @errors = FS::cust_pay->batch_insert(@cust_pay);
-  my $num_errors = scalar(grep $_, @errors);
-  if ( $num_errors == 0 ) {
-    #success; all payments were inserted
-  } else {
-    #failure; no payments were inserted.
-  }
-
-=cut
-
-sub batch_insert {
-  my $self = shift; #class method
-
-  local $SIG{HUP} = 'IGNORE';
-  local $SIG{INT} = 'IGNORE';
-  local $SIG{QUIT} = 'IGNORE';
-  local $SIG{TERM} = 'IGNORE';
-  local $SIG{TSTP} = 'IGNORE';
-  local $SIG{PIPE} = 'IGNORE';
-
-  my $oldAutoCommit = $FS::UID::AutoCommit;
-  local $FS::UID::AutoCommit = 0;
-  my $dbh = dbh;
-
-  my $errors = 0;
-  
-  my @errors = map {
-    my $error = $_->insert;
-    if ( $error ) { 
-      $errors++;
-    } else {
-      $_->cust_main->apply_payments;
-    }
-    $error;
-  } @_;
-
-  if ( $errors ) {
-    $dbh->rollback if $oldAutoCommit;
-  } else {
-    $dbh->commit or die $dbh->errstr if $oldAutoCommit;
-  }
-
-  @errors;
-
 }
 
 =item cust_bill_pay
@@ -538,16 +464,8 @@ by 'x'es.  Useful for displaying credit cards.
 
 sub payinfo_masked {
   my $self = shift;
-  #some false laziness w/cust_main::paymask
-  if ( $self->payby eq 'CARD' ) {
-    my $payinfo = $self->payinfo;
-    'x'x(length($payinfo)-4). substr($payinfo,(length($payinfo)-4));
-  } elsif ( $self->payby eq 'CHEK' ) {
-    my( $account, $aba ) = split('@', $self->payinfo );
-    'x'x(length($account)-2). substr($account,(length($account)-2)). "@". $aba;
-  } else {
-    $self->payinfo;
-  }
+  my $payinfo = $self->payinfo;
+  'x'x(length($payinfo)-4). substr($payinfo,(length($payinfo)-4));
 }
 
 =back

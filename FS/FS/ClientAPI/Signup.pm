@@ -5,7 +5,6 @@ use Tie::RefHash;
 use FS::Conf;
 use FS::Record qw(qsearch qsearchs dbdef);
 use FS::Msgcat qw(gettext);
-use FS::ClientAPI_SessionCache;
 use FS::agent;
 use FS::cust_main_county;
 use FS::part_pkg;
@@ -15,7 +14,12 @@ use FS::cust_pkg;
 use FS::svc_acct;
 use FS::acct_snarf;
 use FS::queue;
-use FS::reg_code;
+
+use FS::ClientAPI; #hmm
+FS::ClientAPI->register_handlers(
+  'Signup/signup_info'  => \&signup_info,
+  'Signup/new_customer' => \&new_customer,
+);
 
 sub signup_info {
   my $packet = shift;
@@ -89,7 +93,7 @@ sub signup_info {
 
   my $session = '';
   if ( exists $packet->{'session_id'} ) {
-    my $cache = new FS::ClientAPI_SessionCache( {
+    my $cache = new Cache::SharedMemoryCache( {
       'namespace' => 'FS::ClientAPI::Agent',
     } );
     $session = $cache->get($packet->{'session_id'});
@@ -101,22 +105,7 @@ sub signup_info {
   }
 
   $signup_info->{'part_pkg'} = [];
-
-  if ( $packet->{'reg_code'} ) {
-    $signup_info->{'part_pkg'} = 
-      [ map { { 'payby'   => [ $_->payby ], %{$_->hashref} } }
-          grep { $_->svcpart('svc_acct') }
-          map { $_->part_pkg }
-            qsearchs( 'reg_code', { 'code'     => $packet->{'reg_code'},
-                                    'agentnum' => $agentnum,              } )
-
-      ];
-
-    $signup_info->{'error'} = 'Unknown registration code'
-      unless @{ $signup_info->{'part_pkg'} };
-
-  } elsif ( $packet->{'promo_code'} ) {
-
+  if ( $packet->{'promo_code'} ) {
     $signup_info->{'part_pkg'} =
       [ map { { 'payby'   => [ $_->payby ], %{$_->hashref} } }
           grep { $_->svcpart('svc_acct') }
@@ -165,7 +154,7 @@ sub new_customer {
 
   my $agentnum;
   if ( exists $packet->{'session_id'} ) {
-    my $cache = new FS::ClientAPI_SessionCache( {
+    my $cache = new Cache::SharedMemoryCache( {
       'namespace' => 'FS::ClientAPI::Agent',
     } );
     my $session = $cache->get($packet->{'session_id'});
@@ -197,12 +186,7 @@ sub new_customer {
       ship_city ship_county ship_state ship_zip ship_country
       ship_daytime ship_night ship_fax
 
-      payby
-      payinfo paycvv paydate payname
-      paystart_month paystart_year payissue
-      payip
-
-      referral_custnum comments
+      payby payinfo paycvv paydate payname referral_custnum comments
     )
 
   } );
@@ -225,18 +209,10 @@ sub new_customer {
       or return { 'error' => "WARNING: unknown pkgpart: $pkgpart" };
   my $svcpart = $part_pkg->svcpart('svc_acct');
 
-  my $reg_code = '';
-  if ( $packet->{'reg_code'} ) {
-    $reg_code = qsearchs( 'reg_code', { 'code'     => $packet->{'reg_code'},
-                                        'agentnum' => $agentnum,             } )
-      or return { 'error' => 'Unknown registration code' };
-  }
-
   my $cust_pkg = new FS::cust_pkg ( {
     #later#'custnum' => $custnum,
     'pkgpart'    => $packet->{'pkgpart'},
     'promo_code' => $packet->{'promo_code'},
-    'reg_code'   => $packet->{'reg_code'},
   } );
   #my $error = $cust_pkg->check;
   #return { 'error' => $error } if $error;
@@ -327,11 +303,6 @@ sub new_customer {
       return { 'error' => '_decline' };
     }
 
-  }
-
-  if ( $reg_code ) {
-    $error = $reg_code->delete;
-    return { 'error' => $error } if $error;
   }
 
   $error = $placeholder->delete;

@@ -19,7 +19,7 @@ use FS::part_export;
 
 @ISA = qw( FS::Record );
 
-$DEBUG = 0;
+$DEBUG = 1;
 
 $ignore_quantity = 0;
 
@@ -178,7 +178,6 @@ sub replace {
   if ( $new->svcpart != $old->svcpart ) {
     my $svc_x = $new->svc_x;
     my $new_svc_x = ref($svc_x)->new({$svc_x->hash, svcpart=>$new->svcpart });
-    local($FS::Record::nowarn_identical) = 1;
     my $error = $new_svc_x->replace($svc_x);
     if ( $error ) {
       $dbh->rollback if $oldAutoCommit;
@@ -200,7 +199,7 @@ sub replace {
 =item check
 
 Checks all fields to make sure this is a valid service.  If there is an error,
-returns the error, otherwise returns false.  Called by the insert and
+returns the error, otehrwise returns false.  Called by the insert and
 replace methods.
 
 =cut
@@ -258,8 +257,8 @@ sub part_svc {
 
 =item cust_pkg
 
-Returns the package this service belongs to, as a FS::cust_pkg object (see
-L<FS::cust_pkg>).
+Returns the definition for this service, as a FS::part_svc object (see
+L<FS::part_svc>).
 
 =cut
 
@@ -274,7 +273,6 @@ Returns a list consisting of:
 - The name of this service (from part_svc)
 - A meaningful identifier (username, domain, or mail alias)
 - The table name (i.e. svc_domain) for this service
-- svcnum
 
 =cut
 
@@ -310,15 +308,14 @@ sub _svc_label {
   } elsif ( $svcdb eq 'svc_domain' ) {
     $tag = $svc_x->getfield('domain');
   } elsif ( $svcdb eq 'svc_www' ) {
-    my $domain_record = $svc_x->domain_record(@_);
+    my $domain_record = $svc_x->domain_record;
     $tag = $domain_record->zone;
   } elsif ( $svcdb eq 'svc_broadband' ) {
     $tag = $svc_x->ip_addr;
   } elsif ( $svcdb eq 'svc_external' ) {
     my $conf = new FS::Conf;
     if ( $conf->config('svc_external-display_type') eq 'artera_turbo' ) {
-      $tag = sprintf('%010d', $svc_x->id). '-'.
-             substr('0000000000'.uc($svc_x->title), -10);
+      $tag = sprintf('%010d', $svc_x->id). '-'. sprintf('%010d', $svc_x->title);
     } else {
       $tag = $svc_x->id. ': '. $svc_x->title;
     }
@@ -327,7 +324,7 @@ sub _svc_label {
     $tag = $svc_x->getfield('svcnum');
   }
 
-  $self->part_svc->svc, $tag, $svcdb, $self->svcnum;
+  $self->part_svc->svc, $tag, $svcdb;
 
 }
 
@@ -384,9 +381,10 @@ sub seconds_since_sqlradacct {
 
   my $svc_x = $self->svc_x;
 
-  my @part_export = $self->part_svc->part_export_usage;
-  die "no accounting-capable exports are enabled for ". $self->part_svc->svc.
-      " service definition"
+  my @part_export = $self->part_svc->part_export('sqlradius');
+  push @part_export, $self->part_svc->part_export('sqlradius_withdomain');
+  die "no sqlradius or sqlradius_withdomain export configured for this".
+      "service type"
     unless @part_export;
     #or return undef;
 
@@ -411,7 +409,14 @@ sub seconds_since_sqlradacct {
       $str2time = 'extract(epoch from ';
     }
 
-    my $username = $part_export->export_username($svc_x);
+    my $username;
+    if ( $part_export->exporttype eq 'sqlradius' ) {
+      $username = $svc_x->username;
+    } elsif ( $part_export->exporttype eq 'sqlradius_withdomain' ) {
+      $username = $svc_x->email;
+    } else {
+      die 'unknown exporttype '. $part_export->exporttype;
+    }
 
     my $query;
   
@@ -493,9 +498,10 @@ sub attribute_since_sqlradacct {
 
   my $svc_x = $self->svc_x;
 
-  my @part_export = $self->part_svc->part_export_usage;
-  die "no accounting-capable exports are enabled for ". $self->part_svc->svc.
-      " service definition"
+  my @part_export = $self->part_svc->part_export('sqlradius');
+  push @part_export, $self->part_svc->part_export('sqlradius_withdomain');
+  die "no sqlradius or sqlradius_withdomain export configured for this".
+      "service type"
     unless @part_export;
     #or return undef;
 
@@ -521,7 +527,14 @@ sub attribute_since_sqlradacct {
       $str2time = 'extract(epoch from ';
     }
 
-    my $username = $part_export->export_username($svc_x);
+    my $username;
+    if ( $part_export->exporttype eq 'sqlradius' ) {
+      $username = $svc_x->username;
+    } elsif ( $part_export->exporttype eq 'sqlradius_withdomain' ) {
+      $username = $svc_x->email;
+    } else {
+      die 'unknown exporttype '. $part_export->exporttype;
+    }
 
     my $sth = $dbh->prepare("SELECT SUM($attrib)
                                FROM radacct
@@ -540,11 +553,11 @@ sub attribute_since_sqlradacct {
 
 }
 
-=item get_session_history TIMESTAMP_START TIMESTAMP_END
+=item get_session_history_sqlradacct TIMESTAMP_START TIMESTAMP_END
 
-See L<FS::svc_acct/get_session_history>.  Equivalent to
-$cust_svc->svc_x->get_session_history, but more efficient.  Meaningless for
-records where B<svcdb> is not "svc_acct".
+See L<FS::svc_acct/get_session_history_sqlradacct>.  Equivalent to
+$cust_svc->svc_x->get_session_history_sqlradacct, but more efficient.
+Meaningless for records where B<svcdb> is not "svc_acct".
 
 =cut
 
@@ -553,20 +566,21 @@ sub get_session_history {
 
   #$attrib ???
 
-  my @part_export = $self->part_svc->part_export_usage;
-  die "no accounting-capable exports are enabled for ". $self->part_svc->svc.
-      " service definition"
+  #my @part_export = $cust_svc->part_svc->part_export->can('usage_sessions');
+  my @part_export = $self->part_svc->part_export('sqlradius');
+  push @part_export, $self->part_svc->part_export('sqlradius_withdomain');
+  die "no sqlradius or sqlradius_withdomain export configured for this".
+      "service type"
     unless @part_export;
     #or return undef;
                      
   my @sessions = ();
 
   foreach my $part_export ( @part_export ) {
-    push @sessions,
-      @{ $part_export->usage_sessions( $start, $end, $self->svc_x ) };
+    push @sessions, $part_export->usage_sessions( $start, $end, $self->svc_x );
   }
 
-  @sessions;
+  \@sessions;
 
 }
 

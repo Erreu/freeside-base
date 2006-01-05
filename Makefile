@@ -41,22 +41,16 @@ INIT_INSTALL = /usr/sbin/update-rc.d freeside defaults 21 20
 #not necessary (freebsd)
 #INIT_INSTALL = /usr/bin/true
 
-#deb
-HTTPD_RESTART = /etc/init.d/apache reload
-#suse
-#HTTPD_RESTART = /etc/init.d/apache restart
+#deb, suse
+HTTPD_RESTART = /etc/init.d/apache restart
 #redhat, fedora, mandrake
 #HTTPD_RESTART = /etc/init.d/httpd restart
 #freebsd
-#HTTPD_RESTART = /usr/local/etc/rc.d/apache.sh stop || true; sleep 10; /usr/local/etc/rc.d/apache.sh start
+#HTTPD_RESTART = /usr/local/etc/rc.d/apache.sh stop; sleep 10; /usr/local/etc/rc.d/apache.sh start
 #openbsd
 #HTTPD_RESTART = kill -TERM `cat /var/www/logs/httpd.pid`; sleep 10; /usr/sbin/httpd -u -DSSL
 #apache
 #HTTPD_RESTART = /usr/local/apache/bin/apachectl stop; sleep 10; /usr/local/apache/bin/apachectl startssl
-
-#(an include directory, not a file - "Include /etc/apache/conf.d" in httpd.conf)
-#deb (3.1+), 
-APACHE_CONF = /etc/apache/conf.d
 
 FREESIDE_RESTART = ${INIT_FILE} restart
 
@@ -68,6 +62,9 @@ INSTALLGROUP = root
 #edit the stuff below to have the daemons start
 
 QUEUED_USER=fs_queue
+
+#eventually this shouldn't be needed
+FREESIDE_PATH = `pwd`
 
 SELFSERVICE_USER = fs_selfservice
 #never run on the same machine in production!!!
@@ -81,12 +78,11 @@ SELFSERVICE_INSTALL_USER = ivan
 SELFSERVICE_INSTALL_USERADD = /usr/sbin/useradd
 #SELFSERVICE_INSTALL_USERADD = "/usr/sbin/pw useradd"
 
-#RT_ENABLED = 0
-RT_ENABLED = 1
+RT_ENABLED = 0
+#RT_ENABLED = 1
 RT_DOMAIN = example.com
-RT_TIMEZONE = US/Pacific
-#RT_TIMEZONE = US/Eastern
-FREESIDE_URL = "http://localhost/freeside/"
+RT_TIMEZONE = US/Pacific;
+#RT_TIMEZONE = US/Eastern;
 
 #for now, same db as specified in DATASOURCE... eventually, otherwise?
 RT_DB_DATABASE = freeside
@@ -98,32 +94,17 @@ FREESIDE_CONF = /usr/local/etc/freeside
 #rt/config.layout.in
 RT_PATH = /opt/rt3
 
-#only used for dev kludge now, not a big deal
-FREESIDE_PATH = `pwd`
-PERL_INC_DEV_KLUDGE = /usr/local/share/perl/5.8.7/
-
-VERSION=1.5.8cvs
-TAG=freeside_1_5_8
+VERSION=1.5.0pre6
+TAG=freeside_1_5_0pre6
 
 help:
-	@echo "supported targets:"
-	@echo "                   create-database create-config"
+	@echo "supported targets: aspdocs masondocs alldocs docs install-docs"
+	@echo "                   htmlman"
+	@echo "                   perl-modules install-perl-modules"
 	@echo "                   install deploy"
+	@echo "                   create-database"
 	@echo "                   configure-rt create-rt"
-	@echo "                   clean help"
-	@echo
-	@echo "                   install-docs install-perl-modules"
-	@echo "                   install-init install-apache"
-	@echo "                   install-rt"
-	@echo "                   install-selfservice update-selfservice"
-	@echo
-	@echo "                   dev dev-docs dev-perl-modules"
-	@echo
-	@echo "                   aspdocs masondocs alldocs docs"
-	@echo "                   htmlman forcehtmlman"
-	@echo "                   perl-modules"
-	#@echo
-	#@echo "                   upload-docs release update-webdemo"
+	@echo "                   clean"
 
 aspdocs: htmlman httemplate/* httemplate/*/* httemplate/*/*/* httemplate/*/*/*/* httemplate/*/*/*/*/*
 	rm -rf aspdocs
@@ -180,18 +161,6 @@ install-docs: docs
 	[ "${TEMPLATE}" = "mason" -a ! -e ${MASONDATA} ] && mkdir ${MASONDATA} || true
 	[ "${TEMPLATE}" = "mason" ] && chown -R freeside ${MASONDATA} || true
 
-dev-docs: docs
-	[ -e ${FREESIDE_DOCUMENT_ROOT} ] && mv ${FREESIDE_DOCUMENT_ROOT} ${FREESIDE_DOCUMENT_ROOT}.`date +%Y%m%d%H%M%S` || true
-	ln -s ${FREESIDE_PATH}/masondocs ${FREESIDE_DOCUMENT_ROOT}
-	cp htetc/handler.pl ${MASON_HANDLER}
-	perl -p -i -e "\
-	  s'%%%FREESIDE_DOCUMENT_ROOT%%%'${FREESIDE_DOCUMENT_ROOT}'g; \
-	  s'%%%RT_ENABLED%%%'${RT_ENABLED}'g; \
-	  s'###use Module::Refresh;###'use Module::Refresh;'; \
-	  s'###Module::Refresh->refresh;###'Module::Refresh->refresh;'; \
-	" ${MASON_HANDLER} || true
-
-
 perl-modules:
 	cd FS; \
 	[ -e Makefile ] || perl Makefile.PL; \
@@ -201,49 +170,28 @@ perl-modules:
 	" blib/lib/FS.pm
 
 install-perl-modules: perl-modules
-	[ -L ${PERL_INC_DEV_KLUDGE}/FS ] \
-	  && rm ${PERL_INC_DEV_KLUDGE}/FS \
-	  && mv ${PERL_INC_DEV_KLUDGE}/FS.old ${PERL_INC_DEV_KLUDGE}/FS \
-	  || true
 	cd FS; \
 	make install UNINST=1
-
-dev-perl-modules:
-	[ -d ${PERL_INC_DEV_KLUDGE}/FS -a ! -L ${PERL_INC_DEV_KLUDGE}/FS ] \
-	  && mv ${PERL_INC_DEV_KLUDGE}/FS ${PERL_INC_DEV_KLUDGE}/FS.old \
-	  || true
-
-	rm -rf ${PERL_INC_DEV_KLUDGE}/FS
-	ln -sf ${FREESIDE_PATH}/FS/FS ${PERL_INC_DEV_KLUDGE}/FS
 
 install-init:
 	#[ -e ${INIT_FILE} ] || install -o root -g ${INSTALLGROUP} -m 711 init.d/freeside-init ${INIT_FILE}
 	install -o root -g ${INSTALLGROUP} -m 711 init.d/freeside-init ${INIT_FILE}
 	perl -p -i -e "\
 	  s/%%%QUEUED_USER%%%/${QUEUED_USER}/g;\
+	  s'%%%FREESIDE_PATH%%%'${FREESIDE_PATH}'g;\
 	  s/%%%SELFSERVICE_USER%%%/${SELFSERVICE_USER}/g;\
 	  s/%%%SELFSERVICE_MACHINES%%%/${SELFSERVICE_MACHINES}/g;\
 	" ${INIT_FILE}
 	${INIT_INSTALL}
 
-install-apache:
-	[ -d ${APACHE_CONF} ] && \
-	  ( install -o root -m 755 htetc/freeside-base.conf ${APACHE_CONF} && \
-	    ( [ ${RT_ENABLED} -eq 1 ] && install -o root -m 755 htetc/freeside-rt.conf ${APACHE_CONF} || true ) && \
-	    perl -p -i -e "\
-	      s'%%%FREESIDE_DOCUMENT_ROOT%%%'${FREESIDE_DOCUMENT_ROOT}'g; \
-	    " ${APACHE_CONF}/freeside-*.conf \
-	  ) || true
-
 install-selfservice:
-	[ -e ~freeside/.ssh/id_dsa.pub ] || su - freeside -c 'ssh-keygen -t dsa'
+	[ -e ~freeside/.ssh/id_dsa.pub ] || su -c 'ssh-keygen -t dsa' - freeside
 	for MACHINE in ${SELFSERVICE_MACHINES}; do \
 	  scp -r fs_selfservice/FS-SelfService ${SELFSERVICE_INSTALL_USER}@$$MACHINE:. ;\
 	  ssh ${SELFSERVICE_INSTALL_USER}@$$MACHINE "cd FS-SelfService; perl Makefile.PL && make" ;\
 	  ssh ${SELFSERVICE_INSTALL_USER}@$$MACHINE "cd FS-SelfService; sudo make install" ;\
 	  scp ~freeside/.ssh/id_dsa.pub ${SELFSERVICE_INSTALL_USER}@$$MACHINE:. ;\
-	  ssh ${SELFSERVICE_INSTALL_USER}@$$MACHINE "sudo ${SELFSERVICE_INSTALL_USERADD} freeside; sudo install -d -o freeside -m 600 ~freeside/.ssh/" ;\
-	  ssh ${SELFSERVICE_INSTALL_USER}@$$MACHINE "sudo ${SELFSERVICE_INSTALL_USERADD} freeside; sudo install -o freeside -m 600 ./id_dsa.pub ~freeside/.ssh/authorized_keys" ;\
+	  ssh ${SELFSERVICE_INSTALL_USER}@$$MACHINE "sudo ${SELFSERVICE_INSTALL_USERADD} freeside; sudo install -D -o freeside -m 600 ./id_dsa.pub ~freeside/.ssh/authorized_keys" ;\
 	   ssh ${SELFSERVICE_INSTALL_USER}@$$MACHINE "sudo install -o freeside -d /usr/local/freeside" ;\
 	done
 
@@ -254,13 +202,11 @@ update-selfservice:
 	  ssh ${SELFSERVICE_INSTALL_USER}@$$MACHINE "cd FS-SelfService; sudo make install" ;\
 	done
 
-install: install-perl-modules install-docs install-init install-apache install-rt
+install: install-perl-modules install-docs install-init install-rt
 
 deploy: install
 	${HTTPD_RESTART}
 	${FREESIDE_RESTART}
-
-dev: dev-perl-modules dev-docs
 
 create-database:
 	perl -e 'use DBIx::DataSource qw( create_database ); create_database( "${DATASOURCE}", "${DB_USER}", "${DB_PASSWORD}" ) or die $$DBIx::DataSource::errstr;'
@@ -327,7 +273,6 @@ create-rt: configure-rt
 	perl -p -i -e "\
 	  s'%%%RT_DOMAIN%%%'${RT_DOMAIN}'g;\
 	  s'%%%RT_TIMEZONE%%%'${RT_TIMEZONE}'g;\
-	  s'%%%FREESIDE_URL%%%'${FREESIDE_URL}'g;\
 	" ${RT_PATH}/etc/RT_SiteConfig.pm
 
 install-rt:
@@ -341,8 +286,8 @@ clean:
 #these are probably only useful if you're me...
 
 upload-docs: forcehtmlman
-	ssh 420.am rm -rf /var/www/www.sisd.com/freeside/docs
-	scp -pr httemplate/docs 420.am:/var/www/www.sisd.com/freeside/docs
+	ssh pouncequick.420.am rm -rf /var/www/www.sisd.com/freeside/docs
+	scp -pr httemplate/docs pouncequick.420.am:/var/www/www.sisd.com/freeside/docs
 
 release: upload-docs
 	cd /home/ivan/freeside
@@ -353,11 +298,11 @@ release: upload-docs
 	cvs export -r ${TAG} -d freeside-${VERSION} freeside
 	tar czvf freeside-${VERSION}.tar.gz freeside-${VERSION}
 
-	scp freeside-${VERSION}.tar.gz ivan@420.am:/var/www/www.sisd.com/freeside/
+	scp freeside-${VERSION}.tar.gz ivan@pouncequick.420.am:/var/www/sisd.420.am/freeside/
 	mv freeside-${VERSION} freeside-${VERSION}.tar.gz ..
 
 update-webdemo:
-	ssh ivan@420.am '( cd freeside; cvs update -d -P )'
-	#ssh root@420.am '( cd /home/ivan/freeside; make clean; make deploy )'
-	ssh root@420.am '( cd /home/ivan/freeside; make deploy )'
+	ssh ivan@pouncequick.420.am '( cd freeside; cvs update -d -P )'
+	#ssh root@pouncequick.420.am '( cd /home/ivan/freeside; make clean; make deploy )'
+	ssh root@pouncequick.420.am '( cd /home/ivan/freeside; make deploy )'
 

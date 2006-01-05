@@ -1,16 +1,13 @@
 package FS::h_svc_www;
 
 use strict;
-use vars qw( @ISA $DEBUG );
-use Carp qw(carp);
-use FS::Record qw(qsearchs);
+use vars qw( @ISA );
+se FS::Record qw(qsearchs);
 use FS::h_Common;
 use FS::svc_www;
 use FS::h_domain_record;
 
 @ISA = qw( FS::h_Common FS::svc_www );
-
-$DEBUG = 0;
 
 sub table { 'h_svc_www' };
 
@@ -30,21 +27,10 @@ FS::h_svc_www - Historical web virtual host objects
 
 sub domain_record {
   my $self = shift;
-
-  carp 'Called FS::h_svc_www->domain_record on svcnum ' . $self->svcnum if $DEBUG;
-
-  my $domain_record = qsearchs(
-    'h_domain_record',
-    { 'recnum' => $self->recnum },
-    FS::h_domain_record->sql_h_searchs(@_),
-  ) || $self->SUPER::domain_record
-    or die "no history domain_record.recnum for svc_www.recnum ". $self->domsvc;
-
-  carp 'Using domain_record in place of missing h_domain_record record.'
-    if ($domain_record->isa('FS::domain_record') and $DEBUG);
-
-  return $domain_record;
-  
+  qsearchs( 'h_domain_record',
+            { 'recnum' => $self->recnum },
+            FS::h_domain_record->sql_h_search(@_),
+          );
 }
 
 =back

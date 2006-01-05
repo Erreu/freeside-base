@@ -14,4 +14,5 @@ my $pdf = $cust_bill->print_pdf( '', $templatename);
 http_header('Content-Type' => 'application/pdf' );
 http_header('Content-Length' => length($pdf) );
 http_header('Cache-control' => 'max-age=60' );
-%><%= $pdf %>
+%>
+<%= $pdf %>

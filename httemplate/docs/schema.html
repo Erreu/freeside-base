@@ -23,7 +23,6 @@
       </ul>
     <li><a name="cust_bill" href="man/FS/cust_bill.html">cust_bill</a> - Invoices.  Declarations that a customer owes you money.  The specific charges are itemized in <a href="#cust_bill_pkg">cust_bill_pkg</a>.
       <ul>
-        <li>billpkgnum - primary_key
         <li>invnum - primary key
         <li>custnum - <a href="#cust_main">customer</a>
         <li>_date
@@ -286,18 +285,6 @@
         <li>optionname - option name
         <li>optionvalue - option value
       </ul>
-    <li><a name="reg_code" href="man/FS/reg_code.html">reg_code</A> - One-time registration codes
-      <ul>
-        <li>codenum - primary key
-        <li>code
-        <li>agentnum - <a href="#agent">Agent</a>
-      </ul>
-    <li><a name="reg_code_pkg" href="man/FS/reg_code_pkg.html">reg_code_pkg</A> - Registration code link to package definitions
-      <ul>
-        <li>codepkgnum - primary key
-        <li>codenum - <a href="#reg_code">Registration code</a>
-        <li>pkgpart - <a href="#part_pkg">Package definition</a>
-      </ul>
     <li><a name="part_referral" href="man/FS/part_referral.html">part_referral</a> - Referral listing
       <ul>
         <li>refnum - primary key
@@ -323,7 +310,6 @@
       </ul>
     <li><a name="pkg_svc" href="man/FS/pkg_svc.html">pkg_svc</a>
       <ul>
-        <li>pkgsvcnum - primary key
         <li>pkgpart - <a href="#part_pkg">Package definition</a>
         <li>svcpart - <a href="#part_svc">Service definition</a>
         <li>quantity - quantity of this service that this package includes
@@ -356,13 +342,11 @@
         <li>nasport - port number on the NAS
         <li>nasnum - <a href="#nas">NAS</a>
       </ul>
-    <li><a name="prepay_credit" href="man/FS/prepay_credit.html">prepay_credit</a> - prepaid cards
+    <li><a name="prepay_credit" href="man/FS/prepay_credit.html">prepay_credit</a>
       <ul>
         <li>prepaynum - primary key
-        <li>identifier - text or numeric string of prepaid card
-        <li>amount - amount of prepayment
-        <li>seconds - prepaid time instead of (or in addition to) monetary value
-        <li>agentnum - optional agent assignment for prepaid cards
+        <li>identifier - text or numeric string used to receive this credit
+        <li>amount - amount of credit
       </ul>
     <li><a name="session" href="man/FS/session.html">session</a>
       <ul>
@@ -440,7 +424,6 @@
       </ul>
     <li><a name="type_pkgs" href="man/FS/type_pkgs.html">type_pkgs</a>
       <ul>
-        <li>typepkgnum - primary key
         <li>typenum - <a href="#agent_type">agent type</a>
         <li>pkgpart - <a href="#part_pkg">Package definition</a>
       </ul>
@@ -478,7 +461,6 @@
       </ul>
     <li><a name="rate_detail" href="man/FS/rate_detail.html">rate_detail</a> - Call rate detail
       <ul>
-        <li>ratedetailnum - primary key
         <li>ratenum - <a href="#rate">rate plan</a>
         <li>orig_regionnum - call origination <a href="#rate_region">region</a>
         <li>dest_regionnum - call destination <a href="#rate_region">region</a>
@@ -494,7 +476,7 @@
     <li><a name="rate_prefix" href="man/FS/rate_prefix.html">rate_prefix</a> - Call rate prefix
       <ul>
         <li>prefixnum - primary key
-        <li>regionnum - <a href="#rate_region">rate region</a>
+        <li>regionnum <a href="#rate_region">rate region</a>
         <li>countrycode
         <li>npa
         <li>nxx
@@ -505,19 +487,6 @@
         <li>msgcode - message code
         <li>locale - locale
         <li>msg - Message text
-      </ul>
-    <li><a name="clientapi_session" href="man/FS/clientapi_session.html">clientapi_session</a> - ClientAPI session store
-      <ul>
-        <li>sessionnum - primary key
-        <li>sessionid - session ID
-        <li>namespace - session namespace
-      </ul>
-    <li><a name="clientapi_session_field" href="man/FS/clientapi_session_field.html">clientapi_session_field</a> - Client API session store data
-      <ul>
-        <li>fieldnum - primary key
-        <li>sessionnum - <a href="#session">session</a>
-        <li>fieldname
-        <li>fieldvalue
       </ul>
   </ul>
 </body>

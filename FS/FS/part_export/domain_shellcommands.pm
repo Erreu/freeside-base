@@ -70,7 +70,6 @@ sub _export_delete {
 sub _export_command {
   my ( $self, $action, $svc_domain) = (shift, shift, shift);
   my $command = $self->option($action);
-  return '' if $command =~ /^\s*$/;
 
   #set variable for the command
   no strict 'vars';

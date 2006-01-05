@@ -1,7 +1,12 @@
+<!-- mason kludge -->
 <%
 
 my $rate;
-if ( $cgi->keywords ) {
+if ( $cgi->param('error') ) {
+  $rate = new FS::rate ( {
+    map { $_, scalar($cgi->param($_)) } fields('rate')
+  } );
+} elsif ( $cgi->keywords ) {
   my($query) = $cgi->keywords;
   $query =~ /^(\d+)$/;
   $rate = qsearchs( 'rate', { 'ratenum' => $1 } );
@@ -17,12 +22,12 @@ my %granularity = (
   '60' => 'minute',
 );
 
-#my $nous = <<END;
-#  WHERE 0 < ( SELECT COUNT(*) FROM rate_prefix
-#               WHERE rate_region.regionnum = rate_prefix.regionnum
-#                 AND countrycode != '1'
-#            )
-#END
+my $nous = <<END;
+  WHERE 0 < ( SELECT COUNT(*) FROM rate_prefix
+               WHERE rate_region.regionnum = rate_prefix.regionnum
+                 AND countrycode != '1'
+            )
+END
 
 %>
 
@@ -32,14 +37,12 @@ my %granularity = (
     ))
 %>
 
-<%= include('/elements/progress-init.html',
-              'OneTrueForm',
-              [ 'rate', 'min_', 'sec_' ],
-              'process/rate.cgi',
-              $p.'browse/rate.cgi',
-           )
-%>
-<FORM NAME="OneTrueForm">
+<% if ( $cgi->param('error') ) { %>
+<FONT SIZE="+1" COLOR="#ff0000">Error: <%= $cgi->param('error') %></FONT><BR>
+<% } %>
+
+<FORM ACTION="<%=$p1%>process/rate.cgi" METHOD=POST>
+
 <INPUT TYPE="hidden" NAME="ratenum" VALUE="<%= $rate->ratenum %>">
 
 Rate plan
@@ -56,27 +59,20 @@ Rate plan
 </TR>
 
 <% foreach my $rate_region (
-     sort { lc($a->regionname) cmp lc($b->regionname) }
-     qsearch({
-               'select'    => 'DISTINCT ON ( regionnum ) rate_region.*',
-               'table'     => 'rate_region',
-               'addl_from' => 'INNER JOIN rate_prefix USING ( regionnum )',
-               'hashref'   => {},
-               'extra_sql' => "WHERE countrycode != '1'",
-                              # 'ORDER BY regionname'
-                              # ERROR: SELECT DISTINCT ON expressions must
-                              #        match initial ORDER BY expressions
-            })
+     qsearch( 'rate_region',
+              {},
+              '',
+              "$nous ORDER BY regionname",
+            )
    ) {
      my $n = $rate_region->regionnum;
      my $rate_detail =
        $rate->dest_detail($rate_region)
-       || new FS::rate_detail { 'min_included'    => 0,
+       || new FS::rate_region { 'min_included'    => 0,
                                 'min_charge'      => 0,
                                 'sec_granularity' => '60'
                               };
 %>
-
   <TR>
     <TD><A HREF="<%=$p%>edit/rate_region.cgi?<%= $rate_region->regionnum %>"><%= $rate_region->regionname %></A></TD>
     <TD><%= $rate_region->prefixes_short %></TD>
@@ -89,7 +85,6 @@ Rate plan
         <% } %>
       </SELECT>
   </TR>
-
 <% } %>
 
 <TR>
@@ -100,9 +95,9 @@ Rate plan
 
 </TABLE>
 
-<BR><INPUT NAME="submit" TYPE="button" VALUE="<%= 
+<BR><INPUT TYPE="submit" VALUE="<%= 
   $rate->ratenum ? "Apply changes" : "Add rate plan"
-%>" onClick="document.OneTrueForm.submit.disabled=true; process();">
+%>">
 
     </FORM>
   </BODY>

@@ -40,25 +40,9 @@ Returns a list consisting of:
 sub label {
   my $self = shift;
   carp "FS::h_cust_svc::label called on $self" if $DEBUG;
-  my $svc_x = $self->h_svc_x(@_);
-  my $part_svc = $self->part_svc;
-
-  unless ($svc_x) {
-    carp "can't find h_". $self->part_svc->svcdb. '.svcnum '. $self->svcnum if $DEBUG;
-    return $part_svc->svc, 'n/a', $part_svc->svcdb;
-  }
-
-  my @label;
-  eval { @label = $self->_svc_label($svc_x, @_); };
-
-  if ($@) {
-    carp 'while resolving history record for svcdb/svcnum ' . 
-         $part_svc->svcdb . '/' . $self->svcnum . ': ' . $@ if $DEBUG;
-    return $part_svc->svc, 'n/a', $part_svc->svcdb;
-  } else {
-    return @label;
-  }
-
+  my $svc_x = $self->h_svc_x(@_)
+    or die "can't find h_". $self->part_svc->svcdb. '.svcnum '. $self->svcnum;
+  $self->_svc_label($svc_x, @_);
 }
 
 =item h_svc_x END_TIMESTAMP [ START_TIMESTAMP ] 
@@ -73,23 +57,16 @@ cancelled before START_TIMESTAMP.
 sub h_svc_x {
   my $self = shift;
   my $svcdb = $self->part_svc->svcdb;
-
-  warn "requiring FS/h_$svcdb.pm" if $DEBUG;
-  require "FS/h_$svcdb.pm";
-  my $svc_x = qsearchs(
-    "h_$svcdb",
-    { 'svcnum' => $self->svcnum, },
-    "FS::h_$svcdb"->sql_h_searchs(@_),
-  ) || $self->SUPER::svc_x;
-
-  if ($svc_x) {
-    carp "Using $svcdb in place of missing h_${svcdb} record."
-      if ($svc_x->isa('FS::' . $svcdb) and $DEBUG);
-    return $svc_x;
-  } else {
-    return '';
-  }
-
+  #if ( $svcdb eq 'svc_acct' && $self->{'_svc_acct'} ) {
+  #  $self->{'_svc_acct'};
+  #} else {
+    warn "requiring FS/h_$svcdb.pm" if $DEBUG;
+    require "FS/h_$svcdb.pm";
+    qsearchs( "h_$svcdb",
+              { 'svcnum'       => $self->svcnum, },
+              "FS::h_$svcdb"->sql_h_search(@_),
+            );
+  #}
 }
 
 =back

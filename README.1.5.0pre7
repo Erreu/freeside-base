@@ -1,0 +1,75 @@
+CREATE TABLE rate (
+    ratenum serial NOT NULL,
+    ratename varchar(80) NOT NULL,
+    PRIMARY KEY (ratenum)
+);
+
+CREATE TABLE rate_detail (
+    ratenum int NOT NULL,
+    orig_regionnum int NULL,
+    dest_regionnum int NOT NULL,
+    min_included int NOT NULL,
+    min_charge decimal(10,2) NOT NULL,
+    sec_granularity int NOT NULL
+);
+CREATE UNIQUE INDEX rate_detail1 ON rate_detail ( ratenum, orig_regionnum, dest_regionnum );
+
+CREATE TABLE rate_region (
+    regionnum serial NOT NULL,
+    regionname varchar(80) NOT NULL,
+    PRIMARY KEY (regionnum)
+);
+
+CREATE TABLE rate_prefix (
+    prefixnum serial NOT NULL,
+    regionnum int NOT NULL, 
+    countrycode varchar(3) NOT NULL,
+    npa varchar(6) NULL,
+    nxx varchar(3) NULL,
+    PRIMARY KEY (prefixnum)
+);
+CREATE INDEX rate_prefix1 ON rate_prefix ( countrycode );
+CREATE INDEX rate_prefix2 ON rate_prefix ( regionnum );
+
+ALTER TABLE part_pkg ADD promo_code varchar(80) NULL;
+ALTER TABLE h_part_pkg ADD promo_code varchar(80) NULL;
+CREATE INDEX part_pkg2 ON part_pkg ( promo_code );
+CREATE INDEX h_part_pkg2 ON h_part_pkg ( promo_code );
+
+ALTER TABLE cust_main ALTER COLUMN zip DROP NOT NULL;
+ALTER TABLE h_cust_main ALTER COLUMN zip DROP NOT NULL;
+
+Installs w/integrated RT:
+  CREATE SEQUENCE attributes_id_seq;
+
+  CREATE TABLE Attributes (
+    id INTEGER DEFAULT nextval('attributes_id_seq'),
+    Name varchar(255) NOT NULL  ,
+    Description varchar(255) NULL  ,
+    Content text,
+    ContentType varchar(16),
+    ObjectType varchar(64),
+    ObjectId integer, -- foreign key to anything
+    Creator integer NOT NULL DEFAULT 0  ,
+    Created TIMESTAMP NULL  ,
+    LastUpdatedBy integer NOT NULL DEFAULT 0  ,
+    LastUpdated TIMESTAMP NULL  ,
+    PRIMARY KEY (id)
+  
+  );
+  
+  CREATE INDEX Attributes1 on Attributes(Name);
+  CREATE INDEX Attributes2 on Attributes(ObjectType, ObjectId);
+
+
+dbdef-create username
+create-history-tables username rate rate_detail rate_region rate_prefix
+dbdef-create username
+
+
+afterwords (for installs w/integrated RT):
+make configure-rt
+make deploy
+/opt/rt3/sbin/rt-setup-database --action insert --datadir etc/upgrade/3.1.15
+/opt/rt3/sbin/rt-setup-database --action insert --datadir etc/upgrade/3.1.17
+

@@ -138,26 +138,26 @@ sub check {
   $self->SUPER::check;
 }
 
-=item sub cust_pay
+=item sub cust_credit
 
-Returns the payment (see L<FS::cust_pay>)
+Returns the credit (see L<FS::cust_credit>)
 
 =cut
 
-sub cust_pay {
+sub cust_credit {
   my $self = shift;
-  qsearchs( 'cust_pay', { 'paynum' => $self->paynum } );
+  qsearchs( 'cust_credit', { 'crednum' => $self->crednum } );
 }
 
-=item cust_refund
+=item cust_bill 
 
-Returns the refund (see L<FS::cust_refund>)
+Returns the invoice (see L<FS::cust_bill>)
 
 =cut
 
-sub cust_refund {
+sub cust_bill {
   my $self = shift;
-  qsearchs( 'cust_refund', { 'refundnum' => $self->refundnum } );
+  qsearchs( 'cust_bill', { 'invnum' => $self->invnum } );
 }
 
 =back

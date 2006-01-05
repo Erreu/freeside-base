@@ -1,7 +1,52 @@
 <%
 my $part_svc;
 my $clone = '';
-if ( $cgi->param('clone') && $cgi->param('clone') =~ /^(\d+)$/ ) {#clone
+my $error = '';
+if ( $cgi->param('magic') eq 'process' ) {
+
+  my $svcpart = $cgi->param('svcpart');
+  my $old = qsearchs('part_svc', { 'svcpart' => $svcpart }) if $svcpart;
+  
+  $cgi->param( 'svc_acct__usergroup',
+               join(',', $cgi->param('svc_acct__usergroup') ) );
+  
+  my $new = new FS::part_svc ( {
+    map {
+      $_, scalar($cgi->param($_));
+  #  } qw(svcpart svc svcdb)
+    } ( fields('part_svc'),
+        map { my $svcdb = $_;
+              my @fields = fields($svcdb);
+              push @fields, 'usergroup' if $svcdb eq 'svc_acct'; #kludge
+              map { ( $svcdb.'__'.$_, $svcdb.'__'.$_.'_flag' )  } @fields;
+            } grep defined( $FS::Record::dbdef->table($_) ),
+                   qw( svc_acct svc_domain svc_forward svc_www svc_broadband )
+      )
+  } );
+  
+  my %exportnums =
+    map { $_->exportnum => ( $cgi->param('exportnum'.$_->exportnum) || '') }
+        qsearch('part_export', {} );
+
+  if ( $svcpart ) {
+    $error = $new->replace($old, '1.3-COMPAT', [ 'usergroup' ], \%exportnums );
+  } else {
+    $error = $new->insert( [ 'usergroup' ], \%exportnums );
+    $svcpart = $new->getfield('svcpart');
+  }
+
+  unless ( $error ) { #no error, redirect
+    #print $cgi->redirect(popurl(3)."browse/part_svc.cgi");
+    print $cgi->redirect("${p}browse/part_svc.cgi");
+    myexit;
+  }
+
+  $part_svc = $new; #??
+  #$part_svc = new FS::part_svc ( {
+  #  map { $_, scalar($cgi->param($_)) } fields('part_svc')
+  #} );
+
+} elsif ( $cgi->param('clone') && $cgi->param('clone') =~ /^(\d+)$/ ) {#clone
   #$cgi->param('clone') =~ /^(\d+)$/ or die "malformed query: $query";
   $part_svc = qsearchs('part_svc', { 'svcpart'=>$1 } )
     or die "unknown svcpart: $1";
@@ -23,6 +68,7 @@ my $hashref = $part_svc->hashref;
 
            #" onLoad=\"visualize()\""
 %>
+<!-- mason kludge -->
 <%= header("$action Service Definition",
            menubar( 'Main Menu'         => $p,
                     'View all service definitions' => "${p}browse/part_svc.cgi"
@@ -30,12 +76,17 @@ my $hashref = $part_svc->hashref;
            )
 %>
 
+<% if ( $error ) { %>
+<FONT SIZE="+1" COLOR="#ff0000">Error: <%= $error %></FONT>
+<% } %>
+
 <FORM NAME="dummy">
 
       Service Part #<%= $part_svc->svcpart ? $part_svc->svcpart : "(NEW)" %>
 <BR><BR>
 Service  <INPUT TYPE="text" NAME="svc" VALUE="<%= $hashref->{svc} %>"><BR>
 Disable new orders <INPUT TYPE="checkbox" NAME="disabled" VALUE="Y"<%= $hashref->{disabled} eq 'Y' ? ' CHECKED' : '' %>><BR>
+<INPUT TYPE="hidden" NAME="magic" VALUE="process">
 <INPUT TYPE="hidden" NAME="svcpart" VALUE="<%= $hashref->{svcpart} %>">
 <BR>
 Services are items you offer to your customers.
@@ -66,8 +117,8 @@ my $conf = new FS::Conf;
 my %defs = (
   'svc_acct' => {
     'dir'       => 'Home directory',
-    'uid'       => 'UID (set to fixed and blank for no UIDs)',
-    'slipip'    => 'IP address',
+    'uid'       => 'UID (set to fixed and blank for dial-only)',
+    'slipip'    => 'IP address (Set to fixed and blank to disable dialin, or, set a value to be exported to RADIUS Framed-IP-Address.  Use the special value <code>0e0</code> [zero e zero] to enable export to RADIUS without a Framed-IP-Address.)',
 #    'popnum'    => qq!<A HREF="$p/browse/svc_acct_pop.cgi/">POP number</A>!,
     'popnum'    => {
                      desc => 'Access number',
@@ -84,7 +135,7 @@ my %defs = (
     '_password' => 'Password',
     'gid'       => 'GID (when blank, defaults to UID)',
     'shell'     => {
-                     desc =>'Shell (all service definitions should have a default or fixed shell that is present in the <b>shells</b> configuration file, set to blank for no shell tracking)',
+                     desc =>'Shell (all service definitions should have a default or fixed shell that is present in the <b>shells</b> configuration file)',
                      type =>'select',
                      select_list => [ $conf->config('shells') ],
                    },
@@ -97,7 +148,7 @@ my %defs = (
                      select_label => 'domain',
                    },
     'usergroup' => {
-                     desc =>'RADIUS groups',
+                     desc =>'ICRADIUS/FreeRADIUS groups',
                      type =>'radius_usergroup_selector',
                    },
   },
@@ -162,11 +213,10 @@ my %defs = (
     'form_name'      => 'dummy',
     #'form_action'    => 'process/part_svc.cgi',
     'form_action'    => 'part_svc.cgi', #self
-    'form_text'      => [ qw( svc svcpart ) ],
+    'form_text'      => [ qw( magic svc svcpart ) ],
     'form_checkbox'  => [ 'disabled' ],
     'layer_callback' => sub {
       my $layer = shift;
-      
       my $html = qq!<INPUT TYPE="hidden" NAME="svcdb" VALUE="$layer">!;
 
       my $columns = 3;
@@ -193,15 +243,19 @@ my %defs = (
 
       $html .=  table(). "<TH>Field</TH><TH COLSPAN=2>Modifier</TH>";
       #yucky kludge
-      my @fields = defined( dbdef->table($layer) )
+      my @fields = defined( $FS::Record::dbdef->table($layer) )
                       ? grep { $_ ne 'svcnum' } fields($layer)
                       : ();
       push @fields, 'usergroup' if $layer eq 'svc_acct'; #kludge
       $part_svc->svcpart($clone) if $clone; #haha, undone below
       foreach my $field (@fields) {
         my $part_svc_column = $part_svc->part_svc_column($field);
-        my $value = $part_svc_column->columnvalue;
-        my $flag = $part_svc_column->columnflag;
+        my $value = $error
+                      ? $cgi->param("${layer}__${field}")
+                      : $part_svc_column->columnvalue;
+        my $flag = $error
+                     ? $cgi->param("${layer}__${field}_flag")
+                     : $part_svc_column->columnflag;
         my $def = $defs{$layer}{$field};
         my $desc = ref($def) ? $def->{desc} : $def;
         
@@ -263,20 +317,8 @@ my %defs = (
       $part_svc->svcpart('') if $clone; #undone
       $html .= "</TABLE>";
 
-      $html .= include('/elements/progress-init.html',
-                         $layer, #form name
-                         [ qw(svc svcpart disabled exportnum), @fields ],
-                         'process/part_svc.cgi',
-                         $p.'browse/part_svc.cgi',
-                         $layer,
-                      );
-      $html .= '<BR><INPUT NAME="submit" TYPE="button" VALUE="'.
-               ($hashref->{svcpart} ? 'Apply changes' : 'Add service'). '" '.
-               ' onClick="document.'. "$layer.submit.disabled=true; ".
-               "fixup(document.$layer); $layer". 'process();">';
-
-      #$html .= '<BR><INPUT TYPE="submit" VALUE="'.
-      #         ($hashref->{svcpart} ? 'Apply changes' : 'Add service'). '">';
+      $html .= '<BR><INPUT TYPE="submit" VALUE="'.
+               ($hashref->{svcpart} ? 'Apply changes' : 'Add service'). '">';
 
       $html;
 

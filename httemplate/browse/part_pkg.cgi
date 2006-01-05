@@ -89,7 +89,8 @@ my $taxclasses = $conf->exists('enable_taxclasses');
 
 <%
 foreach my $part_pkg ( sort $sortby @part_pkg ) {
-  my @pkg_svc = $part_pkg->pkg_svc;
+  my(@pkg_svc)=grep $_->getfield('quantity'),
+    qsearch( 'pkg_svc', { 'pkgpart' => $part_pkg->pkgpart } );
   my($rowspan)=scalar(@pkg_svc);
   my $plandata;
   if ( $part_pkg->plan ) {
@@ -144,8 +145,9 @@ foreach my $part_pkg ( sort $sortby @part_pkg ) {
         <TD ROWSPAN=<%= $rowspan %>><%= $plandata %></TD>
 
 <%
+  my($pkg_svc);
   my($n)="";
-  foreach my $pkg_svc ( @pkg_svc ) {
+  foreach $pkg_svc ( @pkg_svc ) {
     my($svcpart)=$pkg_svc->getfield('svcpart');
     my($part_svc) = qsearchs('part_svc',{'svcpart'=> $svcpart });
     print $n,qq!<TD><A HREF="${p}edit/part_svc.cgi?$svcpart">!,

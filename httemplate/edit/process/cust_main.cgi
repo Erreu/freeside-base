@@ -8,30 +8,23 @@ $cgi->param('tax','') unless defined $cgi->param('tax');
 
 $cgi->param('refnum', (split(/:/, ($cgi->param('refnum'))[0] ))[0] );
 
-#my $payby = $cgi->param('payby');
-my $payby = $cgi->param('select'); # XXX key
-
-my %noauto = (
-  'CARD' => 'DCRD',
-  'CHEK' => 'DCHK',
-);
-$payby = $noauto{$payby}
-  if ! $cgi->param('payauto') && exists $noauto{$payby};
-
-$cgi->param('payby', $payby);
-
+my $payby = $cgi->param('payby');
 if ( $payby ) {
   if ( $payby eq 'CHEK' || $payby eq 'DCHK' ) {
     $cgi->param('payinfo',
-      $cgi->param('payinfo1'). '@'. $cgi->param('payinfo2') );
+      $cgi->param($payby. '_payinfo1'). '@'. $cgi->param($payby. '_payinfo2') );
+  } else {
+    $cgi->param('payinfo', $cgi->param( $payby. '_payinfo' ) );
   }
   $cgi->param('paydate',
-    $cgi->param( 'exp_month' ). '-'. $cgi->param( 'exp_year' ) );
+    $cgi->param( $payby. '_month' ). '-'. $cgi->param( $payby. '_year' ) );
+  $cgi->param('payname', $cgi->param( $payby. '_payname' ) );
+  $cgi->param('paycvv', $cgi->param( $payby. '_paycvv' ) )
+    if defined $cgi->param( $payby. '_paycvv' );
 }
 
 my @invoicing_list = split( /\s*\,\s*/, $cgi->param('invoicing_list') );
 push @invoicing_list, 'POST' if $cgi->param('invoicing_list_POST');
-push @invoicing_list, 'FAX' if $cgi->param('invoicing_list_FAX');
 $cgi->param('invoicing_list', join(',', @invoicing_list) );
 
 
@@ -52,9 +45,6 @@ if ( defined($cgi->param('same')) && $cgi->param('same') eq "Y" ) {
     country daytime night fax
   );
 }
-
-$new->setfield('paid', $cgi->param('paid') )
-  if $cgi->param('paid');
 
 #perhaps this stuff should go to cust_main.pm
 my $cust_pkg = '';
@@ -121,20 +111,7 @@ if ( $new->custnum eq '' ) {
   tie my %hash, 'Tie::RefHash';
   %hash = ( $cust_pkg => [ $svc_acct ] ) if $cust_pkg;
   $error ||= $new->insert( \%hash, \@invoicing_list );
-
-  my $conf = new FS::Conf;
-  if ( $conf->exists('backend-realtime') && ! $error ) {
-
-    my $berror = $new->bill;
-    $new->apply_payments;
-    $new->apply_credits;
-    $berror ||= $new->collect;
-    warn "Warning, error billing during backend-realtime: $berror" if $berror;
-
-  }
-  
 } else { #create old record object
-
   my $old = qsearchs( 'cust_main', { 'custnum' => $new->custnum } ); 
   $error ||= "Old record not found!" unless $old;
   if ( defined dbdef->table('cust_main')->column('paycvv')
@@ -143,7 +120,6 @@ if ( $new->custnum eq '' ) {
     $new->paycvv($old->paycvv);
   }
   $error ||= $new->replace($old, \@invoicing_list);
-  
 }
 
 if ( $error ) {

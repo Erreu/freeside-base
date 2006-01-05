@@ -1,7 +1,7 @@
 package FS::SelfService;
 
 use strict;
-use vars qw($VERSION @ISA @EXPORT_OK $dir $socket %autoload $tag);
+use vars qw($VERSION @ISA @EXPORT_OK $socket %autoload $tag);
 use Exporter;
 use Socket;
 use FileHandle;
@@ -13,8 +13,7 @@ $VERSION = '0.03';
 
 @ISA = qw( Exporter );
 
-$dir = "/usr/local/freeside";
-$socket =  "$dir/selfservice_socket";
+$socket =  "/usr/local/freeside/selfservice_socket";
 $socket .= '.'.$tag if defined $tag && length($tag);
 
 #maybe should ask ClientAPI for this list
@@ -31,7 +30,6 @@ $socket .= '.'.$tag if defined $tag && length($tag);
   'cancel'               => 'MyAccount/cancel',        #add to ss cgi!
   'payment_info'         => 'MyAccount/payment_info',
   'process_payment'      => 'MyAccount/process_payment',
-  'process_prepay'       => 'MyAccount/process_prepay',
   'list_pkgs'            => 'MyAccount/list_pkgs',     #add to ss cgi!
   'order_pkg'            => 'MyAccount/order_pkg',     #add to ss cgi!
   'cancel_pkg'           => 'MyAccount/cancel_pkg',    #add to ss cgi!
@@ -59,11 +57,6 @@ $ENV{'BASH_ENV'} = '';
 my $freeside_uid = scalar(getpwnam('freeside'));
 die "not running as the freeside user\n" if $> != $freeside_uid;
 
--e $dir or die "FATAL: $dir doesn't exist!";
--d $dir or die "FATAL: $dir isn't a directory!";
--r $dir or die "FATAL: Can't read $dir as freeside user!";
--x $dir or die "FATAL: $dir not searchable (executable) as freeside user!";
-
 foreach my $autoload ( keys %autoload ) {
 
   my $eval =
@@ -88,7 +81,7 @@ foreach my $autoload ( keys %autoload ) {
 sub simple_packet {
   my $packet = shift;
   socket(SOCK, PF_UNIX, SOCK_STREAM, 0) or die "socket: $!";
-  connect(SOCK, sockaddr_un($socket)) or die "connect to $socket: $!";
+  connect(SOCK, sockaddr_un($socket)) or die "connect: $!";
   nstore_fd($packet, \*SOCK) or die "can't send packet: $!";
   SOCK->flush;
 
@@ -163,10 +156,6 @@ FS::SelfService - Freeside self-service API
                         'payby'            => $payby,
                         'payinfo'          => $payinfo,
                         'paycvv'           => $paycvv,
-                        'paystart_month'   => $paystart_month
-                        'paystart_year'    => $paystart_year,
-                        'payissue'         => $payissue,
-                        'payip'            => $payip
                         'paydate'          => $paydate,
                         'payname'          => $payname,
                         'invoicing_list'   => $invoicing_list,
@@ -1070,7 +1059,7 @@ END
 
 Note: Resellers can also use the B<signup_info> and B<new_customer> functions
 with their active session, and the B<customer_info> and B<order_pkg> functions
-with their active session and an additional I<custnum> parameter.
+with their active session and an additonal I<custnum> parameter.
 
 =over 4
 

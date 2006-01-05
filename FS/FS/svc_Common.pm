@@ -2,17 +2,15 @@ package FS::svc_Common;
 
 use strict;
 use vars qw( @ISA $noexport_hack $DEBUG );
-use Carp;
 use FS::Record qw( qsearch qsearchs fields dbh );
-use FS::cust_main_Mixin;
 use FS::cust_svc;
 use FS::part_svc;
 use FS::queue;
-use FS::cust_main;
 
-@ISA = qw( FS::cust_main_Mixin FS::Record );
+@ISA = qw( FS::Record );
 
 $DEBUG = 0;
+#$DEBUG = 1;
 
 =head1 NAME
 
@@ -34,38 +32,6 @@ inherit from, i.e. FS::svc_acct.  FS::svc_Common inherits from FS::Record.
 =over 4
 
 =cut
-
-sub new {
-  my $proto = shift;
-  my $class = ref($proto) || $proto;
-  my $self = {};
-  bless ($self, $class);
-
-  unless ( defined ( $self->table ) ) {
-    $self->{'Table'} = shift;
-    carp "warning: FS::Record::new called with table name ". $self->{'Table'};
-  }
-  
-  #$self->{'Hash'} = shift;
-  my $newhash = shift;
-  $self->{'Hash'} = { map { $_ => $newhash->{$_} } qw(svcnum svcpart) };
-  $self->setdefault;
-  $self->{'Hash'}{$_} = $newhash->{$_}
-    foreach grep { defined($newhash->{$_}) && length($newhash->{$_}) }
-                 keys %$newhash;
-
-  foreach my $field ( grep !defined($self->{'Hash'}{$_}), $self->fields ) { 
-    $self->{'Hash'}{$field}='';
-  }
-
-  $self->_rebless if $self->can('_rebless');
-
-  $self->{'modified'} = 0;
-
-  $self->_cache($self->{'Hash'}, shift) if $self->can('_cache') && @_;
-
-  $self;
-}
 
 sub virtual_fields {
 
@@ -134,11 +100,8 @@ If I<jobnum> is set to an array reference, the jobnums of any export jobs will
 be added to the referenced array.
 
 If I<child_objects> is set to an array reference of FS::tablename objects (for
-example, FS::acct_snarf objects), they will have their svcnum field set and
-will be inserted after this record, but before any exports are run.  Each
-element of the array can also optionally be a two-element array reference
-containing the child object and the name of an alternate field to be filled in
-with the newly-inserted svcnum, for example C<[ $svc_forward, 'srcsvc' ]>
+example, FS::acct_snarf objects), they will have their svcnum fieldsset and
+will be inserted after this record, but before any exports are run.
 
 If I<depend_jobnum> is set (to a scalar jobnum or an array reference of
 jobnums), all provisioning jobs will have a dependancy on the supplied
@@ -209,15 +172,8 @@ sub insert {
   }
 
   foreach my $object ( @$objects ) {
-    my($field, $obj);
-    if ( ref($object) eq 'ARRAY' ) {
-      ($obj, $field) = @$object;
-    } else {
-      $obj = $object;
-      $field = 'svcnum';
-    }
-    $obj->$field($self->svcnum);
-    $error = $obj->insert;
+    $object->svcnum($self->svcnum);
+    $error = $object->insert;
     if ( $error ) {
       $dbh->rollback if $oldAutoCommit;
       return $error;

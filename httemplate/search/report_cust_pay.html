@@ -1,10 +1,14 @@
 <HTML>
   <HEAD>
     <TITLE>Payment report criteria</TITLE>
+    <LINK REL="stylesheet" TYPE="text/css" HREF="../elements/calendar-win2k-2.css" TITLE="win2k-2">
+    <SCRIPT TYPE="text/javascript" SRC="../elements/calendar_stripped.js"></SCRIPT>
+    <SCRIPT TYPE="text/javascript" SRC="../elements/calendar-en.js"></SCRIPT>
+    <SCRIPT TYPE="text/javascript" SRC="../elements/calendar-setup.js"></SCRIPT>
   </HEAD>
   <BODY BGCOLOR="#e8e8e8">
     <H1>Payment report criteria</H1>
-    <FORM ACTION="cust_pay.cgi" METHOD="GET">
+    <FORM ACTION="cust_pay.cgi" METHOD="post">
     <INPUT TYPE="hidden" NAME="magic" VALUE="_date">
     <TABLE>
       <TR>
@@ -15,22 +19,35 @@
               <OPTION VALUE="CARD-VisaMC">credit card (Visa/MasterCard)</OPTION>
               <OPTION VALUE="CARD-Amex">credit card (American Express)</OPTION>
               <OPTION VALUE="CARD-Discover">credit card (Discover)</OPTION>
-              <OPTION VALUE="CARD-Maestro">credit card (Maestro/Switch/Solo)</OPTION>
               <OPTION VALUE="CHEK">electronic check / ACH</OPTION>
-              <OPTION VALUE="BILL">check</OPTION>
-              <OPTION VALUE="PREP">prepaid card</OPTION>
-              <OPTION VALUE="CASH">cash</OPTION>
-              <OPTION VALUE="WEST">Western Union</OPTION>
-              <OPTION VALUE="MCRD">manual credit card</OPTION>
+              <OPTION VALUE="BILL">check / cash</OPTION>
             </SELECT>
         </TD>
       </TR>
-      <%= include( '/elements/tr-select-agent.html',
-                     $cgi->param('agentnum'),
-                     'label' => 'for agent: ',
-                 )
-      %>
-      <%= include( '/elements/tr-input-beginning_ending.html' ) %>
+      <TR>
+        <TD ALIGN="right">From: </TD>
+        <TD><INPUT TYPE="text" NAME="beginning" ID="beginning_text" VALUE="" SIZE=11 MAXLENGTH=10> <IMG SRC="../images/calendar.png" ID="beginning_button" STYLE="cursor: pointer" TITLE="Select date"><BR><i>m/d/y</i></TD>
+<SCRIPT TYPE="text/javascript">
+  Calendar.setup({
+    inputField: "beginning_text",
+    ifFormat:   "%m/%d/%Y",
+    button:     "beginning_button",
+    align:      "BR"
+  });
+</SCRIPT>
+      </TR>
+      <TR>
+        <TD ALIGN="right">To: </TD>
+        <TD><INPUT TYPE="text" NAME="ending" ID="ending_text" VALUE="" SIZE=11 MAXLENGTH=10> <IMG SRC="../images/calendar.png" ID="ending_button" STYLE="cursor: pointer" TITLE="Select date"><BR><i>m/d/y</i></TD>
+<SCRIPT TYPE="text/javascript">
+  Calendar.setup({
+    inputField: "ending_text",
+    ifFormat:   "%m/%d/%Y",
+    button:     "ending_button",
+    align:      "BR"
+  });
+</SCRIPT>
+      </TR>
     </TABLE>
     <BR><INPUT TYPE="submit" VALUE="Get Report">
     </FORM>

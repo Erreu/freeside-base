@@ -2,7 +2,6 @@ package FS::h_Common;
 
 use strict;
 use FS::Record qw(dbdef);
-use Carp qw(confess);
 
 =head1 NAME
 
@@ -40,13 +39,8 @@ sub sql_h_search {
   my( $self, $end ) = ( shift, shift );
 
   my $table = $self->table;
-  my $real_table = ($table =~ /^h_(.*)$/) ? $1 : $table;
-  my $pkey = dbdef->table($real_table)->primary_key
-    or die "can't (yet) search history table $real_table without a primary key";
-
-  unless ($end) {
-    confess 'Called sql_h_search without END_TIMESTAMP';
-  }
+  my $pkey = dbdef->table($table)->primary_key
+    or die "can't (yet) search history table $table without a primary key";
 
   my $notcancelled = '';
   if ( scalar(@_) && $_[0] ) {
@@ -70,23 +64,9 @@ sub sql_h_search {
 
      '',
 
-     'AS maintable',
+     'maintable',
   );
 
-}
-
-=item sql_h_searchs END_TIMESTAMP [ START_TIMESTAMP ] 
-
-Like sql_h_search, but limited to the single most recent record (before
-END_TIMESTAMP)
-
-=cut
-
-sub sql_h_searchs {
-  my $self = shift;
-  my($select, $where, $cacheobj, $as) = $self->sql_h_search(@_);
-  $where .= ' LIMIT 1';
-  ($select, $where, $cacheobj, $as);
 }
 
 =back

@@ -43,9 +43,8 @@ sub _export_replace {
   my( $self, $new, $old ) = (shift, shift, shift);
   return "can't change domain with Critical Path"
     if $old->domain ne $new->domain;
-  return "can't change username with Critical Path" #CP no longer supports this
-    if $old->username ne $new->username;
-  return '' unless $old->_password ne $new->_password;
+  return '' unless $old->username  ne $new->username
+                || $old->_password ne $new->_password;
   $self->cp_queue( $new->svcnum, 'replace', $new->domain,
     $old->username, $new->username, $old->_password, $new->_password );
 }

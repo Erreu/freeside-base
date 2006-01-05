@@ -1,12 +1,12 @@
 package FS::svc_acct;
 
 use strict;
-use vars qw( @ISA $DEBUG $me $conf $skip_fuzzyfiles
+use vars qw( @ISA $DEBUG $me $conf
              $dir_prefix @shells $usernamemin
              $usernamemax $passwordmin $passwordmax
              $username_ampersand $username_letter $username_letterfirst
              $username_noperiod $username_nounderscore $username_nodash
-             $username_uppercase $username_percent
+             $username_uppercase
              $password_noampersand $password_noexclamation
              $welcome_template $welcome_from $welcome_subject $welcome_mimetype
              $smtpmachine
@@ -15,8 +15,7 @@ use vars qw( @ISA $DEBUG $me $conf $skip_fuzzyfiles
              @saltset @pw_set );
 use Carp;
 use Fcntl qw(:flock);
-use Date::Format;
-use Crypt::PasswdMD5 1.2;
+use Crypt::PasswdMD5;
 use FS::UID qw( datasrc );
 use FS::Conf;
 use FS::Record qw( qsearch qsearchs fields dbh dbdef );
@@ -38,6 +37,7 @@ use FS::svc_www;
 @ISA = qw( FS::svc_Common );
 
 $DEBUG = 0;
+#$DEBUG = 1;
 $me = '[FS::svc_acct]';
 
 #ask FS::UID to run this stuff for us later
@@ -56,7 +56,6 @@ $FS::UID::callback{'FS::svc_acct'} = sub {
   $username_nodash = $conf->exists('username-nodash');
   $username_uppercase = $conf->exists('username-uppercase');
   $username_ampersand = $conf->exists('username-ampersand');
-  $username_percent = $conf->exists('username-percent');
   $password_noampersand = $conf->exists('password-noexclamation');
   $password_noexclamation = $conf->exists('password-noexclamation');
   $dirhash = $conf->config('dirhash') || 0;
@@ -168,9 +167,7 @@ FS::svc_Common.  The following fields are currently supported:
 
 =item domsvc - svcnum from svc_domain
 
-=item radius_I<Radius_Attribute> - I<Radius-Attribute> (reply)
-
-=item rc_I<Radius_Attribute> - I<Radius-Attribute> (check)
+=item radius_I<Radius_Attribute> - I<Radius-Attribute>
 
 =back
 
@@ -200,10 +197,7 @@ contain an arrayref of group names.  See L<FS::radius_usergroup>.
 The additional field I<child_objects> can optionally be defined; if so it
 should contain an arrayref of FS::tablename objects.  They will have their
 svcnum fields set and will be inserted after this record, but before any
-exports are run.  Each element of the array can also optionally be a
-two-element array reference containing the child object and the name of an
-alternate field to be filled in with the newly-inserted svcnum, for example
-C<[ $svc_forward, 'srcsvc' ]>
+exports are run.
 
 Currently available options are: I<depend_jobnum>
 
@@ -277,12 +271,15 @@ sub insert {
     }
   }
 
-  unless ( $skip_fuzzyfiles ) {
-    $error = $self->queue_fuzzyfiles_update;
-    if ( $error ) {
-      $dbh->rollback if $oldAutoCommit;
-      return "updating fuzzy search cache: $error";
-    }
+  #false laziness with sub replace (and cust_main)
+  my $queue = new FS::queue {
+    'svcnum' => $self->svcnum,
+    'job'    => 'FS::svc_acct::append_fuzzyfiles'
+  };
+  $error = $queue->insert($self->username);
+  if ( $error ) {
+    $dbh->rollback if $oldAutoCommit;
+    return "queueing job (transaction rolled back): $error";
   }
 
   my $cust_pkg = $self->cust_svc->cust_pkg;
@@ -299,7 +296,7 @@ sub insert {
     #welcome email
     my $to = '';
     if ( $welcome_template && $cust_pkg ) {
-      my $to = join(', ', grep { $_ !~ /^(POST|FAX)$/ } $cust_main->invoicing_list );
+      my $to = join(', ', grep { $_ ne 'POST' } $cust_main->invoicing_list );
       if ( $to ) {
         my $wqueue = new FS::queue {
           'svcnum' => $self->svcnum,
@@ -464,18 +461,15 @@ sub replace {
 
   return "can't modify system account" if $old->_check_system;
 
+  return "Username in use"
+    if $old->username ne $new->username &&
+      qsearchs( 'svc_acct', { 'username' => $new->username,
+                               'domsvc'   => $new->domsvc,
+                             } );
   {
     #no warnings 'numeric';  #alas, a 5.006-ism
     local($^W) = 0;
-
-    foreach my $xid (qw( uid gid )) {
-
-      return "Can't change $xid!"
-        if ! $conf->exists("svc_acct-edit_$xid")
-           && $old->$xid() != $new->$xid()
-           && $new->cust_svc->part_svc->part_svc_column($xid)->columnflag ne 'F'
-    }
-
+    return "Can't change uid!" if $old->uid != $new->uid;
   }
 
   #change homdir when we change username
@@ -497,10 +491,8 @@ sub replace {
   return $error if $error;
 
   $old->usergroup( [ $old->radius_groups ] );
-  if ( $DEBUG ) {
-    warn $old->email. " old groups: ". join(' ',@{$old->usergroup}). "\n";
-    warn $new->email. "new groups: ". join(' ',@{$new->usergroup}). "\n";
-  }
+  warn "old groups: ". join(' ',@{$old->usergroup}). "\n" if $DEBUG;
+  warn "new groups: ". join(' ',@{$new->usergroup}). "\n" if $DEBUG;
   if ( $new->usergroup ) {
     #(sorta) false laziness with FS::part_export::sqlradius::_export_replace
     my @newgroups = @{$new->usergroup};
@@ -549,53 +541,22 @@ sub replace {
     return $error if $error;
   }
 
-  if ( $new->username ne $old->username && ! $skip_fuzzyfiles ) {
-    $error = $new->queue_fuzzyfiles_update;
+  if ( $new->username ne $old->username ) {
+    #false laziness with sub insert (and cust_main)
+    my $queue = new FS::queue {
+      'svcnum' => $new->svcnum,
+      'job'    => 'FS::svc_acct::append_fuzzyfiles'
+    };
+    $error = $queue->insert($new->username);
     if ( $error ) {
       $dbh->rollback if $oldAutoCommit;
-      return "updating fuzzy search cache: $error";
+      return "queueing job (transaction rolled back): $error";
     }
   }
 
   $dbh->commit or die $dbh->errstr if $oldAutoCommit;
   ''; #no error
 }
-
-=item queue_fuzzyfiles_update
-
-Used by insert & replace to update the fuzzy search cache
-
-=cut
-
-sub queue_fuzzyfiles_update {
-  my $self = shift;
-
-  local $SIG{HUP} = 'IGNORE';
-  local $SIG{INT} = 'IGNORE';
-  local $SIG{QUIT} = 'IGNORE';
-  local $SIG{TERM} = 'IGNORE';
-  local $SIG{TSTP} = 'IGNORE';
-  local $SIG{PIPE} = 'IGNORE';
-
-  my $oldAutoCommit = $FS::UID::AutoCommit;
-  local $FS::UID::AutoCommit = 0;
-  my $dbh = dbh;
-
-  my $queue = new FS::queue {
-    'svcnum' => $self->svcnum,
-    'job'    => 'FS::svc_acct::append_fuzzyfiles'
-  };
-  my $error = $queue->insert($self->username);
-  if ( $error ) {
-    $dbh->rollback if $oldAutoCommit;
-    return "queueing job (transaction rolled back): $error";
-  }
-
-  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
-  '';
-
-}
-
 
 =item suspend
 
@@ -699,11 +660,11 @@ sub check {
 
   my $ulen = $usernamemax || $self->dbdef_table->column('username')->length;
   if ( $username_uppercase ) {
-    $recref->{username} =~ /^([a-z0-9_\-\.\&\%]{$usernamemin,$ulen})$/i
+    $recref->{username} =~ /^([a-z0-9_\-\.\&]{$usernamemin,$ulen})$/i
       or return gettext('illegal_username'). " ($usernamemin-$ulen): ". $recref->{username};
     $recref->{username} = $1;
   } else {
-    $recref->{username} =~ /^([a-z0-9_\-\.\&\%]{$usernamemin,$ulen})$/
+    $recref->{username} =~ /^([a-z0-9_\-\.\&]{$usernamemin,$ulen})$/
       or return gettext('illegal_username'). " ($usernamemin-$ulen): ". $recref->{username};
     $recref->{username} = $1;
   }
@@ -731,9 +692,6 @@ sub check {
   if ( $password_noexclamation ) {
     $recref->{_password} =~ /\!/ and return gettext('illegal_password');
   }
-  unless ( $username_percent ) {
-    $recref->{username} =~ /\%/ and return gettext('illegal_username');
-  }
 
   $recref->{popnum} =~ /^(\d*)$/ or return "Illegal popnum: ".$recref->{popnum};
   $recref->{popnum} = $1;
@@ -754,28 +712,6 @@ sub check {
     return "Only root can have uid 0"
       if $recref->{uid} == 0
          && $recref->{username} !~ /^(root|toor|smtp)$/;
-
-    unless ( $recref->{username} eq 'sync' ) {
-      if ( grep $_ eq $recref->{shell}, @shells ) {
-        $recref->{shell} = (grep $_ eq $recref->{shell}, @shells)[0];
-      } else {
-        return "Illegal shell \`". $self->shell. "\'; ".
-               $conf->dir. "/shells contains: @shells";
-      }
-    } else {
-      $recref->{shell} = '/bin/sync';
-    }
-
-  } else {
-    $recref->{gid} ne '' ? 
-      return "Can't have gid without uid" : ( $recref->{gid}='' );
-    #$recref->{dir} ne '' ? 
-    #  return "Can't have directory without uid" : ( $recref->{dir}='' );
-    $recref->{shell} ne '' ? 
-      return "Can't have shell without uid" : ( $recref->{shell}='' );
-  }
-
-  unless ( $part_svc->part_svc_column('dir')->columnflag eq 'F' ) {
 
     $recref->{dir} =~ /^([\/\w\-\.\&]*)$/
       or return "Illegal directory: ". $recref->{dir};
@@ -799,6 +735,24 @@ sub check {
     ;
     }
 
+    unless ( $recref->{username} eq 'sync' ) {
+      if ( grep $_ eq $recref->{shell}, @shells ) {
+        $recref->{shell} = (grep $_ eq $recref->{shell}, @shells)[0];
+      } else {
+        return "Illegal shell \`". $self->shell. "\'; ".
+               $conf->dir. "/shells contains: @shells";
+      }
+    } else {
+      $recref->{shell} = '/bin/sync';
+    }
+
+  } else {
+    $recref->{gid} ne '' ? 
+      return "Can't have gid without uid" : ( $recref->{gid}='' );
+    $recref->{dir} ne '' ? 
+      return "Can't have directory without uid" : ( $recref->{dir}='' );
+    $recref->{shell} ne '' ? 
+      return "Can't have shell without uid" : ( $recref->{shell}='' );
   }
 
   #  $error = $self->ut_textn('finger');
@@ -908,12 +862,13 @@ sub _check_duplicate {
     or die dbh->errstr;
   warn "$me acquired svc_acct table lock for duplicate search" if $DEBUG;
 
-  my $part_svc = qsearchs('part_svc', { 'svcpart' => $self->svcpart } );
+  my $svcpart = $self->svcpart;
+  my $part_svc = qsearchs('part_svc', { 'svcpart' => $svcpart } );
   unless ( $part_svc ) {
     return 'unknown svcpart '. $self->svcpart;
   }
 
-  my $global_unique = $conf->config('global_unique-username') || 'none';
+  my $global_unique = $conf->config('global_unique-username');
 
   my @dup_user = grep { !$self->svcnum || $_->svcnum != $self->svcnum }
                  qsearch( 'svc_acct', { 'username' => $self->username } );
@@ -929,7 +884,7 @@ sub _check_duplicate {
   my @dup_uid;
   if ( $part_svc->part_svc_column('uid')->columnflag ne 'F'
        && $self->username !~ /^(toor|(hyla)?fax)$/          ) {
-    @dup_uid = grep { !$self->svcnum || $_->svcnum != $self->svcnum }
+    @dup_uid = grep { $svcpart != $_->svcpart }
                qsearch( 'svc_acct', { 'uid' => $self->uid } );
   } else {
     @dup_uid = ();
@@ -990,8 +945,8 @@ sub _check_duplicate {
       my $dup_svcpart = $dup_uid->cust_svc->svcpart;
       if ( exists($conflict_user_svcpart{$dup_svcpart})
            || exists($conflict_userdomain_svcpart{$dup_svcpart}) ) {
-        return "duplicate uid: conflicts with svcnum ". $dup_uid->svcnum.
-               " via exportnum ". $conflict_user_svcpart{$dup_svcpart}
+        return "duplicate uid: conflicts with svcnum". $dup_uid->svcnum.
+               "via exportnum ". $conflict_user_svcpart{$dup_svcpart}
                                  || $conflict_userdomain_svcpart{$dup_svcpart};
       }
     }
@@ -1026,10 +981,6 @@ expected to change in the future.
 
 sub radius_reply { 
   my $self = shift;
-
-  return %{ $self->{'radius_reply'} }
-    if exists $self->{'radius_reply'};
-
   my %reply =
     map {
       /^(radius_(.*))$/;
@@ -1037,15 +988,9 @@ sub radius_reply {
       #$attrib =~ s/_/\-/g;
       ( $FS::raddb::attrib{lc($attrib)}, $self->getfield($column) );
     } grep { /^radius_/ && $self->getfield($_) } fields( $self->table );
-
   if ( $self->slipip && $self->slipip ne '0e0' ) {
     $reply{$radius_ip} = $self->slipip;
   }
-
-  if ( $self->seconds !~ /^$/ ) {
-    $reply{'Session-Timeout'} = $self->seconds;
-  }
-
   %reply;
 }
 
@@ -1062,63 +1007,16 @@ expected to change in the future.
 
 sub radius_check {
   my $self = shift;
-
-  return %{ $self->{'radius_check'} }
-    if exists $self->{'radius_check'};
-
-  my %check = 
+  my $password = $self->_password;
+  my $pw_attrib = length($password) <= 12 ? $radius_password : 'Crypt-Password';
+  ( $pw_attrib => $password,
     map {
       /^(rc_(.*))$/;
       my($column, $attrib) = ($1, $2);
       #$attrib =~ s/_/\-/g;
       ( $FS::raddb::attrib{lc($attrib)}, $self->getfield($column) );
-    } grep { /^rc_/ && $self->getfield($_) } fields( $self->table );
-
-  my $password = $self->_password;
-  my $pw_attrib = length($password) <= 12 ? $radius_password : 'Crypt-Password';  $check{$pw_attrib} = $password;
-
-  my $cust_pkg = $self->cust_svc->cust_pkg;
-  if ( $cust_pkg && $cust_pkg->part_pkg->is_prepaid && $cust_pkg->bill ) {
-    $check{'Expiration'} = time2str('%B %e %Y %T', $cust_pkg->bill ); #http://lists.cistron.nl/pipermail/freeradius-users/2005-January/040184.html
-  }
-
-  %check;
-
-}
-
-=item snapshot
-
-This method instructs the object to "snapshot" or freeze RADIUS check and
-reply attributes to the current values.
-
-=cut
-
-#bah, my english is too broken this morning
-#Of note is the "Expiration" attribute, which, for accounts in prepaid packages, is typically defined on-the-fly as the associated packages cust_pkg.bill.  (This is used by
-#the FS::cust_pkg's replace method to trigger the correct export updates when
-#package dates change)
-
-sub snapshot {
-  my $self = shift;
-
-  $self->{$_} = { $self->$_() }
-    foreach qw( radius_reply radius_check );
-
-}
-
-=item forget_snapshot
-
-This methos instructs the object to forget any previously snapshotted
-RADIUS check and reply attributes.
-
-=cut
-
-sub forget_snapshot {
-  my $self = shift;
-
-  delete $self->{$_}
-    foreach qw( radius_reply radius_check );
-
+    } grep { /^rc_/ && $self->getfield($_) } fields( $self->table )
+  );
 }
 
 =item domain
@@ -1155,7 +1053,10 @@ Returns the FS::cust_svc record for this account (see L<FS::cust_svc>).
 
 =cut
 
-#inherited from svc_Common
+sub cust_svc {
+  my $self = shift;
+  qsearchs( 'cust_svc', { 'svcnum' => $self->svcnum } );
+}
 
 =item email
 
@@ -1183,93 +1084,6 @@ sub acct_snarf {
   die $@ if $@;
   qsearch('acct_snarf', { 'svcnum' => $self->svcnum } );
 }
-
-=item decrement_seconds SECONDS
-
-Decrements the I<seconds> field of this record by the given amount.  If there
-is an error, returns the error, otherwise returns false.
-
-=cut
-
-sub decrement_seconds {
-  shift->_op_seconds('-', @_);
-}
-
-=item increment_seconds SECONDS
-
-Increments the I<seconds> field of this record by the given amount.  If there
-is an error, returns the error, otherwise returns false.
-
-=cut
-
-sub increment_seconds {
-  shift->_op_seconds('+', @_);
-}
-
-
-my %op2action = (
-  '-' => 'suspend',
-  '+' => 'unsuspend',
-);
-my %op2condition = (
-  '-' => sub { my($self, $seconds) = @_;
-               $self->seconds - $seconds <= 0;
-             },
-  '+' => sub { my($self, $seconds) = @_;
-               $self->seconds + $seconds > 0;
-             },
-);
-
-sub _op_seconds {
-  my( $self, $op, $seconds ) = @_;
-  warn "$me _op_seconds called for svcnum ". $self->svcnum.
-       ' ('. $self->email. "): $op $seconds\n"
-    if $DEBUG;
-
-  local $SIG{HUP} = 'IGNORE';
-  local $SIG{INT} = 'IGNORE';
-  local $SIG{QUIT} = 'IGNORE';
-  local $SIG{TERM} = 'IGNORE';
-  local $SIG{TSTP} = 'IGNORE';
-  local $SIG{PIPE} = 'IGNORE';
-
-  my $oldAutoCommit = $FS::UID::AutoCommit;
-  local $FS::UID::AutoCommit = 0;
-  my $dbh = dbh;
-
-  my $sql = "UPDATE svc_acct SET seconds = ".
-            " CASE WHEN seconds IS NULL THEN 0 ELSE seconds END ". #$seconds||0
-            " $op ? WHERE svcnum = ?";
-  warn "$me $sql\n"
-    if $DEBUG;
-
-  my $sth = $dbh->prepare( $sql )
-    or die "Error preparing $sql: ". $dbh->errstr;
-  my $rv = $sth->execute($seconds, $self->svcnum);
-  die "Error executing $sql: ". $sth->errstr
-    unless defined($rv);
-  die "Can't update seconds for svcnum". $self->svcnum
-    if $rv == 0;
-
-  my $action = $op2action{$op};
-
-  if ( $conf->exists("svc_acct-usage_$action")
-       && &{$op2condition{$op}}($self, $seconds)    ) {
-    #my $error = $self->$action();
-    my $error = $self->cust_svc->cust_pkg->$action();
-    if ( $error ) {
-      $dbh->rollback if $oldAutoCommit;
-      return "Error ${action}ing: $error";
-    }
-  }
-
-  warn "$me update sucessful; committing\n"
-    if $DEBUG;
-  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
-  '';
-
-}
-
 
 =item seconds_since TIMESTAMP
 
@@ -1329,16 +1143,16 @@ sub attribute_since_sqlradacct {
   $self->cust_svc->attribute_since_sqlradacct(@_);
 }
 
-=item get_session_history TIMESTAMP_START TIMESTAMP_END
+=item get_session_history_sqlradacct TIMESTAMP_START TIMESTAMP_END
 
 Returns an array of hash references of this customers login history for the
 given time range.  (document this better)
 
 =cut
 
-sub get_session_history {
+sub get_session_history_sqlradacct {
   my $self = shift;
-  $self->cust_svc->get_session_history(@_);
+  $self->cust_svc->get_session_history_sqlradacct(@_);
 }
 
 =item radius_groups
@@ -1424,43 +1238,25 @@ sub check_password {
 
 }
 
-=item crypt_password [ DEFAULT_ENCRYPTION_TYPE ]
+=item crypt_password
 
 Returns an encrypted password, either by passing through an encrypted password
 in the database or by encrypting a plaintext password from the database.
-
-The optional DEFAULT_ENCRYPTION_TYPE parameter can be set to I<crypt> (classic
-UNIX DES crypt), I<md5> (md5 crypt supported by most modern Linux and BSD
-distrubtions), or (eventually) I<blowfish> (blowfish hashing supported by
-OpenBSD, SuSE, other Linux distibutions with pam_unix2, etc.).  The default
-encryption type is only used if the password is not already encrypted in the
-database.
 
 =cut
 
 sub crypt_password {
   my $self = shift;
+  #false laziness w/shellcommands.pm
   #eventually should check a "password-encoding" field
   if ( length($self->_password) == 13
-       || $self->_password =~ /^\$(1|2a?)\$/
-       || $self->_password =~ /^(\*|NP|\*LK\*|!!?)$/
-     )
-  {
+       || $self->_password =~ /^\$(1|2a?)\$/ ) {
     $self->_password;
   } else {
-    my $encryption = ( scalar(@_) && $_[0] ) ? shift : 'crypt';
-    if ( $encryption eq 'crypt' ) {
-      crypt(
-        $self->_password,
-        $saltset[int(rand(64))].$saltset[int(rand(64))]
-      );
-    } elsif ( $encryption eq 'md5' ) {
-      unix_md5_crypt( $self->_password );
-    } elsif ( $encryption eq 'blowfish' ) {
-      die "unknown encryption method $encryption";
-    } else {
-      die "unknown encryption method $encryption";
-    }
+    crypt(
+      $self->_password,
+      $saltset[int(rand(64))].$saltset[int(rand(64))]
+    );
   }
 }
 
@@ -1619,7 +1415,7 @@ sub radius_usergroup_selector {
 END
 
   foreach my $group ( @all_groups ) {
-    $html .= qq(<OPTION VALUE="$group");
+    $html .= '<OPTION';
     if ( $sel_groups{$group} ) {
       $html .= ' SELECTED';
       $sel_groups{$group} = 0;
@@ -1627,7 +1423,7 @@ END
     $html .= ">$group</OPTION>\n";
   }
   foreach my $group ( grep { $sel_groups{$_} } keys %sel_groups ) {
-    $html .= qq(<OPTION VALUE="$group" SELECTED>$group</OPTION>\n);
+    $html .= "<OPTION SELECTED>$group</OPTION>\n";
   };
   $html .= '</SELECT>';
 

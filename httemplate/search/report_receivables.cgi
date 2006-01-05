@@ -1,3 +1,4 @@
+<!-- mason kludge -->
 <%
 
   my $charged = <<END;
@@ -49,7 +50,7 @@ END
              and cust_main.custnum = cust_bill.custnum
          )
          ,0
-       ) as owed_90_pl,
+       ) as owed_90_plus,
 
        coalesce(
          ( select $charged from cust_bill
@@ -60,8 +61,8 @@ END
 END
 
   my $recurring = <<END;
-        '0' != ( select freq from part_pkg
-                   where cust_pkg.pkgpart = part_pkg.pkgpart )
+        0 < ( select freq from part_pkg
+                where cust_pkg.pkgpart = part_pkg.pkgpart )
 END
 
   my $packages_cols = <<END;
@@ -81,7 +82,9 @@ END
 
 END
 
-  my $where = <<END;
+  my $sql = <<END;
+
+select *, $owed_cols, $packages_cols from cust_main
 where 0 <
   coalesce(
            ( select $charged from cust_bill
@@ -89,144 +92,67 @@ where 0 <
            )
            ,0
          )
+
+order by coalesce(lower(company), ''), lower(last)
+
 END
 
-  my $agentnum = '';
-  if ( $cgi->param('agentnum') =~ /^(\d+)$/ ) {
-    $agentnum = $1;
-    $where .= " AND agentnum = '$agentnum' ";
-  }
-
-  my $count_sql = "select count(*) from cust_main $where";
-
-  my $sql_query = {
-    'table'     => 'cust_main',
-    'hashref'   => {},
-    'select'    => "*, $owed_cols, $packages_cols",
-    'extra_sql' => "$where order by coalesce(lower(company), ''), lower(last)",
-  };
-
-  if ( $agentnum ) {
-    $owed_cols =~
-      s/cust_bill\.custnum/cust_bill.custnum AND cust_main.agentnum = '$agentnum'/g;
-  }
   my $total_sql = "select $owed_cols";
+
+  my $sth = dbh->prepare($sql) or die dbh->errstr;
+  $sth->execute or die $sth->errstr;
+
   my $total_sth = dbh->prepare($total_sql) or die dbh->errstr;
   $total_sth->execute or die $total_sth->errstr;
-  my $row = $total_sth->fetchrow_hashref();
 
-  my $conf = new FS::Conf;
-  my $money_char = $conf->config('money_char') || '$';
-
-  my $align = join('', map { /#/ ? 'r' : 'l' } FS::UI::Web::cust_header() ).
-             'crrrrr';
-
-  my $clink = [ "${p}view/cust_main.cgi?", 'custnum' ];
-
-%><%= include( 'elements/search.html',
-                 'title'       => 'Accounts Receivable Aging Summary',
-                 'name'        => 'customers',
-                 'query'       => $sql_query,
-                 'count_query' => $count_sql,
-                 'header'      => [
-                                    FS::UI::Web::cust_header(),
-                                    'Status', # (me)',
-                                    #'Status', # (cust_main)',
-                                    '0-30',
-                                    '30-60',
-                                    '60-90',
-                                    '90+',
-                                    'Total',
-                                  ],
-                 'footer'      => [
-                                    'Total',
-                                    ( map '',
-                                          ( 1 .. 
-                                            scalar(FS::UI::Web::cust_header()-1)
-                                          )
-                                    ),
-                                    '',
-                                    #'',
-                                    sprintf( $money_char.'%.2f',
-                                             $row->{'owed_0_30'} ),
-                                    sprintf( $money_char.'%.2f',
-                                             $row->{'owed_30_60'} ),
-                                    sprintf( $money_char.'%.2f',
-                                             $row->{'owed_60_90'} ),
-                                    sprintf( $money_char.'%.2f',
-                                             $row->{'owed_90_pl'} ),
-                                    sprintf( '<b>'. $money_char.'%.2f'. '</b>',
-                                             $row->{'owed_total'} ),
-                                  ],
-                 'fields'      => [
-                                    \&FS::UI::Web::cust_fields,
-                                    sub {
-                                          my $row = shift;
-                                          my $status = 'Cancelled';
-                                          my $statuscol = 'FF0000';
-                                          if ( $row->uncancelled_pkgs ) {
-                                            $status = 'Suspended';
-                                            $statuscol = 'FF9900';
-                                            if ( $row->active_pkgs ) {
-                                              $status = 'Active';
-                                              $statuscol = '00CC00';
-                                            }
-                                          }
-                                          $status;
-                                        },
-                                    #sub { ucfirst(shift->status) },
-                                    sub { sprintf( $money_char.'%.2f',
-                                                   shift->get('owed_0_30') ) },
-                                    sub { sprintf( $money_char.'%.2f',
-                                                   shift->get('owed_30_60') ) },
-                                    sub { sprintf( $money_char.'%.2f',
-                                                   shift->get('owed_60_90') ) },
-                                    sub { sprintf( $money_char.'%.2f',
-                                                   shift->get('owed_90_pl') ) },
-                                    sub { sprintf( $money_char.'%.2f',
-                                                   shift->get('owed_total') ) },
-                                  ],
-                 'links'       => [
-                                    ( map $clink, FS::UI::Web::cust_header() ),
-                                    '',
-                                    #'',
-                                    '',
-                                    '',
-                                    '',
-                                    '',
-                                    '',
-                                  ],
-                 #'align'       => 'rlccrrrrr',
-                 'align'       => $align,
-                 #'size'        => [ '', '', '-1', '-1', '', '', '', '',  '', ],
-                 #'style'       => [ '', '',  'b',  'b', '', '', '', '', 'b', ],
-                 'size'        => [ ( map '', FS::UI::Web::cust_header() ),
-                                    '-1', '', '', '', '',  '', ],
-                 'style'       => [ ( map '', FS::UI::Web::cust_header() ),
-                                    'b', '', '', '', '', 'b', ],
-                 'color'       => [
-                                    ( map '', FS::UI::Web::cust_header() ),
-                                    sub {  
-                                          my $row = shift;
-                                          my $status = 'Cancelled';
-                                          my $statuscol = 'FF0000';
-                                          if ( $row->uncancelled_pkgs ) {
-                                            $status = 'Suspended';
-                                            $statuscol = 'FF9900';
-                                            if ( $row->active_pkgs ) {
-                                              $status = 'Active';
-                                              $statuscol = '00CC00';
-                                            }
-                                          }
-                                           $statuscol;
-                                        },
-                                    #sub { shift->statuscolor; },
-                                    '',
-                                    '',
-                                    '',
-                                    '',
-                                    '',
-                                  ],
-
-             )
 %>
+<%= header('Accounts Receivable Aging Summary', menubar( 'Main Menu'=>$p, ) ) %>
+<%= table() %>
+  <TR>
+    <TH>Customer</TH>
+    <TH>Status</TH>
+    <TH>0-30</TH>
+    <TH>30-60</TH>
+    <TH>60-90</TH>
+    <TH>90+</TH>
+    <TH>Total</TH>
+  </TR>
+<% while ( my $row = $sth->fetchrow_hashref() ) {
+     my $status = 'Cancelled';
+     my $statuscol = 'FF0000';
+     if ( $row->{uncancelled_pkgs} ) {
+       $status = 'Suspended';
+       $statuscol = 'FF9900';
+       if ( $row->{active_pkgs} ) {
+         $status = 'Active';
+         $statuscol = '00CC00';
+       }
+     }
+%>
+  <TR>
+    <TD><A HREF="<%= $p %>view/cust_main.cgi?<%= $row->{'custnum'} %>"><%= $row->{'custnum'} %>:
+        <%= $row->{'company'} ? $row->{'company'}. ' (' : '' %><%= $row->{'last'}. ', '. $row->{'first'} %><%= $row->{'company'} ? ')' : '' %></A>
+    </TD>
+    <TD><B><FONT SIZE=-1 COLOR="#<%= $statuscol %>"><%= $status %></FONT></B></TD>
+    <TD ALIGN="right">$<%= sprintf("%.2f", $row->{'owed_0_30'} ) %></TD>
+    <TD ALIGN="right">$<%= sprintf("%.2f", $row->{'owed_30_60'} ) %></TD>
+    <TD ALIGN="right">$<%= sprintf("%.2f", $row->{'owed_60_90'} ) %></TD>
+    <TD ALIGN="right">$<%= sprintf("%.2f", $row->{'owed_90_plus'} ) %></TD>
+    <TD ALIGN="right"><B>$<%= sprintf("%.2f", $row->{'owed_total'} ) %></B></TD>
+  </TR>
+<% } %>
+<% my $row = $total_sth->fetchrow_hashref(); %>
+  <TR>
+    <TD COLSPAN=6>&nbsp;</TD>
+  </TR>
+  <TR>
+    <TD COLSPAN=2><I>Total</I></TD>
+    <TD ALIGN="right"><I>$<%= sprintf("%.2f", $row->{'owed_0_30'} ) %></TD>
+    <TD ALIGN="right"><I>$<%= sprintf("%.2f", $row->{'owed_30_60'} ) %></TD>
+    <TD ALIGN="right"><I>$<%= sprintf("%.2f", $row->{'owed_60_90'} ) %></TD>
+    <TD ALIGN="right"><I>$<%= sprintf("%.2f", $row->{'owed_90_plus'} ) %></TD>
+    <TD ALIGN="right"><I><B>$<%= sprintf("%.2f", $row->{'owed_total'} ) %></B></I></TD>
+  </TR>
+</TABLE>
+</BODY>
+</HTML>
