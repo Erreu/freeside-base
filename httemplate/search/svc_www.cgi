@@ -17,8 +17,7 @@ my $sql_query = {
   'hashref'   => {},
   'select'    => join(', ',
                    'svc_www.*',
-                   'cust_main.custnum',
-                   FS::UI::Web::cust_sql_fields(),
+                   map "cust_main.$_", qw(custnum last first company)
                  ),
   'extra_sql' => $orderby,
   'addl_from' => 'LEFT JOIN cust_svc  USING ( svcnum  )'.
@@ -45,25 +44,17 @@ my $link_cust = sub {
                  'header'      => [ '#',
                                     'Zone',
                                     'User',
-                                    FS::UI::Web::cust_header(),
+                                    'Customer',
                                   ],
                  'fields'      => [ 'svcnum',
                                     sub { $_[0]->domain_record->zone },
-                                    sub {
-                                          my $svc_www = shift;
-                                          my $svc_acct = $svc_www->svc_acct;
-                                          $svc_acct
-                                            ? $svc_acct->email
-                                            : '';
-                                        },
-                                    \&FS::UI::Web::cust_fields,
+                                    sub { $_[0]->svc_acct->email },
+                                    \&FS::svc_Common::cust_name,
                                   ],
                  'links'       => [ $link,
                                     '',
                                     $ulink,
-                                    ( map { $link_cust }
-                                          FS::UI::Web::cust_header()
-                                    ),
+                                    $link_cust,
                                   ],
              )
 %>

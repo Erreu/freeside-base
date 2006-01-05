@@ -20,8 +20,6 @@ use HTML::Mason::ApacheHandler;
 
 use strict;
 
-###use Module::Refresh;###
-
 # List of modules that you want to use from components (see Admin
 # manual for details)
 #{  package HTML::Mason::Commands;
@@ -99,7 +97,6 @@ sub handler
       use Tie::IxHash;
       use URI::Escape;
       use HTML::Entities;
-      use JSON;
       use IO::Handle;
       use IO::File;
       use IO::Scalar;
@@ -113,7 +110,7 @@ sub handler
       use Business::CreditCard;
       use String::Approx qw(amatch);
       use Chart::LinesPoints;
-      use HTML::Widgets::SelectLayers 0.05;
+      use HTML::Widgets::SelectLayers 0.03;
       use FS;
       use FS::UID qw(cgisuidsetup dbh getotaker datasrc driver_name);
       use FS::Record qw(qsearch qsearchs fields dbdef);
@@ -168,8 +165,6 @@ sub handler
       use FS::rate;
       use FS::rate_region;
       use FS::rate_prefix;
-      use FS::payment_gateway;
-      use FS::agent_payment_gateway;
       use FS::XMLRPC;
 
       if ( %%%RT_ENABLED%%% ) {
@@ -187,7 +182,7 @@ sub handler
           use RT::GroupMembers;
           use RT::CustomFields;
           use RT::CustomFieldValues;
-          use RT::ObjectCustomFieldValues;
+          use RT::TicketCustomFieldValues;
 
           use RT::Interface::Web;
           use MIME::Entity;
@@ -272,8 +267,6 @@ sub handler
       }
 
     } # end package HTML::Mason::Commands;
-
-    ###Module::Refresh->refresh;###
 
     $r->content_type('text/html');
     #eorar

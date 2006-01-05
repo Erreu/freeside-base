@@ -2,17 +2,16 @@ package FS::svc_Common;
 
 use strict;
 use vars qw( @ISA $noexport_hack $DEBUG );
-use Carp;
 use FS::Record qw( qsearch qsearchs fields dbh );
-use FS::cust_main_Mixin;
 use FS::cust_svc;
 use FS::part_svc;
 use FS::queue;
 use FS::cust_main;
 
-@ISA = qw( FS::cust_main_Mixin FS::Record );
+@ISA = qw( FS::Record );
 
 $DEBUG = 0;
+#$DEBUG = 1;
 
 =head1 NAME
 
@@ -34,38 +33,6 @@ inherit from, i.e. FS::svc_acct.  FS::svc_Common inherits from FS::Record.
 =over 4
 
 =cut
-
-sub new {
-  my $proto = shift;
-  my $class = ref($proto) || $proto;
-  my $self = {};
-  bless ($self, $class);
-
-  unless ( defined ( $self->table ) ) {
-    $self->{'Table'} = shift;
-    carp "warning: FS::Record::new called with table name ". $self->{'Table'};
-  }
-  
-  #$self->{'Hash'} = shift;
-  my $newhash = shift;
-  $self->{'Hash'} = { map { $_ => $newhash->{$_} } qw(svcnum svcpart) };
-  $self->setdefault;
-  $self->{'Hash'}{$_} = $newhash->{$_}
-    foreach grep { defined($newhash->{$_}) && length($newhash->{$_}) }
-                 keys %$newhash;
-
-  foreach my $field ( grep !defined($self->{'Hash'}{$_}), $self->fields ) { 
-    $self->{'Hash'}{$field}='';
-  }
-
-  $self->_rebless if $self->can('_rebless');
-
-  $self->{'modified'} = 0;
-
-  $self->_cache($self->{'Hash'}, shift) if $self->can('_cache') && @_;
-
-  $self;
-}
 
 sub virtual_fields {
 
@@ -578,6 +545,20 @@ same object for svc_ classes which don't implement a suspension fallback
 
 sub clone_kludge_unsuspend {
   shift;
+}
+
+=item cust_name
+
+Given a svc_ object that contains fields from cust_main (say, from a
+JOINed search.  See httemplate/search/svc_* for examples), returns the 
+equivalent of "$svc_x->cust_svc->cust_pkg->name" (but much more efficient),
+or "(unlinked)" if this service is not linked to a customer.
+
+=cut
+
+sub cust_name {
+  my $svc_x = shift;
+  $svc_x->custnum ? FS::cust_main::name($svc_x) : '(unlinked)';
 }
 
 =back

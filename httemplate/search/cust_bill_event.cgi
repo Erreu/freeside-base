@@ -15,16 +15,8 @@ my($beginning, $ending) = FS::UI::Web::parse_beginning_ending($cgi);
 
 my $where = " WHERE cust_bill_event._date >= $beginning".
             "   AND cust_bill_event._date <= $ending";
-
-if ( $cgi->param('failed') ) {
-  $where .= " AND statustext != '' ".
-            " AND statustext IS NOT NULL ".
-            " AND statustext != 'N/A' "
-}
-
-if ( $cgi->param('part_bill_event.payby') =~ /^(\w+)$/ ) {
-  $where .= " AND part_bill_event.payby = '$1' ";
-}
+$where .= " AND statustext != '' AND statustext IS NOT NULL"
+  if $cgi->param('failed');
 
 my $sql_query = {
   'table'     => 'cust_bill_event',
@@ -35,8 +27,8 @@ my $sql_query = {
                    'part_bill_event.event',
                    'cust_bill.custnum',
                    'cust_bill._date AS cust_bill_date',
-                   'cust_main.custnum AS cust_main_custnum',
-                   FS::UI::Web::cust_sql_fields(),
+                   map "cust_main.$_", qw(last first company)
+
                  ),
   'extra_sql' => "$where ORDER BY _date ASC",
   'addl_from' => 'LEFT JOIN part_bill_event USING ( eventpart ) '.
@@ -44,9 +36,7 @@ my $sql_query = {
                  'LEFT JOIN cust_main       USING ( custnum   ) ',
 };
 
-my $count_sql = "SELECT COUNT(*) FROM cust_bill_event ".
-                "LEFT JOIN part_bill_event USING ( eventpart ) ".
-                $where;
+my $count_sql = "select count(*) from cust_bill_event $where";
 
 my $conf = new FS::Conf;
 
@@ -81,13 +71,6 @@ push @$menubar, 'Re-fax these events' =>
                   "javascript:fax_process()"
   if $conf->exists('hylafax');
 
-my $link_cust = sub {
-  my $cust_bill_event = shift;
-  $cust_bill_event->cust_main_custnum
-    ? [ "${p}view/cust_main.cgi?", 'custnum' ]
-    : '';
-};
-
 %><%= include( 'elements/search.html',
                  'title'       => $title,
                  'html_init'   => $html_init,
@@ -95,12 +78,9 @@ my $link_cust = sub {
                  'name'        => 'billing events',
                  'query'       => $sql_query,
                  'count_query' => $count_sql,
-                 'header'      => [ 'Event',
-                                    'Date',
-                                    'Status',
+                 'header'      => [ qw( Event Date Status ),
                                     #'Inv #', 'Inv Date', 'Cust #',
-                                    'Invoice',
-                                    FS::UI::Web::cust_header(),
+                                    'Invoice', 'Cust #',
                                   ],
                  'fields' => [
                                'event',
@@ -119,7 +99,9 @@ my $link_cust = sub {
                                        time2str("%D", $_[0]->cust_bill_date).
                                      ')';
                                    },
-                               \&FS::UI::Web::cust_fields,
+                               sub { FS::cust_main::name($_[0]) },
+
+
                              ],
                  'links' => [
                               '',
@@ -131,7 +113,8 @@ my $link_cust = sub {
                                 $template .= '-' if $template;
                                 [ "${p}view/cust_bill.cgi?$template", 'invnum'];
                               },
-                              ( map { $link_cust } FS::UI::Web::cust_header() ),
+                              [ "${p}view/cust_main.cgi?", 'custnum' ],
+                              [ "${p}view/cust_main.cgi?", 'custnum' ],
                             ],
              )
 %>

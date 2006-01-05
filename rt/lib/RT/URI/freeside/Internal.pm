@@ -28,7 +28,7 @@
 use strict;
 no warnings qw(redefine);
 
-#use vars qw($conf);
+use vars qw($conf);
 
 use FS;
 use FS::UID qw(dbh);
@@ -94,8 +94,7 @@ sub FreesideVersion {
 
 sub FreesideGetConfig {
 
-  #$conf = new FS::Conf unless ref($conf);
-  my $conf = new FS::Conf;
+  $conf = new FS::Conf unless ref($conf);
 
   return scalar($conf->config(@_));
 

@@ -13,9 +13,7 @@ use FS::agent_type;
 use FS::type_pkgs;
 use FS::part_pkg_option;
 
-@ISA = qw( FS::Record ); # FS::option_Common ); # this can use option_Common
-                                                # when all the plandata bs is
-                                                # gone
+@ISA = qw( FS::Record );
 
 $DEBUG = 0;
 
@@ -420,7 +418,7 @@ sub check {
     my $error = $self->ut_number('freq');
     return $error if $error;
   } else {
-    $self->freq =~ /^(\d+[hdw]?)$/
+    $self->freq =~ /^(\d+[dw]?)$/
       or return "Illegal or empty freq: ". $self->freq;
     $self->freq($1);
   }
@@ -440,10 +438,6 @@ sub check {
 
   return 'Unknown plan '. $self->plan
     unless exists($plans{$self->plan});
-
-  my $conf = new FS::Conf;
-  return 'Taxclass is required'
-    if ! $self->taxclass && $conf->exists('require_taxclasses');
 
   '';
 }
@@ -539,7 +533,6 @@ Returns an english representation of the I<freq> field, such as "monthly",
 
 tie %freq, 'Tie::IxHash', 
   '0'  => '(no recurring fee)',
-  '1h' => 'hourly',
   '1d' => 'daily',
   '1w' => 'weekly',
   '2w' => 'biweekly (every 2 weeks)',
@@ -562,8 +555,8 @@ sub freq_pretty {
     $freq{$freq};
   } else {
     my $interval = 'month';
-    if ( $freq =~ /^(\d+)([hdw])$/ ) {
-      my %interval = ( 'h' => 'hour', 'd'=>'day', 'w'=>'week' );
+    if ( $freq =~ /^(\d+)([dw])$/ ) {
+      my %interval = ( 'd'=>'day', 'w'=>'week' );
       $interval = $interval{$2};
     }
     if ( $1 == 1 ) {
@@ -761,8 +754,6 @@ The delete method is unimplemented.
 
 setup and recur semantics are not yet defined (and are implemented in
 FS::cust_bill.  hmm.).
-
-plandata should go
 
 =head1 SEE ALSO
 

@@ -5,10 +5,10 @@ use vars qw( $conf $system $AUTOLOAD );
 use FS::Conf;
 use FS::UID;
 
-FS::UID->install_callback( sub { 
+install_callback FS::UID sub { 
   $conf = new FS::Conf;
   $system = $conf->config('ticket_system');
-} );
+};
 
 sub AUTOLOAD {
   my $self = shift;

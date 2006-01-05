@@ -14,23 +14,14 @@ $cust_main->set($pre.'state', $statedefault )
   unless $cust_main->get($pre.'state')
          || $cust_main->get($pre.'country') ne $countrydefault;
 
-#my($county_html, $state_html, $country_html) =
-#  FS::cust_main_county::regionselector( $cust_main->get($pre.'county'),
-#                                        $cust_main->get($pre.'state'),
-#                                        $cust_main->get($pre.'country'),
-#                                        $pre,
-#                                        $onchange,
-#                                        $disabled,
-#                                      );
-
-my %select_hash = (
-  'county'   => $cust_main->get($pre.'county'),
-  'state'    => $cust_main->get($pre.'state'),
-  'country'  => $cust_main->get($pre.'country'),
-  'prefix'   => $pre,
-  'onchange' => $onchange,
-  'disabled' => $disabled,
-);
+my($county_html, $state_html, $country_html) =
+  FS::cust_main_county::regionselector( $cust_main->get($pre.'county'),
+                                        $cust_main->get($pre.'state'),
+                                        $cust_main->get($pre.'country'),
+                                        $pre,
+                                        $onchange,
+                                        $disabled,
+                                      );
 
 my $daytime_label = FS::Msgcat::_gettext('daytime') || 'Day Phone';
 my $night_label = FS::Msgcat::_gettext('night') || 'Night Phone';
@@ -39,7 +30,7 @@ my $r = qq!<font color="#ff0000">*</font>&nbsp;!;
 
 %>
 
-<%= &ntable("#cccccc") %>
+<%= &itable("#cccccc") %>
 
 <TR>
   <TH ALIGN="right"><%=$r%>Contact&nbsp;name<BR>(last,&nbsp;first)</TH>
@@ -51,7 +42,7 @@ my $r = qq!<font color="#ff0000">*</font>&nbsp;!;
 <% if ( $conf->exists('show_ss') && !$pre ) { %>
   <TD ALIGN="right">SS#</TD>
   <TD><INPUT TYPE="text" NAME="ss" VALUE="<%= $cust_main->ss %>" SIZE=11></TD>
-<% } elsif ( !$pre ) { %>
+<% } else { %>
   <TD><INPUT TYPE="hidden" NAME="ss" VALUE="<%= $cust_main->ss %>"></TD>
 <% } %>
 
@@ -84,10 +75,7 @@ my $r = qq!<font color="#ff0000">*</font>&nbsp;!;
     <INPUT TYPE="text" NAME="<%=$pre%>city" VALUE="<%= $cust_main->get($pre.'city') %>" onChange="<%= $onchange %>" <%=$disabled%>>
   </TD>
   <TH ALIGN="right"><%=$r%>State</TH>
-  <TD>
-    <%= include('select-county.html', %select_hash ) %>
-    <%= include('select-state.html', %select_hash ) %>
-  </TD>
+  <TD><%= $county_html. $state_html %></TD>
   <TH><%=$r%>Zip</TH>
   <TD>
     <INPUT TYPE="text" NAME="<%=$pre%>zip" VALUE="<%= $cust_main->get($pre.'zip') %>" SIZE=10 onChange="<%= $onchange %>" <%=$disabled%>>
@@ -96,7 +84,7 @@ my $r = qq!<font color="#ff0000">*</font>&nbsp;!;
 
 <TR>
   <TH ALIGN="right"><%=$r%>Country</TH>
-  <TD><%= include('select-country.html', %select_hash ) %></TD>
+  <TD><%= $country_html %></TD>
 </TR>
 
 <TR>

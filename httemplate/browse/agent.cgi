@@ -8,8 +8,6 @@
     %search = ( 'disabled' => '' );
   }
 
-  my $conf = new FS::Conf;
-
 %>
 <%= header('Agent Listing', menubar(
   'Main Menu'   => $p,
@@ -34,14 +32,9 @@ full offerings (via their type).<BR><BR>
   <TH COLSPAN=<%= ( $cgi->param('showdisabled') || !dbdef->table('agent')->column('disabled') ) ? 2 : 3 %>>Agent</TH>
   <TH>Type</TH>
   <TH>Customers</TH>
-  <TH><FONT SIZE=-1>Customer<BR>packages</FONT></TH>
   <TH>Reports</TH>
   <TH>Registration codes</TH>
   <TH>Prepaid cards</TH>
-  <% if ( $conf->config('ticket_system') ) { %>
-    <TH>Ticketing</TH>
-  <% } %>
-  <TH><FONT SIZE=-1>Payment Gateway Overrides</FONT></TH>
   <TH><FONT SIZE=-1>Freq.</FONT></TH>
   <TH><FONT SIZE=-1>Prog.</FONT></TH>
 </TR>
@@ -56,8 +49,6 @@ foreach my $agent ( sort {
 
   my $cust_main_link = $p. 'search/cust_main.cgi?agentnum_on=1&'.
                        'agentnum='. $agent->agentnum;
-
-  my $cust_pkg_link = $p. 'search/cust_pkg.cgi?agentnum='. $agent->agentnum;
 
 %>
 
@@ -74,6 +65,7 @@ foreach my $agent ( sort {
         <TD><A HREF="<%=$p%>edit/agent_type.cgi?<%= $agent->typenum %>"><%= $agent->agent_type->atype %></A></TD>
 
         <TD>
+
           <TABLE CELLSPACING=0 CELLPADDING=0>
             <TR>
               <TH ALIGN="right" WIDTH="40%">
@@ -121,44 +113,6 @@ foreach my $agent ( sort {
         </TD>
 
         <TD>
-          <TABLE CELLSPACING=0 CELLPADDING=0>
-            <TR>
-              <TH ALIGN="right" WIDTH="40%">
-                <FONT COLOR="#00CC00">
-                  <%= my $num_active_pkg = $agent->num_active_cust_pkg %>&nbsp;
-                </FONT>
-              </TH>
-              <TD>
-                <% if ( $num_active_pkg ) { %>
-                  <A HREF="<%= $cust_pkg_link %>&magic=active"><% } %>active<% if ( $num_active_pkg ) { %></A><% } %>
-              </TD>
-            </TR>
-            <TR>
-              <TH ALIGN="right" WIDTH="40%">
-                <FONT COLOR="#FF9900">
-                  <%= my $num_susp_pkg = $agent->num_susp_cust_pkg %>&nbsp;
-                </FONT>
-              </TH>
-              <TD>
-                <% if ( $num_susp_pkg ) { %>
-                  <A HREF="<%= $cust_pkg_link %>&magic=suspended"><% } %>suspended<% if ( $num_susp_pkg ) { %></A><% } %>
-              </TD>
-            </TR>
-            <TR>
-              <TH ALIGN="right" WIDTH="40%">
-                <FONT COLOR="#FF0000">
-                  <%= my $num_cancel_pkg = $agent->num_cancel_cust_pkg %>&nbsp;
-                </FONT>
-              </TH>
-              <TD>
-                <% if ( $num_cancel_pkg ) { %>
-                  <A HREF="<%= $cust_pkg_link %>&magic=cancelled"><% } %>cancelled<% if ( $num_cancel_pkg ) { %></A><% } %>
-              </TD>
-            </TR>
-          </TABLE>
-        </TD>
-
-        <TD>
           <A HREF="<%= $p %>search/report_cust_pay.html?agentnum=<%= $agent->agentnum %>">Payments</A>
           <BR><A HREF="<%= $p %>search/report_cust_credit.html?agentnum=<%= $agent->agentnum %>">Credits</A>
           <BR><A HREF="<%= $p %>search/report_receivables.cgi?agentnum=<%= $agent->agentnum %>">A/R Aging</A>
@@ -178,40 +132,6 @@ foreach my $agent ( sort {
           <% if ( $num_prepay_credit ) { %>
             <A HREF="<%=$p%>search/prepay_credit.html?agentnum=<%= $agent->agentnum %>"><% } %>Unused<% if ( $num_prepay_credit ) { %></A><% } %>
           <BR><A HREF="<%=$p%>edit/prepay_credit.cgi?agentnum=<%= $agent->agentnum %>">Generate cards</A>
-        </TD>
-
-        <% if ( $conf->config('ticket_system') ) { %>
-
-          <TD>
-            <% if ( $agent->ticketing_queueid ) { %>
-              Queue: <%= $agent->ticketing_queueid %>: <%= $agent->ticketing_queue %><BR>
-            <% } %>
-          </TD>
-
-        <% } %>
-
-        <TD>
-          <TABLE CELLSPACING=0 CELLPADDING=0>
-            <% foreach my $override (
-                 # sort { }  want taxclass-full stuff first?  and default cards (empty cardtype)
-                 qsearch('agent_payment_gateway', { 'agentnum' => $agent->agentnum } )
-               ) {
-            %>
-              <TR>
-                <TD> 
-                  <%= $override->cardtype || 'Default' %> to <%= $override->payment_gateway->gateway_module %> (<%= $override->payment_gateway->gateway_username %>)
-                  <%= $override->taxclass
-                        ? ' for '. $override->taxclass. ' only'
-                        : ''
-                  %>
-                  <FONT SIZE=-1><A HREF="<%=$p%>misc/delete-agent_payment_gateway.cgi?<%= 'XXXoverridenum' %>">(delete)</A></FONT>
-                </TD>
-              </TR>
-            <% } %>
-            <TR>
-              <TD><FONT SIZE=-1><A HREF="<%=$p%>edit/agent_payment_gateway.html?agentnum=<%= $agent->agentnum %>">(add override)</A></FONT></TD>
-            </TR>
-          </TABLE>
         </TD>
 
         <TD><%= $agent->freq %></TD>

@@ -104,7 +104,7 @@ sub check {
 
   my $error = 
     $self->ut_numbern('optionnum')
-    || $self->ut_foreign_key('exportnum', 'part_export', 'exportnum')
+    || $self->ut_number('exportnum')
     || $self->ut_alpha('optionname')
     || $self->ut_anything('optionvalue')
   ;

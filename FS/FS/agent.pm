@@ -2,13 +2,11 @@ package FS::agent;
 
 use strict;
 use vars qw( @ISA );
-#use Crypt::YAPassGen;
 use FS::Record qw( dbh qsearch qsearchs );
 use FS::cust_main;
-use FS::cust_pkg;
 use FS::agent_type;
 use FS::reg_code;
-use FS::TicketSystem;
+#use Crypt::YAPassGen;
 
 @ISA = qw( FS::Record );
 
@@ -168,18 +166,6 @@ sub pkgpart_hashref {
   $self->agent_type->pkgpart_hashref;
 }
 
-=item ticketing_queue
-
-Returns the queue name corresponding with the id from the I<ticketing_queueid>
-field, or the empty string.
-
-=cut
-
-sub ticketing_queue {
-  my $self = shift;
-  FS::TicketSystem->queue($self->ticketing_queueid);
-};
-
 =item num_prospect_cust_main
 
 Returns the number of prospects (customers with no packages ever ordered) for
@@ -193,9 +179,10 @@ sub num_prospect_cust_main {
 
 sub num_sql {
   my( $self, $sql ) = @_;
-  my $statement = "SELECT COUNT(*) FROM cust_main WHERE agentnum = ? AND $sql";
-  my $sth = dbh->prepare($statement) or die dbh->errstr." preparing $statement";
-  $sth->execute($self->agentnum) or die $sth->errstr. "executing $statement";
+  my $sth = dbh->prepare(
+    "SELECT COUNT(*) FROM cust_main WHERE agentnum = ? AND $sql"
+  ) or die dbh->errstr;
+  $sth->execute($self->agentnum) or die $sth->errstr;
   $sth->fetchrow_arrayref->[0];
 }
 
@@ -277,46 +264,6 @@ Returns the cancelled customers for this agent, as cust_main objects.
 
 sub cancel_cust_main {
   shift->cust_main_sql(FS::cust_main->cancel_sql);
-}
-
-=item num_active_cust_pkg
-
-Returns the number of active customer packages for this agent.
-
-=cut
-
-sub num_active_cust_pkg {
-  shift->num_pkg_sql(FS::cust_pkg->active_sql);
-}
-
-sub num_pkg_sql {
-  my( $self, $sql ) = @_;
-  my $statement = 
-    "SELECT COUNT(*) FROM cust_pkg LEFT JOIN cust_main USING ( custnum )".
-    " WHERE agentnum = ? AND $sql";
-  my $sth = dbh->prepare($statement) or die dbh->errstr." preparing $statement";
-  $sth->execute($self->agentnum) or die $sth->errstr. "executing $statement";
-  $sth->fetchrow_arrayref->[0];
-}
-
-=item num_susp_cust_pkg
-
-Returns the number of suspended customer packages for this agent.
-
-=cut
-
-sub num_susp_cust_pkg {
-  shift->num_pkg_sql(FS::cust_pkg->susp_sql);
-}
-
-=item num_cancel_cust_pkg
-
-Returns the number of cancelled customer packages for this agent.
-
-=cut
-
-sub num_cancel_cust_pkg {
-  shift->num_pkg_sql(FS::cust_pkg->cancel_sql);
 }
 
 =item generate_reg_codes NUM PKGPART_ARRAYREF

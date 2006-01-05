@@ -23,6 +23,7 @@ my $hashref = $part_svc->hashref;
 
            #" onLoad=\"visualize()\""
 %>
+<!-- mason kludge -->
 <%= header("$action Service Definition",
            menubar( 'Main Menu'         => $p,
                     'View all service definitions' => "${p}browse/part_svc.cgi"
@@ -97,7 +98,7 @@ my %defs = (
                      select_label => 'domain',
                    },
     'usergroup' => {
-                     desc =>'RADIUS groups',
+                     desc =>'ICRADIUS/FreeRADIUS groups',
                      type =>'radius_usergroup_selector',
                    },
   },
@@ -193,7 +194,7 @@ my %defs = (
 
       $html .=  table(). "<TH>Field</TH><TH COLSPAN=2>Modifier</TH>";
       #yucky kludge
-      my @fields = defined( dbdef->table($layer) )
+      my @fields = defined( $FS::Record::dbdef->table($layer) )
                       ? grep { $_ ne 'svcnum' } fields($layer)
                       : ();
       push @fields, 'usergroup' if $layer eq 'svc_acct'; #kludge

@@ -38,12 +38,9 @@ tie my %options, 'Tie::IxHash',
                        type =>'textarea',
                        default=>'',
                      },
-  'usermod_pwonly' => { label=>'Disallow username, domain, uid, gid, and dir changes', #and RADIUS group changes',
+  'usermod_pwonly' => { label=>'Disallow username changes',
                         type =>'checkbox',
                       },
-  'usermod_nousername' => { label=>'Disallow just username changes',
-                            type =>'checkbox',
-                          },
   'suspend' => { label=>'Suspension command',
                  default=>'usermod -L $username',
                },
@@ -151,8 +148,8 @@ old_ for replace operations):
 <UL>
   <LI><code>$username</code>
   <LI><code>$_password</code>
-  <LI><code>$quoted_password</code> - unencrypted password, already quoted for the shell (do not add additional quotes)
-  <LI><code>$crypt_password</code> - encrypted password, already quoted for the shell (do not add additional quotes)
+  <LI><code>$quoted_password</code> - unencrypted password quoted for the shell
+  <LI><code>$crypt_password</code> - encrypted password (quoted for the shell)
   <LI><code>$uid</code>
   <LI><code>$gid</code>
   <LI><code>$finger</code> - GECOS, already quoted for the shell (do not add additional quotes)
@@ -273,33 +270,27 @@ sub _export_replace {
   @old_radius_groups = $old->radius_groups;
   @new_radius_groups = $new->radius_groups;
 
-  my $error = '';
-  if ( $self->option('usermod_pwonly') || $self->option('usermod_nousername') ){
+  if ( $self->option('usermod_pwonly') ) {
+    my $error = '';
     if ( $old_username ne $new_username ) {
       $error ||= "can't change username";
     }
-  }
-  if ( $self->option('usermod_pwonly') ) {
     if ( $old_domain ne $new_domain ) {
       $error ||= "can't change domain";
     }
     if ( $old_uid != $new_uid ) {
       $error ||= "can't change uid";
     }
-    if ( $old_gid != $new_gid ) {
-      $error ||= "can't change gid";
-    }
     if ( $old_dir ne $new_dir ) {
       $error ||= "can't change dir";
     }
-    #if ( join("\n", sort @old_radius_groups) ne
-    #     join("\n", sort @new_radius_groups)    ) {
-    #  $error ||= "can't change RADIUS groups";
-    #}
+    if ( join("\n", sort @old_radius_groups) ne
+         join("\n", sort @new_radius_groups)    ) {
+      $error ||= "can't change RADIUS groups";
+    }
+    return $error. ' ('. $self->exporttype. ' to '. $self->machine. ')'
+      if $error;
   }
-  return $error. ' ('. $self->exporttype. ' to '. $self->machine. ')'
-    if $error;
-
   $self->shellcommands_queue( $new->svcnum,
     user         => $self->option('user')||'root',
     host         => $self->machine,

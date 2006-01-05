@@ -91,12 +91,7 @@
 
         foreach my $field ( @{$opt{'fields'}} ) {
           if ( ref($field) eq 'CODE' ) {
-            push @line, map {
-                              ref($_) eq 'ARRAY'
-                                ? '(N/A)' #unimplemented
-                                : $_;
-                            }
-                            &{$field}($row);
+            push @line, &{$field}($row);
           } else {
             push @line, $row->$field();
           }
@@ -157,13 +152,7 @@
           #  }
           #}
           if ( ref($field) eq 'CODE' ) {
-            foreach my $value ( &{$field}($row) ) {
-              if ( ref($value) eq 'ARRAY' ) { 
-                $worksheet->write($r, $c++, '(N/A)' ); #unimplemented
-              } else {
-                $worksheet->write($r, $c++, $value );
-              }
-            }
+            $worksheet->write($r, $c++, &{$field}($row) );
           } else {
             $worksheet->write($r, $c++, $row->$field() );
           }
@@ -183,9 +172,7 @@
   } else { # regular HTML
 
     if ( exists($opt{'redirect'}) && scalar(@$rows) == 1 && $total == 1 ) {
-      my $redirect = $opt{'redirect'};
-      $redirect = &{$redirect}($rows->[0]) if ref($redirect) eq 'CODE';
-      my( $url, $method ) = @$redirect;
+      my( $url, $method ) = @{$opt{'redirect'}};
       redirect( $url. $rows->[0]->$method() );
     } else {
       ( my $xlsname = $opt{'name'} ) =~ s/\W//g;
@@ -234,10 +221,14 @@
       </TR>
       <TR>
         <TD COLSPAN=2>
+  
             <%= $pager %>
-
-            <%= include('/elements/table-grid.html') %>
-
+            <STYLE TYPE="text/css">
+            .grid table { border: solid; empty-cells: show }
+            .grid TH { padding-left: 3px; padding-right: 3px; border: 1px solid #dddddd; border-bottom: dashed 1px black; border-right: none }
+            .grid TD { padding-left: 3px; padding-right: 3px; empty-cells: show; border: 1px solid #cccccc; border-bottom: none; border-right: none }
+            </STYLE>
+            <TABLE CLASS="grid" CELLSPACING=0 CELLPADDING=0 BORDER=1 BORDERCOLOR="#000000" STYLE="border: solid 1px black; empty-cells: show">
               <TR>
               <% foreach my $header ( @$header ) { %>
                    <TH CLASS="grid" BGCOLOR="#cccccc"><%= $header %></TH>
@@ -262,64 +253,7 @@
                         my $sizes  = $opt{'size'}  ? [ @{$opt{'size'}}  ] : [];
                         my $styles = $opt{'style'} ? [ @{$opt{'style'}} ] : [];
 
-                        foreach my $field (
-
-                          map {
-                                if ( ref($_) eq 'ARRAY' ) {
-
-                                  my $tableref = $_;
-
-                                  '<TABLE BORDER=0 CELLSPACING=0 CELLPADDING=0'.
-                                  ' STYLE="border:none">'.
-
-                                  join('', map {
-
-                                    my $rowref = $_;
-
-                                    '<tr>'.
-
-                                    join('', map {
-
-                                      my $element = $_;
-
-                                      '<TD STYLE="border:none"'.
-                                      ( $element->{'align'}
-                                          ? ' ALIGN="'. $element->{'align'}. '"'
-                                          : ''
-                                      ). '>'.
-                                      ( $element->{'link'}
-                                          ? '<A HREF="'. $element->{'link'}.'">'
-                                          : ''
-                                      ).
-                                      $element->{'data'}.
-                                      ( $element->{'link'}
-                                          ? '</A>'
-                                          : ''
-                                      ).
-                                      '</td>';
-
-                                    } @$rowref ).
-
-                                    '</tr>';
-                                  } @$tableref ).
-
-                                  '</table>';
-
-                                } else {
-                                  $_;
-                                }
-                              }
-
-                          map {
-                                if ( ref($_) eq 'CODE' ) {
-                                  &{$_}($row);
-                                } else {
-                                  $row->$_();
-                                }
-                              }
-                          @{$opt{'fields'}}
-
-                        ) {
+                        foreach my $field ( @{$opt{'fields'}} ) {
 
                           my $align = $aligns ? shift @$aligns : '';
                           $align = " ALIGN=$align" if $align;
@@ -360,7 +294,11 @@
                           }
 
                        %>
-                       <TD CLASS="grid" BGCOLOR="<%= $bgcolor %>"<%= $align %>><%= $font %><%= $a %><%= $s %><%= $field %><%= $es %><%= $a ? '</A>' : '' %><%= $font ? '</FONT>' : '' %></TD>
+                       <% if ( ref($field) eq 'CODE' ) { %>
+                         <TD CLASS="grid" BGCOLOR="<%= $bgcolor %>"<%= $align %>><%= $font %><%= $a %><%= $s %><%= &{$field}($row) %><%= $es %><%= $a ? '</A>' : '' %><%= $font ? '</FONT>' : '' %></TD>
+                       <% } else { %>
+                         <TD CLASS="grid" BGCOLOR="<%= $bgcolor %>"<%= $align %>><%= $font %><%= $a %><%= $s %><%= $row->$field() %><%= $es %><%= $a ? '</A>' : '' %><%= $font ? '</FONT>' : '' %></TD>
+                       <% } %>
                      <% } %>
                    <% } else { %>
                      <% foreach ( @$row ) { %>

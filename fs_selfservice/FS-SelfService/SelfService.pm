@@ -163,10 +163,6 @@ FS::SelfService - Freeside self-service API
                         'payby'            => $payby,
                         'payinfo'          => $payinfo,
                         'paycvv'           => $paycvv,
-                        'paystart_month'   => $paystart_month
-                        'paystart_year'    => $paystart_year,
-                        'payissue'         => $payissue,
-                        'payip'            => $payip
                         'paydate'          => $paydate,
                         'payname'          => $payname,
                         'invoicing_list'   => $invoicing_list,
@@ -1070,7 +1066,7 @@ END
 
 Note: Resellers can also use the B<signup_info> and B<new_customer> functions
 with their active session, and the B<customer_info> and B<order_pkg> functions
-with their active session and an additional I<custnum> parameter.
+with their active session and an additonal I<custnum> parameter.
 
 =over 4
 

@@ -17,12 +17,12 @@ my %granularity = (
   '60' => 'minute',
 );
 
-#my $nous = <<END;
-#  WHERE 0 < ( SELECT COUNT(*) FROM rate_prefix
-#               WHERE rate_region.regionnum = rate_prefix.regionnum
-#                 AND countrycode != '1'
-#            )
-#END
+my $nous = <<END;
+  WHERE 0 < ( SELECT COUNT(*) FROM rate_prefix
+               WHERE rate_region.regionnum = rate_prefix.regionnum
+                 AND countrycode != '1'
+            )
+END
 
 %>
 
@@ -56,17 +56,11 @@ Rate plan
 </TR>
 
 <% foreach my $rate_region (
-     sort { lc($a->regionname) cmp lc($b->regionname) }
-     qsearch({
-               'select'    => 'DISTINCT ON ( regionnum ) rate_region.*',
-               'table'     => 'rate_region',
-               'addl_from' => 'INNER JOIN rate_prefix USING ( regionnum )',
-               'hashref'   => {},
-               'extra_sql' => "WHERE countrycode != '1'",
-                              # 'ORDER BY regionname'
-                              # ERROR: SELECT DISTINCT ON expressions must
-                              #        match initial ORDER BY expressions
-            })
+     qsearch( 'rate_region',
+              {},
+              '',
+              "$nous ORDER BY regionname",
+            )
    ) {
      my $n = $rate_region->regionnum;
      my $rate_detail =
@@ -76,7 +70,6 @@ Rate plan
                                 'sec_granularity' => '60'
                               };
 %>
-
   <TR>
     <TD><A HREF="<%=$p%>edit/rate_region.cgi?<%= $rate_region->regionnum %>"><%= $rate_region->regionname %></A></TD>
     <TD><%= $rate_region->prefixes_short %></TD>
@@ -89,7 +82,6 @@ Rate plan
         <% } %>
       </SELECT>
   </TR>
-
 <% } %>
 
 <TR>

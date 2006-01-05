@@ -250,17 +250,9 @@ sub check {
   return "Unknown svcnum (in svc_domain)"
     unless qsearchs('svc_domain', { 'svcnum' => $self->svcnum } );
 
-  my $conf = new FS::Conf;
-
-  if ( $conf->exists('zone-underscore') ) {
-    $self->reczone =~ /^(@|[a-z0-9_\.\-\*]+)$/i
-      or return "Illegal reczone: ". $self->reczone;
-    $self->reczone($1);
-  } else {
-    $self->reczone =~ /^(@|[a-z0-9\.\-\*]+)$/i
-      or return "Illegal reczone: ". $self->reczone;
-    $self->reczone($1);
-  }
+  $self->reczone =~ /^(@|[a-z0-9\.\-\*]+)$/i
+    or return "Illegal reczone: ". $self->reczone;
+  $self->reczone($1);
 
   $self->recaf =~ /^(IN)$/ or return "Illegal recaf: ". $self->recaf;
   $self->recaf($1);
@@ -292,26 +284,17 @@ sub check {
       or return "Illegal data for A record: ". $self->recdata;
     $self->recdata($1);
   } elsif ( $self->rectype eq 'PTR' ) {
-    if ( $conf->exists('zone-underscore') ) {
-      $self->recdata =~ /^([a-z0-9_\.\-]+)$/i
-        or return "Illegal data for PTR record: ". $self->recdata;
-      $self->recdata($1);
-    } else {
-      $self->recdata =~ /^([a-z0-9\.\-]+)$/i
-        or return "Illegal data for PTR record: ". $self->recdata;
-      $self->recdata($1);
-    }
+    $self->recdata =~ /^([a-z0-9\.\-]+)$/i
+      or return "Illegal data for PTR record: ". $self->recdata;
+    $self->recdata($1);
   } elsif ( $self->rectype eq 'CNAME' ) {
     $self->recdata =~ /^([a-z0-9\.\-]+|\@)$/i
       or return "Illegal data for CNAME record: ". $self->recdata;
     $self->recdata($1);
   } elsif ( $self->rectype eq 'TXT' ) {
-    if ( $self->recdata =~ /^((?:\S+)|(?:".+"))$/ ) {
-      $self->recdata($1);
-    } else {
-      $self->recdata('"'. $self->recdata. '"'); #?
-    }
-    #  or return "Illegal data for TXT record: ". $self->recdata;
+    $self->recdata =~ /^((?:\S+)|(?:".+"))$/
+      or return "Illegal data for TXT record: ". $self->recdata;
+    $self->recdata($1);
   } elsif ( $self->rectype eq '_mstr' ) {
     $self->recdata =~ /^((\d{1,3}\.){3}\d{1,3})$/
       or return "Illegal data for _master pseudo-record: ". $self->recdata;

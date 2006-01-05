@@ -3,7 +3,6 @@ package FS::cust_bill;
 use strict;
 use vars qw( @ISA $DEBUG $conf $money_char );
 use vars qw( $invoice_lines @buf ); #yuck
-use Fcntl qw(:flock); #for spool_csv
 use IPC::Run3;
 use Date::Format;
 use Text::Template 1.20;
@@ -12,9 +11,8 @@ use String::ShellQuote;
 use HTML::Entities;
 use Locale::Country;
 use FS::UID qw( datasrc );
-use FS::Misc qw( send_email send_fax );
 use FS::Record qw( qsearch qsearchs );
-use FS::cust_main_Mixin;
+use FS::Misc qw( send_email send_fax );
 use FS::cust_main;
 use FS::cust_bill_pkg;
 use FS::cust_credit;
@@ -27,7 +25,7 @@ use FS::part_pkg;
 use FS::cust_bill_pay;
 use FS::part_bill_event;
 
-@ISA = qw( FS::cust_main_Mixin FS::Record );
+@ISA = qw( FS::Record );
 
 $DEBUG = 0;
 
@@ -106,13 +104,6 @@ Invoices are normally created by calling the bill method of a customer object
 =cut
 
 sub table { 'cust_bill'; }
-
-sub cust_linked { $_[0]->cust_main_custnum; } 
-sub cust_unlinked_msg {
-  my $self = shift;
-  "WARNING: can't find cust_main.custnum ". $self->custnum.
-  ' (cust_bill.invnum '. $self->invnum. ')';
-}
 
 =item insert
 
@@ -234,25 +225,6 @@ Returns the customer (see L<FS::cust_main>) for this invoice.
 sub cust_main {
   my $self = shift;
   qsearchs( 'cust_main', { 'custnum' => $self->custnum } );
-}
-
-=item cust_suspend_if_balance_over AMOUNT
-
-Suspends the customer associated with this invoice if the total amount owed on
-this invoice and all older invoices is greater than the specified amount.
-
-Returns a list: an empty list on success or a list of errors.
-
-=cut
-
-sub cust_suspend_if_balance_over {
-  my( $self, $amount ) = ( shift, shift );
-  my $cust_main = $self->cust_main;
-  if ( $cust_main->total_owed_date($self->_date) < $amount ) {
-    return ();
-  } else {
-    $cust_main->suspend;
-  }
 }
 
 =item cust_credit
@@ -445,7 +417,7 @@ sub generate_email {
 
     my $path = "$FS::UID::conf_dir/conf.$FS::UID::datasrc";
     my $file;
-    if ( defined($args{'_template'}) && length($args{'_template'})
+    if ( length($args{'_template'})
          && -e "$path/logo_". $args{'_template'}. ".png"
        )
     {
@@ -747,7 +719,7 @@ sub send_if_newest {
   $self->send(@_);
 }
 
-=item send_csv OPTION => VALUE, ...
+=item send_csv OPTIONS
 
 Sends invoice as a CSV data-file to a remote host with the specified protocol.
 
@@ -762,141 +734,7 @@ dir
 The file will be named "N-YYYYMMDDHHMMSS.csv" where N is the invoice number
 and YYMMDDHHMMSS is a timestamp.
 
-See L</print_csv> for a description of the output format.
-
-=cut
-
-sub send_csv {
-  my($self, %opt) = @_;
-
-  #create file(s)
-
-  my $spooldir = "/usr/local/etc/freeside/export.". datasrc. "/cust_bill";
-  mkdir $spooldir, 0700 unless -d $spooldir;
-
-  my $tracctnum = $self->invnum. time2str('-%Y%m%d%H%M%S', time);
-  my $file = "$spooldir/$tracctnum.csv";
-  
-  my ( $header, $detail ) = $self->print_csv(%opt, 'tracctnum' => $tracctnum );
-
-  open(CSV, ">$file") or die "can't open $file: $!";
-  print CSV $header;
-
-  print CSV $detail;
-
-  close CSV;
-
-  my $net;
-  if ( $opt{protocol} eq 'ftp' ) {
-    eval "use Net::FTP;";
-    die $@ if $@;
-    $net = Net::FTP->new($opt{server}) or die @$;
-  } else {
-    die "unknown protocol: $opt{protocol}";
-  }
-
-  $net->login( $opt{username}, $opt{password} )
-    or die "can't FTP to $opt{username}\@$opt{server}: login error: $@";
-
-  $net->binary or die "can't set binary mode";
-
-  $net->cwd($opt{dir}) or die "can't cwd to $opt{dir}";
-
-  $net->put($file) or die "can't put $file: $!";
-
-  $net->quit;
-
-  unlink $file;
-
-}
-
-=item spool_csv
-
-Spools CSV invoice data.
-
-Options are:
-
-=over 4
-
-=item format - 'default' or 'billco'
-
-=item dest - if set (to POST, EMAIL or FAX), only sends spools invoices if the customer has the corresponding invoice destinations set (see L<FS::cust_main_invoice>).
-
-=item agent_spools - if set to a true value, will spool to per-agent files rather than a single global file
-
-=back
-
-=cut
-
-sub spool_csv {
-  my($self, %opt) = @_;
-
-  my $cust_main = $self->cust_main;
-
-  if ( $opt{'dest'} ) {
-    my %invoicing_list = map { /^(POST|FAX)$/ or 'EMAIL' =~ /^(.*)$/; $1 => 1 }
-                             $cust_main->invoicing_list;
-    return 'N/A' unless $invoicing_list{$opt{'dest'}}
-                     || ! keys %invoicing_list;
-  }
-
-  my $spooldir = "/usr/local/etc/freeside/export.". datasrc. "/cust_bill";
-  mkdir $spooldir, 0700 unless -d $spooldir;
-
-  my $tracctnum = $self->invnum. time2str('-%Y%m%d%H%M%S', time);
-
-  my $file =
-    "$spooldir/".
-    ( $opt{'agent_spools'} ? 'agentnum'.$cust_main->agentnum : 'spool' ).
-    ( lc($opt{'format'}) eq 'billco' ? '-header' : '' ) .
-    '.csv';
-  
-  my ( $header, $detail ) = $self->print_csv(%opt, 'tracctnum' => $tracctnum );
-
-  open(CSV, ">>$file") or die "can't open $file: $!";
-  flock(CSV, LOCK_EX);
-  seek(CSV, 0, 2);
-
-  print CSV $header;
-
-  if ( lc($opt{'format'}) eq 'billco' ) {
-
-    flock(CSV, LOCK_UN);
-    close CSV;
-
-    $file =
-      "$spooldir/".
-      ( $opt{'agent_spools'} ? 'agentnum'.$cust_main->agentnum : 'spool' ).
-      '-detail.csv';
-
-    open(CSV,">>$file") or die "can't open $file: $!";
-    flock(CSV, LOCK_EX);
-    seek(CSV, 0, 2);
-  }
-
-  print CSV $detail;
-
-  flock(CSV, LOCK_UN);
-  close CSV;
-
-  return '';
-
-}
-
-=item print_csv OPTION => VALUE, ...
-
-Returns CSV data for this invoice.
-
-Options are:
-
-format - 'default' or 'billco'
-
-Returns a list consisting of two scalars.  The first is a single line of CSV
-header information for this invoice.  The second is one or more lines of CSV
-detail information for this invoice.
-
-If I<format> is not specified or "default", the fields of the CSV file are as
-follows:
+The fields of the CSV file is as follows:
 
 record_type, invnum, custnum, _date, charged, first, last, company, address1, address2, city, state, zip, country, pkg, setup, recur, sdate, edate
 
@@ -904,13 +742,13 @@ record_type, invnum, custnum, _date, charged, first, last, company, address1, ad
 
 =item record type - B<record_type> is either C<cust_bill> or C<cust_bill_pkg>
 
-B<record_type> is C<cust_bill> for the initial header line only.  The
+If B<record_type> is C<cust_bill>, this is a primary invoice record.  The
 last five fields (B<pkg> through B<edate>) are irrelevant, and all other
 fields are filled in.
 
-B<record_type> is C<cust_bill_pkg> for detail lines.  Only the first two fields
-(B<record_type> and B<invnum>) and the last five fields (B<pkg> through B<edate>)
-are filled in.
+If B<record_type> is C<cust_bill_pkg>, this is a line item record.  Only the
+first two fields (B<record_type> and B<invnum>) and the last five fields
+(B<pkg> through B<edate>) are filled in.
 
 =item invnum - invoice number
 
@@ -950,213 +788,101 @@ are filled in.
 
 =back
 
-If I<format> is "billco", the fields of the header CSV file are as follows:
-
-  +-------------------------------------------------------------------+
-  |                        FORMAT HEADER FILE                         |
-  |-------------------------------------------------------------------|
-  | Field | Description                   | Name       | Type | Width |
-  | 1     | N/A-Leave Empty               | RC         | CHAR |     2 |
-  | 2     | N/A-Leave Empty               | CUSTID     | CHAR |    15 |
-  | 3     | Transaction Account No        | TRACCTNUM  | CHAR |    15 |
-  | 4     | Transaction Invoice No        | TRINVOICE  | CHAR |    15 |
-  | 5     | Transaction Zip Code          | TRZIP      | CHAR |     5 |
-  | 6     | Transaction Company Bill To   | TRCOMPANY  | CHAR |    30 |
-  | 7     | Transaction Contact Bill To   | TRNAME     | CHAR |    30 |
-  | 8     | Additional Address Unit Info  | TRADDR1    | CHAR |    30 |
-  | 9     | Bill To Street Address        | TRADDR2    | CHAR |    30 |
-  | 10    | Ancillary Billing Information | TRADDR3    | CHAR |    30 |
-  | 11    | Transaction City Bill To      | TRCITY     | CHAR |    20 |
-  | 12    | Transaction State Bill To     | TRSTATE    | CHAR |     2 |
-  | 13    | Bill Cycle Close Date         | CLOSEDATE  | CHAR |    10 |
-  | 14    | Bill Due Date                 | DUEDATE    | CHAR |    10 |
-  | 15    | Previous Balance              | BALFWD     | NUM* |     9 |
-  | 16    | Pmt/CR Applied                | CREDAPPLY  | NUM* |     9 |
-  | 17    | Total Current Charges         | CURRENTCHG | NUM* |     9 |
-  | 18    | Total Amt Due                 | TOTALDUE   | NUM* |     9 |
-  | 19    | Total Amt Due                 | AMTDUE     | NUM* |     9 |
-  | 20    | 30 Day Aging                  | AMT30      | NUM* |     9 |
-  | 21    | 60 Day Aging                  | AMT60      | NUM* |     9 |
-  | 22    | 90 Day Aging                  | AMT90      | NUM* |     9 |
-  | 23    | Y/N                           | AGESWITCH  | CHAR |     1 |
-  | 24    | Remittance automation         | SCANLINE   | CHAR |   100 |
-  | 25    | Total Taxes & Fees            | TAXTOT     | NUM* |     9 |
-  | 26    | Customer Reference Number     | CUSTREF    | CHAR |    15 |
-  | 27    | Federal Tax***                | FEDTAX     | NUM* |     9 |
-  | 28    | State Tax***                  | STATETAX   | NUM* |     9 |
-  | 29    | Other Taxes & Fees***         | OTHERTAX   | NUM* |     9 |
-  +-------+-------------------------------+------------+------+-------+
-
-If I<format> is "billco", the fields of the detail CSV file are as follows:
-
-                                  FORMAT FOR DETAIL FILE
-        |                            |           |      |
-  Field | Description                | Name      | Type | Width
-  1     | N/A-Leave Empty            | RC        | CHAR |     2
-  2     | N/A-Leave Empty            | CUSTID    | CHAR |    15
-  3     | Account Number             | TRACCTNUM | CHAR |    15
-  4     | Invoice Number             | TRINVOICE | CHAR |    15
-  5     | Line Sequence (sort order) | LINESEQ   | NUM  |     6
-  6     | Transaction Detail         | DETAILS   | CHAR |   100
-  7     | Amount                     | AMT       | NUM* |     9
-  8     | Line Format Control**      | LNCTRL    | CHAR |     2
-  9     | Grouping Code              | GROUP     | CHAR |     2
-  10    | User Defined               | ACCT CODE | CHAR |    15
-
 =cut
 
-sub print_csv {
+sub send_csv {
   my($self, %opt) = @_;
-  
+
+  #part one: create file
+
+  my $spooldir = "/usr/local/etc/freeside/export.". datasrc. "/cust_bill";
+  mkdir $spooldir, 0700 unless -d $spooldir;
+
+  my $file = $spooldir. '/'. $self->invnum. time2str('-%Y%m%d%H%M%S.csv', time);
+
+  open(CSV, ">$file") or die "can't open $file: $!";
+
   eval "use Text::CSV_XS";
   die $@ if $@;
 
-  my $cust_main = $self->cust_main;
-
   my $csv = Text::CSV_XS->new({'always_quote'=>1});
 
-  if ( lc($opt{'format'}) eq 'billco' ) {
+  my $cust_main = $self->cust_main;
 
-    my $taxtotal = 0;
-    $taxtotal += $_->{'amount'} foreach $self->_items_tax;
+  $csv->combine(
+    'cust_bill',
+    $self->invnum,
+    $self->custnum,
+    time2str("%x", $self->_date),
+    sprintf("%.2f", $self->charged),
+    ( map { $cust_main->getfield($_) }
+        qw( first last company address1 address2 city state zip country ) ),
+    map { '' } (1..5),
+  ) or die "can't create csv";
+  print CSV $csv->string. "\n";
 
-    my $duedate = '';
-    if (    $conf->exists('invoice_default_terms') 
-         && $conf->config('invoice_default_terms')=~ /^\s*Net\s*(\d+)\s*$/ ) {
-      $duedate = time2str("%m/%d/%Y", $self->_date + ($1*86400) );
-    }
+  #new charges (false laziness w/print_text and _items stuff)
+  foreach my $cust_bill_pkg ( $self->cust_bill_pkg ) {
 
-    my( $previous_balance, @unused ) = $self->previous; #previous balance
-
-    my $pmt_cr_applied = 0;
-    $pmt_cr_applied += $_->{'amount'}
-      foreach ( $self->_items_payments, $self->_items_credits ) ;
-
-    my $totaldue = sprintf('%.2f', $self->owed + $previous_balance);
-
-    $csv->combine(
-      '',                         #  1 | N/A-Leave Empty               CHAR   2
-      '',                         #  2 | N/A-Leave Empty               CHAR  15
-      $opt{'tracctnum'},          #  3 | Transaction Account No        CHAR  15
-      $self->invnum,              #  4 | Transaction Invoice No        CHAR  15
-      $cust_main->zip,            #  5 | Transaction Zip Code          CHAR   5
-      $cust_main->company,        #  6 | Transaction Company Bill To   CHAR  30
-      #$cust_main->payname,        #  7 | Transaction Contact Bill To   CHAR  30
-      $cust_main->contact,        #  7 | Transaction Contact Bill To   CHAR  30
-      $cust_main->address2,       #  8 | Additional Address Unit Info  CHAR  30
-      $cust_main->address1,       #  9 | Bill To Street Address        CHAR  30
-      '',                         # 10 | Ancillary Billing Information CHAR  30
-      $cust_main->city,           # 11 | Transaction City Bill To      CHAR  20
-      $cust_main->state,          # 12 | Transaction State Bill To     CHAR   2
-
-      # XXX ?
-      time2str("%m/%d/%Y", $self->_date), # 13 | Bill Cycle Close Date CHAR  10
-
-      # XXX ?
-      $duedate,                   # 14 | Bill Due Date                 CHAR  10
-
-      $previous_balance,          # 15 | Previous Balance              NUM*   9
-      $pmt_cr_applied,            # 16 | Pmt/CR Applied                NUM*   9
-      sprintf("%.2f", $self->charged), # 17 | Total Current Charges    NUM*   9
-      $totaldue,                  # 18 | Total Amt Due                 NUM*   9
-      $totaldue,                  # 19 | Total Amt Due                 NUM*   9
-      '',                         # 20 | 30 Day Aging                  NUM*   9
-      '',                         # 21 | 60 Day Aging                  NUM*   9
-      '',                         # 22 | 90 Day Aging                  NUM*   9
-      'N',                        # 23 | Y/N                           CHAR   1
-      '',                         # 24 | Remittance automation         CHAR 100
-      $taxtotal,                  # 25 | Total Taxes & Fees            NUM*   9
-      $self->custnum,             # 26 | Customer Reference Number     CHAR  15
-      '0',                        # 27 | Federal Tax***                NUM*   9
-      sprintf("%.2f", $taxtotal), # 28 | State Tax***                  NUM*   9
-      '0',                        # 29 | Other Taxes & Fees***         NUM*   9
-    );
-
-  } else {
-  
-    $csv->combine(
-      'cust_bill',
-      $self->invnum,
-      $self->custnum,
-      time2str("%x", $self->_date),
-      sprintf("%.2f", $self->charged),
-      ( map { $cust_main->getfield($_) }
-          qw( first last company address1 address2 city state zip country ) ),
-      map { '' } (1..5),
-    ) or die "can't create csv";
-  }
-
-  my $header = $csv->string. "\n";
-
-  my $detail = '';
-  if ( lc($opt{'format'}) eq 'billco' ) {
-
-    my $lineseq = 0;
-    foreach my $item ( $self->_items_pkg ) {
-
-      $csv->combine(
-        '',                     #  1 | N/A-Leave Empty            CHAR   2
-        '',                     #  2 | N/A-Leave Empty            CHAR  15
-        $opt{'tracctnum'},      #  3 | Account Number             CHAR  15
-        $self->invnum,          #  4 | Invoice Number             CHAR  15
-        $lineseq++,             #  5 | Line Sequence (sort order) NUM    6
-        $item->{'description'}, #  6 | Transaction Detail         CHAR 100
-        $item->{'amount'},      #  7 | Amount                     NUM*   9
-        '',                     #  8 | Line Format Control**      CHAR   2
-        '',                     #  9 | Grouping Code              CHAR   2
-        '',                     # 10 | User Defined               CHAR  15
+    my($pkg, $setup, $recur, $sdate, $edate);
+    if ( $cust_bill_pkg->pkgnum ) {
+    
+      ($pkg, $setup, $recur, $sdate, $edate) = (
+        $cust_bill_pkg->cust_pkg->part_pkg->pkg,
+        ( $cust_bill_pkg->setup != 0
+          ? sprintf("%.2f", $cust_bill_pkg->setup )
+          : '' ),
+        ( $cust_bill_pkg->recur != 0
+          ? sprintf("%.2f", $cust_bill_pkg->recur )
+          : '' ),
+        time2str("%x", $cust_bill_pkg->sdate),
+        time2str("%x", $cust_bill_pkg->edate),
       );
 
-      $detail .= $csv->string. "\n";
-
+    } else { #pkgnum tax
+      next unless $cust_bill_pkg->setup != 0;
+      my $itemdesc = defined $cust_bill_pkg->dbdef_table->column('itemdesc')
+                       ? ( $cust_bill_pkg->itemdesc || 'Tax' )
+                       : 'Tax';
+      ($pkg, $setup, $recur, $sdate, $edate) =
+        ( $itemdesc, sprintf("%10.2f",$cust_bill_pkg->setup), '', '', '' );
     }
 
-  } else {
-
-    foreach my $cust_bill_pkg ( $self->cust_bill_pkg ) {
-
-      my($pkg, $setup, $recur, $sdate, $edate);
-      if ( $cust_bill_pkg->pkgnum ) {
-      
-        ($pkg, $setup, $recur, $sdate, $edate) = (
-          $cust_bill_pkg->cust_pkg->part_pkg->pkg,
-          ( $cust_bill_pkg->setup != 0
-            ? sprintf("%.2f", $cust_bill_pkg->setup )
-            : '' ),
-          ( $cust_bill_pkg->recur != 0
-            ? sprintf("%.2f", $cust_bill_pkg->recur )
-            : '' ),
-          ( $cust_bill_pkg->sdate 
-            ? time2str("%x", $cust_bill_pkg->sdate)
-            : '' ),
-          ($cust_bill_pkg->edate 
-            ?time2str("%x", $cust_bill_pkg->edate)
-            : '' ),
-        );
-  
-      } else { #pkgnum tax
-        next unless $cust_bill_pkg->setup != 0;
-        my $itemdesc = defined $cust_bill_pkg->dbdef_table->column('itemdesc')
-                         ? ( $cust_bill_pkg->itemdesc || 'Tax' )
-                         : 'Tax';
-        ($pkg, $setup, $recur, $sdate, $edate) =
-          ( $itemdesc, sprintf("%10.2f",$cust_bill_pkg->setup), '', '', '' );
-      }
-  
-      $csv->combine(
-        'cust_bill_pkg',
-        $self->invnum,
-        ( map { '' } (1..11) ),
-        ($pkg, $setup, $recur, $sdate, $edate)
-      ) or die "can't create csv";
-
-      $detail .= $csv->string. "\n";
-
-    }
+    $csv->combine(
+      'cust_bill_pkg',
+      $self->invnum,
+      ( map { '' } (1..11) ),
+      ($pkg, $setup, $recur, $sdate, $edate)
+    ) or die "can't create csv";
+    print CSV $csv->string. "\n";
 
   }
 
-  ( $header, $detail );
+  close CSV or die "can't close CSV: $!";
+
+  #part two: upload it
+
+  my $net;
+  if ( $opt{protocol} eq 'ftp' ) {
+    eval "use Net::FTP;";
+    die $@ if $@;
+    $net = Net::FTP->new($opt{server}) or die @$;
+  } else {
+    die "unknown protocol: $opt{protocol}";
+  }
+
+  $net->login( $opt{username}, $opt{password} )
+    or die "can't FTP to $opt{username}\@$opt{server}: login error: $@";
+
+  $net->binary or die "can't set binary mode";
+
+  $net->cwd($opt{dir}) or die "can't cwd to $opt{dir}";
+
+  $net->put($file) or die "can't put $file: $!";
+
+  $net->quit;
+
+  unlink $file;
 
 }
 
@@ -1581,7 +1307,7 @@ L<Time::Local> and L<Date::Parse> for conversion functions.
 
 =cut
 
-#still some false laziness w/print_text and print_html (and send_csv) (mostly print_text should use _items stuff though)
+#still some false laziness w/print_text (mostly print_text should use _items stuff though)
 sub print_latex {
 
   my( $self, $today, $template ) = @_;
@@ -2008,7 +1734,6 @@ when emailing the invoice as part of a multipart/related MIME email.
 
 =cut
 
-#some falze laziness w/print_text and print_latex (and send_csv)
 sub print_html {
   my( $self, $today, $template, $cid ) = @_;
   $today ||= time;
@@ -2052,25 +1777,17 @@ sub print_html {
 #    'conf_dir'     => "$FS::UID::conf_dir/conf.$FS::UID::datasrc",
   );
 
-  if (
-         defined( $conf->config_orbase('invoice_htmlreturnaddress', $template) )
-      && length(  $conf->config_orbase('invoice_htmlreturnaddress', $template) )
-  ) {
-    $invoice_data{'returnaddress'} =
-      join("\n", $conf->config('invoice_htmlreturnaddress', $template) );
-  } else {
-    $invoice_data{'returnaddress'} =
-      join("\n", map { 
-                       s/~/&nbsp;/g;
-                       s/\\\\\*?\s*$/<BR>/;
-                       s/\\hyphenation\{[\w\s\-]+\}//;
-                       $_;
-                     }
-                     $conf->config_orbase( 'invoice_latexreturnaddress',
-                                           $template
-                                         )
-          );
-  }
+  $invoice_data{'returnaddress'} =
+    length( $conf->config_orbase('invoice_htmlreturnaddress', $template) )
+      ? join("\n", $conf->config('invoice_htmlreturnaddress', $template) )
+      : join("\n", map { 
+                         s/~/&nbsp;/g;
+                         s/\\\\\*?\s*$/<BR>/;
+                         s/\\hyphenation\{[\w\s\-]+\}//;
+                         $_;
+                       }
+                       $conf->config_orbase('invoice_latexreturnaddress', $template)
+            );
 
   my $countrydefault = $conf->config('countrydefault') || 'US';
   if ( $cust_main->country eq $countrydefault ) {
@@ -2080,26 +1797,20 @@ sub print_html {
       encode_entities(code2country($cust_main->country));
   }
 
-  if (
-         defined( $conf->config_orbase('invoice_htmlnotes', $template) )
-      && length(  $conf->config_orbase('invoice_htmlnotes', $template) )
-  ) {
-    $invoice_data{'notes'} =
-      join("\n", $conf->config_orbase('invoice_htmlnotes', $template) );
-  } else {
-    $invoice_data{'notes'} = 
-      join("\n", map { 
-                       s/%%(.*)$/<!-- $1 -->/;
-                       s/\\section\*\{\\textsc\{(.)(.*)\}\}/<p><b><font size="+1">$1<\/font>\U$2<\/b>/;
-                       s/\\begin\{enumerate\}/<ol>/;
-                       s/\\item /  <li>/;
-                       s/\\end\{enumerate\}/<\/ol>/;
-                       s/\\textbf\{(.*)\}/<b>$1<\/b>/;
-                       $_;
-                     } 
-                     $conf->config_orbase('invoice_latexnotes', $template)
-          );
-  }
+  $invoice_data{'notes'} =
+    length($conf->config_orbase('invoice_htmlnotes', $template))
+      ? join("\n", $conf->config_orbase('invoice_htmlnotes', $template) )
+      : join("\n", map { 
+                         s/%%(.*)$/<!-- $1 -->/;
+                         s/\\section\*\{\\textsc\{(.)(.*)\}\}/<p><b><font size="+1">$1<\/font>\U$2<\/b>/;
+                         s/\\begin\{enumerate\}/<ol>/;
+                         s/\\item /  <li>/;
+                         s/\\end\{enumerate\}/<\/ol>/;
+                         s/\\textbf\{(.*)\}/<b>$1<\/b>/;
+                         $_;
+                       } 
+                       $conf->config_orbase('invoice_latexnotes', $template)
+            );
 
 #  #do variable substitutions in notes
 #  $invoice_data{'notes'} =
@@ -2108,18 +1819,12 @@ sub print_html {
 #        $conf->config_orbase('invoice_latexnotes', $suffix)
 #    );
 
-  if (
-         defined( $conf->config_orbase('invoice_htmlfooter', $template) )
-      && length(  $conf->config_orbase('invoice_htmlfooter', $template) )
-  ) {
    $invoice_data{'footer'} =
-     join("\n", $conf->config_orbase('invoice_htmlfooter', $template) );
-  } else {
-   $invoice_data{'footer'} =
-       join("\n", map { s/~/&nbsp;/g; s/\\\\\*?\s*$/<BR>/; $_; }
-                      $conf->config_orbase('invoice_latexfooter', $template)
-           );
-  }
+     length($conf->config_orbase('invoice_htmlfooter', $template))
+       ? join("\n", $conf->config_orbase('invoice_htmlfooter', $template) )
+       : join("\n", map { s/~/&nbsp;/g; s/\\\\\*?\s*$/<BR>/; $_; }
+                        $conf->config_orbase('invoice_latexfooter', $template)
+             );
 
   $invoice_data{'po_line'} =
     (  $cust_main->payby eq 'BILL' && $cust_main->payinfo )
@@ -2407,7 +2112,6 @@ sub _items_payments {
   @b;
 
 }
-
 
 =back
 

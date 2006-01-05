@@ -11,14 +11,8 @@
   }
 %>
 
-<%= include('/elements/xmlhttp.html',
-              'method' => 'POST',
-              'url'    => $action,
-              'subs'   => [ 'start_job' ],
-           )
-%>
+<SCRIPT TYPE="text/javascript" SRC="../elements/jsrsClient.js"></SCRIPT>
 <SCRIPT TYPE="text/javascript" SRC="../elements/overlibmws.js"></SCRIPT>
-<SCRIPT TYPE="text/javascript" SRC="../elements/overlibmws_iframe.js"></SCRIPT>
 <SCRIPT TYPE="text/javascript">
 function OLiframeContent(src, width, height, name) {
   return ('<iframe src="'+src+'" width="'+width+'" height="'+height+'"'
@@ -27,8 +21,6 @@ function OLiframeContent(src, width, height, name) {
 }
 
 function <%=$key%>process () {
-
-  //alert('<%=$key%>process for form <%=$formname%>');
 
   document.<%=$formname%>.submit.disabled=true;
 
@@ -43,10 +35,8 @@ function <%=$key%>process () {
        )
     {
         if ( field.type == 'select-multiple' ) {
-          //alert('select-multiple ' + field.name);
           for (var j=0; j < field.options.length; j++) {
             if ( field.options[j].selected ) {
-              //alert(field.name + ' => ' + field.options[j].value);
               Hash[x++] = field.name;
               Hash[x++] = field.options[j].value;
             }
@@ -63,12 +53,8 @@ function <%=$key%>process () {
     }
   }
 
-  // jsrsPOST = true;
-  // jsrsExecute( '<%= $action %>', <%=$key%>myCallback, 'start_job', Hash );
-
-  //alert('start_job( ' + Hash + ', <%=$key%>myCallback )' );
-  //alert('start_job()' );
-  start_job( Hash, <%=$key%>myCallback );
+  jsrsPOST = true;
+  jsrsExecute( '<%= $action %>', <%=$key%>myCallback, 'start_job', Hash );
 
 }
 

@@ -1,8 +1,8 @@
-# BEGIN BPS TAGGED BLOCK {{{
+# {{{ BEGIN BPS TAGGED BLOCK
 # 
 # COPYRIGHT:
 #  
-# This software is Copyright (c) 1996-2005 Best Practical Solutions, LLC 
+# This software is Copyright (c) 1996-2004 Best Practical Solutions, LLC 
 #                                          <jesse@bestpractical.com>
 # 
 # (Except where explicitly superseded by other copyright notices)
@@ -42,7 +42,7 @@
 # works based on those contributions, and sublicense and distribute
 # those contributions and any derivatives thereof.
 # 
-# END BPS TAGGED BLOCK }}}
+# }}} END BPS TAGGED BLOCK
 package RT::Base;
 use Carp;
 use Scalar::Util;
@@ -52,18 +52,9 @@ use vars qw(@EXPORT);
 
 @EXPORT=qw(loc CurrentUser);
 
-=head1 NAME
-
-RT::Base
-
-
-=head1 SYNOPSIS
-
-=head1 DESCRIPTION
-
 =head1 FUNCTIONS
 
-=cut
+
 
 # {{{ sub CurrentUser 
 
@@ -81,9 +72,6 @@ sub CurrentUser {
     if (@_) {
         $self->{'original_user'} = $self->{'user'};
         $self->{'user'} = shift;
-        # We need to weaken the CurrentUser ($self->{'user'}) reference
-        # if the object in question is the currentuser object.
-        # This avoids memory leaks.
         Scalar::Util::weaken($self->{'user'}) if (ref($self->{'user'}) &&
                                                     $self->{'user'} == $self );
     }
@@ -91,6 +79,7 @@ sub CurrentUser {
     unless ( ref( $self->{'user'}) ) {
         $RT::Logger->err( "$self was created without a CurrentUser\n" . Carp::cluck() );
         return (0);
+        die;
     }
     return ( $self->{'user'} );
 }
@@ -109,7 +98,7 @@ sub OriginalUser {
 }
 
 
-=head2 loc LOC_STRING
+=item loc LOC_STRING
 
 l is a method which takes a loc string
 to this object's CurrentUser->LanguageHandle for localization. 
@@ -128,18 +117,6 @@ sub loc {
     my $self = shift;
     if (my $user = $self->OriginalUser) {
         return $user->loc(@_);
-    }
-    else {
-        use Carp;
-        Carp::confess("No currentuser");
-        return ("Critical error:$self has no CurrentUser", $self);
-    }
-}
-
-sub loc_fuzzy {
-    my $self = shift;
-    if (my $user = $self->OriginalUser) {
-        return $user->loc_fuzzy(@_);
     }
     else {
         use Carp;

@@ -3,13 +3,11 @@ package FS::TicketSystem::RT_External;
 use strict;
 use vars qw( $conf $default_queueid
              $priority_field $priority_field_queue $field
-	     $dbh $external_url );
+	     $external_dbh $external_url );
 use URI::Escape;
-use FS::UID qw(dbh);
-use FS::Record qw(qsearchs);
-use FS::cust_main;
+use FS::UID;
 
-FS::UID->install_callback( sub { 
+install_callback FS::UID sub { 
   my $conf = new FS::Conf;
   $default_queueid = $conf->config('ticket_system-default_queueid');
   $priority_field =
@@ -26,23 +24,24 @@ FS::UID->install_callback( sub {
   }
 
   $external_url = '';
-  $dbh = dbh;
   if ($conf->config('ticket_system') eq 'RT_External') {
     my ($datasrc, $user, $pass) = $conf->config('ticket_system-rt_external_datasrc');
-    $dbh = DBI->connect($datasrc, $user, $pass, { 'ChopBlanks' => 1 })
+    $external_dbh = DBI->connect($datasrc, $user, $pass, { 'ChopBlanks' => 1 })
       or die "RT_External DBI->connect error: $DBI::errstr\n";
 
     $external_url = $conf->config('ticket_system-rt_external_url');
   }
 
-} );
+};
 
 sub num_customer_tickets {
-  my( $self, $custnum, $priority ) = @_;
+  my( $self, $custnum, $priority, $dbh ) = @_;
+
+  $dbh ||= $external_dbh;
 
   my( $from_sql, @param) = $self->_from_customer( $custnum, $priority );
 
-  my $sql = "SELECT COUNT(*) $from_sql";
+  my $sql = "select count(*) $from_sql";
   my $sth = $dbh->prepare($sql) or die $dbh->errstr. " preparing $sql";
   $sth->execute(@param)         or die $sth->errstr. " executing $sql";
 
@@ -51,13 +50,15 @@ sub num_customer_tickets {
 }
 
 sub customer_tickets {
-  my( $self, $custnum, $limit, $priority ) = @_;
+  my( $self, $custnum, $limit, $priority, $dbh ) = @_;
   $limit ||= 0;
 
+  $dbh ||= $external_dbh;
+
   my( $from_sql, @param) = $self->_from_customer( $custnum, $priority );
-  my $sql = "SELECT tickets.*, queues.name".
-            ( length($priority) ? ", objectcustomfieldvalues.content" : '' ).
-            " $from_sql ORDER BY priority DESC LIMIT $limit";
+  my $sql = "select tickets.*, queues.name".
+            ( length($priority) ? ", ticketcustomfieldvalues.content" : '' ).
+            " $from_sql order by priority desc limit $limit";
   my $sth = $dbh->prepare($sql) or die $dbh->errstr. "preparing $sql";
   $sth->execute(@param)         or die $sth->errstr. "executing $sql";
 
@@ -75,23 +76,9 @@ sub _from_customer {
   my $where = '';
   if ( defined($priority) ) {
 
-    my $queue_sql = " ObjectCustomFields.ObjectId = ( SELECT id FROM queues
-                                                       WHERE queues.name = ? )
-                      OR ( ? = '' AND ObjectCustomFields.ObjectId = 0 )";
-
-    my $customfield_sql =
-      "customfield = ( 
-        SELECT CustomFields.Id FROM CustomFields
-                  JOIN ObjectCustomFields
-                    ON ( CustomFields.id = ObjectCustomFields.CustomField )
-         WHERE LookupType = 'RT::Queue-RT::Ticket'
-           AND name = ?
-           AND ( $queue_sql )
-       )";
-
-    push @param, $priority_field,
-                 $priority_field_queue,
-                 $priority_field_queue;
+    my $queue_sql = " customfields.queue = ( select id from queues
+                                              where queues.name = ? )
+                      or ( ? = '' and customfields.queue = 0 )";
 
     if ( length($priority) ) {
       #$where = "    
@@ -103,35 +90,40 @@ sub _from_customer {
       #                                 )
       #          )
       #";
-      unshift @param, $priority;
+      push @param, $priority;
 
-      $join = "JOIN ObjectCustomFieldValues
-                 ON ( tickets.id = ObjectCustomFieldValues.ObjectId )";
+      $join = "join TicketCustomFieldValues
+                 on ( tickets.id = TicketCustomFieldValues.ticket )";
       
-      $where = " AND content = ?
-                 AND ObjectType = 'RT::Ticket'
-                 AND $customfield_sql";
-
+      $where = "and content = ?
+                and customfield = ( select id from customfields
+                                     where name = ?
+                                       and ( $queue_sql )
+                                  )
+               ";
     } else {
-
       $where =
-               "AND 0 = ( SELECT count(*) FROM ObjectCustomFieldValues
-                           WHERE ObjectId    = tickets.id
-                             AND ObjectType  = 'RT::Ticket'
-                             AND $customfield_sql
+               "and 0 = ( select count(*) from TicketCustomFieldValues
+                           where ticket = tickets.id
+                             and customfield = ( select id from customfields
+                                                  where name = ?
+                                                    and ( $queue_sql )
+                                               )
                         )
                ";
     }
-
+    push @param, $priority_field,
+                 $priority_field_queue,
+                 $priority_field_queue;
   }
 
   my $sql = "
-                    FROM tickets
-                    JOIN queues ON ( tickets.queue = queues.id )
-                    JOIN links ON ( tickets.id = links.localbase )
+                    from tickets
+                    join queues on ( tickets.queue = queues.id )
+                    join links on ( tickets.id = links.localbase )
                     $join 
-       WHERE ( status = 'new' OR status = 'open' OR status = 'stalled' )
-         AND target = 'freeside://freeside/cust_main/$custnum'
+       where ( status = 'new' or status = 'open' or status = 'stalled' )
+         and target = 'freeside://freeside/cust_main/$custnum'
          $where
   ";
 
@@ -139,14 +131,12 @@ sub _from_customer {
 
 }
 
-sub href_customer_tickets {
+sub _href_customer_tickets {
   my( $self, $custnum, $priority ) = @_;
-
-  my $href = $self->baseurl;
 
   #i snarfed this from an RT bookmarked search, it could be unescaped in the
   #source for readability and run through uri_escape
-  $href .= 
+  my $href = 
     'Search/Results.html?Order=ASC&Query=%20MemberOf%20%3D%20%27freeside%3A%2F%2Ffreeside%2Fcust_main%2F'.
     $custnum.
     '%27%20%20AND%20%28%20Status%20%3D%20%27open%27%20%20OR%20Status%20%3D%20%27new%27%20%20OR%20Status%20%3D%20%27stalled%27%20%29%20'
@@ -188,54 +178,35 @@ sub href_customer_tickets {
 
 }
 
-sub href_new_ticket {
-  my( $self, $custnum_or_cust_main, $requestors ) = @_;
+sub href_customer_tickets {
+  my $self = shift;
+  $self->baseurl. $self->_href_customer_tickets(@_);
+}
 
-  my( $custnum, $cust_main );
-  if ( ref($custnum_or_cust_main) ) {
-    $cust_main = $custnum_or_cust_main;
-    $custnum = $cust_main->custnum;
-  } else {
-    $custnum = $custnum_or_cust_main;
-    $cust_main = qsearchs('cust_main', { 'custnum' => $custnum } );
-  }
-  my $queueid = $cust_main->agent->ticketing_queueid || $default_queueid;
 
-  $self->baseurl.
+sub _href_new_ticket {
+  my( $self, $custnum, $requestors ) = @_;
+
   'Ticket/Create.html?'.
-    "Queue=$queueid".
+    "Queue=$default_queueid".
     "&new-MemberOf=freeside://freeside/cust_main/$custnum".
     ( $requestors ? '&Requestors='. uri_escape($requestors) : '' )
     ;
 }
 
-sub href_ticket {
+sub href_new_ticket {
+  my $self = shift;
+  $self->baseurl. $self->_href_new_ticket(@_);
+}
+
+sub _href_ticket {
   my($self, $ticketnum) = @_;
-  $self->baseurl. 'Ticket/Display.html?id='.$ticketnum;
+  'Ticket/Display.html?id='.$ticketnum;
 }
 
-sub queues {
-  my($self) = @_;
-
-  my $sql = "SELECT id, name FROM queues WHERE disabled = 0";
-  my $sth = $dbh->prepare($sql) or die $dbh->errstr. " preparing $sql";
-  $sth->execute()               or die $sth->errstr. " executing $sql";
-
-  map { $_->[0] => $_->[1] } @{ $sth->fetchall_arrayref([]) };
-
-}
-
-sub queue {
-  my($self, $queueid) = @_;
-
-  return '' unless $queueid;
-
-  my $sql = "SELECT name FROM queues WHERE id = ?";
-  my $sth = $dbh->prepare($sql) or die $dbh->errstr. " preparing $sql";
-  $sth->execute($queueid)       or die $sth->errstr. " executing $sql";
-
-  $sth->fetchrow_arrayref->[0];
-
+sub href_ticket {
+  my $self = shift;
+  $self->baseurl. $self->_href_ticket(@_);
 }
 
 sub baseurl {

@@ -45,9 +45,8 @@ Run remote commands via SSH, for forwards.  You will need to
 The following variables are available for interpolation (prefixed with
 <code>new_</code> or <code>old_</code> for replace operations):
 <UL>
-  <LI><code>$username</code> - username of forward source
-  <LI><code>$domain</code> - domain of forward source
-  <LI><code>$source</code> - forward source ($username@$domain)
+  <LI><code>$username</code>
+  <LI><code>$domain</code>
   <LI><code>$destination</code> - forward destination
   <LI>All other fields in <a href="../docs/schema.html#svc_forward">svc_forward</a> are also available.
 </UL>
@@ -69,7 +68,6 @@ sub _export_delete {
 sub _export_command {
   my ( $self, $action, $svc_forward ) = (shift, shift, shift);
   my $command = $self->option($action);
-  return '' if $command =~ /^\s*$/;
 
   #set variable for the command
   no strict 'vars';
@@ -78,17 +76,10 @@ sub _export_command {
     ${$_} = $svc_forward->getfield($_) foreach $svc_forward->fields;
   }
 
-  if ( $svc_forward->srcsvc ) {
-    my $srcsvc_acct = $svc_forward->srcsvc_acct;
-    $username = $srcsvc_acct->username;
-    $domain   = $srcsvc_acct->domain;
-    $source   = $srcsvc_acct->email;
-  } else {
-    $source = $svc_forward->src;
-    ( $username, $domain ) = split(/\@/, $source);
-  }
-
-  if ($svc_forward->dstsvc) {
+  my $svc_acct = $svc_forward->srcsvc_acct;
+  $username = $svc_acct->username;
+  $domain = $svc_acct->domain;
+  if ($svc_forward->dstsvc_acct) {
     $destination = $svc_forward->dstsvc_acct->email;
   } else {
     $destination = $svc_forward->dst;
@@ -115,33 +106,19 @@ sub _export_replace {
     ${"new_$_"} = $new->getfield($_) foreach $new->fields;
   }
 
-  if ( $old->srcsvc ) {
-    my $srcsvc_acct = $old->srcsvc_acct;
-    $old_username = $srcsvc_acct->username;
-    $old_domain   = $srcsvc_acct->domain;
-    $old_source   = $srcsvc_acct->email;
-  } else {
-    $old_source = $old->src;
-    ( $old_username, $old_domain ) = split(/\@/, $old_source);
-  }
-
-  if ( $old->dstsvc ) {
+  my $old_svc_acct = $old->srcsvc_acct;
+  $old_username = $old_svc_acct->username;
+  $old_domain = $old_svc_acct->domain;
+  if ($old->dstsvc_acct) {
     $old_destination = $old->dstsvc_acct->email;
   } else {
     $old_destination = $old->dst;
   }
 
-  if ( $new->srcsvc ) {
-    my $srcsvc_acct = $new->srcsvc_acct;
-    $new_username = $srcsvc_acct->username;
-    $new_domain   = $srcsvc_acct->domain;
-    $new_source   = $srcsvc_acct->email;
-  } else {
-    $new_source = $new->src;
-    ( $new_username, $new_domain ) = split(/\@/, $new_source);
-  }
-
-  if ( $new->dstsvc ) {
+  my $new_svc_acct = $new->srcsvc_acct;
+  $new_username = $new_svc_acct->username;
+  $new_domain = $new_svc_acct->domain;
+  if ($new->dstsvc) {
     $new_destination = $new->dstsvc_acct->email;
   } else {
     $new_destination = $new->dst;

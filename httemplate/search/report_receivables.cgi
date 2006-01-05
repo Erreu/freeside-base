@@ -118,18 +118,14 @@ END
   my $conf = new FS::Conf;
   my $money_char = $conf->config('money_char') || '$';
 
-  my $align = join('', map { /#/ ? 'r' : 'l' } FS::UI::Web::cust_header() ).
-             'crrrrr';
-
-  my $clink = [ "${p}view/cust_main.cgi?", 'custnum' ];
-
 %><%= include( 'elements/search.html',
                  'title'       => 'Accounts Receivable Aging Summary',
                  'name'        => 'customers',
                  'query'       => $sql_query,
                  'count_query' => $count_sql,
                  'header'      => [
-                                    FS::UI::Web::cust_header(),
+                                    '#',
+                                    'Customer',
                                     'Status', # (me)',
                                     #'Status', # (cust_main)',
                                     '0-30',
@@ -139,12 +135,8 @@ END
                                     'Total',
                                   ],
                  'footer'      => [
+                                    '',
                                     'Total',
-                                    ( map '',
-                                          ( 1 .. 
-                                            scalar(FS::UI::Web::cust_header()-1)
-                                          )
-                                    ),
                                     '',
                                     #'',
                                     sprintf( $money_char.'%.2f',
@@ -159,7 +151,8 @@ END
                                              $row->{'owed_total'} ),
                                   ],
                  'fields'      => [
-                                    \&FS::UI::Web::cust_fields,
+                                    'custnum',
+                                    'name',
                                     sub {
                                           my $row = shift;
                                           my $status = 'Cancelled';
@@ -187,7 +180,8 @@ END
                                                    shift->get('owed_total') ) },
                                   ],
                  'links'       => [
-                                    ( map $clink, FS::UI::Web::cust_header() ),
+                                    [ "${p}view/cust_main.cgi?", 'custnum' ],
+                                    [ "${p}view/cust_main.cgi?", 'custnum' ],
                                     '',
                                     #'',
                                     '',
@@ -197,15 +191,14 @@ END
                                     '',
                                   ],
                  #'align'       => 'rlccrrrrr',
-                 'align'       => $align,
+                 'align'       => 'rlcrrrrr',
                  #'size'        => [ '', '', '-1', '-1', '', '', '', '',  '', ],
                  #'style'       => [ '', '',  'b',  'b', '', '', '', '', 'b', ],
-                 'size'        => [ ( map '', FS::UI::Web::cust_header() ),
-                                    '-1', '', '', '', '',  '', ],
-                 'style'       => [ ( map '', FS::UI::Web::cust_header() ),
-                                    'b', '', '', '', '', 'b', ],
+                 'size'        => [ '', '', '-1', '', '', '', '',  '', ],
+                 'style'       => [ '', '',  'b', '', '', '', '', 'b', ],
                  'color'       => [
-                                    ( map '', FS::UI::Web::cust_header() ),
+                                    '',
+                                    '',
                                     sub {  
                                           my $row = shift;
                                           my $status = 'Cancelled';

@@ -1,8 +1,9 @@
 package FS::Record;
 
 use strict;
-use vars qw( $AUTOLOAD @ISA @EXPORT_OK $DEBUG
-             $me %virtual_fields_cache $nowarn_identical );
+use vars qw( $dbdef_file $dbdef $setup_hack $AUTOLOAD @ISA @EXPORT_OK $DEBUG
+             $me %dbdef_cache %virtual_fields_cache $nowarn_identical );
+use subs qw(reload_dbdef);
 use Exporter;
 use Carp qw(carp cluck croak confess);
 use File::CounterFile;
@@ -10,7 +11,6 @@ use Locale::Country;
 use DBI qw(:sql_types);
 use DBIx::DBSchema 0.25;
 use FS::UID qw(dbh getotaker datasrc driver_name);
-use FS::Schema qw(dbdef);
 use FS::SearchCache;
 use FS::Msgcat qw(gettext);
 use FS::Conf;
@@ -20,8 +20,6 @@ use FS::part_virtual_field;
 use Tie::IxHash;
 
 @ISA = qw(Exporter);
-
-#export dbdef for now... everything else expects to find it here
 @EXPORT_OK = qw(dbh fields hfields qsearch qsearchs dbdef jsearch);
 
 $DEBUG = 0;
@@ -35,10 +33,13 @@ my $rsa_loaded;
 my $rsa_encrypt;
 my $rsa_decrypt;
 
-FS::UID->install_callback( sub {
+#ask FS::UID to run this stuff for us later
+$FS::UID::callback{'FS::Record'} = sub { 
   $conf = new FS::Conf; 
   $File::CounterFile::DEFAULT_DIR = "/usr/local/etc/freeside/counters.". datasrc;
-} );
+  $dbdef_file = "/usr/local/etc/freeside/dbdef.". datasrc;
+  &reload_dbdef unless $setup_hack; #$setup_hack needed now?
+};
 
 =head1 NAME
 
@@ -47,7 +48,7 @@ FS::Record - Database record objects
 =head1 SYNOPSIS
 
     use FS::Record;
-    use FS::Record qw(dbh fields qsearch qsearchs);
+    use FS::Record qw(dbh fields qsearch qsearchs dbdef);
 
     $record = new FS::Record 'table', \%hash;
     $record = new FS::Record 'table', { 'column' => 'value', ... };
@@ -92,6 +93,10 @@ FS::Record - Database record objects
     $error = $record->ut_phonen('column');
     $error = $record->ut_anything('column');
     $error = $record->ut_name('column');
+
+    $dbdef = reload_dbdef;
+    $dbdef = reload_dbdef "/non/standard/filename";
+    $dbdef = dbdef;
 
     $quoted_value = _quote($value,'table','field');
 
@@ -185,35 +190,12 @@ sub create {
   }
 }
 
-=item qsearch PARAMS_HASHREF | TABLE, HASHREF, SELECT, EXTRA_SQL, CACHE_OBJ, ADDL_FROM
+=item qsearch TABLE, HASHREF, SELECT, EXTRA_SQL, CACHE_OBJ, ADDL_FROM
 
 Searches the database for all records matching (at least) the key/value pairs
 in HASHREF.  Returns all the records found as `FS::TABLE' objects if that
 module is loaded (i.e. via `use FS::cust_main;'), otherwise returns FS::Record
 objects.
-
-The preferred usage is to pass a hash reference of named parameters:
-
-  my @records = qsearch( {
-                           'table'     => 'table_name',
-                           'hashref'   => { 'field' => 'value'
-                                            'field' => { 'op'    => '<',
-                                                         'value' => '420',
-                                                       },
-                                          },
-
-                           #these are optional...
-                           'select'    => '*',
-                           'extra_sql' => 'AND field ',
-                           #'cache_obj' => '', #optional
-                           'addl_from' => 'LEFT JOIN othtable USING ( field )',
-                         }
-                       );
-
-Much code still uses old-style positional parameters, this is also probably
-fine in the common case where there are only two parameters:
-
-  my @records = qsearch( 'table', { 'field' => 'value' } );
 
 ###oops, argh, FS::Record::new only lets us create database fields.
 #Normal behaviour if SELECT is not specified is `*', as in
@@ -227,28 +209,16 @@ fine in the common case where there are only two parameters:
 =cut
 
 sub qsearch {
-  my($stable, $record, $select, $extra_sql, $cache, $addl_from );
-  if ( ref($_[0]) ) { #hashref for now, eventually maybe accept a list too
-    my $opt = shift;
-    $stable    = $opt->{'table'}     or die "table name is required";
-    $record    = $opt->{'hashref'}   || {};
-    $select    = $opt->{'select'}    || '*';
-    $extra_sql = $opt->{'extra_sql'} || '';
-    $cache     = $opt->{'cache_obj'} || '';
-    $addl_from = $opt->{'addl_from'} || '';
-  } else {
-    ($stable, $record, $select, $extra_sql, $cache, $addl_from ) = @_;
-    $select ||= '*';
-  }
-
+  my($stable, $record, $select, $extra_sql, $cache, $addl_from ) = @_;
   #$stable =~ /^([\w\_]+)$/ or die "Illegal table: $table";
   #for jsearch
   $stable =~ /^([\w\s\(\)\.\,\=]+)$/ or die "Illegal table: $stable";
   $stable = $1;
+  $select ||= '*';
   my $dbh = dbh;
 
   my $table = $cache ? $cache->table : $stable;
-  my $dbdef_table = dbdef->table($table)
+  my $dbdef_table = $dbdef->table($table)
     or die "No schema for table $table found - ".
            "do you need to create it or run dbdef-create?";
   my $pkey = $dbdef_table->primary_key;
@@ -284,7 +254,7 @@ sub qsearch {
       if ( ! defined( $record->{$_} ) || $record->{$_} eq '' ) {
         if ( $op eq '=' ) {
           if ( driver_name eq 'Pg' ) {
-            my $type = dbdef->table($table)->column($column)->type;
+            my $type = $dbdef->table($table)->column($column)->type;
             if ( $type =~ /(int|serial)/i ) {
               qq-( $column IS NULL )-;
             } else {
@@ -295,7 +265,7 @@ sub qsearch {
           }
         } elsif ( $op eq '!=' ) {
           if ( driver_name eq 'Pg' ) {
-            my $type = dbdef->table($table)->column($column)->type;
+            my $type = $dbdef->table($table)->column($column)->type;
             if ( $type =~ /(int|serial)/i ) {
               qq-( $column IS NOT NULL )-;
             } else {
@@ -365,7 +335,7 @@ sub qsearch {
     grep defined( $record->{$_} ) && $record->{$_} ne '', @real_fields
   ) {
     if ( $record->{$field} =~ /^\d+(\.\d+)?$/
-         && dbdef->table($table)->column($field)->type =~ /(int|serial)/i
+         && $dbdef->table($table)->column($field)->type =~ /(int|serial)/i
     ) {
       $sth->bind_param($bind++, $record->{$field}, { TYPE => SQL_INTEGER } );
     } else {
@@ -433,8 +403,7 @@ sub qsearch {
         } values(%result);
       }
     } else {
-      #okay, its been tested
-      # warn "untested code (class FS::$table uses custom new method)";
+      warn "untested code (class FS::$table uses custom new method)";
       @return = map {
         eval 'FS::'. $table. '->new( { %{$_} } )';
       } values(%result);
@@ -458,34 +427,6 @@ sub qsearch {
   return @return;
 }
 
-=item by_key PRIMARY_KEY_VALUE
-
-This is a class method that returns the record with the given primary key
-value.  This method is only useful in FS::Record subclasses.  For example:
-
-  my $cust_main = FS::cust_main->by_key(1); # retrieve customer with custnum 1
-
-is equivalent to:
-
-  my $cust_main = qsearchs('cust_main', { 'custnum' => 1 } );
-
-=cut
-
-sub by_key {
-  my ($class, $pkey_value) = @_;
-
-  my $table = $class->table
-    or croak "No table for $class found";
-
-  my $dbdef_table = dbdef->table($table)
-    or die "No schema for table $table found - ".
-           "do you need to create it or run dbdef-create?";
-  my $pkey = $dbdef_table->primary_key
-    or die "No primary key for table $table";
-
-  return qsearchs($table, { $pkey => $pkey_value });
-}
-
 =item jsearch TABLE, HASHREF, SELECT, EXTRA_SQL, PRIMARY_TABLE, PRIMARY_KEY
 
 Experimental JOINed search method.  Using this method, you can execute a
@@ -507,7 +448,7 @@ sub jsearch {
   );
 }
 
-=item qsearchs PARAMS_HASHREF | TABLE, HASHREF, SELECT, EXTRA_SQL, CACHE_OBJ, ADDL_FROM
+=item qsearchs TABLE, HASHREF, SELECT, EXTRA_SQL, CACHE_OBJ, ADDL_FROM
 
 Same as qsearch, except that if more than one record matches, it B<carp>s but
 returns the first.  If this happens, you either made a logic error in asking
@@ -551,7 +492,7 @@ Returns the DBIx::DBSchema::Table object for the table.
 sub dbdef_table {
   my($self)=@_;
   my($table)=$self->table;
-  dbdef->table($table);
+  $dbdef->table($table);
 }
 
 =item get, getfield COLUMN
@@ -745,32 +686,18 @@ sub insert {
 
   $sth->execute or return $sth->errstr;
 
-  # get inserted id from the database, if applicable & needed
-  if ( $db_seq && ! $self->getfield($primary_key) ) {
+  my $insertid = '';
+  if ( $db_seq ) { # get inserted id from the database, if applicable
     warn "[debug]$me retreiving sequence from database\n" if $DEBUG;
-  
-    my $insertid = '';
-
     if ( driver_name eq 'Pg' ) {
 
-      #my $oid = $sth->{'pg_oid_status'};
-      #my $i_sql = "SELECT $primary_key FROM $table WHERE oid = ?";
-
-      my $default = $self->dbdef_table->column($primary_key)->default;
-      unless ( $default =~ /^nextval\('"?([\w\.]+)"?'/i ) {
-        dbh->rollback if $FS::UID::AutoCommit;
-        return "can't parse $table.$primary_key default value".
-               " for sequence name: $default";
-      }
-      my $sequence = $1;
-
-      my $i_sql = "SELECT currval('$sequence')";
+      my $oid = $sth->{'pg_oid_status'};
+      my $i_sql = "SELECT $primary_key FROM $table WHERE oid = ?";
       my $i_sth = dbh->prepare($i_sql) or do {
         dbh->rollback if $FS::UID::AutoCommit;
         return dbh->errstr;
       };
-      #$i_sth->execute($oid) or do {
-      $i_sth->execute() or do {
+      $i_sth->execute($oid) or do {
         dbh->rollback if $FS::UID::AutoCommit;
         return $i_sth->errstr;
       };
@@ -796,15 +723,11 @@ sub insert {
       }
 
     } else {
-
       dbh->rollback if $FS::UID::AutoCommit;
       return "don't know how to retreive inserted ids from ". driver_name. 
              ", try using counterfiles (maybe run dbdef-create?)";
-
     }
-
     $self->setfield($primary_key, $insertid);
-
   }
 
   my @virtual_fields = 
@@ -836,7 +759,7 @@ sub insert {
 
 
   my $h_sth;
-  if ( defined dbdef->table('h_'. $table) ) {
+  if ( defined $dbdef->table('h_'. $table) ) {
     my $h_statement = $self->_h_statement('insert');
     warn "[debug]$me $h_statement\n" if $DEBUG > 2;
     $h_sth = dbh->prepare($h_statement) or do {
@@ -897,7 +820,7 @@ sub delete {
   my $sth = dbh->prepare($statement) or return dbh->errstr;
 
   my $h_sth;
-  if ( defined dbdef->table('h_'. $self->table) ) {
+  if ( defined $dbdef->table('h_'. $self->table) ) {
     my $h_statement = $self->_h_statement('delete');
     warn "[debug]$me $h_statement\n" if $DEBUG > 2;
     $h_sth = dbh->prepare($h_statement) or return dbh->errstr;
@@ -1041,7 +964,7 @@ sub replace {
   my $sth = dbh->prepare($statement) or return dbh->errstr;
 
   my $h_old_sth;
-  if ( defined dbdef->table('h_'. $old->table) ) {
+  if ( defined $dbdef->table('h_'. $old->table) ) {
     my $h_old_statement = $old->_h_statement('replace_old');
     warn "[debug]$me $h_old_statement\n" if $DEBUG > 2;
     $h_old_sth = dbh->prepare($h_old_statement) or return dbh->errstr;
@@ -1050,7 +973,7 @@ sub replace {
   }
 
   my $h_new_sth;
-  if ( defined dbdef->table('h_'. $new->table) ) {
+  if ( defined $dbdef->table('h_'. $new->table) ) {
     my $h_new_statement = $new->_h_statement('replace_new');
     warn "[debug]$me $h_new_statement\n" if $DEBUG > 2;
     $h_new_sth = dbh->prepare($h_new_statement) or return dbh->errstr;
@@ -1489,8 +1412,6 @@ Check/untaint zip codes.
 
 =cut
 
-my @zip_reqd_countries = qw( CA ); #US implicit...
-
 sub ut_zip {
   my( $self, $field, $country ) = @_;
   if ( $country eq 'US' ) {
@@ -1499,10 +1420,7 @@ sub ut_zip {
                 $self->getfield($field);
     $self->setfield($field,$1);
   } else {
-    if ( $self->getfield($field) =~ /^\s*$/
-         && ( !$country || ! grep { $_ eq $country } @zip_reqd_countries )
-       )
-    {
+    if ( $self->getfield($field) =~ /^\s*$/ ) {
       $self->setfield($field,'');
     } else {
       $self->getfield($field) =~ /^\s*(\w[\w\-\s]{2,8}\w)\s*$/
@@ -1606,9 +1524,9 @@ sub virtual_fields {
   my $table;
   $table = $self->table or confess "virtual_fields called on non-table";
 
-  confess "Unknown table $table" unless dbdef->table($table);
+  confess "Unknown table $table" unless $dbdef->table($table);
 
-  return () unless dbdef->table('part_virtual_field');
+  return () unless $self->dbdef->table('part_virtual_field');
 
   unless ( $virtual_fields_cache{$table} ) {
     my $query = 'SELECT name from part_virtual_field ' .
@@ -1676,10 +1594,39 @@ fields() and other subroutines elsewhere in FS::Record.
 sub real_fields {
   my $table = shift;
 
-  my($table_obj) = dbdef->table($table);
+  my($table_obj) = $dbdef->table($table);
   confess "Unknown table $table" unless $table_obj;
   $table_obj->columns;
 }
+
+=item reload_dbdef([FILENAME])
+
+Load a database definition (see L<DBIx::DBSchema>), optionally from a
+non-default filename.  This command is executed at startup unless
+I<$FS::Record::setup_hack> is true.  Returns a DBIx::DBSchema object.
+
+=cut
+
+sub reload_dbdef {
+  my $file = shift || $dbdef_file;
+
+  unless ( exists $dbdef_cache{$file} ) {
+    warn "[debug]$me loading dbdef for $file\n" if $DEBUG;
+    $dbdef_cache{$file} = DBIx::DBSchema->load( $file )
+                            or die "can't load database schema from $file";
+  } else {
+    warn "[debug]$me re-using cached dbdef for $file\n" if $DEBUG;
+  }
+  $dbdef = $dbdef_cache{$file};
+}
+
+=item dbdef
+
+Returns the current database definition.  See L<DBIx::DBSchema>.
+
+=cut
+
+sub dbdef { $dbdef; }
 
 =item _quote VALUE, TABLE, COLUMN
 
@@ -1691,7 +1638,7 @@ type (see L<DBIx::DBSchema::Column>) does not end in `char' or `binary'.
 
 sub _quote {
   my($value, $table, $column) = @_;
-  my $column_obj = dbdef->table($table)->column($column);
+  my $column_obj = $dbdef->table($table)->column($column);
   my $column_type = $column_obj->type;
   my $nullable = $column_obj->null;
 
@@ -1726,7 +1673,7 @@ sub vfieldpart_hashref {
   my $self = shift;
   my $table = $self->table;
 
-  return {} unless dbdef->table('part_virtual_field');
+  return {} unless $self->dbdef->table('part_virtual_field');
 
   my $dbh = dbh;
   my $statement = "SELECT vfieldpart, name FROM part_virtual_field WHERE ".

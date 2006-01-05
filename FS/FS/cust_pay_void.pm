@@ -3,8 +3,7 @@ use strict;
 use vars qw( @ISA );
 use Business::CreditCard;
 use FS::UID qw(getotaker);
-use FS::Record qw(qsearchs dbh fields); # qsearch );
-use FS::cust_pay;
+use FS::Record qw(qsearchs); # dbh qsearch );
 #use FS::cust_bill;
 #use FS::cust_bill_pay;
 #use FS::cust_pay_refund;
@@ -48,8 +47,7 @@ are currently supported:
 L<Time::Local> and L<Date::Parse> for conversion functions.
 
 =item payby - `CARD' (credit cards), `CHEK' (electronic check/ACH),
-`LECB' (phone bill billing), `BILL' (billing), `CASH' (cash),
-`WEST' (Western Union), `MCRD' (Manual credit card), or `COMP' (free)
+`LECB' (phone bill billing), `BILL' (billing), or `COMP' (free)
 
 =item payinfo - card number, check #, or comp issuer (4-8 lowercase alphanumerics; think username), respectively
 
@@ -79,52 +77,15 @@ sub table { 'cust_pay_void'; }
 
 Adds this voided payment to the database.
 
-=item unvoid 
+=item delete
 
-"Un-void"s this payment: Deletes the voided payment from the database and adds
-back a normal payment.
+Currently unimplemented.
 
 =cut
 
-sub unvoid {
-  my $self = shift;
-
-  local $SIG{HUP} = 'IGNORE';
-  local $SIG{INT} = 'IGNORE';
-  local $SIG{QUIT} = 'IGNORE';
-  local $SIG{TERM} = 'IGNORE';
-  local $SIG{TSTP} = 'IGNORE';
-  local $SIG{PIPE} = 'IGNORE';
-
-  my $oldAutoCommit = $FS::UID::AutoCommit;
-  local $FS::UID::AutoCommit = 0;
-  my $dbh = dbh;
-
-  my $cust_pay = new FS::cust_pay ( {
-    map { $_ => $self->get($_) } fields('cust_pay')
-  } );
-  my $error = $cust_pay->insert;
-  if ( $error ) {
-    $dbh->rollback if $oldAutoCommit;
-    return $error;
-  }
-
-  $error = $self->delete;
-  if ( $error ) {
-    $dbh->rollback if $oldAutoCommit;
-    return $error;
-  }
-
-  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
-
-  '';
-
+sub delete {
+  return "Can't delete voided payments!";
 }
-
-=item delete
-
-Deletes this voided payment.  You probably don't want to use this directly; see
-the B<unvoid> method to add the original payment back.
 
 =item replace OLD_RECORD
 
@@ -167,8 +128,7 @@ sub check {
 
   $self->void_date(time) unless $self->void_date;
 
-  $self->payby =~ /^(CARD|CHEK|LECB|BILL|COMP|PREP|CASH|WEST|MCRD)$/
-    or return "Illegal payby";
+  $self->payby =~ /^(CARD|CHEK|LECB|BILL|COMP)$/ or return "Illegal payby";
   $self->payby($1);
 
   #false laziness with cust_refund::check

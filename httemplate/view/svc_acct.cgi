@@ -1,3 +1,4 @@
+<!-- mason kludge -->
 <%
 
 my $conf = new FS::Conf;
@@ -23,46 +24,41 @@ if ($pkgnum) {
 
 my $part_svc = qsearchs('part_svc',{'svcpart'=> $cust_svc->svcpart } );
 die "Unknown svcpart" unless $part_svc;
-my $svc = $part_svc->svc;
 
-die 'Empty domsvc for svc_acct.svcnum '. $svc_acct->svcnum
-  unless $svc_acct->domsvc;
-my $svc_domain = qsearchs('svc_domain', { 'svcnum' => $svc_acct->domsvc } );
-die 'Unknown domain (domsvc '. $svc_acct->domsvc.
-    ' for svc_acct.svcnum '. $svc_acct->svcnum. ')'
-  unless $svc_domain;
-my $domain = $svc_domain->domain;
+my $domain;
+if ( $svc_acct->domsvc ) {
+  my $svc_domain = qsearchs('svc_domain', { 'svcnum' => $svc_acct->domsvc } );
+  die "Unknown domain" unless $svc_domain;
+  $domain = $svc_domain->domain;
+} else {
+  die "No svc_domain.svcnum record for svc_acct.domsvc: ". $cust_svc->domsvc;
+}
 
 %>
 
-<% if ( $custnum ) { %>
+<SCRIPT>
+function areyousure(href) {
+    if (confirm("Permanently delete this account?") == true)
+        window.location.href = href;
+}
+</SCRIPT>
 
-  <%= header("View $svc account", menubar(
-    "View this customer (#$custnum)" => "${p}view/cust_main.cgi?$custnum",
-    "Main menu" => $p,
-  )) %>
+<%= header('Account View', menubar(
+  ( ( $pkgnum || $custnum )
+    ? ( "View this customer (#$custnum)" => "${p}view/cust_main.cgi?$custnum",
+      )
+    : ( "Cancel this (unaudited) account" =>
+          "javascript:areyousure(\'${p}misc/cancel-unaudited.cgi?$svcnum\')" )
+  ),
+  "Main menu" => $p,
+)) %>
 
-  <%= include( '/elements/small_custview.html', $custnum, '', 1 ) %>
-  <BR>
+<%
 
-<% } else { %>
-
-  <SCRIPT>
-  function areyousure(href) {
-      if (confirm("Permanently delete this account?") == true)
-          window.location.href = href;
-  }
-  </SCRIPT>
-  
-  <%= header('Account View', menubar(
-    "Cancel this (unaudited) account" =>
-            "javascript:areyousure(\'${p}misc/cancel-unaudited.cgi?$svcnum\')",
-    "Main menu" => $p,
-  )) %>
-
-<% } %>
-
-<% if ( $part_svc->part_export_usage ) {
+#if ( $cust_pkg && $cust_pkg->part_pkg->plan eq 'sqlradacct_hour' ) {
+if (    $part_svc->part_export('sqlradius')
+     || $part_svc->part_export('sqlradius_withdomain')
+) {
 
   my $last_bill;
   my %plandata;
@@ -155,73 +151,60 @@ function enable_change () {
   }
 %>
 
-Service #<B><%= $svcnum %></B>
-| <A HREF="<%=$p%>edit/svc_acct.cgi?<%=$svcnum%>">Edit this service</A>
+Service Information
+| <A HREF="<%=$p%>edit/svc_acct.cgi?<%=$svcnum%>">Edit this information</A>
 
 <% if ( @part_svc ) { %>
 | <SELECT NAME="svcpart" onChange="enable_change()">
     <OPTION VALUE="">Change service</OPTION>
     <OPTION VALUE="">--------------</OPTION>
-    <% foreach my $opt_part_svc ( @part_svc ) { %>
-      <OPTION VALUE="<%= $opt_part_svc->svcpart %>"><%= $opt_part_svc->svc %></OPTION>
+    <% foreach my $part_svc ( @part_svc ) { %>
+      <OPTION VALUE="<%= $part_svc->svcpart %>"><%= $part_svc->svc %></OPTION>
     <% } %>
   </SELECT>
   <INPUT NAME="submit" TYPE="submit" VALUE="Change" disabled>
 <% } %>
 
 <%= &ntable("#cccccc") %><TR><TD><%= &ntable("#cccccc",2) %>
+<TR><TD ALIGN="right">Service number</TD>
+  <TD BGCOLOR="#ffffff"><%= $svcnum %></TD></TR>
+<TR><TD ALIGN="right">Service</TD>
+  <TD BGCOLOR="#ffffff"><%= $part_svc->svc %></TD></TR>
+<TR><TD ALIGN="right">Username</TD>
+  <TD BGCOLOR="#ffffff"><%= $svc_acct->username %></TD></TR>
+<TR><TD ALIGN="right">Domain</TD>
+  <TD BGCOLOR="#ffffff"><%= $domain %></TD></TR>
 
-<TR>
-  <TD ALIGN="right">Service</TD>
-  <TD BGCOLOR="#ffffff"><%= $part_svc->svc %></TD>
-</TR>
-<TR>
-  <TD ALIGN="right">Username</TD>
-  <TD BGCOLOR="#ffffff"><%= $svc_acct->username %></TD>
-</TR>
-<TR>
-  <TD ALIGN="right">Domain</TD>
-  <TD BGCOLOR="#ffffff"><%= $domain %></TD>
-</TR>
+<TR><TD ALIGN="right">Password</TD>
+  <TD BGCOLOR="#ffffff"><% 
 
-<TR>
-  <TD ALIGN="right">Password</TD>
-  <TD BGCOLOR="#ffffff">
+my $password = $svc_acct->_password;
+if ( $password =~ /^\*\w+\* (.*)$/ ) {
+  $password = $1;
+  print "<I>(login disabled)</I> ";
+}
+if ( $conf->exists('showpasswords') ) {
+  print '<PRE>'. encode_entities($password). '</PRE>';
+} else {
+  print "<I>(hidden)</I>";
+}
+print "</TR></TD>";
+$password = '';
 
-    <% my $password = $svc_acct->_password; %>
-    <% if ( $password =~ /^\*\w+\* (.*)$/ ) {
-         $password = $1;
-    %>
-      <I>(login disabled)</I>
-    <% } %>
+if ( $conf->exists('security_phrase') ) {
+  my $sec_phrase = $svc_acct->sec_phrase;
+  print '<TR><TD ALIGN="right">Security phrase</TD><TD BGCOLOR="#ffffff">'.
+        $svc_acct->sec_phrase. '</TD></TR>';
+}
 
-    <% if ( $conf->exists('showpasswords') ) { %>
-      <PRE><%= encode_entities($password) %></PRE>
-    <% } else { %>
-      <I>(hidden)</I>
-    <% } %>
+my $svc_acct_pop = $svc_acct->popnum
+                     ? qsearchs('svc_acct_pop',{'popnum'=>$svc_acct->popnum})
+                     : '';
+print "<TR><TD ALIGN=\"right\">Access number</TD>".
+      "<TD BGCOLOR=\"#ffffff\">". $svc_acct_pop->text. '</TD></TR>'
+  if $svc_acct_pop;
 
-  </TD>
-</TR>
-<% $password = ''; %>
-
-<% if ( $conf->exists('security_phrase') ) {
-     my $sec_phrase = $svc_acct->sec_phrase;
 %>
-  <TR>
-    <TD ALIGN="right">Security phrase</TD>
-    <TD BGCOLOR="#ffffff"><%= $svc_acct->sec_phrase %></TD>
-  </TR>
-<% } %>
-
-<% if ( $svc_acct->popnum ) {
-    my $svc_acct_pop = qsearchs('svc_acct_pop',{'popnum'=>$svc_acct->popnum});
-%>
-  <TR>
-    <TD ALIGN="right">Access number</TD>
-    <TD BGCOLOR="#ffffff"><%= $svc_acct_pop->text %></TD>
-  </TR>
-<% } %>
 
 <% if ($svc_acct->uid ne '') { %>
   <TR>
@@ -277,56 +260,49 @@ Service #<B><%= $svcnum %></B>
   </TR>
 <% } %>
 
-<% foreach my $attribute ( grep /^radius_/, $svc_acct->fields ) {
+<%
+
+my($attribute);
+foreach $attribute ( grep /^radius_/, $svc_acct->fields ) {
+  #warn $attribute;
   $attribute =~ /^radius_(.*)$/;
   my $pattribute = $FS::raddb::attrib{$1};
-%>
-  <TR>
-    <TD ALIGN="right">Radius (reply) <%= $pattribute %></TD>
-    <TD BGCOLOR="#ffffff"><%= $svc_acct->getfield($attribute) %></TD>
-  </TR>
-<% } %>
-
-<% foreach my $attribute ( grep /^rc_/, $svc_acct->fields ) {
+  print "<TR><TD ALIGN=\"right\">Radius (reply) $pattribute</TD>".
+        "<TD BGCOLOR=\"#ffffff\">". $svc_acct->getfield($attribute).
+        "</TD></TR>";
+}
+foreach $attribute ( grep /^rc_/, $svc_acct->fields ) {
+  #warn $attribute;
   $attribute =~ /^rc_(.*)$/;
   my $pattribute = $FS::raddb::attrib{$1};
-%>
-  <TR>
-    <TD ALIGN="right">Radius (check) <%= $pattribute %></TD>
-    <TD BGCOLOR="#ffffff"><%= $svc_acct->getfield($attribute) %></TD>
-  </TR>
-<% } %>
+  print "<TR><TD ALIGN=\"right\">Radius (check) $pattribute: </TD>".
+        "<TD BGCOLOR=\"#ffffff\">". $svc_acct->getfield($attribute).
+        "</TD></TR>";
+}
 
-<TR>
-  <TD ALIGN="right">RADIUS groups</TD>
-  <TD BGCOLOR="#ffffff"><%= join('<BR>', $svc_acct->radius_groups) %></TD>
-</TR>
+print '<TR><TD ALIGN="right">RADIUS groups</TD><TD BGCOLOR="#ffffff">'.
+      join('<BR>', $svc_acct->radius_groups). '</TD></TR>';
 
-<% if ( $svc_acct->seconds =~ /^\d+$/ ) { %>
-  <TR>
-    <TD ALIGN="right">Prepaid time</TD>
-    <TD BGCOLOR="#ffffff"><%= duration_exact($svc_acct->seconds) %></TD>
-  </TR>
-<% } %>
+if ( $svc_acct->seconds =~ /^\d+$/ ) {
+  print '<TR><TD ALIGN="right">Prepaid time</TD><TD BGCOLOR="#ffffff">'.
+        duration_exact($svc_acct->seconds). '</TD></TR>';
+}
 
-<%
 # Can this be abstracted further?  Maybe a library function like
 # widget('HTML', 'view', $svc_acct) ?  It would definitely make UI 
 # style management easier.
+
+foreach (sort { $a cmp $b } $svc_acct->virtual_fields) {
+  print $svc_acct->pvf($_)->widget('HTML', 'view', $svc_acct->getfield($_)),
+      "\n";
+}
 %>
+</TABLE></TD></TR></TABLE></FORM>
+<%
 
-<% foreach (sort { $a cmp $b } $svc_acct->virtual_fields) { %>
-  <%= $svc_acct->pvf($_)->widget('HTML', 'view', $svc_acct->getfield($_)) %>
-<% } %>
+print '<BR><BR>';
 
-</TABLE></TD></TR></TABLE>
-</FORM>
-<BR><BR>
+print join("\n", $conf->config('svc_acct-notes') ). '<BR><BR>'.
+      joblisting({'svcnum'=>$svcnum}, 1). '</BODY></HTML>';
 
-<%= join("<BR>", $conf->config('svc_acct-notes') ) %>
-<BR><BR>
-
-<%= joblisting({'svcnum'=>$svcnum}, 1) %>
-
-</BODY>
-</HTML>
+%>

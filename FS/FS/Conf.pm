@@ -512,7 +512,7 @@ httemplate/docs/config.html
   {
     'key'         => 'erpcdmachines',
     'section'     => 'deprecated',
-    'description' => '<b>DEPRECATED</b>, ERPCD is no longer supported.  Used to be ERPCD authentication machines, one per line.  This enables export of `/usr/annex/acp_passwd\' and `/usr/annex/acp_dialup\'',
+    'description' => '<b>DEPRECATED</b>, ERPCD is no longer supported.  Used to be ERPCD authenticaion machines, one per line.  This enables export of `/usr/annex/acp_passwd\' and `/usr/annex/acp_dialup\'',
     'type'        => 'textarea',
   },
 
@@ -668,7 +668,7 @@ httemplate/docs/config.html
 
   {
     'key'         => 'invoice_send_receipts',
-    'section'     => 'deprecated',
+    'section'     => 'deprecated',q
     'description' => '<b>DEPRECATED</b>, this used to send an invoice copy on payments and credits.  See the payment_receipt_email and XXXX instead.',
     'type'        => 'checkbox',
   },
@@ -676,7 +676,7 @@ httemplate/docs/config.html
   {
     'key'         => 'payment_receipt_email',
     'section'     => 'billing',
-    'description' => 'Template file for payment receipts.  Payment receipts are sent to the customer email invoice destination(s) when a payment is received.  See the <a href="http://search.cpan.org/~mjd/Text-Template/lib/Text/Template.pm">Text::Template</a> documentation for details on the template substitution language.  The following variables are available: <ul><li><code>$date</code> <li><code>$name</code> <li><code>$paynum</code> - Freeside payment number <li><code>$paid</code> - Amount of payment <li><code>$payby</code> - Payment type (Card, Check, Electronic check, etc.) <li><code>$payinfo</code> - Masked credit card number or check number <li><code>$balance</code> - New balance</ul>',
+    'description' => 'Template file for payment receipts.',
     'type'        => 'textarea',
   },
 
@@ -1202,13 +1202,6 @@ httemplate/docs/config.html
   },
 
   {
-    'key'         => 'backend-realtime',
-    'section'     => '',
-    'description' => 'Run billing for backend signups immediately.',
-    'type'        => 'checkbox',
-  },
-
-  {
     'key'         => 'declinetemplate',
     'section'     => 'billing',
     'description' => 'Template file for credit card decline emails.',
@@ -1265,16 +1258,9 @@ httemplate/docs/config.html
   },
 
   {
-    'key'         => 'require_taxclasses',
-    'section'     => 'billing',
-    'description' => 'Require a taxclass to be entered for every package',
-    'type'        => 'checkbox',
-  },
-
-  {
     'key'         => 'welcome_email',
     'section'     => '',
-    'description' => 'Template file for welcome email.  Welcome emails are sent to the customer email invoice destination(s) each time a svc_acct record is created.  See the <a href="http://search.cpan.org/~mjd/Text-Template/lib/Text/Template.pm">Text::Template</a> documentation for details on the template substitution language.  The following variables are available<ul><li><code>$username</code> <li><code>$password</code> <li><code>$first</code> <li><code>$last</code> <li><code>$pkg</code></ul>',
+    'description' => 'Template file for welcome email.  Welcome emails are sent to the customer email invoice destination(s) each time a svc_acct record is created.  See the <a href="http://search.cpan.org/doc/MJD/Text-Template-1.42/Template.pm">Text::Template</a> documentation for details on the template substitution language.  The following variables are available: <code>$username</code>, <code>$password</code>, <code>$first</code>, <code>$last</code> and <code>$pkg</code>.',
     'type'        => 'textarea',
   },
 
@@ -1301,19 +1287,11 @@ httemplate/docs/config.html
   },
 
   {
-    'key'         => 'payby',
-    'section'     => 'billing',
-    'description' => 'Available payment types.',
-    'type'        => 'selectmultiple',
-    'select_enum' => [ qw(CARD DCRD CHEK DCHK LECB BILL CASH WEST MCRD COMP) ],
-  },
-
-  {
     'key'         => 'payby-default',
     'section'     => 'UI',
     'description' => 'Default payment type.  HIDE disables display of billing information and sets customers to BILL.',
     'type'        => 'select',
-    'select_enum' => [ '', qw(CARD DCRD CHEK DCHK LECB BILL CASH WEST MCRD COMP HIDE) ],
+    'select_enum' => [ '', qw(CARD DCRD CHEK DCHK LECB BILL COMP HIDE) ],
   },
 
   {
@@ -1478,7 +1456,7 @@ httemplate/docs/config.html
   {
     'key'         => 'ticket_system',
     'section'     => '',
-    'description' => 'Ticketing system integration.  <b>RT_Internal</b> uses the built-in RT ticketing system (see the <a href="../docs/install-rt">integrated ticketing installation instructions</a>).   <b>RT_External</b> accesses an external RT installation in a separate database (local or remote).',
+    'description' => 'Ticketing system integraiton.  <b>RT_Internal</b> uses the built-in RT ticketing system (see the <a href="../docs/install-rt">integrated ticketing installation instructions</a>).   <b>RT_External</b> accesses an external RT installation in a separate database (local or remote).',
     'type'        => 'select',
     #'select_enum' => [ '', qw(RT_Internal RT_Libs RT_External) ],
     'select_enum' => [ '', qw(RT_Internal RT_External) ],
@@ -1487,28 +1465,8 @@ httemplate/docs/config.html
   {
     'key'         => 'ticket_system-default_queueid',
     'section'     => '',
-    'description' => 'Default queue used when creating new customer tickets.',
-    'type'        => 'select-sub',
-    'options_sub' => sub {
-                           my $conf = new FS::Conf;
-                           if ( $conf->config('ticket_system') ) {
-                             eval "use FS::TicketSystem;";
-                             die $@ if $@;
-                             FS::TicketSystem->queues();
-                           } else {
-                             ();
-                           }
-                         },
-    'option_sub'  => sub { 
-                           my $conf = new FS::Conf;
-                           if ( $conf->config('ticket_system') ) {
-                             eval "use FS::TicketSystem;";
-                             die $@ if $@;
-                             FS::TicketSystem->queue(shift);
-                           } else {
-                             '';
-                           }
-                         },
+    'description' => 'Default queue number used when creating new customer tickets.',
+    'type'        => 'text',
   },
 
   {
@@ -1533,21 +1491,6 @@ httemplate/docs/config.html
   },
 
   {
-    'key'         => 'ticket_system-rt_external_datasrc',
-    'section'     => '',
-    'description' => 'With external RT integration, the DBI data source for the external RT installation, for example, <code>DBI:Pg:user=rt_user;password=rt_word;host=rt.example.com;dbname=rt</code>',
-    'type'        => 'text',
-
-  },
-
-  {
-    'key'         => 'ticket_system-rt_external_url',
-    'section'     => '',
-    'description' => 'With external RT integration, the URL for the external RT installation, for example, <code>https://rt.example.com/rt</code>',
-    'type'        => 'text',
-  },
-
-  {
     'key'         => 'company_name',
     'section'     => 'required',
     'description' => 'Your company name',
@@ -1558,20 +1501,6 @@ httemplate/docs/config.html
     'key'         => 'echeck-void',
     'section'     => 'billing',
     'description' => 'Enable local-only voiding of echeck payments in addition to refunds against the payment gateway',
-    'type'        => 'checkbox',
-  },
-
-  {
-    'key'         => 'cc-void',
-    'section'     => 'billing',
-    'description' => 'Enable local-only voiding of credit card payments in addition to refunds against the payment gateway',
-    'type'        => 'checkbox',
-  },
-
-  {
-    'key'         => 'unvoid',
-    'section'     => 'billing',
-    'description' => 'Enable unvoiding of voided payments',
     'type'        => 'checkbox',
   },
 
@@ -1613,51 +1542,6 @@ httemplate/docs/config.html
     'key'         => 'svc_acct-usage_unsuspend',
     'section'     => 'billing',
     'description' => 'Unuspends the package an account belongs to when svc_acct.seconds is incremented from 0 or below to a positive value (accounts with an empty seconds value are ignored).  Typically used in conjunction with prepaid packages and freeside-sqlradius-radacctd.',
-    'type'        => 'checkbox',
-  },
-
-  {
-    'key'         => 'cust-fields',
-    'section'     => 'UI',
-    'description' => 'Which customer fields to display on reports',
-    'type'        => 'select',
-    'select_enum' => [
-      'Customer: Last, First</b> or</i> Company (Last, First)</b>',
-      'Cust# | Customer: custnum | Last, First or Company (Last, First)',
-      'Name | Company: Last, First | Company',
-      'Cust# | Name | Company: custnum | Last, First | Company',
-      '(bill) Customer | (service) Customer: Last, First or Company (Last, First) | (same for service address if present)',
-      'Cust# | (bill) Customer | (service) Customer:  custnum | Last, First or Company (Last, First) | (same for service address if present)',
-      '(bill) Name | (bill) Company | (service) Name | (service) Company: Last, First | Company | (same for service address if present)',
-      'Cust# | (bill) Name | (bill) Company | (service) Name | (service) Company: custnum | Last, First | Company | (same for service address if present)',
-    ],
-  },
-
-  {
-    'key'         => 'cust_pkg-display_times',
-    'section'     => 'UI',
-    'description' => 'Display full timestamps (not just dates) for customer packages.  Useful if you are doing real-time things like hourly prepaid.',
-    'type'        => 'checkbox',
-  },
-
-  {
-    'key'         => 'svc_acct-edit_uid',
-    'section'     => 'shell',
-    'description' => 'Allow UID editing.',
-    'type'        => 'checkbox',
-  },
-
-  {
-    'key'         => 'svc_acct-edit_gid',
-    'section'     => 'shell',
-    'description' => 'Allow GID editing.',
-    'type'        => 'checkbox',
-  },
-
-  {
-    'key'         => 'zone-underscore',
-    'section'     => 'BIND',
-    'description' => 'Allow underscores in zone names.  As underscores are illegal characters in zone names, this option is not recommended.',
     'type'        => 'checkbox',
   },
 

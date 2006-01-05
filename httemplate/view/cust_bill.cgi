@@ -8,12 +8,6 @@ my $invnum = $3;
 
 my $conf = new FS::Conf;
 
-my @payby =  grep /\w/, $conf->config('payby');
-#@payby = (qw( CARD DCRD CHEK DCHK LECB BILL CASH WEST COMP ))
-@payby = (qw( CARD DCRD CHEK DCHK LECB BILL CASH COMP ))
-  unless @payby;
-my %payby = map { $_=>1 } @payby;
-
 my $cust_bill = qsearchs('cust_bill',{'invnum'=>$invnum});
 die "Invoice #$invnum not found!" unless $cust_bill;
 my $custnum = $cust_bill->getfield('custnum');
@@ -28,45 +22,8 @@ my $link = $templatename ? "$templatename-$invnum" : $invnum;
   "View this customer (#$custnum)" => "${p}view/cust_main.cgi?$custnum",
 )) %>
 
-<% if ( $cust_bill->owed > 0
-        && ( $payby{'BILL'} || $payby{'CASH'} || $payby{'WEST'} || $payby{'MCRD'} )
-      )
-   {
-     my $s = 0;
-%>
-
-  Post 
-
-  <% if ( $payby{'BILL'} ) { %>
-  
-    <%= $s++ ? ' | ' : '' %>
-    <A HREF="<%= $p %>edit/cust_pay.cgi?payby=BILL;invnum=<%= $invnum %>">check</A>
-  
-  <% } %>
-  
-  <% if ( $payby{'CASH'} ) { %>
-  
-    <%= $s++ ? ' | ' : '' %>
-    <A HREF="<%= $p %>edit/cust_pay.cgi?payby=CASH;invnum=<%= $invnum %>">cash</A>
-  
-  <% } %>
-  
-  <% if ( $payby{'WEST'} ) { %>
-  
-    <%= $s++ ? ' | ' : '' %>
-    <A HREF="<%= $p %>edit/cust_pay.cgi?payby=WEST;invnum=<%= $invnum %>">Western Union</A>
-  
-  <% } %>
-
-  <% if ( $payby{'MCRD'} ) { %>
-  
-    <%= $s++ ? ' | ' : '' %>
-    <A HREF="<%= $p %>edit/cust_pay.cgi?payby=MCRD;invnum=<%= $invnum %>">manual credit card</A>
-  
-  <% } %>
-
-  payment against this invoice<BR>
-
+<% if ( $cust_bill->owed > 0 ) { %>
+  <A HREF="<%= $p %>edit/cust_pay.cgi?<%= $invnum %>">Enter payments (check/cash) against this invoice</A> |
 <% } %>
 
 <A HREF="<%= $p %>misc/print-invoice.cgi?<%= $link %>">Re-print this invoice</A>

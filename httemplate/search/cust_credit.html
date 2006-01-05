@@ -5,7 +5,7 @@
    my @search = ();
 
    if ( $cgi->param('otaker') && $cgi->param('otaker') =~ /^([\w\.\-]+)$/ ) {
-     push @search, "cust_credit.otaker = '$1'";
+     push @search, "otaker = '$1'";
    }
 
    if ( $cgi->param('agentnum') && $cgi->param('agentnum') =~ /^(\d+)$/ ) {
@@ -46,22 +46,13 @@
 
    my $sql_query   = {
      'table'     => 'cust_credit',
-     'select'    => join(', ',
-                      'cust_credit.*',
-                      'cust_main.custnum as cust_main_custnum',
-                      FS::UI::Web::cust_sql_fields(),
-                    ),
+     'select'    => 'cust_credit.*, cust_main.last, cust_main.first, cust_main.company',
      'hashref'   => {},
      'extra_sql' => $where,
      'addl_from' => 'LEFT JOIN cust_main USING ( custnum )',
    };
 
-     my $clink = sub {
-       my $cust_bill = shift;
-       $cust_bill->cust_main_custnum
-         ? [ "${p}view/cust_main.cgi?", 'custnum' ]
-         : '';
-     };
+   my $clink = [ "${p}view/cust_main.cgi?", 'custnum' ];
 
 %><%= include( 'elements/search.html',
                  'title'       => $title,
@@ -70,26 +61,26 @@
                  'count_query' => $count_query,
                  'count_addl'  => [ '$%.2f total credited', ],
                  #'redirect'    => $link,
-                 'header'      => [ 'Amount',
-                                    'Date',
-                                    FS::UI::Web::cust_header(),
-                                    'By',
-                                    'Reason'
-                                  ],
+                 'header'      =>
+                   [ qw(Amount Date), 'Cust #', 'Contact name',
+                     qw(Company By Reason) ],
                  'fields'      => [
                    #'crednum',
                    sub { sprintf('$%.2f', shift->amount ) },
                    sub { time2str('%b %d %Y', shift->_date ) },
-                   \&FS::UI::Web::cust_fields,
+                   'custnum',
+                   sub { $_[0]->get('last'). ', '. $_[0]->first; },
+                   'company',
                    'otaker',
                    'reason',
                  ],
-                 #'align' => 'rrrllll',
-                 'align' => 'rr',
+                 'align' => 'rrrllll',
                  'links' => [
                    '',
                    '',
-                   ( map { $clink } FS::UI::Web::cust_header() ),
+                   $clink,
+                   $clink,
+                   $clink,
                    '',
                    '',
                  ],

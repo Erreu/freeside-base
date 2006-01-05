@@ -15,7 +15,6 @@ use vars qw( @ISA $DEBUG $me $conf $skip_fuzzyfiles
              @saltset @pw_set );
 use Carp;
 use Fcntl qw(:flock);
-use Date::Format;
 use Crypt::PasswdMD5 1.2;
 use FS::UID qw( datasrc );
 use FS::Conf;
@@ -467,15 +466,7 @@ sub replace {
   {
     #no warnings 'numeric';  #alas, a 5.006-ism
     local($^W) = 0;
-
-    foreach my $xid (qw( uid gid )) {
-
-      return "Can't change $xid!"
-        if ! $conf->exists("svc_acct-edit_$xid")
-           && $old->$xid() != $new->$xid()
-           && $new->cust_svc->part_svc->part_svc_column($xid)->columnflag ne 'F'
-    }
-
+    return "Can't change uid!" if $old->uid != $new->uid;
   }
 
   #change homdir when we change username
@@ -497,10 +488,8 @@ sub replace {
   return $error if $error;
 
   $old->usergroup( [ $old->radius_groups ] );
-  if ( $DEBUG ) {
-    warn $old->email. " old groups: ". join(' ',@{$old->usergroup}). "\n";
-    warn $new->email. "new groups: ". join(' ',@{$new->usergroup}). "\n";
-  }
+  warn "old groups: ". join(' ',@{$old->usergroup}). "\n" if $DEBUG;
+  warn "new groups: ". join(' ',@{$new->usergroup}). "\n" if $DEBUG;
   if ( $new->usergroup ) {
     #(sorta) false laziness with FS::part_export::sqlradius::_export_replace
     my @newgroups = @{$new->usergroup};
@@ -755,28 +744,6 @@ sub check {
       if $recref->{uid} == 0
          && $recref->{username} !~ /^(root|toor|smtp)$/;
 
-    unless ( $recref->{username} eq 'sync' ) {
-      if ( grep $_ eq $recref->{shell}, @shells ) {
-        $recref->{shell} = (grep $_ eq $recref->{shell}, @shells)[0];
-      } else {
-        return "Illegal shell \`". $self->shell. "\'; ".
-               $conf->dir. "/shells contains: @shells";
-      }
-    } else {
-      $recref->{shell} = '/bin/sync';
-    }
-
-  } else {
-    $recref->{gid} ne '' ? 
-      return "Can't have gid without uid" : ( $recref->{gid}='' );
-    #$recref->{dir} ne '' ? 
-    #  return "Can't have directory without uid" : ( $recref->{dir}='' );
-    $recref->{shell} ne '' ? 
-      return "Can't have shell without uid" : ( $recref->{shell}='' );
-  }
-
-  unless ( $part_svc->part_svc_column('dir')->columnflag eq 'F' ) {
-
     $recref->{dir} =~ /^([\/\w\-\.\&]*)$/
       or return "Illegal directory: ". $recref->{dir};
     $recref->{dir} = $1;
@@ -799,6 +766,24 @@ sub check {
     ;
     }
 
+    unless ( $recref->{username} eq 'sync' ) {
+      if ( grep $_ eq $recref->{shell}, @shells ) {
+        $recref->{shell} = (grep $_ eq $recref->{shell}, @shells)[0];
+      } else {
+        return "Illegal shell \`". $self->shell. "\'; ".
+               $conf->dir. "/shells contains: @shells";
+      }
+    } else {
+      $recref->{shell} = '/bin/sync';
+    }
+
+  } else {
+    $recref->{gid} ne '' ? 
+      return "Can't have gid without uid" : ( $recref->{gid}='' );
+    $recref->{dir} ne '' ? 
+      return "Can't have directory without uid" : ( $recref->{dir}='' );
+    $recref->{shell} ne '' ? 
+      return "Can't have shell without uid" : ( $recref->{shell}='' );
   }
 
   #  $error = $self->ut_textn('finger');
@@ -1026,10 +1011,6 @@ expected to change in the future.
 
 sub radius_reply { 
   my $self = shift;
-
-  return %{ $self->{'radius_reply'} }
-    if exists $self->{'radius_reply'};
-
   my %reply =
     map {
       /^(radius_(.*))$/;
@@ -1037,15 +1018,12 @@ sub radius_reply {
       #$attrib =~ s/_/\-/g;
       ( $FS::raddb::attrib{lc($attrib)}, $self->getfield($column) );
     } grep { /^radius_/ && $self->getfield($_) } fields( $self->table );
-
   if ( $self->slipip && $self->slipip ne '0e0' ) {
     $reply{$radius_ip} = $self->slipip;
   }
-
   if ( $self->seconds !~ /^$/ ) {
     $reply{'Session-Timeout'} = $self->seconds;
   }
-
   %reply;
 }
 
@@ -1062,63 +1040,16 @@ expected to change in the future.
 
 sub radius_check {
   my $self = shift;
-
-  return %{ $self->{'radius_check'} }
-    if exists $self->{'radius_check'};
-
-  my %check = 
+  my $password = $self->_password;
+  my $pw_attrib = length($password) <= 12 ? $radius_password : 'Crypt-Password';
+  ( $pw_attrib => $password,
     map {
       /^(rc_(.*))$/;
       my($column, $attrib) = ($1, $2);
       #$attrib =~ s/_/\-/g;
       ( $FS::raddb::attrib{lc($attrib)}, $self->getfield($column) );
-    } grep { /^rc_/ && $self->getfield($_) } fields( $self->table );
-
-  my $password = $self->_password;
-  my $pw_attrib = length($password) <= 12 ? $radius_password : 'Crypt-Password';  $check{$pw_attrib} = $password;
-
-  my $cust_pkg = $self->cust_svc->cust_pkg;
-  if ( $cust_pkg && $cust_pkg->part_pkg->is_prepaid && $cust_pkg->bill ) {
-    $check{'Expiration'} = time2str('%B %e %Y %T', $cust_pkg->bill ); #http://lists.cistron.nl/pipermail/freeradius-users/2005-January/040184.html
-  }
-
-  %check;
-
-}
-
-=item snapshot
-
-This method instructs the object to "snapshot" or freeze RADIUS check and
-reply attributes to the current values.
-
-=cut
-
-#bah, my english is too broken this morning
-#Of note is the "Expiration" attribute, which, for accounts in prepaid packages, is typically defined on-the-fly as the associated packages cust_pkg.bill.  (This is used by
-#the FS::cust_pkg's replace method to trigger the correct export updates when
-#package dates change)
-
-sub snapshot {
-  my $self = shift;
-
-  $self->{$_} = { $self->$_() }
-    foreach qw( radius_reply radius_check );
-
-}
-
-=item forget_snapshot
-
-This methos instructs the object to forget any previously snapshotted
-RADIUS check and reply attributes.
-
-=cut
-
-sub forget_snapshot {
-  my $self = shift;
-
-  delete $self->{$_}
-    foreach qw( radius_reply radius_check );
-
+    } grep { /^rc_/ && $self->getfield($_) } fields( $self->table )
+  );
 }
 
 =item domain
@@ -1155,7 +1086,10 @@ Returns the FS::cust_svc record for this account (see L<FS::cust_svc>).
 
 =cut
 
-#inherited from svc_Common
+sub cust_svc {
+  my $self = shift;
+  qsearchs( 'cust_svc', { 'svcnum' => $self->svcnum } );
+}
 
 =item email
 

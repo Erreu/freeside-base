@@ -52,7 +52,6 @@ FS/cust_bill_pkg_detail.pm
 FS/cust_credit.pm
 FS/cust_credit_bill.pm
 FS/cust_main.pm
-FS/cust_main_Mixin.pm
 FS/cust_main_county.pm
 FS/cust_main_invoice.pm
 FS/cust_pay.pm
@@ -92,8 +91,6 @@ FS/part_export/http.pm
 FS/part_export/infostreet.pm
 FS/part_export/ldap.pm
 FS/part_export/null.pm
-FS/part_export/radiator.pm
-FS/part_export/router.pm
 FS/part_export/shellcommands.pm
 FS/part_export/shellcommands_withdomain.pm
 FS/part_export/sqlmail.pm
@@ -180,7 +177,6 @@ t/cust_credit.t
 t/cust_credit_bill.t
 t/cust_credit_refund.t
 t/cust_main.t
-t/cust_main_Mixin.t
 t/cust_main_county.t
 t/cust_main_invoice.t
 t/cust_pay.t
@@ -223,7 +219,6 @@ t/part_export-ldap.t
 t/part_export-null.t
 t/part_export-passwdfile.t
 t/part_export-postfix.t
-t/part_export-radiator.t
 t/part_export-router.t
 t/part_export-shellcommands.t
 t/part_export-shellcommands_withdomain.t
@@ -279,16 +274,3 @@ t/msgcat.t
 t/raddb.t
 t/clientapi_session.t
 t/clientapi_session_field.t
-FS/payment_gateway.pm
-t/payment_gateway.t
-FS/payment_gateway_option.pm
-t/payment_gateway_option.t
-FS/option_Common.pm
-t/option_Common.t
-FS/agent_payment_gateway.pm
-t/agent_payment_gateway.t
-FS/banned_pay.pm
-t/banned_pay.t
-FS/cancel_reason.pm
-t/cancel_reason.t
-bin/freeside-prepaidd

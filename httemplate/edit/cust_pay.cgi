@@ -1,13 +1,7 @@
+<!-- mason kludge -->
 <%
 
 my $conf = new FS::Conf;
-
-my %payby = (
-  'BILL' => 'Check',
-  'CASH' => 'Cash',
-  'WEST' => 'Western Union',
-  'MCRD' => 'Manual credit card',
-);
 
 my($link, $linknum, $paid, $payby, $payinfo, $quickpay, $_date); 
 if ( $cgi->param('error') ) {
@@ -18,21 +12,23 @@ if ( $cgi->param('error') ) {
   $payinfo  = $cgi->param('payinfo');
   $quickpay = $cgi->param('quickpay');
   $_date    = $cgi->param('_date') ? str2time($cgi->param('_date')) : time;
-} elsif ( $cgi->param('custnum') =~ /^(\d+)$/ ) {
-  $link     = 'custnum';
-  $linknum  = $1;
-  $paid     = '';
-  $payby    = $cgi->param('payby') || 'BILL';
-  $payinfo  = '';
-  $quickpay = $cgi->param('quickpay');
-  $_date    = time;
-} elsif ( $cgi->param('invnum') =~ /^(\d+)$/ ) {
+} elsif ($cgi->keywords) {
+  my($query) = $cgi->keywords;
+  $query =~ /^(\d+)$/;
   $link     = 'invnum';
   $linknum  = $1;
   $paid     = '';
-  $payby    = $cgi->param('payby') || 'BILL';
+  $payby    = 'BILL';
   $payinfo  = "";
   $quickpay = '';
+  $_date    = time;
+} elsif ( $cgi->param('custnum')  =~ /^(\d+)$/ ) {
+  $link     = 'custnum';
+  $linknum  = $1;
+  $paid     = '';
+  $payby    = 'BILL';
+  $payinfo  = '';
+  $quickpay = $cgi->param('quickpay');
   $_date    = time;
 } else {
   die "illegal query ". $cgi->keywords;
@@ -40,7 +36,7 @@ if ( $cgi->param('error') ) {
 
 my $paybatch = "webui-$_date-$$-". rand() * 2**32;
 
-my $title = 'Post '. $payby{$payby}. ' payment';
+my $title = 'Post payment';
 $title .= " against Invoice #$linknum" if $link eq 'invnum';
 
 %>
@@ -101,17 +97,12 @@ Payment
 <TR>
   <TD ALIGN="right">Amount</TD>
   <TD BGCOLOR="#ffffff" ALIGN="right"><%= $money_char %></TD>
-  <TD><INPUT TYPE="text" NAME="paid" VALUE="<%= $paid %>" SIZE=8 MAXLENGTH=8> by <B><%= $payby{$payby} %></B></TD>
+  <TD><INPUT TYPE="text" NAME="paid" VALUE="<%= $paid %>" SIZE=8 MAXLENGTH=8></TD>
 </TR>
-
-<% if ( $payby eq 'BILL' ) { %>
-
-  <TR>
-    <TD ALIGN="right">Check #</TD>
-    <TD COLSPAN=2><INPUT TYPE="text" NAME="payinfo" VALUE="<%= $payinfo %>" SIZE=10></TD>
-  </TR>
-
-<% } %>
+<TR>
+  <TD ALIGN="right">Check #</TD>
+  <TD COLSPAN=2><INPUT TYPE="text" NAME="payinfo" VALUE="<%= $payinfo %>" SIZE=10></TD>
+</TR>
 
 <TR>
 <% if ( $link eq 'custnum' ) { %>
