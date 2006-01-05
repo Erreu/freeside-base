@@ -88,10 +88,6 @@ L<FS::part_pkg_option> - Package definition option class
 L<FS::pkg_svc> - Class linking package definitions (see L<FS::part_pkg>) with
 service definitions (see L<FS::part_svc>)
 
-L<FS::reg_code> - One-time registration codes
-
-L<FS::reg_code_pkg> - Class linking registration codes (see L<FS::reg_code>) with package definitions (see L<FS::part_pkg>)
-
 L<FS::rate> - Rate plans for call billing
 
 L<FS::rate_region> - Rate regions for call billing
@@ -160,24 +156,6 @@ L<FS::queue_depend> - Job dependencies
 
 L<FS::msgcat> - Message catalogs
 
-L<FS::clientapi_session>
-
-L<FS::clientapi_session_field>
-
-=head1 Client API
-
-L<FS::ClientAPI>
-
-L<FS::ClientAPI_SessionCache>
-
-L<FS::ClientAPI::Signup>
-
-L<FS::ClientAPI::passwd>
-
-L<FS::ClientAPI::MyAccount>
-
-L<FS::ClientAPI::Agent>
-
 =head1 Remote API modules
 
 L<FS::SelfService>
@@ -212,9 +190,15 @@ L<freeside-bill>
 
 L<freeside-overdue>
 
-=head2 User Interface classes
+=head2 User Interface classes (under (stalled) development; not yet usable)
 
-L<FS::UI::Web> - Web user-interface class
+L<FS::UI::Base> - User-interface base class
+
+L<FS::UI::Gtk> - Gtk user-interface class
+
+L<FS::UI::CGI> - CGI (HTML) user-interface class
+
+L<FS::UI::agent> - agent table user-interface class
 
 =head2 Notes
 
@@ -237,11 +221,11 @@ The main documentation is in httemplate/docs.
 =head1 SUPPORT
 
 A mailing list for users is available.  Send a blank message to
-<freeside-users-subscribe@sisd.com> to subscribe.
+<ivan-freeside-subscribe@sisd.com> to subscribe.
 
 A mailing list for developers is available.  It is intended to be lower volume
 and higher SNR than the users list.  Send a blank message to
-<freeside-devel-subscribe@sisd.com> to subscribe.
+<ivan-freeside-devel-subscribe@sisd.com> to subscribe.
 
 Commercial support is available; see
 <http://www.sisd.com/freeside/commercial.html>.

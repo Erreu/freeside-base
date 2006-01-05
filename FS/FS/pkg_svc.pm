@@ -39,8 +39,6 @@ FS::Record.  The following fields are currently supported:
 
 =over 4
 
-=item pkgsvcnum - primary key
-
 =item pkgpart - Billing item definition (see L<FS::part_pkg>)
 
 =item svcpart - Service definition (see L<FS::part_svc>)
@@ -103,8 +101,7 @@ sub check {
 
   my $error;
   $error =
-       $self->ut_numbern('pkgsvcnum')
-    || $self->ut_number('pkgpart')
+    $self->ut_number('pkgpart')
     || $self->ut_number('svcpart')
     || $self->ut_number('quantity')
   ;

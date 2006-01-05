@@ -1,13 +1,11 @@
 package FS::rate;
 
 use strict;
-use vars qw( @ISA $DEBUG );
-use FS::Record qw( qsearch qsearchs dbh fields );
+use vars qw( @ISA );
+use FS::Record qw( qsearch qsearchs dbh );
 use FS::rate_detail;
 
 @ISA = qw(FS::Record);
-
-$DEBUG = 1;
 
 =head1 NAME
 
@@ -96,32 +94,13 @@ sub insert {
   }
 
   if ( $options{'rate_detail'} ) {
-
-    my( $num, $last, $min_sec ) = (0, time, 5); #progressbar foo
-
     foreach my $rate_detail ( @{$options{'rate_detail'}} ) {
-
       $rate_detail->ratenum($self->ratenum);
       $error = $rate_detail->insert;
       if ( $error ) {
         $dbh->rollback if $oldAutoCommit;
         return $error;
       }
-
-      if ( $options{'job'} ) {
-        $num++;
-        if ( time - $min_sec > $last ) {
-          my $error = $options{'job'}->update_statustext(
-            int( 100 * $num / scalar( @{$options{'rate_detail'}} ) )
-          );
-          if ( $error ) {
-            $dbh->rollback if $oldAutoCommit;
-            return $error;
-          }
-          $last = time;
-        }
-      }
-
     }
   }
 
@@ -169,8 +148,8 @@ sub replace {
   local $FS::UID::AutoCommit = 0;
   my $dbh = dbh;
 
-#  my @old_rate_detail = ();
-#  @old_rate_detail = $old->rate_detail if $options{'rate_detail'};
+  my @old_rate_detail = ();
+  @old_rate_detail = $old->rate_detail if $options{'rate_detail'};
 
   my $error = $new->SUPER::replace($old);
   if ($error) {
@@ -178,67 +157,21 @@ sub replace {
     return $error;
   }
 
-#  foreach my $old_rate_detail ( @old_rate_detail ) {
-#
-#    my $error = $old_rate_detail->delete;
-#    if ($error) {
-#      $dbh->rollback if $oldAutoCommit;
-#      return $error;
-#    }
-#
-#    if ( $options{'job'} ) {
-#      $num++;
-#      if ( time - $min_sec > $last ) {
-#        my $error = $options{'job'}->update_statustext(
-#          int( 50 * $num / scalar( @old_rate_detail ) )
-#        );
-#        if ( $error ) {
-#          $dbh->rollback if $oldAutoCommit;
-#          return $error;
-#        }
-#        $last = time;
-#      }
-#    }
-#
-#  }
-  if ( $options{'rate_detail'} ) {
-    my $sth = $dbh->prepare('DELETE FROM rate_detail WHERE ratenum = ?') or do {
+  foreach my $old_rate_detail ( @old_rate_detail ) {
+    my $error = $old_rate_detail->delete;
+    if ($error) {
       $dbh->rollback if $oldAutoCommit;
-      return $dbh->errstr;
-    };
-  
-    $sth->execute($old->ratenum) or do {
-      $dbh->rollback if $oldAutoCommit;
-      return $sth->errstr;
-    };
-
-    my( $num, $last, $min_sec ) = (0, time, 5); #progresbar foo
-#  $num = 0;
-    foreach my $rate_detail ( @{$options{'rate_detail'}} ) {
-  
-      $rate_detail->ratenum($new->ratenum);
-      $error = $rate_detail->insert;
-      if ( $error ) {
-        $dbh->rollback if $oldAutoCommit;
-        return $error;
-      }
-  
-      if ( $options{'job'} ) {
-        $num++;
-        if ( time - $min_sec > $last ) {
-          my $error = $options{'job'}->update_statustext(
-            int( 100 * $num / scalar( @{$options{'rate_detail'}} ) )
-          );
-          if ( $error ) {
-            $dbh->rollback if $oldAutoCommit;
-            return $error;
-          }
-          $last = time;
-        }
-      }
-  
+      return $error;
     }
+  }
 
+  foreach my $rate_detail ( @{$options{'rate_detail'}} ) {
+    $rate_detail->ratenum($new->ratenum);
+    $error = $rate_detail->insert;
+    if ( $error ) {
+      $dbh->rollback if $oldAutoCommit;
+      return $error;
+    }
   }
 
   $dbh->commit or die $dbh->errstr if $oldAutoCommit;
@@ -296,76 +229,6 @@ sub rate_detail {
 
 
 =back
-
-=head1 SUBROUTINES
-
-=over 4
-
-=item process
-
-Experimental job-queue processor for web interface adds/edits
-
-=cut
-
-use Storable qw(thaw);
-use Data::Dumper;
-use MIME::Base64;
-sub process {
-  my $job = shift;
-
-  my $param = thaw(decode_base64(shift));
-  warn Dumper($param) if $DEBUG;
-
-  my $old = qsearchs('rate', { 'ratenum' => $param->{'ratenum'} } )
-    if $param->{'ratenum'};
-
-  my @rate_detail = map {
-
-    my $regionnum = $_->regionnum;
-    if ( $param->{"sec_granularity$regionnum"} ) {
-
-      new FS::rate_detail {
-        'dest_regionnum'  => $regionnum,
-        map { $_ => $param->{"$_$regionnum"} }
-            qw( min_included min_charge sec_granularity )
-      };
-
-    } else {
-
-      new FS::rate_detail {
-        'dest_regionnum'  => $regionnum,
-        'min_included'    => 0,
-        'min_charge'      => 0,
-        'sec_granularity' => '60'
-      };
-
-    }
-    
-  } qsearch('rate_region', {} );
-  
-  my $rate = new FS::rate {
-    map { $_ => $param->{$_} }
-        fields('rate')
-  };
-
-  my $error = '';
-  if ( $param->{'ratenum'} ) {
-    warn "$rate replacing $old (". $param->{'ratenum'}. ")\n" if $DEBUG;
-    $error = $rate->replace( $old,
-                             'rate_detail' => \@rate_detail,
-                             'job'         => $job,
-                           );
-  } else {
-    warn "inserting $rate\n" if $DEBUG;
-    $error = $rate->insert( 'rate_detail' => \@rate_detail,
-                            'job'         => $job,
-                          );
-    #$ratenum = $rate->getfield('ratenum');
-  }
-
-  die "$error\n" if $error;
-
-}
 
 =head1 BUGS
 

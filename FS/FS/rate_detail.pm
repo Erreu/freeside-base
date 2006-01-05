@@ -34,8 +34,6 @@ inherits from FS::Record.  The following fields are currently supported:
 
 =over 4
 
-=item ratedetailnum - primary key
-
 =item ratenum - rate plan (see L<FS::rate>)
 
 =item orig_regionnum - call origination region
@@ -108,8 +106,7 @@ sub check {
   my $self = shift;
 
   my $error = 
-       $self->ut_numbern('ratedetailnum')
-    || $self->ut_foreign_key('ratenum', 'rate', 'ratenum')
+       $self->ut_foreign_key('ratenum', 'rate', 'ratenum')
     || $self->ut_foreign_keyn('orig_regionnum', 'rate_region', 'regionnum' )
     || $self->ut_foreign_key('dest_regionnum', 'rate_region', 'regionnum' )
     || $self->ut_number('min_included')

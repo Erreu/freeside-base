@@ -95,21 +95,6 @@ sub config {
   }
 }
 
-=item config_binary KEY
-
-Returns the exact scalar value for key.
-
-=cut
-
-sub config_binary {
-  my($self,$file)=@_;
-  my($dir)=$self->dir;
-  my $fh = new IO::File "<$dir/$file" or return;
-  local $/;
-  my $content = <$fh>;
-  $content;
-}
-
 =item exists KEY
 
 Returns true if the specified key exists, even if the corresponding value
@@ -224,31 +209,6 @@ sub config_items {
         new FS::ConfItem {
                            'key'         => $basename,
                            'section'     => 'billing',
-                           'description' => 'Alternate HTML template for invoices.  See the <a href="../docs/billing.html">billing documentation</a> for details.',
-                           'type'        => 'textarea',
-                         }
-      } glob($self->dir. '/invoice_html_*')
-  ),
-  ( map { 
-        my $basename = basename($_);
-        $basename =~ /^(.*)$/;
-        $basename = $1;
-        ($latexname = $basename ) =~ s/latex/html/;
-        new FS::ConfItem {
-                           'key'         => $basename,
-                           'section'     => 'billing',
-                           'description' => "Alternate Notes section for HTML invoices.  Defaults to the same data in $latexname if not specified.",
-                           'type'        => 'textarea',
-                         }
-      } glob($self->dir. '/invoice_htmlnotes_*')
-  ),
-  ( map { 
-        my $basename = basename($_);
-        $basename =~ /^(.*)$/;
-        $basename = $1;
-        new FS::ConfItem {
-                           'key'         => $basename,
-                           'section'     => 'billing',
                            'description' => 'Alternate LaTeX template for invoices.  See the <a href="../docs/billing.html">billing documentation</a> for details.',
                            'type'        => 'textarea',
                          }
@@ -342,34 +302,6 @@ httemplate/docs/config.html
   },
 
   {
-    'key'         => 'encryption',
-    'section'     => 'billing',
-    'description' => 'Enable encryption of credit cards.',
-    'type'        => 'checkbox',
-  },
-
-  {
-    'key'         => 'encryptionmodule',
-    'section'     => 'billing',
-    'description' => 'Use which module for encryption?',
-    'type'        => 'text',
-  },
-
-  {
-    'key'         => 'encryptionpublickey',
-    'section'     => 'billing',
-    'description' => 'Your RSA Public Key - Required if Encryption is turned on.',
-    'type'        => 'textarea',
-  },
-
-  {
-    'key'         => 'encryptionprivatekey',
-    'section'     => 'billing',
-    'description' => 'Your RSA Private Key - Including this will enable the "Bill Now" feature.  However if the system is compromised, a hacker can use this key to decode the stored credit card information.  This is generally not a good idea.',
-    'type'        => 'textarea',
-  },
-
-  {
     'key'         => 'business-onlinepayment',
     'section'     => 'billing',
     'description' => '<a href="http://search.cpan.org/search?mode=module&query=Business%3A%3AOnlinePayment">Business::OnlinePayment</a> support, at least three lines: processor, login, and password.  An optional fourth line specifies the action or actions (multiple actions are separated with `,\': for example: `Authorization Only, Post Authorization\').    Optional additional lines are passed to Business::OnlinePayment as %processor_options.',
@@ -387,13 +319,6 @@ httemplate/docs/config.html
     'key'         => 'business-onlinepayment-description',
     'section'     => 'billing',
     'description' => 'String passed as the description field to <a href="http://search.cpan.org/search?mode=module&query=Business%3A%3AOnlinePayment">Business::OnlinePayment</a>.  Evaluated as a double-quoted perl string, with the following variables available: <code>$agent</code> (the agent name), and <code>$pkgs</code> (a comma-separated list of packages for which these charges apply)',
-    'type'        => 'text',
-  },
-
-  {
-    'key'         => 'business-onlinepayment-email-override',
-    'section'     => 'billing',
-    'description' => 'Email address used instead of customer email address when submitting a BOP transaction.',
     'type'        => 'text',
   },
 
@@ -512,7 +437,7 @@ httemplate/docs/config.html
   {
     'key'         => 'erpcdmachines',
     'section'     => 'deprecated',
-    'description' => '<b>DEPRECATED</b>, ERPCD is no longer supported.  Used to be ERPCD authentication machines, one per line.  This enables export of `/usr/annex/acp_passwd\' and `/usr/annex/acp_dialup\'',
+    'description' => '<b>DEPRECATED</b>, ERPCD is no longer supported.  Used to be ERPCD authenticaion machines, one per line.  This enables export of `/usr/annex/acp_passwd\' and `/usr/annex/acp_dialup\'',
     'type'        => 'textarea',
   },
 
@@ -580,38 +505,9 @@ httemplate/docs/config.html
   },
 
   {
-    'key'         => 'invoice_html',
-    'section'     => 'billing',
-    'description' => 'Optional HTML template for invoices.  See the <a href="../docs/billing.html">billing documentation</a> for details.',
-
-    'type'        => 'textarea',
-  },
-
-  {
-    'key'         => 'invoice_htmlnotes',
-    'section'     => 'billing',
-    'description' => 'Notes section for HTML invoices.  Defaults to the same data in invoice_latexnotes if not specified.',
-    'type'        => 'textarea',
-  },
-
-  {
-    'key'         => 'invoice_htmlfooter',
-    'section'     => 'billing',
-    'description' => 'Footer for HTML invoices.  Defaults to the same data in invoice_latexfooter if not specified.',
-    'type'        => 'textarea',
-  },
-
-  {
-    'key'         => 'invoice_htmlreturnaddress',
-    'section'     => 'billing',
-    'description' => 'Return address for HTML invoices.  Defaults to the same data in invoice_latexreturnaddress if not specified.',
-    'type'        => 'textarea',
-  },
-
-  {
     'key'         => 'invoice_latex',
     'section'     => 'billing',
-    'description' => 'Optional LaTeX template for typeset PostScript invoices.  See the <a href="../docs/billing.html">billing documentation</a> for details.',
+    'description' => 'Optional LaTeX template for typeset PostScript invoices.',
     'type'        => 'textarea',
   },
 
@@ -630,33 +526,11 @@ httemplate/docs/config.html
   },
 
   {
-    'key'         => 'invoice_latexreturnaddress',
-    'section'     => 'billing',
-    'description' => 'Return address for LaTeX typeset PostScript invoices.',
-    'type'        => 'textarea',
-  },
-
-  {
     'key'         => 'invoice_latexsmallfooter',
     'section'     => 'billing',
     'description' => 'Optional small footer for multi-page LaTeX typeset PostScript invoices.',
     'type'        => 'textarea',
   },
-
-  {
-    'key'         => 'invoice_email_pdf',
-    'section'     => 'billing',
-    'description' => 'Send PDF invoice as an attachment to emailed invoices.  By default, includes the plain text invoice as the email body, unless invoice_email_pdf_note is set.',
-    'type'        => 'checkbox'
-  },
-
-  {
-    'key'         => 'invoice_email_pdf_note',
-    'section'     => 'billing',
-    'description' => 'If defined, this text will replace the default plain text invoice as the body of emailed PDF invoices.',
-    'type'        => 'textarea'
-  },
-
 
   { 
     'key'         => 'invoice_default_terms',
@@ -668,7 +542,7 @@ httemplate/docs/config.html
 
   {
     'key'         => 'invoice_send_receipts',
-    'section'     => 'deprecated',
+    'section'     => 'deprecated',q
     'description' => '<b>DEPRECATED</b>, this used to send an invoice copy on payments and credits.  See the payment_receipt_email and XXXX instead.',
     'type'        => 'checkbox',
   },
@@ -676,7 +550,7 @@ httemplate/docs/config.html
   {
     'key'         => 'payment_receipt_email',
     'section'     => 'billing',
-    'description' => 'Template file for payment receipts.  Payment receipts are sent to the customer email invoice destination(s) when a payment is received.  See the <a href="http://search.cpan.org/~mjd/Text-Template/lib/Text/Template.pm">Text::Template</a> documentation for details on the template substitution language.  The following variables are available: <ul><li><code>$date</code> <li><code>$name</code> <li><code>$paynum</code> - Freeside payment number <li><code>$paid</code> - Amount of payment <li><code>$payby</code> - Payment type (Card, Check, Electronic check, etc.) <li><code>$payinfo</code> - Masked credit card number or check number <li><code>$balance</code> - New balance</ul>',
+    'description' => 'Template file for payment receipts.',
     'type'        => 'textarea',
   },
 
@@ -723,7 +597,7 @@ httemplate/docs/config.html
     'editlist_parts' => [ { type=>'text' },
                           { type=>'immutable', value=>'IN' },
                           { type=>'select',
-                            select_enum=>{ map { $_=>$_ } qw(A CNAME MX NS TXT)} },
+                            select_enum=>{ map { $_=>$_ } qw(A CNAME MX NS)} },
                           { type=> 'text' }, ],
   },
 
@@ -1050,13 +924,6 @@ httemplate/docs/config.html
     'type'        => 'checkbox',
   },
 
-  { 
-    'key'         => 'username-percent',
-    'section'     => 'username',
-    'description' => 'Allow the percent character (%) in usernames.',
-    'type'        => 'checkbox',
-  },
-
   {
     'key'         => 'username_policy',
     'section'     => 'deprecated',
@@ -1202,13 +1069,6 @@ httemplate/docs/config.html
   },
 
   {
-    'key'         => 'backend-realtime',
-    'section'     => '',
-    'description' => 'Run billing for backend signups immediately.',
-    'type'        => 'checkbox',
-  },
-
-  {
     'key'         => 'declinetemplate',
     'section'     => 'billing',
     'description' => 'Template file for credit card decline emails.',
@@ -1265,16 +1125,9 @@ httemplate/docs/config.html
   },
 
   {
-    'key'         => 'require_taxclasses',
-    'section'     => 'billing',
-    'description' => 'Require a taxclass to be entered for every package',
-    'type'        => 'checkbox',
-  },
-
-  {
     'key'         => 'welcome_email',
     'section'     => '',
-    'description' => 'Template file for welcome email.  Welcome emails are sent to the customer email invoice destination(s) each time a svc_acct record is created.  See the <a href="http://search.cpan.org/~mjd/Text-Template/lib/Text/Template.pm">Text::Template</a> documentation for details on the template substitution language.  The following variables are available<ul><li><code>$username</code> <li><code>$password</code> <li><code>$first</code> <li><code>$last</code> <li><code>$pkg</code></ul>',
+    'description' => 'Template file for welcome email.  Welcome emails are sent to the customer email invoice destination(s) each time a svc_acct record is created.  See the <a href="http://search.cpan.org/doc/MJD/Text-Template-1.42/Template.pm">Text::Template</a> documentation for details on the template substitution language.  The following variables are available: <code>$username</code>, <code>$password</code>, <code>$first</code>, <code>$last</code> and <code>$pkg</code>.',
     'type'        => 'textarea',
   },
 
@@ -1301,19 +1154,11 @@ httemplate/docs/config.html
   },
 
   {
-    'key'         => 'payby',
-    'section'     => 'billing',
-    'description' => 'Available payment types.',
-    'type'        => 'selectmultiple',
-    'select_enum' => [ qw(CARD DCRD CHEK DCHK LECB BILL CASH WEST MCRD COMP) ],
-  },
-
-  {
     'key'         => 'payby-default',
     'section'     => 'UI',
     'description' => 'Default payment type.  HIDE disables display of billing information and sets customers to BILL.',
     'type'        => 'select',
-    'select_enum' => [ '', qw(CARD DCRD CHEK DCHK LECB BILL CASH WEST MCRD COMP HIDE) ],
+    'select_enum' => [ '', qw(CARD DCRD CHEK DCHK LECB BILL COMP HIDE) ],
   },
 
   {
@@ -1478,37 +1323,16 @@ httemplate/docs/config.html
   {
     'key'         => 'ticket_system',
     'section'     => '',
-    'description' => 'Ticketing system integration.  <b>RT_Internal</b> uses the built-in RT ticketing system (see the <a href="../docs/install-rt">integrated ticketing installation instructions</a>).   <b>RT_External</b> accesses an external RT installation in a separate database (local or remote).',
+    'description' => 'Ticketing system integraiton.  <b>RT_Internal</b> uses the built-in RT ticketing system (use <code>make create-rt</code> to create the necessary tables).  <b>RT_Libs</b> uses the built-in RT libraries to access an RT installation in a separate database (local or remote).  <b>RT_External</b> uses RT\'s XML interface and RTx::Atom to access an RT installation in a separate database (local or remote).',
     'type'        => 'select',
-    #'select_enum' => [ '', qw(RT_Internal RT_Libs RT_External) ],
-    'select_enum' => [ '', qw(RT_Internal RT_External) ],
+    'select_enum' => [ '', qw(RT_Internal RT_Libs RT_External) ],
   },
 
   {
     'key'         => 'ticket_system-default_queueid',
     'section'     => '',
-    'description' => 'Default queue used when creating new customer tickets.',
-    'type'        => 'select-sub',
-    'options_sub' => sub {
-                           my $conf = new FS::Conf;
-                           if ( $conf->config('ticket_system') ) {
-                             eval "use FS::TicketSystem;";
-                             die $@ if $@;
-                             FS::TicketSystem->queues();
-                           } else {
-                             ();
-                           }
-                         },
-    'option_sub'  => sub { 
-                           my $conf = new FS::Conf;
-                           if ( $conf->config('ticket_system') ) {
-                             eval "use FS::TicketSystem;";
-                             die $@ if $@;
-                             FS::TicketSystem->queue(shift);
-                           } else {
-                             '';
-                           }
-                         },
+    'description' => 'Default queue number used when creating new customer tickets.',
+    'type'        => 'text',
   },
 
   {
@@ -1533,21 +1357,6 @@ httemplate/docs/config.html
   },
 
   {
-    'key'         => 'ticket_system-rt_external_datasrc',
-    'section'     => '',
-    'description' => 'With external RT integration, the DBI data source for the external RT installation, for example, <code>DBI:Pg:user=rt_user;password=rt_word;host=rt.example.com;dbname=rt</code>',
-    'type'        => 'text',
-
-  },
-
-  {
-    'key'         => 'ticket_system-rt_external_url',
-    'section'     => '',
-    'description' => 'With external RT integration, the URL for the external RT installation, for example, <code>https://rt.example.com/rt</code>',
-    'type'        => 'text',
-  },
-
-  {
     'key'         => 'company_name',
     'section'     => 'required',
     'description' => 'Your company name',
@@ -1562,102 +1371,9 @@ httemplate/docs/config.html
   },
 
   {
-    'key'         => 'cc-void',
-    'section'     => 'billing',
-    'description' => 'Enable local-only voiding of credit card payments in addition to refunds against the payment gateway',
-    'type'        => 'checkbox',
-  },
-
-  {
-    'key'         => 'unvoid',
-    'section'     => 'billing',
-    'description' => 'Enable unvoiding of voided payments',
-    'type'        => 'checkbox',
-  },
-
-  {
     'key'         => 'address2-search',
     'section'     => 'UI',
     'description' => 'Enable a "Unit" search box which searches the second address field',
-    'type'        => 'checkbox',
-  },
-
-  { 'key'         => 'referral_credit',
-    'section'     => 'billing',
-    'description' => "Enables one-time referral credits in the amount of one month <i>referred</i> customer's recurring fee (irregardless of frequency).",
-    'type'        => 'checkbox',
-  },
-
-  { 'key'         => 'selfservice_server-cache_module',
-    'section'     => '',
-    'description' => 'Module used to store self-service session information.  All modules handle any number of self-service servers.  Cache::SharedMemoryCache is appropriate for a single database / single Freeside server.  Cache::FileCache is useful for multiple databases on a single server, or when IPC::ShareLite is not available (i.e. FreeBSD).', #  _Database stores session information in the database and is appropriate for multiple Freeside servers, but may be slower.',
-    'type'        => 'select',
-    'select_enum' => [ 'Cache::SharedMemoryCache', 'Cache::FileCache', ], # '_Database' ],
-  },
-
-  {
-    'key'         => 'hylafax',
-    'section'     => '',
-    'description' => 'Options for a HylaFAX server to enable the FAX invoice destination.  They should be in the form of a space separated list of arguments to the Fax::Hylafax::Client::sendfax subroutine.  You probably shouldn\'t override things like \'docfile\'.  *Note* Only supported when using typeset invoices (see the invoice_latex configuration option).',
-    'type'        => [qw( checkbox textarea )],
-  },
-
-  {
-    'key'         => 'svc_acct-usage_suspend',
-    'section'     => 'billing',
-    'description' => 'Suspends the package an account belongs to when svc_acct.seconds is decremented to 0 or below (accounts with an empty seconds value are ignored).  Typically used in conjunction with prepaid packages and freeside-sqlradius-radacctd.',
-    'type'        => 'checkbox',
-  },
-
-  {
-    'key'         => 'svc_acct-usage_unsuspend',
-    'section'     => 'billing',
-    'description' => 'Unuspends the package an account belongs to when svc_acct.seconds is incremented from 0 or below to a positive value (accounts with an empty seconds value are ignored).  Typically used in conjunction with prepaid packages and freeside-sqlradius-radacctd.',
-    'type'        => 'checkbox',
-  },
-
-  {
-    'key'         => 'cust-fields',
-    'section'     => 'UI',
-    'description' => 'Which customer fields to display on reports',
-    'type'        => 'select',
-    'select_enum' => [
-      'Customer: Last, First</b> or</i> Company (Last, First)</b>',
-      'Cust# | Customer: custnum | Last, First or Company (Last, First)',
-      'Name | Company: Last, First | Company',
-      'Cust# | Name | Company: custnum | Last, First | Company',
-      '(bill) Customer | (service) Customer: Last, First or Company (Last, First) | (same for service address if present)',
-      'Cust# | (bill) Customer | (service) Customer:  custnum | Last, First or Company (Last, First) | (same for service address if present)',
-      '(bill) Name | (bill) Company | (service) Name | (service) Company: Last, First | Company | (same for service address if present)',
-      'Cust# | (bill) Name | (bill) Company | (service) Name | (service) Company: custnum | Last, First | Company | (same for service address if present)',
-    ],
-  },
-
-  {
-    'key'         => 'cust_pkg-display_times',
-    'section'     => 'UI',
-    'description' => 'Display full timestamps (not just dates) for customer packages.  Useful if you are doing real-time things like hourly prepaid.',
-    'type'        => 'checkbox',
-  },
-
-  {
-    'key'         => 'svc_acct-edit_uid',
-    'section'     => 'shell',
-    'description' => 'Allow UID editing.',
-    'type'        => 'checkbox',
-  },
-
-  {
-    'key'         => 'svc_acct-edit_gid',
-    'section'     => 'shell',
-    'description' => 'Allow GID editing.',
-    'type'        => 'checkbox',
-  },
-
-  {
-    'key'         => 'zone-underscore',
-    'section'     => 'BIND',
-    'description' => 'Allow underscores in zone names.  As underscores are illegal characters in zone names, this option is not recommended.',
     'type'        => 'checkbox',
   },
 

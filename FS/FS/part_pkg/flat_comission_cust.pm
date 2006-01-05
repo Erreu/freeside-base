@@ -3,34 +3,30 @@ package FS::part_pkg::flat_comission_cust;
 use strict;
 use vars qw(@ISA %info);
 #use FS::Record qw(qsearch qsearchs);
-use FS::part_pkg::flat;
+use FS::part_pkg;
 
 @ISA = qw(FS::part_pkg::flat);
 
 %info = (
-  'name' => 'Flat rate with recurring commission per active customer',
-  'fields' => {
-    'setup_fee' => { 'name' => 'Setup fee for this package',
-                     'default' => 0,
-                   },
-    'recur_fee' => { 'name' => 'Recurring fee for this package',
-                     'default' => 0,
-                   },
-    'unused_credit' => { 'name' => 'Credit the customer for the unused portion'.
-                                   ' of service at cancellation',
-                         'type' => 'checkbox',
-                       },
-    'comission_amount' => { 'name' => 'Commission amount per month (per active customer)',
-                            'default' => 0,
-                          },
-    'comission_depth'  => { 'name' => 'Number of layers',
-                            'default' => 1,
-                          },
-  },
-  'fieldorder' => [ 'setup_fee', 'recur_fee', 'unused_credit', 'comission_depth', 'comission_amount' ],
-  #'setup' => 'what.setup_fee.value',
-  #'recur' => '\'my $error = $cust_pkg->cust_main->credit( \' + what.comission_amount.value + \' * scalar($cust_pkg->cust_main->referral_cust_main_ncancelled(\' + what.comission_depth.value+ \')), "commission" ); die $error if $error; \' + what.recur_fee.value + \';\'',
-  'weight' => '60',
+    'name' => 'Flat rate with recurring commission per active customer',
+    'fields' => {
+      'setup_fee' => { 'name' => 'Setup fee for this package',
+                       'default' => 0,
+                     },
+      'recur_fee' => { 'name' => 'Recurring fee for this package',
+                       'default' => 0,
+                     },
+      'comission_amount' => { 'name' => 'Commission amount per month (per active customer)',
+                              'default' => 0,
+                            },
+      'comission_depth'  => { 'name' => 'Number of layers',
+                              'default' => 1,
+                            },
+    },
+    'fieldorder' => [ 'setup_fee', 'recur_fee', 'comission_depth', 'comission_amount' ],
+    #'setup' => 'what.setup_fee.value',
+    #'recur' => '\'my $error = $cust_pkg->cust_main->credit( \' + what.comission_amount.value + \' * scalar($cust_pkg->cust_main->referral_cust_main_ncancelled(\' + what.comission_depth.value+ \')), "commission" ); die $error if $error; \' + what.recur_fee.value + \';\'',
+    'weight' => '60',
 );
 
 sub calc_recur {
@@ -38,16 +34,13 @@ sub calc_recur {
 
   my $amount = $self->option('comission_amount');
   my $num_active = scalar(
-    $cust_pkg->cust_main->referral_cust_main_ncancelled(
+    $cust_pkg->cust_main->referral_cust_pkgcust_main_ncancelled(
       $self->option('comission_depth')
     )
   );
 
-  if ( $amount && $num_active ) {
-    my $error =
-      $cust_pkg->cust_main->credit( $amount*$num_active, "commission" );
-    die $error if $error;
-  }
+  my $error = $cust_pkg->cust_main->credit( $amount*$num_active, "commission" );
+  die $error if $error;
 
   $self->option('recur_fee');
 }

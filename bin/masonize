@@ -52,7 +52,7 @@ foreach $file ( split(/\n/, `find . -depth -print`) ) {
         $mode = 'html';
         next;
       }
-      die "unterminated <%= ??? (in  $file):";
+      die 'unterminated <%= ???';
 
     } elsif ( $mode eq 'perlc' ) {
 

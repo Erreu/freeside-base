@@ -1,8 +1,8 @@
-# BEGIN BPS TAGGED BLOCK {{{
+# {{{ BEGIN BPS TAGGED BLOCK
 # 
 # COPYRIGHT:
 #  
-# This software is Copyright (c) 1996-2005 Best Practical Solutions, LLC 
+# This software is Copyright (c) 1996-2004 Best Practical Solutions, LLC 
 #                                          <jesse@bestpractical.com>
 # 
 # (Except where explicitly superseded by other copyright notices)
@@ -42,8 +42,7 @@
 # works based on those contributions, and sublicense and distribute
 # those contributions and any derivatives thereof.
 # 
-# END BPS TAGGED BLOCK }}}
-
+# }}} END BPS TAGGED BLOCK
 =head1 NAME
 
   RT::Link - an RT Link object
@@ -77,9 +76,6 @@ ok (UNIVERSAL::isa($link, 'DBIx::SearchBuilder::Record'));
 
 =cut
 
-
-package RT::Link;
-
 use strict;
 no warnings qw(redefine);
 
@@ -107,31 +103,23 @@ sub Create {
     my $base = RT::URI->new( $self->CurrentUser );
     $base->FromURI( $args{'Base'} );
 
-    unless ( $base->Resolver && $base->Scheme ) {
-	my $msg = $self->loc("Couldn't resolve base '[_1]' into a URI.", 
-			     $args{'Base'});
-        $RT::Logger->warning( "$self $msg\n" );
+    unless ( $base->Resolver and $base->Scheme ) {
+        $RT::Logger->warning( "$self couldn't resolve base:'"
+                              . $args{'Base'} . " - "
+                              . "' into a URI\n" );
 
-	if (wantarray) {
-	    return(undef, $msg);
-	} else {
-	    return (undef);
-	}
+        return (undef);
     }
 
     my $target = RT::URI->new( $self->CurrentUser );
     $target->FromURI( $args{'Target'} );
 
     unless ( $target->Resolver ) {
-	my $msg = $self->loc("Couldn't resolve target '[_1]' into a URI.", 
-			     $args{'Target'});
-        $RT::Logger->warning( "$self $msg\n" );
+        $RT::Logger->warning( "$self couldn't resolve target:'"
+                              . $args{'Target'} . " - "
+                              . "' into a URI\n" );
 
-	if (wantarray) {
-	    return(undef, $msg);
-	} else {
-	    return (undef);
-	}
+        return (undef);
     }
 
     my $base_id   = 0;

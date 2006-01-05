@@ -1,17 +1,14 @@
 package FS::part_svc;
 
 use strict;
-use vars qw( @ISA $DEBUG );
+use vars qw( @ISA );
 use FS::Record qw( qsearch qsearchs fields dbh );
-use FS::Schema qw( dbdef );
 use FS::part_svc_column;
 use FS::part_export;
 use FS::export_svc;
 use FS::cust_svc;
 
 @ISA = qw(FS::Record);
-
-$DEBUG = 0;
 
 =head1 NAME
 
@@ -67,7 +64,7 @@ database, see L<"insert">.
 
 sub table { 'part_svc'; }
 
-=item insert [ EXTRA_FIELDS_ARRAYREF [ , EXPORTNUMS_HASHREF [ , JOB ] ] ] 
+=item insert [ EXTRA_FIELDS_ARRAYREF [ , EXPORTNUMS_HASHREF ] ] 
 
 Adds this service definition to the database.  If there is an error, returns
 the error, otherwise returns false.
@@ -90,8 +87,6 @@ EXTRA_FIELDS_ARRAYREF also.
 If EXPORTNUMS_HASHREF is specified (keys are exportnums and values are
 boolean), the appopriate export_svc records will be inserted.
 
-TODOC: JOB
-
 =cut
 
 sub insert {
@@ -103,8 +98,6 @@ sub insert {
     my $exportnums = shift;
     @exportnums = grep $exportnums->{$_}, keys %$exportnums;
   }
-  my $job = '';
-  $job = shift if @_;
 
   local $SIG{HUP} = 'IGNORE';
   local $SIG{INT} = 'IGNORE';
@@ -163,14 +156,13 @@ sub insert {
   }
 
   # add export_svc records
-  my $slice = 100/scalar(@exportnums) if @exportnums;
-  my $done = 0;
+
   foreach my $exportnum ( @exportnums ) {
     my $export_svc = new FS::export_svc ( {
       'exportnum' => $exportnum,
       'svcpart'   => $self->svcpart,
     } );
-    $error = $export_svc->insert($job, $slice*$done++, $slice);
+    $error = $export_svc->insert;
     if ( $error ) {
       $dbh->rollback if $oldAutoCommit;
       return $error;
@@ -193,7 +185,7 @@ sub delete {
 # check & make sure the svcpart isn't in cust_svc or pkg_svc (in any packages)?
 }
 
-=item replace OLD_RECORD [ '1.3-COMPAT' [ , EXTRA_FIELDS_ARRAYREF [ , EXPORTNUMS_HASHREF [ , JOB ] ] ] ]
+=item replace OLD_RECORD [ '1.3-COMPAT' [ , EXTRA_FIELDS_ARRAYREF [ , EXPORTNUMS_HASHREF ] ] ]
 
 Replaces OLD_RECORD with this one in the database.  If there is an error,
 returns the error, otherwise returns false.
@@ -202,26 +194,10 @@ TODOC: 1.3-COMPAT
 
 TODOC: EXTRA_FIELDS_ARRAYREF (same as insert method)
 
-TODOC: JOB
-
 =cut
 
 sub replace {
   my ( $new, $old ) = ( shift, shift );
-  my $compat = '';
-  my @fields = ();
-  my $exportnums;
-  my $job = '';
-  if ( @_ && $_[0] eq '1.3-COMPAT' ) {
-    shift;
-    $compat = '1.3';
-    @fields = @{shift(@_)} if @_;
-    $exportnums = @_ ? shift : '';
-    $job = shift if @_;
-  } else {
-    return 'non-1.3-COMPAT interface not yet written';
-    #not yet implemented
-  }
 
   return "Can't change svcdb for an existing service definition!"
     unless $old->svcdb eq $new->svcdb;
@@ -243,7 +219,11 @@ sub replace {
     return $error;
   }
 
-  if ( $compat eq '1.3' ) {
+  if ( @_ && $_[0] eq '1.3-COMPAT' ) {
+    shift;
+    my @fields = ();
+    @fields = @{shift(@_)} if @_;
+    my $exportnums = @_ ? shift : '';
 
    # maintain part_svc_column records
 
@@ -284,7 +264,6 @@ sub replace {
     if ( $exportnums ) {
 
       #false laziness w/ edit/process/agent_type.cgi
-      my @new_export_svc = ();
       foreach my $part_export ( qsearch('part_export', {}) ) {
         my $exportnum = $part_export->exportnum;
         my $hashref = {
@@ -300,26 +279,14 @@ sub replace {
             return $error;
           }
         } elsif ( ! $export_svc && $exportnums->{$exportnum} ) {
-          push @new_export_svc, new FS::export_svc ( $hashref );
-        }
-
-      }
-
-      my $slice = 100/scalar(@new_export_svc) if @new_export_svc;
-      my $done = 0;
-      foreach my $export_svc (@new_export_svc) {
-        $error = $export_svc->insert($job, $slice*$done++, $slice);
-        if ( $error ) {
-          $dbh->rollback if $oldAutoCommit;
-          return $error;
-        }
-        if ( $job ) {
-          $error = $job->update_statustext( int( $slice * $done ) );
+          $export_svc = new FS::export_svc ( $hashref );
+          $error = $export_svc->insert;
           if ( $error ) {
             $dbh->rollback if $oldAutoCommit;
             return $error;
           }
         }
+        
       }
 
     }
@@ -393,8 +360,8 @@ sub all_part_svc_column {
 
 =item part_export [ EXPORTTYPE ]
 
-Returns a list of all exports (see L<FS::part_export>) for this service, or,
-if an export type is specified, only returns exports of the given type.
+Returns all exports (see L<FS::part_export>) for this service, or, if an
+export type is specified, only returns exports of the given type.
 
 =cut
 
@@ -406,85 +373,15 @@ sub part_export {
     qsearch('export_svc', { 'svcpart' => $self->svcpart } );
 }
 
-=item part_export_usage
+=item cust_svc
 
-Returns a list of any exports (see L<FS::part_export>) for this service that
-are capable of reporting usage information.
-
-=cut
-
-sub part_export_usage {
-  my $self = shift;
-  grep $_->can('usage_sessions'), $self->part_export;
-}
-
-=item cust_svc [ PKGPART ] 
-
-Returns a list of associated customer services (FS::cust_svc records).
-
-If a PKGPART is specified, returns the customer services which are contained
-within packages of that type (see L<FS::part_pkg>).  If PKGPARTis specified as
-B<0>, returns unlinked customer services.
+Returns a list of associated FS::cust_svc records.
 
 =cut
 
 sub cust_svc {
   my $self = shift;
-
-  my $hashref = { 'svcpart' => $self->svcpart };
-
-  my( $addl_from, $extra_sql ) = ( '', '' );
-  if ( @_ ) {
-    my $pkgpart = shift;
-    if ( $pkgpart =~ /^(\d+)$/ ) {
-      $addl_from = 'LEFT JOIN cust_pkg USING ( pkgnum )';
-      $extra_sql = "AND pkgpart = $1";
-    } elsif ( $pkgpart eq '0' ) {
-      $hashref->{'pkgnum'} = '';
-    }
-  }
-
-  qsearch({
-    'table'     => 'cust_svc',
-    'addl_from' => $addl_from,
-    'hashref'   => $hashref,
-    'extra_sql' => $extra_sql,
-  });
-}
-
-=item num_cust_svc [ PKGPART ] 
-
-Returns the number of associated customer services (FS::cust_svc records).
-
-If a PKGPART is specified, returns the number of customer services which are
-contained within packages of that type (see L<FS::part_pkg>).  If PKGPART
-is specified as B<0>, returns the number of unlinked customer services.
-
-=cut
-
-sub num_cust_svc {
-  my $self = shift;
-
-  my @param = ( $self->svcpart );
-
-  my( $join, $and ) = ( '', '' );
-  if ( @_ ) {
-    my $pkgpart = shift;
-    if ( $pkgpart ) {
-      $join = 'LEFT JOIN cust_pkg USING ( pkgnum )';
-      $and = 'AND pkgpart = ?';
-      push @param, $pkgpart;
-    } elsif ( $pkgpart eq '0' ) {
-      $and = 'AND pkgnum IS NULL';
-    }
-  }
-
-  my $sth = dbh->prepare(
-    "SELECT COUNT(*) FROM cust_svc $join WHERE svcpart = ? $and"
-  ) or die dbh->errstr;
-  $sth->execute(@param)
-    or die $sth->errstr;
-  $sth->fetchrow_arrayref->[0];
+  qsearch('cust_svc', { 'svcpart' => $self->svcpart } );
 }
 
 =item svc_x
@@ -498,135 +395,7 @@ sub svc_x {
   map { $_->svc_x } $self->cust_svc;
 }
 
-
 =back
-
-=head1 SUBROUTINES
-
-=over 4
-
-=item process
-
-Job-queue processor for web interface adds/edits
-
-=cut
-
-use Storable qw(thaw);
-use Data::Dumper;
-use MIME::Base64;
-sub process {
-  my $job = shift;
-
-  my $param = thaw(decode_base64(shift));
-  warn Dumper($param) if $DEBUG;
-
-  my $old = qsearchs('part_svc', { 'svcpart' => $param->{'svcpart'} }) 
-    if $param->{'svcpart'};
-
-  $param->{'svc_acct__usergroup'} =
-    ref($param->{'svc_acct__usergroup'})
-      ? join(',', @{$param->{'svc_acct__usergroup'}} )
-      : $param->{'svc_acct__usergroup'};
-  
-  my $new = new FS::part_svc ( {
-    map {
-      $_ => $param->{$_};
-  #  } qw(svcpart svc svcdb)
-    } ( fields('part_svc'),
-        map { my $svcdb = $_;
-              my @fields = fields($svcdb);
-              push @fields, 'usergroup' if $svcdb eq 'svc_acct'; #kludge
-              map { ( $svcdb.'__'.$_, $svcdb.'__'.$_.'_flag' )  } @fields;
-            } grep defined( dbdef->table($_) ),
-                   qw( svc_acct svc_domain svc_forward svc_www svc_broadband )
-      )
-  } );
-  
-  my %exportnums =
-    map { $_->exportnum => ( $param->{'exportnum'.$_->exportnum} || '') }
-        qsearch('part_export', {} );
-
-  my $error;
-  if ( $param->{'svcpart'} ) {
-    $error = $new->replace( $old,
-                            '1.3-COMPAT',
-                            [ 'usergroup' ],
-                            \%exportnums,
-                            $job
-                          );
-  } else {
-    $error = $new->insert( [ 'usergroup' ],
-                           \%exportnums,
-                           $job,
-                         );
-    $param->{'svcpart'} = $new->getfield('svcpart');
-  }
-
-  die "$error\n" if $error;
-}
-
-=item process_bulk_cust_svc
-
-Job-queue processor for web interface bulk customer service changes
-
-=cut
-
-use Storable qw(thaw);
-use Data::Dumper;
-use MIME::Base64;
-sub process_bulk_cust_svc {
-  my $job = shift;
-
-  my $param = thaw(decode_base64(shift));
-  warn Dumper($param) if $DEBUG;
-
-  my $old_part_svc =
-    qsearchs('part_svc', { 'svcpart' => $param->{'old_svcpart'} } );
-
-  die "Must select a new service definition\n" unless $param->{'new_svcpart'};
-
-  #the rest should be abstracted out to to its own subroutine?
-
-  local $SIG{HUP} = 'IGNORE';
-  local $SIG{INT} = 'IGNORE';
-  local $SIG{QUIT} = 'IGNORE';
-  local $SIG{TERM} = 'IGNORE';
-  local $SIG{TSTP} = 'IGNORE';
-  local $SIG{PIPE} = 'IGNORE';
-
-  my $oldAutoCommit = $FS::UID::AutoCommit;
-  local $FS::UID::AutoCommit = 0;
-  my $dbh = dbh;
-
-  local( $FS::cust_svc::ignore_quantity ) = 1;
-
-  my $total = $old_part_svc->num_cust_svc( $param->{'pkgpart'} );
-
-  my $n = 0;
-  foreach my $old_cust_svc ( $old_part_svc->cust_svc( $param->{'pkgpart'} ) ) {
-
-    my $new_cust_svc = new FS::cust_svc { $old_cust_svc->hash };
-
-    $new_cust_svc->svcpart( $param->{'new_svcpart'} );
-    my $error = $new_cust_svc->replace($old_cust_svc);
-    if ( $error ) {
-      $dbh->rollback if $oldAutoCommit;
-      die "$error\n" if $error;
-    }
-
-    $error = $job->update_statustext( int( 100 * ++$n / $total ) );
-    if ( $error ) {
-      $dbh->rollback if $oldAutoCommit;
-      die $error if $error;
-    }
-
-  }
-
-  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
-
-  '';
-
-}
 
 =head1 BUGS
 
@@ -635,7 +404,7 @@ Delete is unimplemented.
 The list of svc_* tables is hardcoded.  When svc_acct_pop is renamed, this
 should be fixed.
 
-all_part_svc_column methods should be documented
+all_part_svc_column method should be documented
 
 =head1 SEE ALSO
 

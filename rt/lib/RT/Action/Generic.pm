@@ -1,8 +1,8 @@
-# BEGIN BPS TAGGED BLOCK {{{
+# {{{ BEGIN BPS TAGGED BLOCK
 # 
 # COPYRIGHT:
 #  
-# This software is Copyright (c) 1996-2005 Best Practical Solutions, LLC 
+# This software is Copyright (c) 1996-2004 Best Practical Solutions, LLC 
 #                                          <jesse@bestpractical.com>
 # 
 # (Except where explicitly superseded by other copyright notices)
@@ -42,8 +42,7 @@
 # works based on those contributions, and sublicense and distribute
 # those contributions and any derivatives thereof.
 # 
-# END BPS TAGGED BLOCK }}}
-
+# }}} END BPS TAGGED BLOCK
 =head1 NAME
 
   RT::Action::Generic - a generic baseclass for RT Actions
@@ -85,31 +84,31 @@ sub new  {
 # {{{ sub _Init 
 sub _Init  {
   my $self = shift;
-  my %args = ( Argument => undef,
-               CurrentUser => undef,
-               ScripActionObj => undef,
-               ScripObj => undef,
-               TemplateObj => undef,
-               TicketObj => undef,
-               TransactionObj => undef,
-               Type => undef,
-
-               @_ );
-
+  my %args = ( TransactionObj => undef,
+	       TicketObj => undef,
+	       ScripObj => undef,
+	       TemplateObj => undef,
+	       Argument => undef,
+	       Type => undef,
+            CurrentUser => undef,
+	       @_ );
+  
+  
   $self->{'Argument'} = $args{'Argument'};
-  $self->CurrentUser( $args{'CurrentUser'});
-  $self->{'ScripActionObj'} = $args{'ScripActionObj'};
   $self->{'ScripObj'} = $args{'ScripObj'};
-  $self->{'TemplateObj'} = $args{'TemplateObj'};
   $self->{'TicketObj'} = $args{'TicketObj'};
   $self->{'TransactionObj'} = $args{'TransactionObj'};
+  $self->{'TemplateObj'} = $args{'TemplateObj'};
   $self->{'Type'} = $args{'Type'};
+  $self->CurrentUser( $args{'CurrentUser'});
+    Scalar::Util::weaken($self->{'ScripObj'});
+    Scalar::Util::weaken($self->{'TicketObj'});
+    Scalar::Util::weaken($self->{'TemplateObj'});
+    Scalar::Util::weaken($self->{'TransactionObj'});
 
-  Scalar::Util::weaken($self->{'ScripActionObj'});
-  Scalar::Util::weaken($self->{'ScripObj'});
-  Scalar::Util::weaken($self->{'TemplateObj'});
-  Scalar::Util::weaken($self->{'TicketObj'});
-  Scalar::Util::weaken($self->{'TransactionObj'});
+
+
+
 
 }
 # }}}
@@ -148,13 +147,6 @@ sub TemplateObj  {
 sub ScripObj  {
   my $self = shift;
   return($self->{'ScripObj'});
-}
-# }}}
-
-# {{{ sub ScripActionObj
-sub ScripActionObj  {
-  my $self = shift;
-  return($self->{'ScripActionObj'});
 }
 # }}}
 
@@ -213,11 +205,13 @@ sub DESTROY {
 
     # We need to clean up all the references that might maybe get
     # oddly circular
-    $self->{'ScripActionObj'} = undef;
-    $self->{'ScripObj'} = undef;
     $self->{'TemplateObj'} =undef
     $self->{'TicketObj'} = undef;
     $self->{'TransactionObj'} = undef;
+    $self->{'ScripObj'} = undef;
+
+
+     
 }
 
 # }}}

@@ -3,12 +3,11 @@ package FS::cust_bill_pkg;
 use strict;
 use vars qw( @ISA );
 use FS::Record qw( qsearch qsearchs dbdef dbh );
-use FS::cust_main_Mixin;
 use FS::cust_pkg;
 use FS::cust_bill;
 use FS::cust_bill_pkg_detail;
 
-@ISA = qw( FS::cust_main_Mixin FS::Record );
+@ISA = qw( FS::Record );
 
 =head1 NAME
 
@@ -37,11 +36,9 @@ supported:
 
 =over 4
 
-=item billpkgnum - primary key
-
 =item invnum - invoice (see L<FS::cust_bill>)
 
-=item pkgnum - package (see L<FS::cust_pkg>) or 0 for the special virtual sales tax package, or -1 for the virtual line item (itemdesc is used for the line)
+=item pkgnum - package (see L<FS::cust_pkg>) or 0 for the special virtual sales tax package
 
 =item setup - setup fee
 
@@ -51,7 +48,7 @@ supported:
 
 =item edate - ending date of recurring fee
 
-=item itemdesc - Line item description (currentlty used only when pkgnum is 0 or -1)
+=item itemdesc - Line item description (currentlty used only when pkgnum is 0)
 
 =back
 
@@ -156,8 +153,7 @@ sub check {
   my $self = shift;
 
   my $error =
-         $self->ut_numbern('billpkgnum')
-      || $self->ut_snumber('pkgnum')
+    $self->ut_number('pkgnum')
       || $self->ut_number('invnum')
       || $self->ut_money('setup')
       || $self->ut_money('recur')
@@ -167,8 +163,7 @@ sub check {
   ;
   return $error if $error;
 
-  #if ( $self->pkgnum != 0 ) { #allow unchecked pkgnum 0 for tax! (add to part_pkg?)
-  if ( $self->pkgnum > 0 ) { #allow -1 for non-pkg line items and 0 for tax (add to part_pkg?)
+  if ( $self->pkgnum != 0 ) { #allow unchecked pkgnum 0 for tax! (add to part_pkg?)
     return "Unknown pkgnum ". $self->pkgnum
       unless qsearchs( 'cust_pkg', { 'pkgnum' => $self->pkgnum } );
   }
@@ -204,33 +199,6 @@ sub details {
                                         'invnum' => $self->invnum, } );
     #qsearch ( 'cust_bill_pkg_detail', { 'lineitemnum' => $self->lineitemnum });
 }
-
-=item desc
-
-Returns a description for this line item.  For typical line items, this is the
-I<pkg> field of the corresponding B<FS::part_pkg> object (see L<FS::part_pkg>).
-For one-shot line items and named taxes, it is the I<itemdesc> field of this
-line item, and for generic taxes, simply returns "Tax".
-
-=cut
-
-sub desc {
-  my $self = shift;
-
-  if ( $self->pkgnum > 0 ) {
-    $self->cust_pkg->part_pkg->pkg;
-  } else {
-    $self->itemdesc || 'Tax';
-  }
-}
-
-=back
-
-=head1 CLASS METHODS
-
-=over 4
-
-=item  
 
 =back
 

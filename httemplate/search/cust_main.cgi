@@ -57,7 +57,6 @@ if ( $cgi->param('browse')
 ) {
 
   my %search = ();
-
   if ( $cgi->param('browse') ) {
     my $query = $cgi->param('browse');
     if ( $query eq 'custnum' ) {
@@ -81,16 +80,15 @@ if ( $cgi->param('browse')
   } else {
     $sortby = \*last_sort; #??
     $orderby = "ORDER BY LOWER(last || ' ' || first)"; #??
-  }
-
-  if ( $cgi->param('otaker_on') ) {
-    $cgi->param('otaker') =~ /^(\w{1,32})$/ or eidiot "Illegal otaker\n";
-    $search{otaker} = $1;
-  } elsif ( $cgi->param('agentnum_on') ) {
-    $cgi->param('agentnum') =~ /^(\d+)$/ or eidiot "Illegal agentnum\n";
-    $search{agentnum} = $1;
-#  } else {
-#    die "unknown query...";
+    if ( $cgi->param('otaker_on') ) {
+      $cgi->param('otaker') =~ /^(\w{1,32})$/ or eidiot "Illegal otaker\n";
+      $search{otaker} = $1;
+    } elsif ( $cgi->param('agentnum_on') ) {
+      $cgi->param('agentnum') =~ /^(\d+)$/ or eidiot "Illegal agentnum\n";
+      $search{agentnum} = $1;
+    } else {
+      die "unknown query...";
+    }
   }
 
   my @qual = ();
@@ -287,7 +285,7 @@ if ( scalar(@cust_main) == 1 && ! $cgi->param('referral_custnum') ) {
       or eidiot "Illegal referral_custnum\n";
     my $referral_custnum = $1;
     my $cust_main = qsearchs('cust_main', { custnum => $referral_custnum } );
-    print '<FORM METHOD="GET">'.
+    print '<FORM METHOD=POST>'.
           qq!<INPUT TYPE="hidden" NAME="referral_custnum" VALUE="$referral_custnum">!.
           'referrals of <A HREF="'. popurl(2).
           "view/cust_main.cgi?$referral_custnum\">$referral_custnum: ".

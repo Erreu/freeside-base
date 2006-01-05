@@ -1,39 +1,32 @@
 package FS::part_pkg::voip_sqlradacct;
 
 use strict;
-use vars qw(@ISA $DEBUG %info);
-use Date::Format;
+use vars qw(@ISA %info);
 use FS::Record qw(qsearchs qsearch);
-use FS::part_pkg::flat;
+use FS::part_pkg;
 #use FS::rate;
 use FS::rate_prefix;
 
-@ISA = qw(FS::part_pkg::flat);
-
-$DEBUG = 1;
+@ISA = qw(FS::part_pkg);
 
 %info = (
-  'name' => 'VoIP rating by plan of CDR records in an SQL RADIUS radacct table',
-  'fields' => {
-    'setup_fee'     => { 'name' => 'Setup fee for this package',
-                         'default' => 0,
-                       },
-    'recur_flat'     => { 'name' => 'Base recurring fee for this package',
-                          'default' => 0,
-                        },
-    'unused_credit' => { 'name' => 'Credit the customer for the unused portion'.
-                                   ' of service at cancellation',
-                         'type' => 'checkbox',
-                       },
-    'ratenum'   => { 'name' => 'Rate plan',
-                     'type' => 'select',
-                     'select_table' => 'rate',
-                     'select_key'   => 'ratenum',
-                     'select_label' => 'ratename',
-                   },
-  },
-  'fieldorder' => [qw( setup_fee recur_flat unused_credit ratenum ignore_unrateable )],
-  'weight' => 40,
+    'name' => 'VoIP rating by plan of CDR records in an SQL RADIUS radacct table',
+    'fields' => {
+      'setup_fee' => { 'name' => 'Setup fee for this package',
+                       'default' => 0,
+                     },
+      'recur_flat' => { 'name' => 'Base monthly charge for this package',
+                        'default' => 0,
+                      },
+      'ratenum'   => { 'name' => 'Rate plan',
+                       'type' => 'select',
+                       'select_table' => 'rate',
+                       'select_key'   => 'ratenum',
+                       'select_label' => 'ratename',
+                     },
+    },
+    'fieldorder' => [qw( setup_fee recur_flat ratenum )],
+    'weight' => 40,
 );
 
 sub calc_setup {
@@ -59,10 +52,6 @@ sub calc_recur {
     foreach my $session (
       $cust_svc->get_session_history( $last_bill, $$sdate )
     ) {
-      if ( $DEBUG > 1 ) {
-        warn "rating session $session\n".
-             join('', map { "  $_ => ". $session->{$_}. "\n" } keys %$session );
-      }
 
       ###
       # look up rate details based on called station id
@@ -74,21 +63,18 @@ sub calc_recur {
       $dest =~ s/\s//g;
       my $proto = '';
       $dest =~ s/^(\w+):// and $proto = $1; #sip:
-      my $siphost = '';
-      $dest =~ s/\@(.*)$// and $siphost = $1; # @10.54.32.1, @sip.example.com
+      my $ip = '';
+      $dest =~ s/\@((\d{1,3}\.){3}\d{1,3})$// and $ip = $1; # @10.54.32.1
 
       #determine the country code
       my $countrycode;
-      if ( $dest =~ /^011(((\d)(\d))(\d))(\d+)$/ ) {
+      if ( $dest =~ /^011((\d\d)(\d))(\d+)$/ ) {
 
-        my( $three, $two, $one, $u1, $u2, $rest ) = ( $1, $2, $3, $4, $5, $6 );
-        #first look for 1 digit country code
-        if ( qsearch('rate_prefix', { 'countrycode' => $one } ) ) {
-          $countrycode = $one;
-          $dest = $u1.$u2.$rest;
-        } elsif ( qsearch('rate_prefix', { 'countrycode' => $two } ) ) { #or 2
+        my( $three, $two, $unknown, $rest ) = ( $1, $2, $3, $4 );
+        #first look for 2 digit country code
+        if ( qsearch('rate_prefix', { 'countrycode' => $two } ) ) {
           $countrycode = $two;
-          $dest = $u2.$rest;
+          $dest = $unknown.$rest;
         } else { #3 digit country code
           $countrycode = $three;
           $dest = $rest;
@@ -96,38 +82,30 @@ sub calc_recur {
 
       } else {
         $countrycode = '1';
-        $dest =~ s/^1//;# if length($dest) > 10;
       }
-
-      warn "rating call to +$countrycode $dest\n" if $DEBUG;
 
       #find a rate prefix, first look at most specific (4 digits) then 3, etc.,
       # finally trying the country code only
       my $rate_prefix = '';
-      for my $len ( reverse(1..6) ) {
+      for my $len ( reverse(1..4) ) {
         $rate_prefix = qsearchs('rate_prefix', {
           'countrycode' => $countrycode,
-          #'npa'         => { op=> 'LIKE', value=> substr($dest, 0, $len) }
-          'npa'         => substr($dest, 0, $len),
+          'npa'         => { op=> 'LIKE', value=> substr($dest, 0, $len) }
         } ) and last;
       }
       $rate_prefix ||= qsearchs('rate_prefix', {
         'countrycode' => $countrycode,
         'npa'         => '',
       });
-
-      die "Can't find rate for call to +$countrycode $dest\n"
+      die "Can't find rate for call to countrycode $countrycode number $dest\n"
         unless $rate_prefix;
 
       my $regionnum = $rate_prefix->regionnum;
+
       my $rate_detail = qsearchs('rate_detail', {
         'ratenum'        => $ratenum,
         'dest_regionnum' => $regionnum,
       } );
-
-      warn "  found rate for regionnum $regionnum ".
-           "and rate detail $rate_detail\n"
-        if $DEBUG;
 
       ###
       # find the price and add detail to the invoice
@@ -152,23 +130,16 @@ sub calc_recur {
         $charges += $charge;
       }
 
-      my $rate_region = $rate_prefix->rate_region;
-      warn "  (rate region $rate_region)\n" if $DEBUG;
-
-      my @call_details = (
-        #time2str("%Y %b %d - %r", $session->{'acctstarttime'}),
-        time2str("%c", $session->{'acctstarttime'}),
-        $minutes.'m',
-        '$'.$charge,
-        "+$countrycode $dest",
-        $rate_region->regionname,
-      );
-
-      warn "  adding details on charge to invoice: ".
-           join(' - ', @call_details )
-        if $DEBUG;
-
-      push @$details, join(' - ', @call_details); #\@call_details,
+      push @$details, 
+        #[
+        join(' - ', 
+          "+$countrycode $dest",
+          $rate_prefix->rate_region->regionname,
+          $minutes.'m',
+          '$'.$charge,
+        #]
+        )
+      ;
 
     } # $session
 
@@ -180,11 +151,6 @@ sub calc_recur {
 
 sub is_free {
   0;
-}
-
-sub base_recur {
-  my($self, $cust_pkg) = @_;
-  $self->option('recur_flat');
 }
 
 1;

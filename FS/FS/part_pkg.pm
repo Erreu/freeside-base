@@ -2,7 +2,7 @@ package FS::part_pkg;
 
 use strict;
 use vars qw( @ISA %freq %plans $DEBUG );
-use Carp qw(carp cluck confess);
+use Carp qw(carp cluck);
 use Tie::IxHash;
 use FS::Conf;
 use FS::Record qw( qsearch qsearchs dbh dbdef );
@@ -13,9 +13,7 @@ use FS::agent_type;
 use FS::type_pkgs;
 use FS::part_pkg_option;
 
-@ISA = qw( FS::Record ); # FS::option_Common ); # this can use option_Common
-                                                # when all the plandata bs is
-                                                # gone
+@ISA = qw( FS::Record );
 
 $DEBUG = 0;
 
@@ -118,8 +116,8 @@ sub clone {
 Adds this package definition to the database.  If there is an error,
 returns the error, otherwise returns false.
 
-Currently available options are: I<pkg_svc>, I<primary_svc>, I<cust_pkg>, 
-I<custnum_ref> and I<options>.
+Currently available options are: I<pkg_svc>, I<primary_svc>, I<cust_pkg> and
+I<custnum_ref>.
 
 If I<pkg_svc> is set to a hashref with svcparts as keys and quantities as
 values, appropriate FS::pkg_svc records will be inserted.
@@ -132,9 +130,6 @@ record itself), the object will be updated to point to this package definition.
 
 In conjunction with I<cust_pkg>, if I<custnum_ref> is set to a scalar reference,
 the scalar will be updated with the custnum value from the cust_pkg record.
-
-If I<options> is set to a hashref of options, appropriate FS::part_pkg_option
-records will be inserted.
 
 =cut
 
@@ -168,8 +163,7 @@ sub insert {
   }
 
   if ( $plandata ) {
-
-    warn "  inserting part_pkg_option records for plandata" if $DEBUG;
+  warn "  inserting part_pkg_option records for plandata" if $DEBUG;
     foreach my $part_pkg_option ( 
       map { /^(\w+)=(.*)$/ or do { $dbh->rollback if $oldAutoCommit;
                                    return "illegal plandata: $plandata";
@@ -188,27 +182,6 @@ sub insert {
         return $error;
       }
     }
-
-  } elsif ( $options{'options'} ) {
-
-    warn "  inserting part_pkg_option records for options hashref" if $DEBUG;
-    foreach my $optionname ( keys %{$options{'options'}} ) {
-
-      my $part_pkg_option =
-        new FS::part_pkg_option {
-          'pkgpart'     => $self->pkgpart,
-          'optionname'  => $optionname,
-          'optionvalue' => $options{'options'}->{$optionname},
-        };
-
-      my $error = $part_pkg_option->insert;
-      if ( $error ) {
-        $dbh->rollback if $oldAutoCommit;
-        return $error;
-      }
-
-    }
-
   }
 
   my $conf = new FS::Conf;
@@ -232,10 +205,7 @@ sub insert {
   my $pkg_svc = $options{'pkg_svc'} || {};
   foreach my $part_svc ( qsearch('part_svc', {} ) ) {
     my $quantity = $pkg_svc->{$part_svc->svcpart} || 0;
-    my $primary_svc =
-      ( $options{'primary_svc'} && $options{'primary_svc'}==$part_svc->svcpart )
-        ? 'Y'
-        : '';
+    my $primary_svc = $options{'primary_svc'} == $part_svc->svcpart ? 'Y' : '';
 
     my $pkg_svc = new FS::pkg_svc( {
       'pkgpart'     => $self->pkgpart,
@@ -377,7 +347,6 @@ sub replace {
     next unless $old_quantity != $quantity || $old_primary_svc ne $primary_svc;
   
     my $new_pkg_svc = new FS::pkg_svc( {
-      'pkgsvcnum'   => ( $old_pkg_svc ? $old_pkg_svc->pkgsvcnum : '' ),
       'pkgpart'     => $new->pkgpart,
       'svcpart'     => $part_svc->svcpart,
       'quantity'    => $quantity, 
@@ -420,7 +389,7 @@ sub check {
     my $error = $self->ut_number('freq');
     return $error if $error;
   } else {
-    $self->freq =~ /^(\d+[hdw]?)$/
+    $self->freq =~ /^(\d+[dw]?)$/
       or return "Illegal or empty freq: ". $self->freq;
     $self->freq($1);
   }
@@ -440,10 +409,6 @@ sub check {
 
   return 'Unknown plan '. $self->plan
     unless exists($plans{$self->plan});
-
-  my $conf = new FS::Conf;
-  return 'Taxclass is required'
-    if ! $self->taxclass && $conf->exists('require_taxclasses');
 
   '';
 }
@@ -539,7 +504,6 @@ Returns an english representation of the I<freq> field, such as "monthly",
 
 tie %freq, 'Tie::IxHash', 
   '0'  => '(no recurring fee)',
-  '1h' => 'hourly',
   '1d' => 'daily',
   '1w' => 'weekly',
   '2w' => 'biweekly (every 2 weeks)',
@@ -549,10 +513,6 @@ tie %freq, 'Tie::IxHash',
   '6'  => 'semiannually (every 6 months)',
   '12' => 'annually',
   '24' => 'biannually (every 2 years)',
-  '36' => 'triannually (every 3 years)',
-  '48' => '(every 4 years)',
-  '60' => '(every 5 years)',
-  '120' => '(every 10 years)',
 ;
 
 sub freq_pretty {
@@ -562,8 +522,8 @@ sub freq_pretty {
     $freq{$freq};
   } else {
     my $interval = 'month';
-    if ( $freq =~ /^(\d+)([hdw])$/ ) {
-      my %interval = ( 'h' => 'hour', 'd'=>'day', 'w'=>'week' );
+    if ( $freq =~ /^(\d+)([dw])$/ ) {
+      my %interval = ( 'd'=>'day', 'w'=>'week' );
       $interval = $interval{$2};
     }
     if ( $1 == 1 ) {
@@ -624,7 +584,7 @@ Returns the option value for the given name, or the empty string.
 =cut
 
 sub option {
-  my( $self, $opt, $ornull ) = @_;
+  my( $self, $opt ) = @_;
   my $part_pkg_option =
     qsearchs('part_pkg_option', {
       pkgpart    => $self->pkgpart,
@@ -634,8 +594,7 @@ sub option {
   my %plandata = map { /^(\w+)=(.*)$/; ( $1 => $2 ); }
                      split("\n", $self->get('plandata') );
   return $plandata{$opt} if exists $plandata{$opt};
-  cluck "Package definition option $opt not found in options or plandata!\n"
-    unless $ornull;
+  cluck "Package definition option $opt not found in options or plandata!\n";
   '';
 }
 
@@ -650,16 +609,9 @@ on how to create new price plans, but until then, see L</NEW PLAN CLASSES>.
 sub _rebless {
   my $self = shift;
   my $plan = $self->plan;
-  unless ( $plan ) {
-    confess "no price plan found for pkgpart ". $self->pkgpart. "\n"
-      if $DEBUG;
-    return $self;
-  }
-  return $self if ref($self) =~ /::$plan$/; #already blessed into plan subclass
   my $class = ref($self). "::$plan";
-  warn "reblessing $self into $class" if $DEBUG;
   eval "use $class;";
-  die $@ if $@;
+  #die $@ if $@;
   bless($self, $class) unless $@;
   $self;
 }
@@ -694,11 +646,6 @@ sub _calc_eval {
   $value;
 }
 
-#fallback that return 0 for old legacy packages with no plan
-
-sub calc_remain { 0; }
-sub calc_cancel { 0; }
-
 =back
 
 =head1 SUBROUTINES
@@ -711,7 +658,6 @@ sub calc_cancel { 0; }
 
 my %info;
 foreach my $INC ( @INC ) {
-  warn "globbing $INC/FS/part_pkg/*.pm\n" if $DEBUG;
   foreach my $file ( glob("$INC/FS/part_pkg/*.pm") ) {
     warn "attempting to load plan info from $file\n" if $DEBUG;
     $file =~ /\/(\w+)\.pm$/ or do {
@@ -761,8 +707,6 @@ The delete method is unimplemented.
 
 setup and recur semantics are not yet defined (and are implemented in
 FS::cust_bill.  hmm.).
-
-plandata should go
 
 =head1 SEE ALSO
 

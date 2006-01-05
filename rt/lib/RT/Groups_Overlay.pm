@@ -1,8 +1,8 @@
-# BEGIN BPS TAGGED BLOCK {{{
+# {{{ BEGIN BPS TAGGED BLOCK
 # 
 # COPYRIGHT:
 #  
-# This software is Copyright (c) 1996-2005 Best Practical Solutions, LLC 
+# This software is Copyright (c) 1996-2004 Best Practical Solutions, LLC 
 #                                          <jesse@bestpractical.com>
 # 
 # (Except where explicitly superseded by other copyright notices)
@@ -42,8 +42,7 @@
 # works based on those contributions, and sublicense and distribute
 # those contributions and any derivatives thereof.
 # 
-# END BPS TAGGED BLOCK }}}
-
+# }}} END BPS TAGGED BLOCK
 =head1 NAME
 
   RT::Groups - a collection of RT::Group objects
@@ -52,7 +51,7 @@
 
   use RT::Groups;
   my $groups = $RT::Groups->new($CurrentUser);
-  $groups->UnLimit();
+  $groups->LimitToReal();
   while (my $group = $groups->Next()) {
      print $group->Id ." is a group id\n";
   }
@@ -70,9 +69,6 @@ ok (require RT::Groups);
 =end testing
 
 =cut
-
-
-package RT::Groups;
 
 use strict;
 no warnings qw(redefine);
@@ -149,7 +145,8 @@ sub LimitToPersonalGroupsFor {
     $self->Limit(FIELD => 'Domain', OPERATOR => '=', VALUE => 'Personal');
     $self->Limit(   FIELD => 'Instance',   
                     OPERATOR => '=', 
-                    VALUE => $princ);
+                    VALUE => $princ,
+                    ENTRY_AGGREGATOR => 'OR');
 }
 
 
@@ -157,7 +154,7 @@ sub LimitToPersonalGroupsFor {
 
 # {{{ LimitToRolesForQueue
 
-=head2 LimitToRolesForQueue QUEUE_ID
+=item LimitToRolesForQueue QUEUE_ID
 
 Limits the set of groups found to role groups for queue QUEUE_ID
 
@@ -174,7 +171,7 @@ sub LimitToRolesForQueue {
 
 # {{{ LimitToRolesForTicket
 
-=head2 LimitToRolesForTicket Ticket_ID
+=item LimitToRolesForTicket Ticket_ID
 
 Limits the set of groups found to role groups for Ticket Ticket_ID
 
@@ -191,7 +188,7 @@ sub LimitToRolesForTicket {
 
 # {{{ LimitToRolesForSystem
 
-=head2 LimitToRolesForSystem System_ID
+=item LimitToRolesForSystem System_ID
 
 Limits the set of groups found to role groups for System System_ID
 
@@ -254,7 +251,7 @@ sub WithMember {
 }
 
 
-=head2 WithRight { Right => RIGHTNAME, Object => RT::Record, IncludeSystemRights => 1, IncludeSuperusers => 0, EquivObjects => [ ] }
+=head2 WithRight { Right => RIGHTNAME, Object => RT::Record, IncludeSystemRights => 1, IncludeSuperusers => 0 }
 
 
 Find all groups which have RIGHTNAME for RT::Record. Optionally include global rights and superusers. By default, include the global rights, but not the superusers.
@@ -287,57 +284,6 @@ $groups->WithRight(Right => 'OwnTicket', Object => $q);
 ok ($id,$msg);
 is($groups->Count, 2);
 
-my $RTxGroup = RT::Group->new($RT::SystemUser);
-($id, $msg) = $RTxGroup->CreateUserDefinedGroup( Name => 'RTxGroup', Description => "RTx extension group");
-ok ($id,$msg);
-
-my $RTxSysObj = {};
-bless $RTxSysObj, 'RTx::System';
-*RTx::System::Id = sub { 1; };
-*RTx::System::id = *RTx::System::Id;
-my $ace = RT::Record->new($RT::SystemUser);
-$ace->Table('ACL');
-$ace->_BuildTableAttributes unless ($_TABLE_ATTR->{ref($self)});
-($id, $msg) = $ace->Create( PrincipalId => $RTxGroup->id, PrincipalType => 'Group', RightName => 'RTxGroupRight', ObjectType => 'RTx::System', ObjectId  => 1);
-ok ($id, "ACL for RTxSysObj created");
-
-my $RTxObj = {};
-bless $RTxObj, 'RTx::System::Record';
-*RTx::System::Record::Id = sub { 4; };
-*RTx::System::Record::id = *RTx::System::Record::Id;
-
-$groups = RT::Groups->new($RT::SystemUser);
-$groups->WithRight(Right => 'RTxGroupRight', Object => $RTxSysObj);
-is($groups->Count, 1, "RTxGroupRight found for RTxSysObj");
-
-$groups = RT::Groups->new($RT::SystemUser);
-$groups->WithRight(Right => 'RTxGroupRight', Object => $RTxObj);
-is($groups->Count, 0, "RTxGroupRight not found for RTxObj");
-
-$groups = RT::Groups->new($RT::SystemUser);
-$groups->WithRight(Right => 'RTxGroupRight', Object => $RTxObj, EquivObjects => [ $RTxSysObj ]);
-is($groups->Count, 1, "RTxGroupRight found for RTxObj using EquivObjects");
-
-$ace = RT::Record->new($RT::SystemUser);
-$ace->Table('ACL');
-$ace->_BuildTableAttributes unless ($_TABLE_ATTR->{ref($self)});
-($id, $msg) = $ace->Create( PrincipalId => $RTxGroup->id, PrincipalType => 'Group', RightName => 'RTxGroupRight', ObjectType => 'RTx::System::Record', ObjectId  => 5 );
-ok ($id, "ACL for RTxObj created");
-
-my $RTxObj2 = {};
-bless $RTxObj2, 'RTx::System::Record';
-*RTx::System::Record::Id = sub { 5; };
-
-$groups = RT::Groups->new($RT::SystemUser);
-$groups->WithRight(Right => 'RTxGroupRight', Object => $RTxObj2);
-is($groups->Count, 1, "RTxGroupRight found for RTxObj2");
-
-$groups = RT::Groups->new($RT::SystemUser);
-$groups->WithRight(Right => 'RTxGroupRight', Object => $RTxObj2, EquivObjects => [ $RTxSysObj ]);
-is($groups->Count, 1, "RTxGroupRight found for RTxObj2");
-
-
-
 =end testing
 
 
@@ -350,7 +296,6 @@ sub WithRight {
                  Object =>              => undef,
                  IncludeSystemRights    => 1,
                  IncludeSuperusers      => undef,
-                 EquivObjects           => [ ],
                  @_ );
 
     my $acl        = $self->NewAlias('ACL');
@@ -398,10 +343,6 @@ sub WithRight {
 	else {
 	    $which_object = '';
 	}
-        foreach my $obj ( @{ $args{'EquivObjects'} } ) {
-             next unless ( UNIVERSAL::can( $obj, 'id' ) );
-             $which_object .= "($acl.ObjectType = '" . ref( $obj ) . "' AND $acl.ObjectId = " . $obj->id . ") OR ";
-         }
         $which_object .=
             " ($acl.ObjectType = '" . ref($args{'Object'}) . "'" .
             " AND $acl.ObjectId = " . $args{'Object'}->Id . ") ";
@@ -474,28 +415,6 @@ sub LimitToDeleted {
 		);
 }
 # }}}
-
-# {{{ sub Next
-
-sub Next {
-    my $self = shift;
-
-    # Don't show groups which the user isn't allowed to see.
-
-    my $Group = $self->SUPER::Next();
-    if ((defined($Group)) and (ref($Group))) {
-	unless ($Group->CurrentUserHasRight('SeeGroup')) {
-	    return $self->Next();
-	}
-	
-	return $Group;
-    }
-    else {
-	return undef;
-    }
-}
-
-
 
 sub _DoSearch {
     my $self = shift;

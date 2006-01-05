@@ -1,0 +1,27 @@
+- broadband (dsl/wireless) tracking, etc etc
+- Extended description on invoice for time/data charges
+- Multiple, named taxes
+- */*FIX
+- extended reported and graphing
+- integrated RT ticketing system
+- one-time payments (in signup server too).  DCRD and DCHK on-demand payment types
+- credit report
+- reseller interface
+
+1.5.0pre6:
+- RADIUS session viewing
+- Major updates for reseller interface
+- Credit card and ACH refunds (w/supported processor module)
+- Proper email payment receipts (not invoice copies)
+- modular price plans, rewrote package add/edit page
+- fixed up tax report - should be correct for edge cases with named taxes,
+  tax classes, etc.
+- Documentation updates
+
+1.5.0pre7:
+- fix bug that could cause mis-billing on upgrades! (new installs ok)
+- update install documentation for 1.5 HTML::Mason or Apache::ASP install
+# - historical late notice viewing in web interface
+- VoIP billing for CDRs from RADIUS
+- promotional codes for signup
+- lots of RT integration, integrated RT upgraded to 3.2.2

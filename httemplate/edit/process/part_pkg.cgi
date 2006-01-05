@@ -19,28 +19,22 @@ foreach (qw( setuptax recurtax disabled )) {
 
 my $new = new FS::part_pkg ( {
   map {
-    $_ => scalar($cgi->param($_));
+    $_, scalar($cgi->param($_));
   } fields('part_pkg')
 } );
 
-my %pkg_svc = map { $_ => scalar($cgi->param("pkg_svc$_")) }
+my %pkg_svc = map { $_ => $cgi->param("pkg_svc$_") }
               map { $_->svcpart }
               qsearch('part_svc', {} );
 
 my $error;
 my $custnum = '';
-if ( $cgi->param('taxclass') eq '(select)' ) {
-
-  $error = 'Must select a tax class';
-
-} elsif ( $pkgpart ) {
-
+if ( $pkgpart ) {
   $error = $new->replace( $old,
                           pkg_svc     => \%pkg_svc,
                           primary_svc => scalar($cgi->param('pkg_svc_primary')),
                         );
 } else {
-
   $error = $new->insert(  pkg_svc     => \%pkg_svc,
                           primary_svc => scalar($cgi->param('pkg_svc_primary')),
                           cust_pkg    => $cgi->param('pkgnum'),
@@ -48,7 +42,6 @@ if ( $cgi->param('taxclass') eq '(select)' ) {
                        );
   $pkgpart = $new->pkgpart;
 }
-
 if ( $error ) {
   $cgi->param('error', $error );
   print $cgi->redirect(popurl(2). "part_pkg.cgi?". $cgi->query_string );

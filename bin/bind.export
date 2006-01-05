@@ -43,12 +43,10 @@ foreach my $export ( @exports ) {
   open(NAMED_CONF,">$prefix/named.conf")
     or die "can't open $prefix/named.conf: $!";
 
-  if ( -e "$prefix/named.conf.HEADER" ) {
-    open(CONF_HEADER,"<$prefix/named.conf.HEADER")
-      or die "can't open $prefix/named.conf.HEADER: $!";
-    while (<CONF_HEADER>) { print NAMED_CONF $_; }
-    close CONF_HEADER;
-  }
+  open(CONF_HEADER,"<$prefix/named.conf.HEADER")
+    or die "can't open $prefix/named.conf.HEADER: $!";
+  while (<CONF_HEADER>) { print NAMED_CONF $_; }
+  close CONF_HEADER;
 
   my $zonepath = $export->option('zonepath');
   $zonepath =~ s/\/$//;
@@ -147,12 +145,10 @@ foreach my $sexport ( @sexports ) { #false laziness with above
   open(NAMED_CONF,">$prefix/named.conf")
     or die "can't open $prefix/named.conf: $!";
 
-  if ( -e "$prefix/named.conf.HEADER" ) {
-    open(CONF_HEADER,"<$prefix/named.conf.HEADER")
-      or die "can't open $prefix/named.conf.HEADER: $!";
-    while (<CONF_HEADER>) { print NAMED_CONF $_; }
-    close CONF_HEADER;
-  }
+  open(CONF_HEADER,"<$prefix/named.conf.HEADER")
+    or die "can't open $prefix/named.conf.HEADER: $!";
+  while (<CONF_HEADER>) { print NAMED_CONF $_; }
+  close CONF_HEADER;
 
   my $masters = $sexport->option('master');
 

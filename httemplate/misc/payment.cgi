@@ -22,7 +22,7 @@
    my $conf = new FS::Conf;
    my %states = map { $_->state => 1 }
                   qsearch('cust_main_county', {
-                    'country' => $conf->config('countrydefault') || 'US'
+                    'country' => $conf->config('defaultcountry') || 'US'
                   } );
    my @states = sort { $a cmp $b } keys %states;
 
@@ -183,7 +183,7 @@ function achclose() {
   <TR>
     <TD ALIGN="right">
       Account&nbsp;holder<BR>
-      Social&nbsp;security&nbsp;or&nbsp;tax&nbsp;ID&nbsp;#
+      Social&nbsp;security&nbsp;or&nbsp;tax&nbspID&nbsp;#
     </TD>
     <TD><INPUT TYPE="text" NAME="ss" VALUE="<%=$ss%>"></TD>
   </TR>

@@ -16,13 +16,32 @@ sub sql_num_customer_tickets {
    )";
 }
 
-sub baseurl {
-  #my $self = shift;
-  if ( $RT::URI::freeside::URL ) {
-    $RT::URI::freeside::URL. 'rt/';
-  } else {
-    'http://you_need_to_set_RT_URI_freeside_URL_in_SiteConfig.pm/';
-  }
+sub num_customer_tickets {
+  my( $self, $custnum, $priority ) = ( shift, shift, shift );
+  $self->SUPER::num_customer_tickets( $custnum, $priority, dbh );
+}
+
+sub customer_tickets {
+  my( $self, $custnum, $limit, $priority ) = ( shift, shift, shift, shift );
+  $self->SUPER::customer_tickets( $custnum, $limit, $priority, dbh );
+}
+
+sub href_customer_tickets {
+  my $self = shift;
+  # well, 2 is wrong here but will have to do for now
+  popurl(2).'rt/'. $self->SUPER::href_customer_tickets(@_);
+}
+
+sub href_new_ticket {
+  my $self = shift;
+  # well, 2 is wrong here but will have to do for now
+  popurl(2).'rt/'. $self->SUPER::href_new_ticket(@_);
+}
+
+sub href_ticket {
+  my $self = shift;
+  # well, 2 is wrong here but will have to do for now
+  popurl(2).'rt/'. $self->SUPER::href_ticket(@_);
 }
 
 1;

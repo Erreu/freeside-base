@@ -1,6 +1,6 @@
 package FS::part_export::shellcommands;
 
-use vars qw(@ISA %info);
+use vars qw(@ISA %info @saltset);
 use Tie::IxHash;
 use String::ShellQuote;
 use FS::part_export;
@@ -26,7 +26,7 @@ tie my %options, 'Tie::IxHash',
                        default=>'',
                      },
   'usermod' => { label=>'Modify command',
-                 default=>'usermod -c $new_finger -d $new_dir -m -l $new_username -s $new_shell -u $new_uid -g $new_gid -p $new_crypt_password $old_username',
+                 default=>'usermod -c $new_finger -d $new_dir -m -l $new_username -s $new_shell -u $new_uid -p $new_crypt_password $old_username',
                 #default=>'[ -d $old_dir ] && mv $old_dir $new_dir || ( '.
                  #  'chmod u+t $old_dir; mkdir $new_dir; cd $old_dir; '.
                  #  'find . -depth -print | cpio -pdm $new_dir; '.
@@ -38,12 +38,9 @@ tie my %options, 'Tie::IxHash',
                        type =>'textarea',
                        default=>'',
                      },
-  'usermod_pwonly' => { label=>'Disallow username, domain, uid, gid, and dir changes', #and RADIUS group changes',
+  'usermod_pwonly' => { label=>'Disallow username changes',
                         type =>'checkbox',
                       },
-  'usermod_nousername' => { label=>'Disallow just username changes',
-                            type =>'checkbox',
-                          },
   'suspend' => { label=>'Suspension command',
                  default=>'usermod -L $username',
                },
@@ -56,10 +53,6 @@ tie my %options, 'Tie::IxHash',
   'unsuspend_stdin' => { label=>'Unsuspension command STDIN',
                          default=>'',
                        },
-  'crypt' => { label   => 'Default password encryption',
-               type=>'select', options=>[qw(crypt md5)],
-               default => 'crypt',
-             },
 ;
 
 %info = (
@@ -82,7 +75,7 @@ running will not accept a domain as a parameter.  You will need to
       this.form.useradd_stdin.value = "";
       this.form.userdel.value = "userdel -r $username";
       this.form.userdel_stdin.value="";
-      this.form.usermod.value = "usermod -c $new_finger -d $new_dir -m -l $new_username -s $new_shell -u $new_uid -g $new_gid -p $new_crypt_password $old_username";
+      this.form.usermod.value = "usermod -c $new_finger -d $new_dir -m -l $new_username -s $new_shell -u $new_uid -p $new_crypt_password $old_username";
       this.form.usermod_stdin.value = "";
       this.form.suspend.value = "usermod -L $username";
       this.form.suspend_stdin.value="";
@@ -91,10 +84,10 @@ running will not accept a domain as a parameter.  You will need to
     '>
   <LI>
     <INPUT TYPE="button" VALUE="FreeBSD before 4.10 / 5.3" onClick='
-      this.form.useradd.value = "lockf /etc/passwd.lock pw useradd $username -d $dir -m -s $shell -u $uid -c $finger -h 0";
+      this.form.useradd.value = "lockf /etc/passwd.lock pw useradd $username -d $dir -m -s $shell -u $uid -g $gid -c $finger -h 0";
       this.form.useradd_stdin.value = "$_password\n";
       this.form.userdel.value = "lockf /etc/passwd.lock pw userdel $username -r"; this.form.userdel_stdin.value="";
-      this.form.usermod.value = "lockf /etc/passwd.lock pw usermod $old_username -d $new_dir -m -l $new_username -s $new_shell -u $new_uid -g $new_gid -c $new_finger -h 0";
+      this.form.usermod.value = "lockf /etc/passwd.lock pw usermod $old_username -d $new_dir -m -l $new_username -s $new_shell -u $new_uid -c $new_finger -h 0";
       this.form.usermod_stdin.value = "$new__password\n"; this.form.suspend.value = "lockf /etc/passwd.lock pw lock $username";
       this.form.suspend_stdin.value="";
       this.form.unsuspend.value = "lockf /etc/passwd.lock pw unlock $username"; this.form.unsuspend_stdin.value="";
@@ -112,7 +105,7 @@ running will not accept a domain as a parameter.  You will need to
       this.form.useradd_stdin.value = "$_password\n";
       this.form.userdel.value = "pw userdel $username -r";
       this.form.userdel_stdin.value="";
-      this.form.usermod.value = "pw usermod $old_username -d $new_dir -m -l $new_username -s $new_shell -u $new_uid -g $new_gid -c $new_finger -h 0";
+      this.form.usermod.value = "pw usermod $old_username -d $new_dir -m -l $new_username -s $new_shell -u $new_uid -c $new_finger -h 0";
       this.form.usermod_stdin.value = "$new__password\n";
       this.form.suspend.value = "pw lock $username";
       this.form.suspend_stdin.value="";
@@ -125,7 +118,7 @@ running will not accept a domain as a parameter.  You will need to
       this.form.useradd_stdin.value = "";
       this.form.userdel.value = "userdel -r $username";
       this.form.userdel_stdin.value="";
-      this.form.usermod.value = "usermod -c $new_finger -d $new_dir -m -l $new_username -s $new_shell -u $new_uid -g $new_gid -p $new_crypt_password $old_username";
+      this.form.usermod.value = "usermod -c $new_finger -d $new_dir -m -l $new_username -s $new_shell -u $new_uid -p $new_crypt_password $old_username";
       this.form.usermod_stdin.value = "";
       this.form.suspend.value = "";
       this.form.suspend_stdin.value="";
@@ -151,8 +144,8 @@ old_ for replace operations):
 <UL>
   <LI><code>$username</code>
   <LI><code>$_password</code>
-  <LI><code>$quoted_password</code> - unencrypted password, already quoted for the shell (do not add additional quotes)
-  <LI><code>$crypt_password</code> - encrypted password, already quoted for the shell (do not add additional quotes)
+  <LI><code>$quoted_password</code> - unencrypted password quoted for the shell
+  <LI><code>$crypt_password</code> - encrypted password
   <LI><code>$uid</code>
   <LI><code>$gid</code>
   <LI><code>$finger</code> - GECOS, already quoted for the shell (do not add additional quotes)
@@ -166,6 +159,8 @@ old_ for replace operations):
 </UL>
 END
 );
+
+@saltset = ( 'a'..'z' , 'A'..'Z' , '0'..'9' , '.' , '/' );
 
 sub rebless { shift; }
 
@@ -221,7 +216,7 @@ sub _export_command {
 
   my $cust_pkg = $svc_acct->cust_svc->cust_pkg;
   if ( $cust_pkg ) {
-    $email = ( grep { $_ !~ /^(POST|FAX)$/ } $cust_pkg->cust_main->invoicing_list )[0];
+    $email = ( grep { $_ ne 'POST' } $cust_pkg->cust_main->invoicing_list )[0];
   } else {
     $email = '';
   }
@@ -234,8 +229,16 @@ sub _export_command {
   $quoted_password = shell_quote $_password;
   $domain = $svc_acct->domain;
 
-  $crypt_password =
-    shell_quote( $svc_acct->crypt_password( $self->option('crypt') ) );
+  #eventually should check a "password-encoding" field
+  if ( length($svc_acct->_password) == 13
+       || $svc_acct->_password =~ /^\$(1|2a?)\$/ ) {
+    $crypt_password = shell_quote $svc_acct->_password;
+  } else {
+    $crypt_password = crypt(
+      $svc_acct->_password,
+      $saltset[int(rand(64))].$saltset[int(rand(64))]
+    );
+  }
 
   @radius_groups = $svc_acct->radius_groups;
 
@@ -267,39 +270,40 @@ sub _export_replace {
   $old_domain = $old->domain;
   $new_domain = $new->domain;
 
-  $new_crypt_password =
-    shell_quote( $new->crypt_password( $self->option('crypt') ) );
+  #eventuall should check a "password-encoding" field
+  if ( length($new->_password) == 13
+       || $new->_password =~ /^\$(1|2a?)\$/ ) {
+    $new_crypt_password = shell_quote $new->_password;
+  } else {
+    $new_crypt_password =
+      crypt( $new->_password, $saltset[int(rand(64))].$saltset[int(rand(64))]
+    );
+  }
 
   @old_radius_groups = $old->radius_groups;
   @new_radius_groups = $new->radius_groups;
 
-  my $error = '';
-  if ( $self->option('usermod_pwonly') || $self->option('usermod_nousername') ){
+  if ( $self->option('usermod_pwonly') ) {
+    my $error = '';
     if ( $old_username ne $new_username ) {
       $error ||= "can't change username";
     }
-  }
-  if ( $self->option('usermod_pwonly') ) {
     if ( $old_domain ne $new_domain ) {
       $error ||= "can't change domain";
     }
     if ( $old_uid != $new_uid ) {
       $error ||= "can't change uid";
     }
-    if ( $old_gid != $new_gid ) {
-      $error ||= "can't change gid";
-    }
     if ( $old_dir ne $new_dir ) {
       $error ||= "can't change dir";
     }
-    #if ( join("\n", sort @old_radius_groups) ne
-    #     join("\n", sort @new_radius_groups)    ) {
-    #  $error ||= "can't change RADIUS groups";
-    #}
+    if ( join("\n", sort @old_radius_groups) ne
+         join("\n", sort @new_radius_groups)    ) {
+      $error ||= "can't change RADIUS groups";
+    }
+    return $error. ' ('. $self->exporttype. ' to '. $self->machine. ')'
+      if $error;
   }
-  return $error. ' ('. $self->exporttype. ' to '. $self->machine. ')'
-    if $error;
-
   $self->shellcommands_queue( $new->svcnum,
     user         => $self->option('user')||'root',
     host         => $self->machine,

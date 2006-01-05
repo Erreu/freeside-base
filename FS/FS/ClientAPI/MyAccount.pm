@@ -2,16 +2,14 @@ package FS::ClientAPI::MyAccount;
 
 use strict;
 use vars qw($cache);
-use subs qw(_cache);
 use Digest::MD5 qw(md5_hex);
 use Date::Format;
 use Business::CreditCard;
-use Time::Duration;
+use Cache::SharedMemoryCache; #store in db?
 use FS::CGI qw(small_custview); #doh
 use FS::Conf;
 use FS::Record qw(qsearch qsearchs);
 use FS::Msgcat qw(gettext);
-use FS::ClientAPI_SessionCache;
 use FS::svc_acct;
 use FS::svc_domain;
 use FS::svc_external;
@@ -21,22 +19,42 @@ use FS::cust_bill;
 use FS::cust_main_county;
 use FS::cust_pkg;
 
+use FS::ClientAPI; #hmm
+FS::ClientAPI->register_handlers(
+  'MyAccount/login'              => \&login,
+  'MyAccount/logout'             => \&logout,
+  'MyAccount/customer_info'      => \&customer_info,
+  'MyAccount/edit_info'          => \&edit_info,
+  'MyAccount/invoice'            => \&invoice,
+  'MyAccount/list_invoices'      => \&list_invoices,
+  'MyAccount/cancel'             => \&cancel,
+  'MyAccount/payment_info'       => \&payment_info,
+  'MyAccount/process_payment'    => \&process_payment,
+  'MyAccount/list_pkgs'          => \&list_pkgs,
+  'MyAccount/order_pkg'          => \&order_pkg,
+  'MyAccount/cancel_pkg'         => \&cancel_pkg,
+  'MyAccount/charge'             => \&charge,
+  'MyAccount/part_svc_info'      => \&part_svc_info,
+  'MyAccount/provision_acct'     => \&provision_acct,
+  'MyAccount/provision_external' => \&provision_external,
+  'MyAccount/unprovision_svc'    => \&unprovision_svc,
+);
+
 use vars qw( @cust_main_editable_fields );
 @cust_main_editable_fields = qw(
   first last company address1 address2 city
     county state zip country daytime night fax
   ship_first ship_last ship_company ship_address1 ship_address2 ship_city
     ship_state ship_zip ship_country ship_daytime ship_night ship_fax
-  payby payinfo payname paystart_month paystart_year payissue payip
+  payby payinfo payname
 );
 
 use subs qw(_provision);
 
-sub _cache {
-  $cache ||= new FS::ClientAPI_SessionCache( {
-               'namespace' => 'FS::ClientAPI::MyAccount',
-             } );
-}
+#store in db?
+my $cache = new Cache::SharedMemoryCache( {
+   'namespace' => 'FS::ClientAPI::MyAccount',
+} );
 
 #false laziness w/FS::ClientAPI::passwd::passwd
 sub login {
@@ -72,9 +90,9 @@ sub login {
   my $session_id;
   do {
     $session_id = md5_hex(md5_hex(time(). {}. rand(). $$))
-  } until ( ! defined _cache->get($session_id) ); #just in case
+  } until ( ! defined $cache->get($session_id) ); #just in case
 
-  _cache->set( $session_id, $session, '1 hour' );
+  $cache->set( $session_id, $session, '1 hour' );
 
   return { 'error'      => '',
            'session_id' => $session_id,
@@ -84,7 +102,7 @@ sub login {
 sub logout {
   my $p = shift;
   if ( $p->{'session_id'} ) {
-    _cache->remove($p->{'session_id'});
+    $cache->remove($p->{'session_id'});
     return { 'error' => '' };
   } else {
     return { 'error' => "Can't resume session" }; #better error message
@@ -118,7 +136,7 @@ sub customer_info {
 
     my $conf = new FS::Conf;
     $return{small_custview} =
-      small_custview( $cust_main, $conf->config('countrydefault') );
+      small_custview( $cust_main, $conf->config('defaultcountry') );
 
     $return{name} = $cust_main->first. ' '. $cust_main->get('last');
 
@@ -132,19 +150,15 @@ sub customer_info {
     }
 
     $return{'invoicing_list'} =
-      join(', ', grep { $_ !~ /^(POST|FAX)$/ } $cust_main->invoicing_list );
+      join(', ', grep { $_ ne 'POST' } $cust_main->invoicing_list );
     $return{'postal_invoicing'} =
       0 < ( grep { $_ eq 'POST' } $cust_main->invoicing_list );
 
-  } elsif ( $session->{'svcnum'} ) { #no customer record
+  } else { #no customer record
 
     my $svc_acct = qsearchs('svc_acct', { 'svcnum' => $session->{'svcnum'} } )
       or die "unknown svcnum";
     $return{name} = $svc_acct->email;
-
-  } else {
-
-    return { 'error' => 'Expired session' }; #XXX redirect to login w/this err!
 
   }
 
@@ -157,7 +171,7 @@ sub customer_info {
 
 sub edit_info {
   my $p = shift;
-  my $session = _cache->get($p->{'session_id'})
+  my $session = $cache->get($p->{'session_id'})
     or return { 'error' => "Can't resume session" }; #better error message
 
   my $custnum = $session->{'custnum'}
@@ -197,7 +211,7 @@ sub edit_info {
 
 sub payment_info {
   my $p = shift;
-  my $session = _cache->get($p->{'session_id'})
+  my $session = $cache->get($p->{'session_id'})
     or return { 'error' => "Can't resume session" }; #better error message
 
   ##
@@ -207,7 +221,7 @@ sub payment_info {
   my $conf = new FS::Conf;
   my %states = map { $_->state => 1 }
                  qsearch('cust_main_county', {
-                   'country' => $conf->config('countrydefault') || 'US'
+                   'country' => $conf->config('defaultcountry') || 'US'
                  } );
 
   use vars qw($payment_info); #cache for performance
@@ -226,8 +240,6 @@ sub payment_info {
       'MasterCard' => 'MasterCard',
       'Discover' => 'Discover card',
       'American Express' => 'American Express card',
-      'Switch' => 'Switch',
-      'Solo' => 'Solo',
     },
 
   };
@@ -276,7 +288,7 @@ sub process_payment {
 
   my $p = shift;
 
-  my $session = _cache->get($p->{'session_id'})
+  my $session = $cache->get($p->{'session_id'})
     or return { 'error' => "Can't resume session" }; #better error message
 
   my %return;
@@ -343,8 +355,7 @@ sub process_payment {
     'payname'  => $payname,
     'paybatch' => $paybatch,
     'paycvv'   => $paycvv,
-    map { $_ => $p->{$_} } qw( paystart_month paystart_year payissue payip
-                               address1 address2 city state zip )
+    map { $_ => $p->{$_} } qw( address1 address2 city state zip )
   );
   return { 'error' => $error } if $error;
 
@@ -353,8 +364,7 @@ sub process_payment {
   if ( $p->{'save'} ) {
     my $new = new FS::cust_main { $cust_main->hash };
     $new->set( $_ => $p->{$_} )
-      foreach qw( payname paystart_month paystart_year payissue payip
-                  address1 address2 city state zip payinfo );
+      foreach qw( payname address1 address2 city state zip payinfo );
     $new->set( 'paydate' => $p->{'year'}. '-'. $p->{'month'}. '-01' );
     $new->set( 'payby' => $p->{'auto'} ? 'CARD' : 'DCRD' );
     my $error = $new->replace($cust_main);
@@ -366,39 +376,9 @@ sub process_payment {
 
 }
 
-sub process_prepay {
-
-  my $p = shift;
-
-  my $session = _cache->get($p->{'session_id'})
-    or return { 'error' => "Can't resume session" }; #better error message
-
-  my %return;
-
-  my $custnum = $session->{'custnum'};
-
-  my $cust_main = qsearchs('cust_main', { 'custnum' => $custnum } )
-    or return { 'error' => "unknown custnum $custnum" };
-
-  my( $amount, $seconds ) = ( 0, 0 );
-  my $error = $cust_main->recharge_prepay( $p->{'prepaid_cardnum'},
-                                           \$amount,
-                                           \$seconds
-                                         );
-
-  return { 'error' => $error } if $error;
-
-  return { 'error'    => '',
-           'amount'   => $amount,
-           'seconds'  => $seconds,
-           'duration' => duration_exact($seconds),
-         };
-
-}
-
 sub invoice {
   my $p = shift;
-  my $session = _cache->get($p->{'session_id'})
+  my $session = $cache->get($p->{'session_id'})
     or return { 'error' => "Can't resume session" }; #better error message
 
   my $custnum = $session->{'custnum'};
@@ -420,7 +400,7 @@ sub invoice {
 
 sub list_invoices {
   my $p = shift;
-  my $session = _cache->get($p->{'session_id'})
+  my $session = $cache->get($p->{'session_id'})
     or return { 'error' => "Can't resume session" }; #better error message
 
   my $custnum = $session->{'custnum'};
@@ -441,7 +421,7 @@ sub list_invoices {
 
 sub cancel {
   my $p = shift;
-  my $session = _cache->get($p->{'session_id'})
+  my $session = $cache->get($p->{'session_id'})
     or return { 'error' => "Can't resume session" }; #better error message
 
   my $custnum = $session->{'custnum'};
@@ -494,7 +474,7 @@ sub list_pkgs {
                         } $cust_main->ncancelled_pkgs
                   ],
     'small_custview' =>
-      small_custview( $cust_main, $conf->config('countrydefault') ),
+      small_custview( $cust_main, $conf->config('defaultcountry') ),
   };
 
 }
@@ -612,7 +592,7 @@ sub order_pkg {
 
 sub cancel_pkg {
   my $p = shift;
-  my $session = _cache->get($p->{'session_id'})
+  my $session = $cache->get($p->{'session_id'})
     or return { 'error' => "Can't resume session" }; #better error message
 
   my $custnum = $session->{'custnum'};
@@ -737,7 +717,7 @@ sub part_svc_info {
     'acstate'         => '',
 
     'small_custview' =>
-      small_custview( $cust_main, $conf->config('countrydefault') ),
+      small_custview( $cust_main, $conf->config('defaultcountry') ),
 
   };
 
@@ -767,7 +747,7 @@ sub unprovision_svc {
   return { 'svc'   => $cust_svc->part_svc->svc,
            'error' => $cust_svc->cancel,
            'small_custview' =>
-             small_custview( $cust_main, $conf->config('countrydefault') ),
+             small_custview( $cust_main, $conf->config('defaultcountry') ),
          };
 
 }
@@ -781,27 +761,28 @@ sub _custoragent_session_custnum {
   if ( $p->{'session_id'} ) {
 
     $context = 'customer';
-    $session = _cache->get($p->{'session_id'})
-      or return ( 'error' => "Can't resume session" ); #better error message
+    $session = $cache->get($p->{'session_id'})
+      or return { 'error' => "Can't resume session" }; #better error message
     $custnum = $session->{'custnum'};
 
   } elsif ( $p->{'agent_session_id'} ) {
 
     $context = 'agent';
-    my $agent_cache = new FS::ClientAPI_SessionCache( {
+    my $agent_cache = new Cache::SharedMemoryCache( {
       'namespace' => 'FS::ClientAPI::Agent',
     } );
     $session = $agent_cache->get($p->{'agent_session_id'})
-      or return ( 'error' => "Can't resume session" ); #better error message
+      or return { 'error' => "Can't resume session" }; #better error message
     $custnum = $p->{'custnum'};
 
   } else {
-    return ( 'error' => "Can't resume session" ); #better error message
+    return { 'error' => "Can't resume session" }; #better error message
   }
 
   ($context, $session, $custnum);
 
 }
+
 
 1;
 

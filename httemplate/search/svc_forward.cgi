@@ -4,117 +4,76 @@ my $conf = new FS::Conf;
 
 my($query)=$cgi->keywords;
 $query ||= ''; #to avoid use of unitialized value errors
-
-
-my $orderby;
-
-my $cjoin = '';
-my @extra_sql = ();
-if ( $query =~ /^UN_(.*)$/ ) {
-  $query = $1;
-  $cjoin = 'LEFT JOIN cust_svc USING ( svcnum )';
-  push @extra_sql, 'pkgnum IS NULL';
-}
-
+my(@svc_forward,$sortby);
 if ( $query eq 'svcnum' ) {
-  $orderby = 'ORDER BY svcnum';
+  $sortby=\*svcnum_sort;
+  @svc_forward=qsearch('svc_forward',{});
 } else {
   eidiot('unimplemented');
 }
 
-my $extra_sql = 
-  scalar(@extra_sql)
-    ? ' WHERE '. join(' AND ', @extra_sql )
-    : '';
+if ( scalar(@svc_forward) == 1 ) {
+  print $cgi->redirect(popurl(2). "view/svc_forward.cgi?". $svc_forward[0]->svcnum);
+  #exit;
+} elsif ( scalar(@svc_forward) == 0 ) {
+%>
+<!-- mason kludge -->
+<%
+  eidiot "No matching forwards found!\n";
+} else {
+%>
+<!-- mason kludge -->
+<%
+  my $total = scalar(@svc_forward);
+  print header("Mail forward Search Results",''), <<END;
 
-my $count_query = "SELECT COUNT(*) FROM svc_forward $cjoin $extra_sql";
-my $sql_query = {
-  'table'     => 'svc_forward',
-  'hashref'   => {},
-  'select'    => join(', ',
-                   'svc_forward.*',
-                    'cust_main.custnum',
-                    FS::UI::Web::cust_sql_fields(),
-                 ),
-  'extra_sql' => "$extra_sql $orderby",
-  'addl_from' => ' LEFT JOIN cust_svc  USING ( svcnum  ) '.
-                 ' LEFT JOIN part_svc  USING ( svcpart ) '.
-                 ' LEFT JOIN cust_pkg  USING ( pkgnum  ) '.
-                 ' LEFT JOIN cust_main USING ( custnum ) ',
-};
+    $total matching mail forwards found
+    <TABLE BORDER=4 CELLSPACING=0 CELLPADDING=0>
+      <TR>
+        <TH>Service #<BR><FONT SIZE=-1>(click to view forward)</FONT></TH>
+        <TH>Mail to<BR><FONT SIZE=-1>(click to view account)</FONT></TH>
+        <TH>Forwards to<BR><FONT SIZE=-1>(click to view account)</FONT></TH>
+      </TR>
+END
 
-#        <TH>Service #<BR><FONT SIZE=-1>(click to view forward)</FONT></TH>
-#        <TH>Mail to<BR><FONT SIZE=-1>(click to view account)</FONT></TH>
-#        <TH>Forwards to<BR><FONT SIZE=-1>(click to view account)</FONT></TH>
+  foreach my $svc_forward (
+    sort $sortby (@svc_forward)
+  ) {
+    my $svcnum = $svc_forward->svcnum;
 
-my $link = [ "${p}view/svc_forward.cgi?", 'svcnum' ];
-
-my $format_src = sub {
-  my $svc_forward = shift;
-  if ( $svc_forward->srcsvc_acct ) {
-    $svc_forward->srcsvc_acct->email;
-  } else {
     my $src = $svc_forward->src;
     $src = "<I>(anything)</I>$src" if $src =~ /^@/;
-    $src;
+    if ( $svc_forward->srcsvc_acct ) {
+      $src = qq!<A HREF="${p}view/svc_acct.cgi?!. $svc_forward->srcsvc. '">'.
+             $svc_forward->srcsvc_acct->email. '</A>';
+    }
+
+    my $dst = $svc_forward->dst;
+    if ( $svc_forward->dstsvc_acct ) {
+      $dst = qq!<A HREF="${p}view/svc_acct.cgi?!. $svc_forward->dstsvc. '">'.
+             $svc_forward->dstsvc_acct->email. '</A>';
+    }
+
+    print <<END;
+      <TR>
+        <TD><A HREF="${p}view/svc_forward.cgi?$svcnum">$svcnum</A></TD>
+        <TD>$src</TD>
+        <TD>$dst</TD>
+      </TR>
+END
+
   }
-};
+ 
+  print <<END;
+    </TABLE>
+  </BODY>
+</HTML>
+END
 
-my $link_src = sub {
-  my $svc_forward = shift;
-  if ( $svc_forward->srcsvc_acct ) {
-    [ "${p}view/svc_acct.cgi?", 'srcsvc' ];
-  } else {
-    '';
-  }
-};
+}
 
-my $format_dst = sub {
-  my $svc_forward = shift;
-  if ( $svc_forward->dstsvc_acct ) {
-    $svc_forward->dstsvc_acct->email;
-  } else {
-    $svc_forward->dst;
-  }
-};
+sub svcnum_sort {
+  $a->getfield('svcnum') <=> $b->getfield('svcnum');
+}
 
-my $link_dst = sub {
-  my $svc_forward = shift;
-  if ( $svc_forward->dstsvc_acct ) {
-    [ "${p}view/svc_acct.cgi?", 'dstsvc' ];
-  } else {
-    '';
-  }
-};
-
-#smaller false laziness w/svc_*.cgi here
-my $link_cust = sub {
-  my $svc_x = shift;
-  $svc_x->custnum ? [ "${p}view/cust_main.cgi?", 'custnum' ] : '';
-};
-
-%><%= include( 'elements/search.html',
-                 'title'             => "Mail forward Search Results",
-                 'name'              => 'mail forwards',
-                 'query'             => $sql_query,
-                 'count_query'       => $count_query,
-                 'redirect'          => $link,
-                 'header'            => [ '#',
-                                          'Mail to',
-                                          'Forwards to',
-                                          FS::UI::Web::cust_header(),
-                                        ],
-                 'fields'            => [ 'svcnum',
-                                          $format_src,
-                                          $format_dst,
-                                          \&FS::UI::Web::cust_fields,
-                                        ],
-                 'links'             => [ $link,
-                                          $link_src,
-                                          $link_dst,
-                                          ( map { $link_cust }
-                                                FS::UI::Web::cust_header()
-                                          ),
-                                        ],
-             )
 %>

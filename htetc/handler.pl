@@ -20,8 +20,6 @@ use HTML::Mason::ApacheHandler;
 
 use strict;
 
-###use Module::Refresh;###
-
 # List of modules that you want to use from components (see Admin
 # manual for details)
 #{  package HTML::Mason::Commands;
@@ -95,34 +93,27 @@ sub handler
       use Date::Format;
       use Date::Parse;
       use Time::Local;
-      use Time::Duration;
       use Tie::IxHash;
-      use URI::Escape;
       use HTML::Entities;
-      use JSON;
       use IO::Handle;
       use IO::File;
-      use IO::Scalar;
       use Net::Whois::Raw qw(whois);
       if ( $] < 5.006 ) {
         eval "use Net::Whois::Raw 0.32 qw(whois)";
         die $@ if $@;
       }
-      use Text::CSV_XS;
-      use Spreadsheet::WriteExcel;
       use Business::CreditCard;
       use String::Approx qw(amatch);
       use Chart::LinesPoints;
-      use HTML::Widgets::SelectLayers 0.05;
+      use HTML::Widgets::SelectLayers 0.03;
       use FS;
       use FS::UID qw(cgisuidsetup dbh getotaker datasrc driver_name);
       use FS::Record qw(qsearch qsearchs fields dbdef);
       use FS::Conf;
       use FS::CGI qw(header menubar popurl table itable ntable idiot eidiot
                      small_custview myexit http_header);
-      use FS::UI::Web;
       use FS::Msgcat qw(gettext geterror);
-      use FS::Misc qw( send_email send_fax );
+      use FS::Misc qw( send_email );
       use FS::Report::Table::Monthly;
       use FS::TicketSystem;
 
@@ -168,9 +159,6 @@ sub handler
       use FS::rate;
       use FS::rate_region;
       use FS::rate_prefix;
-      use FS::payment_gateway;
-      use FS::agent_payment_gateway;
-      use FS::XMLRPC;
 
       if ( %%%RT_ENABLED%%% ) {
         eval '
@@ -187,7 +175,7 @@ sub handler
           use RT::GroupMembers;
           use RT::CustomFields;
           use RT::CustomFieldValues;
-          use RT::ObjectCustomFieldValues;
+          use RT::TicketCustomFieldValues;
 
           use RT::Interface::Web;
           use MIME::Entity;
@@ -272,8 +260,6 @@ sub handler
       }
 
     } # end package HTML::Mason::Commands;
-
-    ###Module::Refresh->refresh;###
 
     $r->content_type('text/html');
     #eorar

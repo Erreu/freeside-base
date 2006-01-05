@@ -1,5 +1,7 @@
 <!-- mason kludge -->
-<%= header("Job Queue", menubar( 'Main Menu' => $p, )) %>
-<%= joblisting({}) %>
-</BODY>
-</HTML>
+<%
+
+print header("Job Queue", menubar( 'Main Menu' => $p, )).
+      joblisting({}). '</BODY></HTML>';
+
+%>

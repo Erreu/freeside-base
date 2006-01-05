@@ -104,9 +104,8 @@ unless ($cancel) {
 
   #list of services this pkgpart includes
   my $pkg_svc;
-  my %pkg_svc;
-  #foreach $pkg_svc ( qsearch('pkg_svc',{'pkgpart'=> $cust_pkg->pkgpart }) ) {
-  foreach $pkg_svc ( $cust_pkg->part_pkg->pkg_svc ) {
+  my %pkg_svc = ();
+  foreach $pkg_svc ( qsearch('pkg_svc',{'pkgpart'=> $cust_pkg->pkgpart }) ) {
     $pkg_svc{$pkg_svc->svcpart} = $pkg_svc->quantity if $pkg_svc->quantity;
   }
 

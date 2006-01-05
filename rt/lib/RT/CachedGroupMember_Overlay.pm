@@ -1,8 +1,8 @@
-# BEGIN BPS TAGGED BLOCK {{{
+# {{{ BEGIN BPS TAGGED BLOCK
 # 
 # COPYRIGHT:
 #  
-# This software is Copyright (c) 1996-2005 Best Practical Solutions, LLC 
+# This software is Copyright (c) 1996-2004 Best Practical Solutions, LLC 
 #                                          <jesse@bestpractical.com>
 # 
 # (Except where explicitly superseded by other copyright notices)
@@ -42,45 +42,29 @@
 # works based on those contributions, and sublicense and distribute
 # those contributions and any derivatives thereof.
 # 
-# END BPS TAGGED BLOCK }}}
-package RT::CachedGroupMember;
-
+# }}} END BPS TAGGED BLOCK
 use strict;
 no warnings qw(redefine);
 
-=head1 NAME
+# {{{ Create
 
-  RT::CachedGroupMember
-
-=head1 SYNOPSIS
-
-  use RT::CachedGroupMember;
-
-=head1 DESCRIPTION
-
-=head1 METHODS
-
-=cut
-
-# {{ Create
-
-=head2 Create PARAMHASH
+=item Create PARAMHASH
 
 Create takes a hash of values and creates a row in the database:
 
-  'Group' is the "top level" group we're building the cache for. This 
-  is an RT::Principal object
+  'Group' is the "top level" group we're building the cache for. This is an 
+  RT::Principal object
 
-  'Member' is the RT::Principal  of the user or group we're adding to 
-  the cache.
+  'Member' is the RT::Principal  of the user or group we're adding
+  to the cache.
 
-  'ImmediateParent' is the RT::Principal of the group that this 
-  principal belongs to to get here
+  'ImmediateParent' is the RT::Principal of the group that this principal
+  belongs to to get here
 
   int(11) 'Via' is an internal reference to CachedGroupMembers->Id of
-  the "parent" record of this cached group member. It should be empty if 
-  this member is a "direct" member of this group. (In that case, it will 
-  be set to this cached group member's id after creation)
+  the "parent" record of this cached group member. It should be empty if this
+  member is a "direct" member of this group. (In that case, it will be set to this 
+  cached group member's id after creation)
 
   This routine should _only_ be called by GroupMember->Create
 
@@ -256,14 +240,11 @@ mysql supported foreign keys with cascading SetDisableds.
 sub SetDisabled {
     my $self = shift;
     my $val = shift;
- 
-    # if it's already disabled, we're good.
-    return {1} if ($self->__Value('Disabled') == $val);
+    
     my $err = $self->SUPER::SetDisabled($val);
-    my ($retval, $msg) = $err->as_array();
-    unless ($retval) {
-        $RT::Logger->error( "Couldn't SetDisabled CachedGroupMember " . $self->Id .": $msg");
-        return ($err);
+    unless ($err) {
+        $RT::Logger->error( "Couldn't SetDisabled CachedGroupMember " . $self->Id );
+        return (undef);
     }
     
     my $member = $self->MemberObj();
@@ -277,7 +258,7 @@ sub SetDisabled {
             my $kid_err = $kid->SetDisabled($val );
             unless ($kid_err) {
                 $RT::Logger->error( "Couldn't SetDisabled CachedGroupMember " . $kid->Id );
-                return ($kid_err);
+                return (undef);
             }
         }
     }

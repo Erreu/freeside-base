@@ -126,15 +126,13 @@ sub check {
 
       or $c =~ /^\s*\$cust_bill\->(comp|realtime_(card|ach|lec)|batch_card|send)\(\);\s*$/
 
-      or $c =~ /^\s*\$cust_bill\->send(_if_newest)?\(\'[\w\-\s]+\'\s*(,\s*(\d+|\[\s*\d+(,\s*\d+)*\s*\])\s*,\s*'[\w\@\.\-\+]*'\s*)?\);\s*$/
+      or $c =~ /^\s*\$cust_bill\->send(_if_newest)?\(\'[\w\-\s]+\'\s*(,\s*\d+\s*,\s*'[\w\@\.\-\+]*'\s*)?\);\s*$/
 
       or $c =~ /^\s*\$cust_main\->apply_payments; \$cust_main->apply_credits; "";\s*$/
 
       or $c =~ /^\s*\$cust_main\->charge\( \s*\d*\.?\d*\s*,\s*\'[\w \!\@\#\$\%\&\(\)\-\+\;\:\"\,\.\?\/]*\'\s*\);\s*$/
 
       or $c =~ /^\s*\$cust_main\->suspend_(if|unless)_pkgpart\([\d\,\s]*\);\s*$/
-
-      or $c =~ /^\s*\$cust_bill\->cust_suspend_if_balance_over\([\d\.\s]*\);\s*$/
 
       or do {
         #log
@@ -160,12 +158,7 @@ sub check {
   if ( $self->plandata =~ /^(agent_)?templatename\s+(.*)$/m ) {
     my $name= $2;
 
-    foreach my $file (qw( template
-                          latex latexnotes latexreturnaddress latexfooter
-                            latexsmallfooter
-                          html htmlnotes htmlreturnaddress htmlfooter
-                     ))
-    {
+    foreach my $file (qw( template latex latexnotes )) {
       unless ( $conf->exists("invoice_${file}_$name") ) {
         $conf->set(
           "invoice_${file}_$name" =>
@@ -178,32 +171,11 @@ sub check {
   $self->SUPER::check;
 }
 
-=item templatename
-
-Returns the alternate invoice template name, if any, or false if there is
-no alternate template for this invoice event.
-
-=cut
-
-sub templatename {
-  my $self = shift;
-  if (    $self->plan     =~ /^send_(alternate|agent)$/
-       && $self->plandata =~ /^(agent_)?templatename (.*)$/m
-     )
-  {
-    $2;
-  } else {
-    '';
-  }
-}
-
-
 =back
 
 =head1 BUGS
 
-The whole "eventcode" idea is bunk.  This should be refactored with subclasses
-like part_pkg/ and part_export/
+Alas.
 
 =head1 SEE ALSO
 
