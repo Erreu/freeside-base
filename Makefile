@@ -102,7 +102,7 @@ RT_PATH = /opt/rt3
 FREESIDE_PATH = `pwd`
 PERL_INC_DEV_KLUDGE = /usr/local/share/perl/5.8.7/
 
-VERSION=1.5.8cvs
+VERSION=1.5.8
 TAG=freeside_1_5_8
 
 help:
