@@ -3746,13 +3746,13 @@ sub smart_search {
       #substring
       push @cust_main, qsearch( 'cust_main',
                                 { 'last'     => { 'op'    => 'ILIKE',
-                                                  'value' => "%$q_value%" },
+                                                  'value' => "%$value%" },
                                   %options,
                                 }
                               );
       push @cust_main, qsearch( 'cust_main',
                                 { 'ship_last' => { 'op'    => 'ILIKE',
-                                                   'value' => "%$q_value%" },
+                                                   'value' => "%$value%" },
                                   %options,
 
                                 }
@@ -3761,13 +3761,13 @@ sub smart_search {
 
       push @cust_main, qsearch( 'cust_main',
                                 { 'company'  => { 'op'    => 'ILIKE',
-                                                  'value' => "%$q_value%" },
+                                                  'value' => "%$value%" },
                                   %options,
                                 }
                               );
       push @cust_main, qsearch( 'cust_main',
                                 { 'ship_company' => { 'op' => 'ILIKE',
-                                                   'value' => "%$q_value%" },
+                                                   'value' => "%$value%" },
                                   %options,
                                 }
                               )
