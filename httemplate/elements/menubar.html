@@ -1,8 +1,0 @@
-<%
-  my($item, $url, @html);
-  while (@_) {
-    ($item, $url) = splice(@_,0,2);
-    push @html, qq!<A HREF="$url">$item</A>!;
-  }
-%>
-<%= join(' | ', @html) %>
