@@ -42,12 +42,17 @@ INSERT INTO msgcat ( msgnum, msgcode, locale, msg ) VALUES ( 21, 'svc_external-t
 DROP INDEX cust_bill_pkg1;
 </pre>
 
-  <li>On recent Pg versions:
+  <li>On Pg 8.1 and newer:
+<pre>
+ALTER TABLE cust_main ALTER COLUMN payinfo TYPE varchar(512) NULL;
+ALTER TABLE h_cust_main ALTER COLUMN payinfo TYPE varchar(512) NULL;
+</pre>
+  <li>On Pg 7.4-8.0 (7.3-8.0?):
 <pre>
 ALTER TABLE cust_main ALTER COLUMN payinfo varchar(512) NULL;
 ALTER TABLE h_cust_main ALTER COLUMN payinfo varchar(512) NULL;
 </pre>
-On older Pg versions that don't support altering columns directly, you will need to dump the database, edit the schema definitions in the dump file, and reload.
+Pg versions 7.3 (7.2?) and older don't support altering columns directly. you will need to dump the database, edit the schema definitions in the dump file, and reload.
 
   <li>On recent Pg versions:
 <pre>
