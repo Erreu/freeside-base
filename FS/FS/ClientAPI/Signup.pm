@@ -5,6 +5,7 @@ use Tie::RefHash;
 use FS::Conf;
 use FS::Record qw(qsearch qsearchs dbdef);
 use FS::Msgcat qw(gettext);
+use FS::Misc qw(card_types);
 use FS::ClientAPI_SessionCache;
 use FS::agent;
 use FS::cust_main_county;
@@ -22,29 +23,21 @@ sub signup_info {
 
   my $conf = new FS::Conf;
 
-  use vars qw($signup_info); #cache for performance;
-  $signup_info ||= {
-
+  use vars qw($signup_info_cache); #cache for performance;
+  $signup_info_cache ||= {
     'cust_main_county' =>
       [ map { $_->hashref } qsearch('cust_main_county', {}) ],
 
     'agent' =>
       [
         map { $_->hashref }
-          qsearch('agent', dbdef->table('agent')->column('disabled')
-                             ? { 'disabled' => '' }
-                             : {}
-                 )
+          qsearch('agent', { 'disabled' => '' } )
       ],
 
     'part_referral' =>
       [
         map { $_->hashref }
-          qsearch('part_referral',
-                    dbdef->table('part_referral')->column('disabled')
-                      ? { 'disabled' => '' }
-                      : {}
-                 )
+          qsearch('part_referral', { 'disabled' => '' })
       ],
 
     'agentnum2part_pkg' =>
@@ -53,28 +46,33 @@ sub signup_info {
           my $href = $_->pkgpart_hashref;
           $_->agentnum =>
             [
-              map { { 'payby' => [ $_->payby ], %{$_->hashref} } }
+              map { { 'payby'       => [ $_->payby ],
+                      'freq_pretty' => $_->freq_pretty,
+                      'options'     => { $_->options },
+                      %{$_->hashref}
+                  } }
                 grep { $_->svcpart('svc_acct') && $href->{ $_->pkgpart } }
                   qsearch( 'part_pkg', { 'disabled' => '' } )
             ];
-        } qsearch('agent', dbdef->table('agent')->column('disabled')
-                             ? { 'disabled' => '' }
-                             : {}
-                 )
+        } qsearch('agent', { 'disabled' => '' })
       },
 
     'svc_acct_pop' => [ map { $_->hashref } qsearch('svc_acct_pop',{} ) ],
+
+    'emailinvoiceonly' => $conf->exists('emailinvoiceonly'),
 
     'security_phrase' => $conf->exists('security_phrase'),
 
     'payby' => [ $conf->config('signup_server-payby') ],
 
-    'cvv_enabled' => defined dbdef->table('cust_main')->column('paycvv'),
+    'card_types' => card_types(),
 
-    'ship_enabled' => defined dbdef->table('cust_main')->column('ship_last'),
+    'cvv_enabled' => defined dbdef->table('cust_main')->column('paycvv'), # 1,
+
+    'ship_enabled' => defined dbdef->table('cust_main')->column('ship_last'),#1,
 
     'msgcat' => { map { $_=>gettext($_) } qw(
-      passwords_dont_match invalid_card unknown_card_type not_a empty_password
+      passwords_dont_match invalid_card unknown_card_type not_a empty_password illegal_or_empty_text
     ) },
 
     'statedefault' => $conf->config('statedefault') || 'CA',
@@ -83,9 +81,39 @@ sub signup_info {
 
     'refnum' => $conf->config('signup_server-default_refnum'),
 
+    'default_pkgpart' => $conf->config('signup_server-default_pkgpart'),
+
   };
 
-  my $agentnum = $conf->config('signup_server-default_agentnum');
+  my $signup_info = { %$signup_info_cache };
+
+  my @addl = qw( signup_server-classnum2 signup_server-classnum3 );
+
+  if ( grep { $conf->exists($_) } @addl ) {
+  
+    $signup_info->{optional_packages} = [];
+
+    foreach my $addl ( @addl ) {
+      my $classnum = $conf->config($addl) or next;
+
+      my @pkgs = map { {
+                         'freq_pretty' => $_->freq_pretty,
+                         'options'     => { $_->options },
+                         %{ $_->hashref }
+                       };
+                     }
+                     qsearch( 'part_pkg', { classnum => $classnum } );
+
+      push @{$signup_info->{optional_packages}}, \@pkgs;
+
+    }
+
+  }
+
+  my $agentnum = $packet->{'agentnum'}
+                 || $conf->config('signup_server-default_agentnum');
+  $agentnum =~ /^(\d*)$/ or die "illegal agentnum";
+  $agentnum = $1;
 
   my $session = '';
   if ( exists $packet->{'session_id'} ) {
@@ -98,13 +126,31 @@ sub signup_info {
     } else {
       return { 'error' => "Can't resume session" }; #better error message
     }
+  }elsif( exists $packet->{'customer_session_id'} ) {
+    my $cache = new FS::ClientAPI_SessionCache( {
+      'namespace' => 'FS::ClientAPI::MyAccount',
+    } );
+    $session = $cache->get($packet->{'customer_session_id'});
+    if ( $session ) {
+      my $custnum = $session->{'custnum'};
+      my $cust_main = qsearchs('cust_main', { 'custnum' => $custnum });
+      return { 'error' => "Can't find your customer record" } unless $cust_main;
+      $agentnum = $cust_main->agentnum;
+    } else {
+      return { 'error' => "Can't resume session" }; #better error message
+    }
   }
 
   $signup_info->{'part_pkg'} = [];
 
   if ( $packet->{'reg_code'} ) {
     $signup_info->{'part_pkg'} = 
-      [ map { { 'payby'   => [ $_->payby ], %{$_->hashref} } }
+      [ map { { 'payby'       => [ $_->payby ],
+                'freq_pretty' => $_->freq_pretty,
+                'options'     => { $_->options },
+                %{$_->hashref}
+              };
+            }
           grep { $_->svcpart('svc_acct') }
           map { $_->part_pkg }
             qsearchs( 'reg_code', { 'code'     => $packet->{'reg_code'},
@@ -118,7 +164,11 @@ sub signup_info {
   } elsif ( $packet->{'promo_code'} ) {
 
     $signup_info->{'part_pkg'} =
-      [ map { { 'payby'   => [ $_->payby ], %{$_->hashref} } }
+      [ map { { 'payby'   => [ $_->payby ],
+                'freq_pretty' => $_->freq_pretty,
+                'options'     => { $_->options },
+                %{$_->hashref}
+            } }
           grep { $_->svcpart('svc_acct') }
             qsearch( 'part_pkg', { 'promo_code' => {
                                      op=>'ILIKE',
@@ -133,12 +183,29 @@ sub signup_info {
 
   if ( $agentnum && ! @{ $signup_info->{'part_pkg'} } ) {
     $signup_info->{'part_pkg'} = $signup_info->{'agentnum2part_pkg'}{$agentnum};
+
+    $signup_info->{'part_referral'} =
+      [
+        map { $_->hashref }
+          qsearch( {
+                     'table'     => 'part_referral',
+                     'hashref'   => { 'disabled' => '' },
+                     'extra_sql' => "AND (    agentnum = $agentnum  ".
+                                    "      OR agentnum IS NULL    ) ",
+                   },
+                 )
+      ];
+
   }
   # else {
   # delete $signup_info->{'part_pkg'};
   #}
 
-  if ( $session ) {
+  $signup_info->{'part_pkg'} = [ sort { $a->{pkg} cmp $b->{pkg} }  # case?
+                                      @{ $signup_info->{'part_pkg'} }
+                               ];
+
+  if ( exists $packet->{'session_id'} ) {
     my $agent_signup_info = { %$signup_info };
     delete $agent_signup_info->{agentnum2part_pkg};
     $agent_signup_info->{'agent'} = $session->{'agent'};
@@ -214,7 +281,9 @@ sub new_customer {
   $cust_main->payinfo($cust_main->daytime)
     if $cust_main->payby eq 'LECB' && ! $cust_main->payinfo;
 
-  my @invoicing_list = split( /\s*\,\s*/, $packet->{'invoicing_list'} );
+  my @invoicing_list = $packet->{'invoicing_list'}
+                         ? split( /\s*\,\s*/, $packet->{'invoicing_list'} )
+                         : ();
 
   $packet->{'pkgpart'} =~ /^(\d+)$/ or '' =~ /^()$/;
   my $pkgpart = $1;
@@ -299,10 +368,9 @@ sub new_customer {
     #warn "[fs_signup_server] error billing new customer: $bill_error"
     #  if $bill_error;
 
-    $cust_main->apply_payments;
-    $cust_main->apply_credits;
+    $cust_main->apply_payments_and_credits;
 
-    $bill_error = $cust_main->collect;
+    $bill_error = $cust_main->collect('realtime' => 1);
     #warn "[fs_signup_server] error collecting from new customer: $bill_error"
     #  if $bill_error;
 

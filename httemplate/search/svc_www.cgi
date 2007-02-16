@@ -1,29 +1,101 @@
-<%
+<% include( 'elements/search.html',
+                 'title'       => 'Virtual Host Search Results',
+                 'name'        => 'virtual hosts',
+                 'query'       => $sql_query,
+                 'count_query' => $count_query,
+                 'redirect'    => $link,
+                 'header'      => [ '#',
+                                    'Service',
+                                    'Zone',
+                                    'User',
+                                    FS::UI::Web::cust_header(),
+                                  ],
+                 'fields'      => [ 'svcnum',
+                                    'svc',
+                                    sub { $_[0]->domain_record->zone },
+                                    sub {
+                                          my $svc_www = shift;
+                                          my $svc_acct = $svc_www->svc_acct;
+                                          $svc_acct
+                                            ? $svc_acct->email
+                                            : '';
+                                        },
+                                    \&FS::UI::Web::cust_fields,
+                                  ],
+                 'links'       => [ $link,
+                                    $link,
+                                    '',
+                                    $ulink,
+                                    ( map { $_ ne 'Cust. Status' ? $link_cust : '' }
+                                          FS::UI::Web::cust_header()
+                                    ),
+                                  ],
+                 'align' => 'rlll'. FS::UI::Web::cust_aligns(),
+                 'color' => [ 
+                              '',
+                              '',
+                              '',
+                              '',
+                              FS::UI::Web::cust_colors(),
+                            ],
+                 'style' => [ 
+                              '',
+                              '',
+                              '',
+                              '',
+                              FS::UI::Web::cust_styles(),
+                            ],
+             )
+%>
+<%init>
+
+die "access denied"
+  unless $FS::CurrentUser::CurrentUser->access_right('List services');
 
 #my $conf = new FS::Conf;
 
-my($query)=$cgi->keywords;
-$query ||= ''; #to avoid use of unitialized value errors
-my $orderby;
-if ( $query eq 'svcnum' ) {
-  $orderby = 'ORDER BY svcnum';
-} else {
-  eidiot('unimplemented');
+my $orderby = 'ORDER BY svcnum';
+my @extra_sql = ();
+if ( $cgi->param('magic') =~ /^(all|unlinked)$/ ) {
+
+  push @extra_sql, 'pkgnum IS NULL'
+    if $cgi->param('magic') eq 'unlinked';
+
+  if ( $cgi->param('sortby') =~ /^(\w+)$/ ) {
+    my $sortby = $1;
+    $orderby = "ORDER BY $sortby";
+  }
+
+} elsif ( $cgi->param('svcpart') =~ /^(\d+)$/ ) {
+  push @extra_sql, "svcpart = $1";
 }
 
-my $count_query = 'SELECT COUNT(*) FROM svc_www';
+my $addl_from = ' LEFT JOIN cust_svc  USING ( svcnum  ) '.
+                ' LEFT JOIN part_svc  USING ( svcpart ) '.
+                ' LEFT JOIN cust_pkg  USING ( pkgnum  ) '.
+                ' LEFT JOIN cust_main USING ( custnum ) ';
+
+#here is the agent virtualization
+push @extra_sql, $FS::CurrentUser::CurrentUser->agentnums_sql;
+
+my $extra_sql = 
+  scalar(@extra_sql)
+    ? ' WHERE '. join(' AND ', @extra_sql )
+    : '';
+
+
+my $count_query = "SELECT COUNT(*) FROM svc_www $addl_from $extra_sql";
 my $sql_query = {
   'table'     => 'svc_www',
   'hashref'   => {},
   'select'    => join(', ',
                    'svc_www.*',
+                   'part_svc.svc',
                    'cust_main.custnum',
                    FS::UI::Web::cust_sql_fields(),
                  ),
-  'extra_sql' => $orderby,
-  'addl_from' => 'LEFT JOIN cust_svc  USING ( svcnum  )'.
-                 'LEFT JOIN cust_pkg  USING ( pkgnum  )'.
-                 'LEFT JOIN cust_main USING ( custnum )',
+  'extra_sql' => "$extra_sql $orderby",
+  'addl_from' => $addl_from,
 };
 
 my $link  = [ "${p}view/svc_www.cgi?", 'svcnum', ];
@@ -36,34 +108,4 @@ my $link_cust = sub {
   $svc_x->custnum ? [ "${p}view/cust_main.cgi?", 'custnum' ] : '';
 };
 
-%><%= include( 'elements/search.html',
-                 'title'       => 'Virtual Host Search Results',
-                 'name'        => 'virtual hosts',
-                 'query'       => $sql_query,
-                 'count_query' => $count_query,
-                 'redirect'    => $link,
-                 'header'      => [ '#',
-                                    'Zone',
-                                    'User',
-                                    FS::UI::Web::cust_header(),
-                                  ],
-                 'fields'      => [ 'svcnum',
-                                    sub { $_[0]->domain_record->zone },
-                                    sub {
-                                          my $svc_www = shift;
-                                          my $svc_acct = $svc_www->svc_acct;
-                                          $svc_acct
-                                            ? $svc_acct->email
-                                            : '';
-                                        },
-                                    \&FS::UI::Web::cust_fields,
-                                  ],
-                 'links'       => [ $link,
-                                    '',
-                                    $ulink,
-                                    ( map { $link_cust }
-                                          FS::UI::Web::cust_header()
-                                    ),
-                                  ],
-             )
-%>
+</%init>

@@ -111,6 +111,8 @@ L<FS::cust_svc> - Service class
 
 L<FS::cust_pkg> - Customer package class
 
+L<FS::cust_pkg_option> - Customer package option class
+
 L<FS::cust_main> - Customer class
 
 L<FS::cust_main_invoice> - Invoice destination
@@ -142,7 +144,9 @@ L<FS::cust_credit_bill> - Credit application to invoice class
 
 L<FS::cust_pay_refund> - Refund application to payment class
 
-L<FS::cust_pay_batch> - Credit card transaction queue class
+L<FS::pay_batch> - Credit card transaction queue class
+
+L<FS::cust_pay_batch> - Credit card transaction member queue class
 
 L<FS::prepay_credit> - Prepaid "calling card" credit class.
 

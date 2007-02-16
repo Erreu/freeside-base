@@ -1,0 +1,91 @@
+#!/usr/bin/perl -w
+
+use strict;
+use Getopt::Std;
+use FS::UID qw(adminsuidsetup);
+
+&untaint_argv;	#what it sounds like  (eww)
+#use vars qw($opt_d $opt_v $opt_p $opt_a $opt_s $opt_y);
+use vars qw(%opt);
+getopts("p:a:d:vsy:", \%opt);
+
+my $user = shift or die &usage;
+adminsuidsetup $user;
+
+use FS::Cron::bill qw(bill);
+bill(%opt, 'freq'=>'1m' );
+
+###
+# subroutines
+###
+
+sub untaint_argv {
+  foreach $_ ( $[ .. $#ARGV ) { #untaint @ARGV
+    #$ARGV[$_] =~ /^([\w\-\/]*)$/ || die "Illegal arguement \"$ARGV[$_]\"";
+    # Date::Parse
+    $ARGV[$_] =~ /^(.*)$/ || die "Illegal arguement \"$ARGV[$_]\"";
+    $ARGV[$_]=$1;
+  }
+}
+
+sub usage {
+  die "Usage:\n\n  freeside-monthly [ -d 'date' ] user [ custnum custnum ... ]\n";
+}
+
+###
+# documentation
+###
+
+=head1 NAME
+
+freeside-monthly - Run monthly billing and invoice collection events.
+
+=head1 SYNOPSIS
+
+  freeside-monthly [ -d 'date' ] [ -y days ] [ -p 'payby' ] [ -a agentnum ] [ -s ] [ -v ] user [ custnum custnum ... ]
+
+=head1 DESCRIPTION
+
+Bills customers and runs invoice collection events, for the alternate monthly
+event chain.  If you have defined monthly event checks, should be run from
+crontab monthly.
+
+Bills customers.  Searches for customers who are due for billing and calls
+the bill and collect methods of a cust_main object.  See L<FS::cust_main>.
+
+  -d: Pretend it's 'date'.  Date is in any format Date::Parse is happy with,
+      but be careful.
+
+  -y: In addition to -d, which specifies an absolute date, the -y switch
+      specifies an offset, in days.  For example, "-y 15" would increment the
+      "pretend date" 15 days from whatever was specified by the -d switch
+      (or now, if no -d switch was given).
+
+  -p: Only process customers with the specified payby (I<CARD>, I<DCRD>, I<CHEK>, I<DCHK>, I<BILL>, I<COMP>, I<LECB>)
+
+  -a: Only process customers with the specified agentnum
+
+  -s: re-charge setup fees
+
+  -v: enable debugging
+
+user: From the mapsecrets file - see config.html from the base documentation
+
+custnum: if one or more customer numbers are specified, only bills those
+customers.  Otherwise, bills all customers.
+
+=head1 NOTE
+
+In most cases, you would use freeside-daily only and not freeside-monthly.
+freeside-monthly would only be used in cases where you have events that can
+only be run once each month, for example, batching invoices to a third-party
+print/mail provider.
+
+=head1 BUGS
+
+=head1 SEE ALSO
+
+L<freeside-daily>, L<FS::cust_main>, config.html from the base documentation
+
+=cut
+

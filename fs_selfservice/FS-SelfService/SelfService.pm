@@ -1,7 +1,7 @@
 package FS::SelfService;
 
 use strict;
-use vars qw($VERSION @ISA @EXPORT_OK $dir $socket %autoload $tag);
+use vars qw($VERSION @ISA @EXPORT_OK $DEBUG $dir $socket %autoload $tag);
 use Exporter;
 use Socket;
 use FileHandle;
@@ -12,6 +12,8 @@ use Storable 2.09 qw(nstore_fd fd_retrieve);
 $VERSION = '0.03';
 
 @ISA = qw( Exporter );
+
+$DEBUG = 0;
 
 $dir = "/usr/local/freeside";
 $socket =  "$dir/selfservice_socket";
@@ -27,19 +29,25 @@ $socket .= '.'.$tag if defined $tag && length($tag);
   'customer_info'        => 'MyAccount/customer_info',
   'edit_info'            => 'MyAccount/edit_info',     #add to ss cgi!
   'invoice'              => 'MyAccount/invoice',
+  'invoice_logo'         => 'MyAccount/invoice_logo',
   'list_invoices'        => 'MyAccount/list_invoices', #?
   'cancel'               => 'MyAccount/cancel',        #add to ss cgi!
   'payment_info'         => 'MyAccount/payment_info',
   'process_payment'      => 'MyAccount/process_payment',
   'process_prepay'       => 'MyAccount/process_prepay',
-  'list_pkgs'            => 'MyAccount/list_pkgs',     #add to ss cgi!
+  'list_pkgs'            => 'MyAccount/list_pkgs',     #add to ss cgi (added?)
+  'list_svcs'            => 'MyAccount/list_svcs',     #add to ss cgi (added?)
+  'list_svc_usage'       => 'MyAccount/list_svc_usage',   
   'order_pkg'            => 'MyAccount/order_pkg',     #add to ss cgi!
+  'change_pkg'           => 'MyAccount/change_pkg', 
+  'order_recharge'       => 'MyAccount/order_recharge',
   'cancel_pkg'           => 'MyAccount/cancel_pkg',    #add to ss cgi!
   'charge'               => 'MyAccount/charge',        #?
   'part_svc_info'        => 'MyAccount/part_svc_info',
   'provision_acct'       => 'MyAccount/provision_acct',
   'provision_external'   => 'MyAccount/provision_external',
   'unprovision_svc'      => 'MyAccount/unprovision_svc',
+  'myaccount_passwd'     => 'MyAccount/myaccount_passwd',
   'signup_info'          => 'Signup/signup_info',
   'new_customer'         => 'Signup/new_customer',
   'agent_login'          => 'Agent/agent_login',
@@ -72,6 +80,7 @@ foreach my $autoload ( keys %autoload ) {
                    if ( ref($_[0]) ) {
                      $param = shift;
                    } else {
+                     #warn scalar(@_). ": ". join(" / ", @_);
                      $param = { @_ };
                    }
 
@@ -87,6 +96,8 @@ foreach my $autoload ( keys %autoload ) {
 
 sub simple_packet {
   my $packet = shift;
+  warn "sending ". $packet->{_packet}. " to server"
+    if $DEBUG;
   socket(SOCK, PF_UNIX, SOCK_STREAM, 0) or die "socket: $!";
   connect(SOCK, sockaddr_un($socket)) or die "connect to $socket: $!";
   nstore_fd($packet, \*SOCK) or die "can't send packet: $!";
@@ -98,8 +109,15 @@ sub simple_packet {
 #  my $w = new IO::Select;
 #  $w->add(\*SOCK);
 #  my @wait = $w->can_read;
+
+  warn "reading message from server"
+    if $DEBUG;
+
   my $return = fd_retrieve(\*SOCK) or die "error reading result: $!";
   die $return->{'_error'} if defined $return->{_error} && $return->{_error};
+
+  warn "returning message to client"
+    if $DEBUG;
 
   $return;
 }
@@ -908,15 +926,15 @@ sub expselect {
   }
   my $return = qq!<SELECT NAME="$prefix!. qq!_month" SIZE="1">!;
   for ( 1 .. 12 ) {
-    $return .= "<OPTION";
+    $return .= qq!<OPTION VALUE="$_"!;
     $return .= " SELECTED" if $_ == $m;
     $return .= ">$_";
   }
   $return .= qq!</SELECT>/<SELECT NAME="$prefix!. qq!_year" SIZE="1">!;
   my @t = localtime;
   my $thisYear = $t[5] + 1900;
-  for ( ($thisYear > $y && $y > 0 ? $y : $thisYear) .. 2037 ) {
-    $return .= "<OPTION";
+  for ( ($thisYear > $y && $y > 0 ? $y : $thisYear) .. ($thisYear+10) ) {
+    $return .= qq!<OPTION VALUE="$_"!;
     $return .= " SELECTED" if $_ == $y;
     $return .= ">$_";
   }

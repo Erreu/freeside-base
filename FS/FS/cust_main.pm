@@ -16,9 +16,11 @@ BEGIN {
 }
 use Digest::MD5 qw(md5_base64);
 use Date::Format;
+use Date::Parse;
 #use Date::Manip;
 use String::Approx qw(amatch);
 use Business::CreditCard 0.28;
+use Locale::Country;
 use FS::UID qw( getotaker dbh );
 use FS::Record qw( qsearchs qsearch dbdef );
 use FS::Misc qw( send_email );
@@ -40,15 +42,17 @@ use FS::cust_bill_pay;
 use FS::prepay_credit;
 use FS::queue;
 use FS::part_pkg;
-use FS::part_bill_event;
+use FS::part_bill_event qw(due_events);
 use FS::cust_bill_event;
 use FS::cust_tax_exempt;
+use FS::cust_tax_exempt_pkg;
 use FS::type_pkgs;
 use FS::payment_gateway;
 use FS::agent_payment_gateway;
 use FS::banned_pay;
+use FS::payinfo_Mixin;
 
-@ISA = qw( FS::Record );
+@ISA = qw( FS::Record FS::payinfo_Mixin );
 
 @EXPORT_OK = qw( smart_search );
 
@@ -77,7 +81,7 @@ sub _cache {
   my $self = shift;
   my ( $hashref, $cache ) = @_;
   if ( exists $hashref->{'pkgnum'} ) {
-#    #@{ $self->{'_pkgnum'} } = ();
+    #@{ $self->{'_pkgnum'} } = ();
     my $subcache = $cache->subcache( 'pkgnum', 'cust_pkg', $hashref->{custnum});
     $self->{'_pkgnum'} = $subcache;
     #push @{ $self->{'_pkgnum'} },
@@ -117,8 +121,6 @@ FS::cust_main - Object methods for cust_main records
   $error = $record->collect;
   $error = $record->collect %options;
   $error = $record->collect 'invoice_time'   => $time,
-                            'batch_card'     => 'yes',
-                            'report_badcard' => 'yes',
                           ;
 
 =head1 DESCRIPTION
@@ -188,81 +190,15 @@ FS::Record.  The following fields are currently supported:
 
 =item ship_fax - phone (optional)
 
-=item payby 
+=item payby - Payment Type (See L<FS::payinfo_Mixin> for valid payby values)
 
-I<CARD> (credit card - automatic), I<DCRD> (credit card - on-demand), I<CHEK> (electronic check - automatic), I<DCHK> (electronic check - on-demand), I<LECB> (Phone bill billing), I<BILL> (billing), I<COMP> (free), or I<PREPAY> (special billing type: applies a credit - see L<FS::prepay_credit> and sets billing type to I<BILL>)
+=item payinfo - Payment Information (See L<FS::payinfo_Mixin> for data format)
 
-=item payinfo 
-
-Card Number, P.O., comp issuer (4-8 lowercase alphanumerics; think username) or prepayment identifier (see L<FS::prepay_credit>)
-
-=cut 
-
-sub payinfo {
-  my($self,$payinfo) = @_;
-  if ( defined($payinfo) ) {
-    $self->paymask($payinfo);
-    $self->setfield('payinfo', $payinfo); # This is okay since we are the 'setter'
-  } else {
-    $payinfo = $self->getfield('payinfo'); # This is okay since we are the 'getter'
-    return $payinfo;
-  }
-}
-
+=item paymask - Masked payinfo (See L<FS::payinfo_Mixin> for how this works)
 
 =item paycvv
- 
+
 Card Verification Value, "CVV2" (also known as CVC2 or CID), the 3 or 4 digit number on the back (or front, for American Express) of the credit card
-
-=cut
-
-=item paymask - Masked payment type
-
-=over 4 
-
-=item Credit Cards
-
-Mask all but the last four characters.
-
-=item Checks
-
-Mask all but last 2 of account number and bank routing number.
-
-=item Others
-
-Do nothing, return the unmasked string.
-
-=back
-
-=cut 
-
-sub paymask {
-  my($self,$value)=@_;
-
-  # If it doesn't exist then generate it
-  my $paymask=$self->getfield('paymask');
-  if (!defined($value) && (!defined($paymask) || $paymask eq '')) {
-    $value = $self->payinfo;
-  }
-
-  if ( defined($value) && !$self->is_encrypted($value)) {
-    my $payinfo = $value;
-    my $payby = $self->payby;
-    if ($payby eq 'CARD' || $payby eq 'DCRD') { # Credit Cards (Show last four)
-      $paymask = 'x'x(length($payinfo)-4). substr($payinfo,(length($payinfo)-4));
-    } elsif ($payby eq 'CHEK' ||
-             $payby eq 'DCHK' ) { # Checks (Show last 2 @ bank)
-      my( $account, $aba ) = split('@', $payinfo );
-      $paymask = 'x'x(length($account)-2). substr($account,(length($account)-2))."@".$aba;
-    } else { # Tie up loose ends
-      $paymask = $payinfo;
-    }
-    $self->setfield('paymask', $paymask); # This is okay since we are the 'setter'
-  } elsif (defined($value) && $self->is_encrypted($value)) {
-    $paymask = 'N/A';
-  }
-  return $paymask;
-}
 
 =item paydate - expiration date, mm/yyyy, m/yyyy, mm/yy or m/yy
 
@@ -283,6 +219,8 @@ sub paymask {
 =item comments - comments (optional)
 
 =item referral_custnum - referring customer number
+
+=item spool_cdr - Enable individual CDR spooling, empty or `Y'
 
 =back
 
@@ -334,7 +272,7 @@ Currently available options are: I<depend_jobnum> and I<noexport>.
 If I<depend_jobnum> is set, all provisioning jobs will have a dependancy
 on the supplied jobnum (they will not run until the specific job completes).
 This can be used to defer provisioning until some action completes (such
-as running the customer's credit card sucessfully).
+as running the customer's credit card successfully).
 
 The I<noexport> option is deprecated.  If I<noexport> is set true, no
 provisioning jobs (exports) are scheduled.  (You can schedule them later with
@@ -394,6 +332,8 @@ sub insert {
   warn "  inserting $self\n"
     if $DEBUG > 1;
 
+  $self->signupdate(time) unless $self->signupdate;
+
   my $error = $self->SUPER::insert;
   if ( $error ) {
     $dbh->rollback if $oldAutoCommit;
@@ -411,6 +351,20 @@ sub insert {
       return "checking invoicing_list (transaction rolled back): $error";
     }
     $self->invoicing_list( $invoicing_list );
+  }
+
+  if (    $conf->config('cust_main-skeleton_tables')
+       && $conf->config('cust_main-skeleton_custnum') ) {
+
+    warn "  inserting skeleton records\n"
+      if $DEBUG > 1;
+
+    my $error = $self->start_copy_skel;
+    if ( $error ) {
+      $dbh->rollback if $oldAutoCommit;
+      return $error;
+    }
+
   }
 
   warn "  ordering packages\n"
@@ -455,6 +409,133 @@ sub insert {
 
 }
 
+sub start_copy_skel {
+  my $self = shift;
+
+  #'mg_user_preference' => {},
+  #'mg_user_indicator_profile.user_indicator_profile_id' => { 'mg_profile_indicator.profile_indicator_id' => { 'mg_profile_details.profile_detail_id' }, },
+  #'mg_watchlist_header.watchlist_header_id' => { 'mg_watchlist_details.watchlist_details_id' },
+  #'mg_user_grid_header.grid_header_id' => { 'mg_user_grid_details.user_grid_details_id' },
+  #'mg_portfolio_header.portfolio_header_id' => { 'mg_portfolio_trades.portfolio_trades_id' => { 'mg_portfolio_trades_positions.portfolio_trades_positions_id' } },
+  my @tables = eval($conf->config_binary('cust_main-skeleton_tables'));
+  die $@ if $@;
+
+  _copy_skel( 'cust_main',                                 #tablename
+              $conf->config('cust_main-skeleton_custnum'), #sourceid
+              $self->custnum,                              #destid
+              @tables,                                     #child tables
+            );
+}
+
+#recursive subroutine, not a method
+sub _copy_skel {
+  my( $table, $sourceid, $destid, %child_tables ) = @_;
+
+  my $primary_key;
+  if ( $table =~ /^(\w+)\.(\w+)$/ ) {
+    ( $table, $primary_key ) = ( $1, $2 );
+  } else {
+    my $dbdef_table = dbdef->table($table);
+    $primary_key = $dbdef_table->primary_key
+      or return "$table has no primary key".
+                " (or do you need to run dbdef-create?)";
+  }
+
+  warn "  _copy_skel: $table.$primary_key $sourceid to $destid for ".
+       join (', ', keys %child_tables). "\n"
+    if $DEBUG > 2;
+
+  foreach my $child_table_def ( keys %child_tables ) {
+
+    my $child_table;
+    my $child_pkey = '';
+    if ( $child_table_def =~ /^(\w+)\.(\w+)$/ ) {
+      ( $child_table, $child_pkey ) = ( $1, $2 );
+    } else {
+      $child_table = $child_table_def;
+
+      $child_pkey = dbdef->table($child_table)->primary_key;
+      #  or return "$table has no primary key".
+      #            " (or do you need to run dbdef-create?)\n";
+    }
+
+    my $sequence = '';
+    if ( keys %{ $child_tables{$child_table_def} } ) {
+
+      return "$child_table has no primary key".
+             " (run dbdef-create or try specifying it?)\n"
+        unless $child_pkey;
+
+      #false laziness w/Record::insert and only works on Pg
+      #refactor the proper last-inserted-id stuff out of Record::insert if this
+      # ever gets use for anything besides a quick kludge for one customer
+      my $default = dbdef->table($child_table)->column($child_pkey)->default;
+      $default =~ /^nextval\(\(?'"?([\w\.]+)"?'/i
+        or return "can't parse $child_table.$child_pkey default value ".
+                  " for sequence name: $default";
+      $sequence = $1;
+
+    }
+  
+    my @sel_columns = grep { $_ ne $primary_key }
+                           dbdef->table($child_table)->columns;
+    my $sel_columns = join(', ', @sel_columns );
+
+    my @ins_columns = grep { $_ ne $child_pkey } @sel_columns;
+    my $ins_columns = ' ( '. join(', ', $primary_key, @ins_columns ). ' ) ';
+    my $placeholders = ' ( ?, '. join(', ', map '?', @ins_columns ). ' ) ';
+
+    my $sel_st = "SELECT $sel_columns FROM $child_table".
+                 " WHERE $primary_key = $sourceid";
+    warn "    $sel_st\n"
+      if $DEBUG > 2;
+    my $sel_sth = dbh->prepare( $sel_st )
+      or return dbh->errstr;
+  
+    $sel_sth->execute or return $sel_sth->errstr;
+
+    while ( my $row = $sel_sth->fetchrow_hashref ) {
+
+      warn "    selected row: ".
+           join(', ', map { "$_=".$row->{$_} } keys %$row ). "\n"
+        if $DEBUG > 2;
+
+      my $statement =
+        "INSERT INTO $child_table $ins_columns VALUES $placeholders";
+      my $ins_sth =dbh->prepare($statement)
+          or return dbh->errstr;
+      my @param = ( $destid, map $row->{$_}, @ins_columns );
+      warn "    $statement: [ ". join(', ', @param). " ]\n"
+        if $DEBUG > 2;
+      $ins_sth->execute( @param )
+        or return $ins_sth->errstr;
+
+      #next unless keys %{ $child_tables{$child_table} };
+      next unless $sequence;
+      
+      #another section of that laziness
+      my $seq_sql = "SELECT currval('$sequence')";
+      my $seq_sth = dbh->prepare($seq_sql) or return dbh->errstr;
+      $seq_sth->execute or return $seq_sth->errstr;
+      my $insertid = $seq_sth->fetchrow_arrayref->[0];
+  
+      # don't drink soap!  recurse!  recurse!  okay!
+      my $error =
+        _copy_skel( $child_table_def,
+                    $row->{$child_pkey}, #sourceid
+                    $insertid, #destid
+                    %{ $child_tables{$child_table_def} },
+                  );
+      return $error if $error;
+
+    }
+
+  }
+
+  return '';
+
+}
+
 =item order_pkgs HASHREF, [ SECONDSREF, [ , OPTION => VALUE ... ] ]
 
 Like the insert method on an existing record, this method orders a package
@@ -478,7 +559,7 @@ Currently available options are: I<depend_jobnum> and I<noexport>.
 If I<depend_jobnum> is set, all provisioning jobs will have a dependancy
 on the supplied jobnum (they will not run until the specific job completes).
 This can be used to defer provisioning until some action completes (such
-as running the customer's credit card sucessfully).
+as running the customer's credit card successfully).
 
 The I<noexport> option is deprecated.  If I<noexport> is set true, no
 provisioning jobs (exports) are scheduled.  (You can schedule them later with
@@ -546,21 +627,23 @@ sub order_pkgs {
   ''; #no error
 }
 
-=item recharge_prepay IDENTIFIER | PREPAY_CREDIT_OBJ [ , AMOUNTREF, SECONDSREF ]
+=item recharge_prepay IDENTIFIER | PREPAY_CREDIT_OBJ [ , AMOUNTREF, SECONDSREF, UPBYTEREF, DOWNBYTEREF ]
 
 Recharges this (existing) customer with the specified prepaid card (see
 L<FS::prepay_credit>), specified either by I<identifier> or as an
 FS::prepay_credit object.  If there is an error, returns the error, otherwise
 returns false.
 
-Optionally, two scalar references can be passed as well.  They will have their
-values filled in with the amount and number of seconds applied by this prepaid
+Optionally, four scalar references can be passed as well.  They will have their
+values filled in with the amount, number of seconds, and number of upload and
+download bytes applied by this prepaid
 card.
 
 =cut
 
 sub recharge_prepay { 
-  my( $self, $prepay_credit, $amountref, $secondsref ) = @_;
+  my( $self, $prepay_credit, $amountref, $secondsref, 
+      $upbytesref, $downbytesref, $totalbytesref ) = @_;
 
   local $SIG{HUP} = 'IGNORE';
   local $SIG{INT} = 'IGNORE';
@@ -573,10 +656,14 @@ sub recharge_prepay {
   local $FS::UID::AutoCommit = 0;
   my $dbh = dbh;
 
-  my( $amount, $seconds ) = ( 0, 0 );
+  my( $amount, $seconds, $upbytes, $downbytes, $totalbytes) = ( 0, 0, 0, 0, 0 );
 
-  my $error = $self->get_prepay($prepay_credit, \$amount, \$seconds)
+  my $error = $self->get_prepay($prepay_credit, \$amount,
+                                \$seconds, \$upbytes, \$downbytes, \$totalbytes)
            || $self->increment_seconds($seconds)
+           || $self->increment_upbytes($upbytes)
+           || $self->increment_downbytes($downbytes)
+           || $self->increment_totalbytes($totalbytes)
            || $self->insert_cust_pay_prepay( $amount,
                                              ref($prepay_credit)
                                                ? $prepay_credit->identifier
@@ -590,6 +677,9 @@ sub recharge_prepay {
 
   if ( defined($amountref)  ) { $$amountref  = $amount;  }
   if ( defined($secondsref) ) { $$secondsref = $seconds; }
+  if ( defined($upbytesref) ) { $$upbytesref = $upbytes; }
+  if ( defined($downbytesref) ) { $$downbytesref = $downbytes; }
+  if ( defined($totalbytesref) ) { $$totalbytesref = $totalbytes; }
 
   $dbh->commit or die $dbh->errstr if $oldAutoCommit;
   '';
@@ -613,7 +703,8 @@ If there is an error, returns the error, otherwise returns false.
 
 
 sub get_prepay {
-  my( $self, $prepay_credit, $amountref, $secondsref ) = @_;
+  my( $self, $prepay_credit, $amountref, $secondsref,
+      $upref, $downref, $totalref) = @_;
 
   local $SIG{HUP} = 'IGNORE';
   local $SIG{INT} = 'IGNORE';
@@ -660,10 +751,49 @@ sub get_prepay {
 
   $$amountref  += $prepay_credit->amount;
   $$secondsref += $prepay_credit->seconds;
+  $$upref      += $prepay_credit->upbytes;
+  $$downref    += $prepay_credit->downbytes;
+  $$totalref   += $prepay_credit->totalbytes;
 
   $dbh->commit or die $dbh->errstr if $oldAutoCommit;
   '';
 
+}
+
+=item increment_upbytes SECONDS
+
+Updates this customer's single or primary account (see L<FS::svc_acct>) by
+the specified number of upbytes.  If there is an error, returns the error,
+otherwise returns false.
+
+=cut
+
+sub increment_upbytes {
+  _increment_column( shift, 'upbytes', @_);
+}
+
+=item increment_downbytes SECONDS
+
+Updates this customer's single or primary account (see L<FS::svc_acct>) by
+the specified number of downbytes.  If there is an error, returns the error,
+otherwise returns false.
+
+=cut
+
+sub increment_downbytes {
+  _increment_column( shift, 'downbytes', @_);
+}
+
+=item increment_totalbytes SECONDS
+
+Updates this customer's single or primary account (see L<FS::svc_acct>) by
+the specified number of totalbytes.  If there is an error, returns the error,
+otherwise returns false.
+
+=cut
+
+sub increment_totalbytes {
+  _increment_column( shift, 'totalbytes', @_);
 }
 
 =item increment_seconds SECONDS
@@ -675,9 +805,23 @@ otherwise returns false.
 =cut
 
 sub increment_seconds {
-  my( $self, $seconds ) = @_;
-  warn "$me increment_seconds called: $seconds seconds\n"
+  _increment_column( shift, 'seconds', @_);
+}
+
+=item _increment_column AMOUNT
+
+Updates this customer's single or primary account (see L<FS::svc_acct>) by
+the specified number of seconds or bytes.  If there is an error, returns
+the error, otherwise returns false.
+
+=cut
+
+sub _increment_column {
+  my( $self, $column, $amount ) = @_;
+  warn "$me increment_column called: $column, $amount\n"
     if $DEBUG;
+
+  return '' unless $amount;
 
   my @cust_pkg = grep { $_->part_pkg->svcpart('svc_acct') }
                       $self->ncancelled_pkgs;
@@ -708,7 +852,8 @@ sub increment_seconds {
        ' ('. $svc_acct->email. ")\n"
     if $DEBUG > 1;
 
-  $svc_acct->increment_seconds($seconds);
+  $column = "increment_$column";
+  $svc_acct->$column($amount);
 
 }
 
@@ -866,7 +1011,9 @@ sub delete {
       my %hash = $cust_pkg->hash;
       $hash{'custnum'} = $new_custnum;
       my $new_cust_pkg = new FS::cust_pkg ( \%hash );
-      my $error = $new_cust_pkg->replace($cust_pkg);
+      my $error = $new_cust_pkg->replace($cust_pkg,
+                                         options => { $cust_pkg->options },
+                                        );
       if ( $error ) {
         $dbh->rollback if $oldAutoCommit;
         return $error;
@@ -921,6 +1068,8 @@ sub replace {
   my $self = shift;
   my $old = shift;
   my @param = @_;
+  warn "$me replace called\n"
+    if $DEBUG;
 
   local $SIG{HUP} = 'IGNORE';
   local $SIG{INT} = 'IGNORE';
@@ -929,26 +1078,24 @@ sub replace {
   local $SIG{TSTP} = 'IGNORE';
   local $SIG{PIPE} = 'IGNORE';
 
-  # If the mask is blank then try to set it - if we can...
-  if (!defined($self->getfield('paymask')) || $self->getfield('paymask') eq '') {
-    $self->paymask($self->payinfo);
-  }
-
   # We absolutely have to have an old vs. new record to make this work.
   if (!defined($old)) {
     $old = qsearchs( 'cust_main', { 'custnum' => $self->custnum } );
   }
 
-  if ( $self->payby eq 'COMP' && $self->payby ne $old->payby
-       && $conf->config('users-allow_comp')                  ) {
-    return "You are not permitted to create complimentary accounts."
-      unless grep { $_ eq getotaker } $conf->config('users-allow_comp');
+  my $curuser = $FS::CurrentUser::CurrentUser;
+  if (    $self->payby eq 'COMP'
+       && $self->payby ne $old->payby
+       && ! $curuser->access_right('Complimentary customer')
+     )
+  {
+    return "You are not permitted to create complimentary accounts.";
   }
 
   local($ignore_expired_card) = 1
     if $old->payby  =~ /^(CARD|DCRD)$/
     && $self->payby =~ /^(CARD|DCRD)$/
-    && $old->payinfo eq $self->payinfo;
+    && ( $old->payinfo eq $self->payinfo || $old->paymask eq $self->paymask );
 
   my $oldAutoCommit = $FS::UID::AutoCommit;
   local $FS::UID::AutoCommit = 0;
@@ -1015,15 +1162,19 @@ sub queue_fuzzyfiles_update {
   my $dbh = dbh;
 
   my $queue = new FS::queue { 'job' => 'FS::cust_main::append_fuzzyfiles' };
-  my $error = $queue->insert($self->getfield('last'), $self->company);
+  my $error = $queue->insert( map $self->getfield($_),
+                                  qw(first last company)
+                            );
   if ( $error ) {
     $dbh->rollback if $oldAutoCommit;
     return "queueing job (transaction rolled back): $error";
   }
 
-  if ( defined $self->dbdef_table->column('ship_last') && $self->ship_last ) {
+  if ( $self->ship_last ) {
     $queue = new FS::queue { 'job' => 'FS::cust_main::append_fuzzyfiles' };
-    $error = $queue->insert($self->getfield('ship_last'), $self->ship_company);
+    $error = $queue->insert( map $self->getfield("ship_$_"),
+                                 qw(first last company)
+                           );
     if ( $error ) {
       $dbh->rollback if $oldAutoCommit;
       return "queueing job (transaction rolled back): $error";
@@ -1052,9 +1203,12 @@ sub check {
   my $error =
     $self->ut_numbern('custnum')
     || $self->ut_number('agentnum')
+    || $self->ut_textn('agent_custid')
     || $self->ut_number('refnum')
     || $self->ut_name('last')
     || $self->ut_name('first')
+    || $self->ut_snumbern('birthdate')
+    || $self->ut_snumbern('signupdate')
     || $self->ut_textn('company')
     || $self->ut_text('address1')
     || $self->ut_textn('address2')
@@ -1169,7 +1323,10 @@ sub check {
     }
   }
 
-  $self->payby =~ /^(CARD|DCRD|CHEK|DCHK|LECB|BILL|COMP|PREPAY|CASH|WEST|MCRD)$/
+  #$self->payby =~ /^(CARD|DCRD|CHEK|DCHK|LECB|BILL|COMP|PREPAY|CASH|WEST|MCRD)$/
+  #  or return "Illegal payby: ". $self->payby;
+  #$self->payby($1);
+  FS::payby->can_payby($self->table, $self->payby)
     or return "Illegal payby: ". $self->payby;
 
   $error =    $self->ut_numbern('paystart_month')
@@ -1194,8 +1351,6 @@ sub check {
     $check_payinfo = 0;
   }
 
-  $self->payby($1);
-
   if ( $check_payinfo && $self->payby =~ /^(CARD|DCRD)$/ ) {
 
     my $payinfo = $self->payinfo;
@@ -1211,22 +1366,25 @@ sub check {
       if cardtype($self->payinfo) eq "Unknown";
 
     my $ban = qsearchs('banned_pay', $self->_banned_pay_hashref);
-    return "Banned credit card" if $ban;
+    if ( $ban ) {
+      return 'Banned credit card: banned on '.
+             time2str('%a %h %o at %r', $ban->_date).
+             ' by '. $ban->otaker.
+             ' (ban# '. $ban->bannum. ')';
+    }
 
-    if ( defined $self->dbdef_table->column('paycvv') ) {
-      if (length($self->paycvv) && !$self->is_encrypted($self->paycvv)) {
-        if ( cardtype($self->payinfo) eq 'American Express card' ) {
-          $self->paycvv =~ /^(\d{4})$/
-            or return "CVV2 (CID) for American Express cards is four digits.";
-          $self->paycvv($1);
-        } else {
-          $self->paycvv =~ /^(\d{3})$/
-            or return "CVV2 (CVC2/CID) is three digits.";
-          $self->paycvv($1);
-        }
+    if (length($self->paycvv) && !$self->is_encrypted($self->paycvv)) {
+      if ( cardtype($self->payinfo) eq 'American Express card' ) {
+        $self->paycvv =~ /^(\d{4})$/
+          or return "CVV2 (CID) for American Express cards is four digits.";
+        $self->paycvv($1);
       } else {
-        $self->paycvv('');
+        $self->paycvv =~ /^(\d{3})$/
+          or return "CVV2 (CVC2/CID) is three digits.";
+        $self->paycvv($1);
       }
+    } else {
+      $self->paycvv('');
     }
 
     my $cardtype = cardtype($payinfo);
@@ -1257,13 +1415,23 @@ sub check {
 
     my $payinfo = $self->payinfo;
     $payinfo =~ s/[^\d\@]//g;
-    $payinfo =~ /^(\d+)\@(\d{9})$/ or return 'invalid echeck account@aba';
-    $payinfo = "$1\@$2";
+    if ( $conf->exists('echeck-nonus') ) {
+      $payinfo =~ /^(\d+)\@(\d+)$/ or return 'invalid echeck account@aba';
+      $payinfo = "$1\@$2";
+    } else {
+      $payinfo =~ /^(\d+)\@(\d{9})$/ or return 'invalid echeck account@aba';
+      $payinfo = "$1\@$2";
+    }
     $self->payinfo($payinfo);
-    $self->paycvv('') if $self->dbdef_table->column('paycvv');
+    $self->paycvv('');
 
     my $ban = qsearchs('banned_pay', $self->_banned_pay_hashref);
-    return "Banned ACH account" if $ban;
+    if ( $ban ) {
+      return 'Banned ACH account: banned on '.
+             time2str('%a %h %o at %r', $ban->_date).
+             ' by '. $ban->otaker.
+             ' (ban# '. $ban->bannum. ')';
+    }
 
   } elsif ( $self->payby eq 'LECB' ) {
 
@@ -1272,24 +1440,27 @@ sub check {
     $payinfo =~ /^1?(\d{10})$/ or return 'invalid btn billing telephone number';
     $payinfo = $1;
     $self->payinfo($payinfo);
-    $self->paycvv('') if $self->dbdef_table->column('paycvv');
+    $self->paycvv('');
 
   } elsif ( $self->payby eq 'BILL' ) {
 
     $error = $self->ut_textn('payinfo');
     return "Illegal P.O. number: ". $self->payinfo if $error;
-    $self->paycvv('') if $self->dbdef_table->column('paycvv');
+    $self->paycvv('');
 
   } elsif ( $self->payby eq 'COMP' ) {
 
-    if ( !$self->custnum && $conf->config('users-allow_comp') ) {
+    my $curuser = $FS::CurrentUser::CurrentUser;
+    if (    ! $self->custnum
+         && ! $curuser->access_right('Complimentary customer')
+       )
+    {
       return "You are not permitted to create complimentary accounts."
-        unless grep { $_ eq getotaker } $conf->config('users-allow_comp');
     }
 
     $error = $self->ut_textn('payinfo');
     return "Illegal comp account issuer: ". $self->payinfo if $error;
-    $self->paycvv('') if $self->dbdef_table->column('paycvv');
+    $self->paycvv('');
 
   } elsif ( $self->payby eq 'PREPAY' ) {
 
@@ -1300,12 +1471,12 @@ sub check {
     return "Illegal prepayment identifier: ". $self->payinfo if $error;
     return "Unknown prepayment identifier"
       unless qsearchs('prepay_credit', { 'identifier' => $self->payinfo } );
-    $self->paycvv('') if $self->dbdef_table->column('paycvv');
+    $self->paycvv('');
 
   }
 
   if ( $self->paydate eq '' || $self->paydate eq '-' ) {
-    return "Expriation date required"
+    return "Expiration date required"
       unless $self->payby =~ /^(BILL|PREPAY|CHEK|DCHK|LECB|CASH|WEST|MCRD)$/;
     $self->paydate('');
   } else {
@@ -1336,8 +1507,10 @@ sub check {
     $self->payname($1);
   }
 
-  $self->tax =~ /^(Y?)$/ or return "Illegal tax: ". $self->tax;
-  $self->tax($1);
+  foreach my $flag (qw( tax spool_cdr )) {
+    $self->$flag() =~ /^(Y?)$/ or return "Illegal $flag: ". $self->$flag();
+    $self->$flag($1);
+  }
 
   $self->otaker(getotaker) unless $self->otaker;
 
@@ -1355,11 +1528,17 @@ Returns all packages (see L<FS::cust_pkg>) for this customer.
 
 sub all_pkgs {
   my $self = shift;
+
+  return $self->num_pkgs unless wantarray;
+
+  my @cust_pkg = ();
   if ( $self->{'_pkgnum'} ) {
-    values %{ $self->{'_pkgnum'}->cache };
+    @cust_pkg = values %{ $self->{'_pkgnum'}->cache };
   } else {
-    qsearch( 'cust_pkg', { 'custnum' => $self->custnum });
+    @cust_pkg = qsearch( 'cust_pkg', { 'custnum' => $self->custnum });
   }
+
+  sort sort_packages @cust_pkg;
 }
 
 =item ncancelled_pkgs
@@ -1370,19 +1549,43 @@ Returns all non-cancelled packages (see L<FS::cust_pkg>) for this customer.
 
 sub ncancelled_pkgs {
   my $self = shift;
+
+  return $self->num_ncancelled_pkgs unless wantarray;
+
+  my @cust_pkg = ();
   if ( $self->{'_pkgnum'} ) {
-    grep { ! $_->getfield('cancel') } values %{ $self->{'_pkgnum'}->cache };
+
+    @cust_pkg = grep { ! $_->getfield('cancel') }
+                values %{ $self->{'_pkgnum'}->cache };
+
   } else {
-    @{ [ # force list context
+
+    @cust_pkg =
       qsearch( 'cust_pkg', {
-        'custnum' => $self->custnum,
-        'cancel'  => '',
-      }),
+                             'custnum' => $self->custnum,
+                             'cancel'  => '',
+                           });
+    push @cust_pkg,
       qsearch( 'cust_pkg', {
-        'custnum' => $self->custnum,
-        'cancel'  => 0,
-      }),
-    ] };
+                             'custnum' => $self->custnum,
+                             'cancel'  => 0,
+                           });
+  }
+
+  sort sort_packages @cust_pkg;
+
+}
+
+# This should be generalized to use config options to determine order.
+sub sort_packages {
+  if ( $a->get('cancel') and $b->get('cancel') ) {
+    $a->pkgnum <=> $b->pkgnum;
+  } elsif ( $a->get('cancel') or $b->get('cancel') ) {
+    return -1 if $b->get('cancel');
+    return  1 if $a->get('cancel');
+    return 0;
+  } else {
+    $a->pkgnum <=> $b->pkgnum;
   }
 }
 
@@ -1431,14 +1634,18 @@ customer.
 =cut
 
 sub num_cancelled_pkgs {
-  my $self = shift;
-  $self->num_pkgs("cancel IS NOT NULL AND cust_pkg.cancel != 0");
+  shift->num_pkgs("cust_pkg.cancel IS NOT NULL AND cust_pkg.cancel != 0");
+}
+
+sub num_ncancelled_pkgs {
+  shift->num_pkgs("( cust_pkg.cancel IS NULL OR cust_pkg.cancel = 0 )");
 }
 
 sub num_pkgs {
   my( $self, $sql ) = @_;
+  $sql = "AND $sql" if $sql && $sql !~ /^\s*$/ && $sql !~ /^\s*AND/i;
   my $sth = dbh->prepare(
-    "SELECT COUNT(*) FROM cust_pkg WHERE custnum = ? AND $sql"
+    "SELECT COUNT(*) FROM cust_pkg WHERE custnum = ? $sql"
   ) or die dbh->errstr;
   $sth->execute($self->custnum) or die $sth->errstr;
   $sth->fetchrow_arrayref->[0];
@@ -1467,7 +1674,7 @@ Returns a list: an empty list on success or a list of errors.
 
 sub suspend {
   my $self = shift;
-  grep { $_->suspend } $self->unsuspended_pkgs;
+  grep { $_->suspend(@_) } $self->unsuspended_pkgs;
 }
 
 =item suspend_if_pkgpart PKGPART [ , PKGPART ... ]
@@ -1481,8 +1688,14 @@ Returns a list: an empty list on success or a list of errors.
 
 sub suspend_if_pkgpart {
   my $self = shift;
-  my @pkgparts = @_;
-  grep { $_->suspend }
+  my (@pkgparts, %opt);
+  if (ref($_[0]) eq 'HASH'){
+    @pkgparts = @{$_[0]{pkgparts}};
+    %opt      = %{$_[0]};
+  }else{
+    @pkgparts = @_;
+  }
+  grep { $_->suspend(%opt) }
     grep { my $pkgpart = $_->pkgpart; grep { $pkgpart eq $_ } @pkgparts }
       $self->unsuspended_pkgs;
 }
@@ -1498,8 +1711,14 @@ Returns a list: an empty list on success or a list of errors.
 
 sub suspend_unless_pkgpart {
   my $self = shift;
-  my @pkgparts = @_;
-  grep { $_->suspend }
+  my (@pkgparts, %opt);
+  if (ref($_[0]) eq 'HASH'){
+    @pkgparts = @{$_[0]{pkgparts}};
+    %opt      = %{$_[0]};
+  }else{
+    @pkgparts = @_;
+  }
+  grep { $_->suspend(%opt) }
     grep { my $pkgpart = $_->pkgpart; ! grep { $pkgpart eq $_ } @pkgparts }
       $self->unsuspended_pkgs;
 }
@@ -1554,8 +1773,24 @@ sub _banned_pay_hashref {
   {
     'payby'   => $payby2ban{$self->payby},
     'payinfo' => md5_base64($self->payinfo),
-    #'reason'  =>
+    #don't ever *search* on reason! #'reason'  =>
   };
+}
+
+=item notes
+
+Returns all notes (see L<FS::cust_main_note>) for this customer.
+
+=cut
+
+sub notes {
+  my $self = shift;
+  #order by?
+  qsearch( 'cust_main_note',
+           { 'custnum' => $self->custnum },
+	   '',
+	   'ORDER BY _DATE DESC'
+	 );
 }
 
 =item agent
@@ -1617,17 +1852,30 @@ sub bill {
 
   $self->select_for_update; #mutex
 
+  #create a new invoice
+  #(we'll remove it later if it doesn't actually need to be generated [contains
+  # no line items] and we're inside a transaciton so nothing else will see it)
+  my $cust_bill = new FS::cust_bill ( {
+    'custnum' => $self->custnum,
+    '_date'   => $time,
+    #'charged' => $charged,
+    'charged' => 0,
+  } );
+  $error = $cust_bill->insert;
+  if ( $error ) {
+    $dbh->rollback if $oldAutoCommit;
+    return "can't create invoice for customer #". $self->custnum. ": $error";
+  }
+  my $invnum = $cust_bill->invnum;
+
+  ###
   # find the packages which are due for billing, find out how much they are
   # & generate invoice database.
- 
-  my( $total_setup, $total_recur ) = ( 0, 0 );
-  #my( $taxable_setup, $taxable_recur ) = ( 0, 0 );
-  my @cust_bill_pkg = ();
-  #my $tax = 0;##
-  #my $taxable_charged = 0;##
-  #my $charged = 0;##
+  ###
 
+  my( $total_setup, $total_recur ) = ( 0, 0 );
   my %tax;
+  my @precommit_hooks = ();
 
   foreach my $cust_pkg (
     qsearch('cust_pkg', { 'custnum' => $self->custnum } )
@@ -1649,22 +1897,28 @@ sub bill {
 
     my @details = ();
 
+    ###
     # bill setup
+    ###
+
     my $setup = 0;
     if ( !$cust_pkg->setup || $options{'resetup'} ) {
     
       warn "    bill setup\n" if $DEBUG > 1;
 
-      $setup = eval { $cust_pkg->calc_setup( $time ) };
+      $setup = eval { $cust_pkg->calc_setup( $time, \@details ) };
       if ( $@ ) {
         $dbh->rollback if $oldAutoCommit;
-        return $@;
+        return "$@ running calc_setup for $cust_pkg\n";
       }
 
       $cust_pkg->setfield('setup', $time) unless $cust_pkg->setup;
     }
 
-    #bill recurring fee
+    ###
+    # bill recurring fee
+    ### 
+
     my $recur = 0;
     my $sdate;
     if ( $part_pkg->getfield('freq') ne '0' &&
@@ -1677,10 +1931,13 @@ sub bill {
       # XXX shared with $recur_prog
       $sdate = $cust_pkg->bill || $cust_pkg->setup || $time;
 
-      $recur = eval { $cust_pkg->calc_recur( \$sdate, \@details ) };
+      #over two params!  lets at least switch to a hashref for the rest...
+      my %param = ( 'precommit_hooks' => \@precommit_hooks, );
+
+      $recur = eval { $cust_pkg->calc_recur( \$sdate, \@details, \%param ) };
       if ( $@ ) {
         $dbh->rollback if $oldAutoCommit;
-        return $@;
+        return "$@ running calc_recur for $cust_pkg\n";
       }
 
       #change this bit to use Date::Manip? CAREFUL with timezones (see
@@ -1719,12 +1976,18 @@ sub bill {
     warn "\$recur is undefined" unless defined($recur);
     warn "\$cust_pkg->bill is undefined" unless defined($cust_pkg->bill);
 
-    if ( $cust_pkg->modified ) {
+    ###
+    # If $cust_pkg has been modified, update it and create cust_bill_pkg records
+    ###
+
+    if ( $cust_pkg->modified ) {  # hmmm.. and if the options are modified?
 
       warn "  package ". $cust_pkg->pkgnum. " modified; updating\n"
         if $DEBUG >1;
 
-      $error=$cust_pkg->replace($old_cust_pkg);
+      $error=$cust_pkg->replace($old_cust_pkg,
+                                options => { $cust_pkg->options },
+                               );
       if ( $error ) { #just in case
         $dbh->rollback if $oldAutoCommit;
         return "Error modifying pkgnum ". $cust_pkg->pkgnum. ": $error";
@@ -1740,10 +2003,13 @@ sub bill {
         $dbh->rollback if $oldAutoCommit;
         return "negative recur $recur for pkgnum ". $cust_pkg->pkgnum;
       }
+
       if ( $setup != 0 || $recur != 0 ) {
-        warn "    charges (setup=$setup, recur=$recur); queueing line items\n"
+
+        warn "    charges (setup=$setup, recur=$recur); adding line items\n"
           if $DEBUG > 1;
         my $cust_bill_pkg = new FS::cust_bill_pkg ({
+          'invnum'  => $invnum,
           'pkgnum'  => $cust_pkg->pkgnum,
           'setup'   => $setup,
           'recur'   => $recur,
@@ -1751,35 +2017,40 @@ sub bill {
           'edate'   => $cust_pkg->bill,
           'details' => \@details,
         });
-        push @cust_bill_pkg, $cust_bill_pkg;
+        $error = $cust_bill_pkg->insert;
+        if ( $error ) {
+          $dbh->rollback if $oldAutoCommit;
+          return "can't create invoice line item for invoice #$invnum: $error";
+        }
         $total_setup += $setup;
         $total_recur += $recur;
 
+        ###
+        # handle taxes
+        ###
+
         unless ( $self->tax =~ /Y/i || $self->payby eq 'COMP' ) {
 
-          my @taxes = qsearch( 'cust_main_county', {
-                                 'state'    => $self->state,
-                                 'county'   => $self->county,
-                                 'country'  => $self->country,
-                                 'taxclass' => $part_pkg->taxclass,
-                                                                      } );
+          my $prefix = 
+            ( $conf->exists('tax-ship_address') && length($self->ship_last) )
+            ? 'ship_'
+            : '';
+          my %taxhash = map { $_ => $self->get("$prefix$_") }
+                            qw( state county country );
+
+          $taxhash{'taxclass'} = $part_pkg->taxclass;
+
+          my @taxes = qsearch( 'cust_main_county', \%taxhash );
+
           unless ( @taxes ) {
-            @taxes =  qsearch( 'cust_main_county', {
-                                  'state'    => $self->state,
-                                  'county'   => $self->county,
-                                  'country'  => $self->country,
-                                  'taxclass' => '',
-                                                                      } );
+            $taxhash{'taxclass'} = '';
+            @taxes =  qsearch( 'cust_main_county', \%taxhash );
           }
 
           #one more try at a whole-country tax rate
           unless ( @taxes ) {
-            @taxes =  qsearch( 'cust_main_county', {
-                                  'state'    => '',
-                                  'county'   => '',
-                                  'country'  => $self->country,
-                                  'taxclass' => '',
-                                                                      } );
+            $taxhash{$_} = '' foreach qw( state county );
+            @taxes =  qsearch( 'cust_main_county', \%taxhash );
           }
 
           # maybe eliminate this entirely, along with all the 0% records
@@ -1787,8 +2058,10 @@ sub bill {
             $dbh->rollback if $oldAutoCommit;
             return
               "fatal: can't find tax rate for state/county/country/taxclass ".
-              join('/', ( map $self->$_(), qw(state county country) ),
-                        $part_pkg->taxclass ).  "\n";
+              join('/', ( map $self->get("$prefix$_"),
+                              qw(state county country)
+                        ),
+                        $part_pkg->taxclass ). "\n";
           }
   
           foreach my $tax ( @taxes ) {
@@ -1803,7 +2076,8 @@ sub bill {
             next unless $taxable_charged;
 
             if ( $tax->exempt_amount && $tax->exempt_amount > 0 ) {
-              my ($mon,$year) = (localtime($sdate) )[4,5];
+              #my ($mon,$year) = (localtime($sdate) )[4,5];
+              my ($mon,$year) = (localtime( $sdate || $cust_bill->_date ) )[4,5];
               $mon++;
               my $freq = $part_pkg->freq || 1;
               if ( $freq !~ /(\d+)$/ ) {
@@ -1811,40 +2085,74 @@ sub bill {
                 return "daily/weekly package definitions not (yet?)".
                        " compatible with monthly tax exemptions";
               }
-              my $taxable_per_month = sprintf("%.2f", $taxable_charged / $freq );
+              my $taxable_per_month =
+                sprintf("%.2f", $taxable_charged / $freq );
+
+              #call the whole thing off if this customer has any old
+              #exemption records...
+              my @cust_tax_exempt =
+                qsearch( 'cust_tax_exempt' => { custnum=> $self->custnum } );
+              if ( @cust_tax_exempt ) {
+                $dbh->rollback if $oldAutoCommit;
+                return
+                  'this customer still has old-style tax exemption records; '.
+                  'run bin/fs-migrate-cust_tax_exempt?';
+              }
+
               foreach my $which_month ( 1 .. $freq ) {
-                my %hash = (
-                  'custnum' => $self->custnum,
-                  'taxnum'  => $tax->taxnum,
-                  'year'    => 1900+$year,
-                  'month'   => $mon++,
-                );
-                #until ( $mon < 12 ) { $mon -= 12; $year++; }
-                until ( $mon < 13 ) { $mon -= 12; $year++; }
-                my $cust_tax_exempt =
-                  qsearchs('cust_tax_exempt', \%hash)
-                  || new FS::cust_tax_exempt( { %hash, 'amount' => 0 } );
-                my $remaining_exemption = sprintf("%.2f",
-                  $tax->exempt_amount - $cust_tax_exempt->amount );
+
+                #maintain the new exemption table now
+                my $sql = "
+                  SELECT SUM(amount)
+                    FROM cust_tax_exempt_pkg
+                      LEFT JOIN cust_bill_pkg USING ( billpkgnum )
+                      LEFT JOIN cust_bill     USING ( invnum     )
+                    WHERE custnum = ?
+                      AND taxnum  = ?
+                      AND year    = ?
+                      AND month   = ?
+                ";
+                my $sth = dbh->prepare($sql) or do {
+                  $dbh->rollback if $oldAutoCommit;
+                  return "fatal: can't lookup exising exemption: ". dbh->errstr;
+                };
+                $sth->execute(
+                  $self->custnum,
+                  $tax->taxnum,
+                  1900+$year,
+                  $mon,
+                ) or do {
+                  $dbh->rollback if $oldAutoCommit;
+                  return "fatal: can't lookup exising exemption: ". dbh->errstr;
+                };
+                my $existing_exemption = $sth->fetchrow_arrayref->[0] || 0;
+                
+                my $remaining_exemption =
+                  $tax->exempt_amount - $existing_exemption;
                 if ( $remaining_exemption > 0 ) {
                   my $addl = $remaining_exemption > $taxable_per_month
                     ? $taxable_per_month
                     : $remaining_exemption;
                   $taxable_charged -= $addl;
-                  my $new_cust_tax_exempt = new FS::cust_tax_exempt ( {
-                    $cust_tax_exempt->hash,
-                    'amount' =>
-                      sprintf("%.2f", $cust_tax_exempt->amount + $addl),
+
+                  my $cust_tax_exempt_pkg = new FS::cust_tax_exempt_pkg ( {
+                    'billpkgnum' => $cust_bill_pkg->billpkgnum,
+                    'taxnum'     => $tax->taxnum,
+                    'year'       => 1900+$year,
+                    'month'      => $mon,
+                    'amount'     => sprintf("%.2f", $addl ),
                   } );
-                  $error = $new_cust_tax_exempt->exemptnum
-                    ? $new_cust_tax_exempt->replace($cust_tax_exempt)
-                    : $new_cust_tax_exempt->insert;
+                  $error = $cust_tax_exempt_pkg->insert;
                   if ( $error ) {
                     $dbh->rollback if $oldAutoCommit;
-                    return "fatal: can't update cust_tax_exempt: $error";
+                    return "fatal: can't insert cust_tax_exempt_pkg: $error";
                   }
-  
                 } # if $remaining_exemption > 0
+
+                #++
+                $mon++;
+                #until ( $mon < 12 ) { $mon -= 12; $year++; }
+                until ( $mon < 13 ) { $mon -= 12; $year++; }
   
               } #foreach $which_month
   
@@ -1866,85 +2174,50 @@ sub bill {
 
   } #foreach my $cust_pkg
 
-  my $charged = sprintf( "%.2f", $total_setup + $total_recur );
-#  my $taxable_charged = sprintf( "%.2f", $taxable_setup + $taxable_recur );
-
-  unless ( @cust_bill_pkg ) { #don't create invoices with no line items
+  unless ( $cust_bill->cust_bill_pkg ) {
+    $cust_bill->delete; #don't create an invoice w/o line items
     $dbh->commit or die $dbh->errstr if $oldAutoCommit;
     return '';
-  } 
-
-#  unless ( $self->tax =~ /Y/i
-#           || $self->payby eq 'COMP'
-#           || $taxable_charged == 0 ) {
-#    my $cust_main_county = qsearchs('cust_main_county',{
-#        'state'   => $self->state,
-#        'county'  => $self->county,
-#        'country' => $self->country,
-#    } ) or die "fatal: can't find tax rate for state/county/country ".
-#               $self->state. "/". $self->county. "/". $self->country. "\n";
-#    my $tax = sprintf( "%.2f",
-#      $taxable_charged * ( $cust_main_county->getfield('tax') / 100 )
-#    );
-
-  if ( dbdef->table('cust_bill_pkg')->column('itemdesc') ) { #1.5 schema
-
-    foreach my $taxname ( grep { $tax{$_} > 0 } keys %tax ) {
-      my $tax = sprintf("%.2f", $tax{$taxname} );
-      $charged = sprintf( "%.2f", $charged+$tax );
-  
-      my $cust_bill_pkg = new FS::cust_bill_pkg ({
-        'pkgnum'   => 0,
-        'setup'    => $tax,
-        'recur'    => 0,
-        'sdate'    => '',
-        'edate'    => '',
-        'itemdesc' => $taxname,
-      });
-      push @cust_bill_pkg, $cust_bill_pkg;
-    }
-  
-  } else { #1.4 schema
-
-    my $tax = 0;
-    foreach ( values %tax ) { $tax += $_ };
-    $tax = sprintf("%.2f", $tax);
-    if ( $tax > 0 ) {
-      $charged = sprintf( "%.2f", $charged+$tax );
-
-      my $cust_bill_pkg = new FS::cust_bill_pkg ({
-        'pkgnum' => 0,
-        'setup'  => $tax,
-        'recur'  => 0,
-        'sdate'  => '',
-        'edate'  => '',
-      });
-      push @cust_bill_pkg, $cust_bill_pkg;
-    }
-
   }
 
-  my $cust_bill = new FS::cust_bill ( {
-    'custnum' => $self->custnum,
-    '_date'   => $time,
-    'charged' => $charged,
-  } );
-  $error = $cust_bill->insert;
-  if ( $error ) {
-    $dbh->rollback if $oldAutoCommit;
-    return "can't create invoice for customer #". $self->custnum. ": $error";
-  }
+  my $charged = sprintf( "%.2f", $total_setup + $total_recur );
 
-  my $invnum = $cust_bill->invnum;
-  my $cust_bill_pkg;
-  foreach $cust_bill_pkg ( @cust_bill_pkg ) {
-    #warn $invnum;
-    $cust_bill_pkg->invnum($invnum);
+  foreach my $taxname ( grep { $tax{$_} > 0 } keys %tax ) {
+    my $tax = sprintf("%.2f", $tax{$taxname} );
+    $charged = sprintf( "%.2f", $charged+$tax );
+  
+    my $cust_bill_pkg = new FS::cust_bill_pkg ({
+      'invnum'   => $invnum,
+      'pkgnum'   => 0,
+      'setup'    => $tax,
+      'recur'    => 0,
+      'sdate'    => '',
+      'edate'    => '',
+      'itemdesc' => $taxname,
+    });
     $error = $cust_bill_pkg->insert;
     if ( $error ) {
       $dbh->rollback if $oldAutoCommit;
-      return "can't create invoice line item for customer #". $self->custnum.
-             ": $error";
+      return "can't create invoice line item for invoice #$invnum: $error";
+    }
+    $total_setup += $tax;
+
+  }
+
+  $cust_bill->charged( sprintf( "%.2f", $total_setup + $total_recur ) );
+  $error = $cust_bill->replace;
+  if ( $error ) {
+    $dbh->rollback if $oldAutoCommit;
+    return "can't update charged for invoice #$invnum: $error";
+  }
+
+  foreach my $hook ( @precommit_hooks ) { 
+    eval {
+      &{$hook}; #($self) ?
+    };
+    if ( $@ ) {
+      $dbh->rollback if $oldAutoCommit;
+      return "$@ running precommit hook $hook\n";
     }
   }
   
@@ -1977,16 +2250,12 @@ for conversion functions.
 retry - Retry card/echeck/LEC transactions even when not scheduled by invoice
 events.
 
-retry_card - Deprecated alias for 'retry'
-
-batch_card - This option is deprecated.  See the invoice events web interface
-to control whether cards are batched or run against a realtime gateway.
-
-report_badcard - This option is deprecated.
-
-force_print - This option is deprecated; see the invoice events web interface.
-
 quiet - set true to surpress email card/ACH decline notices.
+
+freq - "1d" for the traditional, daily events (the default), or "1m" for the
+new monthly events
+
+payby - allows for one time override of normal customer billing method
 
 =cut
 
@@ -2028,6 +2297,13 @@ sub collect {
     }
   }
 
+  my $extra_sql = '';
+  if ( defined $options{'freq'} && $options{'freq'} eq '1m' ) {
+    $extra_sql = " AND freq = '1m' ";
+  } else {
+    $extra_sql = " AND ( freq = '1d' OR freq IS NULL OR freq = '' ) ";
+  }
+
   foreach my $cust_bill ( $self->open_cust_bill ) {
 
     # don't try to charge for the same invoice if it's already in a batch
@@ -2038,71 +2314,27 @@ sub collect {
     warn "  invnum ". $cust_bill->invnum. " (owed ". $cust_bill->owed. ")\n"
       if $DEBUG > 1;
 
-    foreach my $part_bill_event (
-      sort {    $a->seconds   <=> $b->seconds
-             || $a->weight    <=> $b->weight
-             || $a->eventpart <=> $b->eventpart }
-        grep { $_->seconds <= ( $invoice_time - $cust_bill->_date )
-               && ! qsearch( 'cust_bill_event', {
-                                'invnum'    => $cust_bill->invnum,
-                                'eventpart' => $_->eventpart,
-                                'status'    => 'done',
-                                                                   } )
-             }
-          qsearch('part_bill_event', { 'payby'    => $self->payby,
-                                       'disabled' => '',           } )
-    ) {
+    foreach my $part_bill_event ( due_events ( $cust_bill,
+                                               exists($options{'payby'}) 
+					         ? $options{'payby'}
+						 : $self->payby,
+					       $invoice_time,
+					       $extra_sql ) ) {
 
       last if $cust_bill->owed <= 0  # don't run subsequent events if owed<=0
            || $self->balance   <= 0; # or if balance<=0
 
-      warn "  calling invoice event (". $part_bill_event->eventcode. ")\n"
-        if $DEBUG > 1;
-      my $cust_main = $self; #for callback
-
-      my $error;
       {
         local $realtime_bop_decline_quiet = 1 if $options{'quiet'};
-        local $SIG{__DIE__}; # don't want Mason __DIE__ handler active
-        $error = eval $part_bill_event->eventcode;
+        warn "  do_event " .  $cust_bill . " ". (%options) .  "\n"
+          if $DEBUG > 1;
+
+        if (my $error = $part_bill_event->do_event($cust_bill, %options)) {
+	  # gah, even with transactions.
+	  $dbh->commit if $oldAutoCommit; #well.
+	  return $error;
+	}
       }
-
-      my $status = '';
-      my $statustext = '';
-      if ( $@ ) {
-        $status = 'failed';
-        $statustext = $@;
-      } elsif ( $error ) {
-        $status = 'done';
-        $statustext = $error;
-      } else {
-        $status = 'done'
-      }
-
-      #add cust_bill_event
-      my $cust_bill_event = new FS::cust_bill_event {
-        'invnum'     => $cust_bill->invnum,
-        'eventpart'  => $part_bill_event->eventpart,
-        #'_date'      => $invoice_time,
-        '_date'      => time,
-        'status'     => $status,
-        'statustext' => $statustext,
-      };
-      $error = $cust_bill_event->insert;
-      if ( $error ) {
-        #$dbh->rollback if $oldAutoCommit;
-        #return "error: $error";
-
-        # gah, even with transactions.
-        $dbh->commit if $oldAutoCommit; #well.
-        my $e = 'WARNING: Event run but database not updated - '.
-                'error inserting cust_bill_event, invnum #'. $cust_bill->invnum.
-                ', eventpart '. $part_bill_event->eventpart.
-                ": $error";
-        warn $e;
-        return $e;
-      }
-
 
     }
 
@@ -2115,9 +2347,10 @@ sub collect {
 
 =item retry_realtime
 
-Schedules realtime credit card / electronic check / LEC billing events for
-for retry.  Useful if card information has changed or manual retry is desired.
-The 'collect' method must be called to actually retry the transaction.
+Schedules realtime / batch  credit card / electronic check / LEC billing
+events for for retry.  Useful if card information has changed or manual
+retry is desired.  The 'collect' method must be called to actually retry
+the transaction.
 
 Implementation details: For each of this customer's open invoices, changes
 the status of the first "done" (with statustext error) realtime processing
@@ -2148,7 +2381,7 @@ sub retry_realtime {
         grep {
                #$_->part_bill_event->plan eq 'realtime-card'
                $_->part_bill_event->eventcode =~
-                   /\$cust_bill\->realtime_(card|ach|lec)/
+                   /\$cust_bill\->(batch|realtime)_(card|ach|lec)/
                  && $_->status eq 'done'
                  && $_->statustext
              }
@@ -2184,7 +2417,7 @@ if set, will override the value from the customer record.
 I<description> is a free-text field passed to the gateway.  It defaults to
 "Internet services".
 
-If an I<invnum> is specified, this payment (if sucessful) is applied to the
+If an I<invnum> is specified, this payment (if successful) is applied to the
 specified invoice.  If you don't specify an I<invnum> you might want to
 call the B<apply_payments> method.
 
@@ -2298,8 +2531,9 @@ sub realtime_bop {
     $payname =  "$payfirst $paylast";
   }
 
-  my @invoicing_list = grep { $_ ne 'POST' } $self->invoicing_list;
-  if ( $conf->exists('emailinvoiceauto')
+  my @invoicing_list = $self->invoicing_list_emailonly;
+  if ( $conf->exists('emailinvoiceautoalways')
+       || $conf->exists('emailinvoiceauto') && ! @invoicing_list
        || ( $conf->exists('emailinvoiceonly') && ! @invoicing_list ) ) {
     push @invoicing_list, $self->all_emails;
   }
@@ -2315,6 +2549,9 @@ sub realtime_bop {
                 : $self->payip;
   $content{customer_ip} = $payip
     if length($payip);
+
+  $content{invoice_number} = $options{'invnum'}
+    if exists($options{'invnum'}) && length($options{'invnum'});
 
   if ( $method eq 'CC' ) { 
 
@@ -2351,7 +2588,12 @@ sub realtime_bop {
       if qsearch('cust_pay', { 'custnum' => $self->custnum,
                                'payby'   => 'CARD',
                                'payinfo' => $payinfo,
+                             } )
+      || qsearch('cust_pay', { 'custnum' => $self->custnum,
+                               'payby'   => 'CARD',
+                               'paymask' => $self->mask_payinfo('CARD', $payinfo),
                              } );
+
 
   } elsif ( $method eq 'ECHECK' ) {
     ( $content{account_number}, $content{routing_code} ) =
@@ -2381,7 +2623,7 @@ sub realtime_bop {
     'action'         => $action1,
     'description'    => $options{'description'},
     'amount'         => $amount,
-    'invoice_number' => $options{'invnum'},
+    #'invoice_number' => $options{'invnum'},
     'customer_id'    => $self->custnum,
     'last_name'      => $paylast,
     'first_name'     => $payfirst,
@@ -2427,7 +2669,8 @@ sub realtime_bop {
       description    => $options{'description'},
     );
 
-    foreach my $field (qw( authorization_source_code returned_ACI                                          transaction_identifier validation_code           
+    foreach my $field (qw( authorization_source_code returned_ACI
+                           transaction_identifier validation_code           
                            transaction_sequence_num local_transaction_date    
                            local_transaction_time AVS_result_code          )) {
       $capture{$field} = $transaction->$field() if $transaction->can($field);
@@ -2438,7 +2681,7 @@ sub realtime_bop {
     $capture->submit();
 
     unless ( $capture->is_success ) {
-      my $e = "Authorization sucessful but capture failed, custnum #".
+      my $e = "Authorization successful but capture failed, custnum #".
               $self->custnum. ': '.  $capture->result_code.
               ": ". $capture->error_message;
       warn $e;
@@ -2495,10 +2738,12 @@ sub realtime_bop {
        'payinfo'  => $payinfo,
        'paybatch' => $paybatch,
     } );
-    my $error = $cust_pay->insert;
+    my $error = $cust_pay->insert($options{'manual'} ? ( 'manual' => 1 ) : () );
     if ( $error ) {
       $cust_pay->invnum(''); #try again with no specific invnum
-      my $error2 = $cust_pay->insert;
+      my $error2 = $cust_pay->insert( $options{'manual'} ?
+                                      ( 'manual' => 1 ) : ()
+                                    );
       if ( $error2 ) {
         # gah, even with transactions.
         my $e = 'WARNING: Card/ACH debited but database not updated - '.
@@ -2618,7 +2863,7 @@ gateway is attempted.
 #I<zip>, I<payinfo> and I<paydate> are also available.  Any of these options,
 #if set, will override the value from the customer record.
 
-#If an I<invnum> is specified, this payment (if sucessful) is applied to the
+#If an I<invnum> is specified, this payment (if successful) is applied to the
 #specified invoice.  If you don't specify an I<invnum> you might want to
 #call the B<apply_payments> method.
 
@@ -2775,6 +3020,23 @@ sub realtime_refund_bop {
     $payname =  "$payfirst $paylast";
   }
 
+  my @invoicing_list = $self->invoicing_list_emailonly;
+  if ( $conf->exists('emailinvoiceautoalways')
+       || $conf->exists('emailinvoiceauto') && ! @invoicing_list
+       || ( $conf->exists('emailinvoiceonly') && ! @invoicing_list ) ) {
+    push @invoicing_list, $self->all_emails;
+  }
+
+  my $email = ($conf->exists('business-onlinepayment-email-override'))
+              ? $conf->config('business-onlinepayment-email-override')
+              : $invoicing_list[0];
+
+  my $payip = exists($options{'payip'})
+                ? $options{'payip'}
+                : $self->payip;
+  $content{customer_ip} = $payip
+    if length($payip);
+
   my $payinfo = '';
   if ( $method eq 'CC' ) {
 
@@ -2813,6 +3075,8 @@ sub realtime_refund_bop {
     'state'          => $self->state,
     'zip'            => $self->zip,
     'country'        => $self->country,
+    'email'          => $email,
+    'phone'          => $self->daytime || $self->night,
     %content, #after
   );
   warn join('', map { "  $_ => $sub_content{$_}\n" } keys %sub_content )
@@ -2832,7 +3096,7 @@ sub realtime_refund_bop {
   $paybatch .= ':'. $refund->order_number
     if $refund->can('order_number') && $refund->order_number;
 
-  while ( $cust_pay && $cust_pay->unappled < $amount ) {
+  while ( $cust_pay && $cust_pay->unapplied < $amount ) {
     my @cust_bill_pay = $cust_pay->cust_bill_pay;
     last unless @cust_bill_pay;
     my $cust_bill_pay = pop @cust_bill_pay;
@@ -2900,6 +3164,24 @@ sub total_owed_date {
     $total_bill += $cust_bill->owed;
   }
   sprintf( "%.2f", $total_bill );
+}
+
+=item apply_payments_and_credits
+
+Applies unapplied payments and credits.
+
+In most cases, this new method should be used in place of sequential
+apply_payments and apply_credits methods.
+
+=cut
+
+sub apply_payments_and_credits {
+  my $self = shift;
+
+  foreach my $cust_bill ( $self->open_cust_bill ) {
+    $cust_bill->apply_payments_and_credits;
+  }
+
 }
 
 =item apply_credits OPTION => VALUE ...
@@ -3074,6 +3356,29 @@ sub balance_date {
   );
 }
 
+=item in_transit_payments
+
+Returns the total of requests for payments for this customer pending in 
+batches in transit to the bank.  See L<FS::pay_batch> and L<FS::cust_pay_batch>
+
+=cut
+
+sub in_transit_payments {
+  my $self = shift;
+  my $in_transit_payments = 0;
+  foreach my $pay_batch ( qsearch('pay_batch', {
+    'status' => 'I',
+  } ) ) {
+    foreach my $cust_pay_batch ( qsearch('cust_pay_batch', {
+      'batchnum' => $pay_batch->batchnum,
+      'custnum' => $self->custnum,
+    } ) ) {
+      $in_transit_payments += $cust_pay_batch->amount;
+    }
+  }
+  sprintf( "%.2f", $in_transit_payments );
+}
+
 =item paydate_monthyear
 
 Returns a two-element list consisting of the month and year of this customer's
@@ -3090,21 +3395,6 @@ sub paydate_monthyear {
   } else {
     ('', '');
   }
-}
-
-=item payinfo_masked
-
-Returns a "masked" payinfo field appropriate to the payment type.  Masked characters are replaced by 'x'es.  Use this to display publicly accessable account Information.
-
-Credit Cards - Mask all but the last four characters.
-Checks - Mask all but last 2 of account number and bank routing number.
-Others - Do nothing, return the unmasked string.
-
-=cut
-
-sub payinfo_masked {
-  my $self = shift;
-  return $self->paymask;
 }
 
 =item invoicing_list [ ARRAYREF ]
@@ -3124,6 +3414,7 @@ This interface may change in the future.
 
 sub invoicing_list {
   my( $self, $arrayref ) = @_;
+
   if ( $arrayref ) {
     my @cust_main_invoice;
     if ( $self->custnum ) {
@@ -3158,12 +3449,14 @@ sub invoicing_list {
       warn $error if $error;
     }
   }
+  
   if ( $self->custnum ) {
     map { $_->address }
       qsearch( 'cust_main_invoice', { 'custnum' => $self->custnum } );
   } else {
     ();
   }
+
 }
 
 =item check_invoicing_list ARRAYREF
@@ -3239,6 +3532,34 @@ sub invoicing_list_addpost {
   my @invoicing_list = $self->invoicing_list;
   push @invoicing_list, 'POST';
   $self->invoicing_list(\@invoicing_list);
+}
+
+=item invoicing_list_emailonly
+
+Returns the list of email invoice recipients (invoicing_list without non-email
+destinations such as POST and FAX).
+
+=cut
+
+sub invoicing_list_emailonly {
+  my $self = shift;
+  warn "$me invoicing_list_emailonly called"
+    if $DEBUG;
+  grep { $_ !~ /^([A-Z]+)$/ } $self->invoicing_list;
+}
+
+=item invoicing_list_emailonly_scalar
+
+Returns the list of email invoice recipients (invoicing_list without non-email
+destinations such as POST and FAX) as a comma-separated scalar.
+
+=cut
+
+sub invoicing_list_emailonly_scalar {
+  my $self = shift;
+  warn "$me invoicing_list_emailonly_scalar called"
+    if $DEBUG;
+  join(', ', $self->invoicing_list_emailonly);
 }
 
 =item referral_cust_main [ DEPTH [ EXCLUDE_HASHREF ] ]
@@ -3336,10 +3657,22 @@ the error, otherwise returns false.
 =cut
 
 sub charge {
-  my ( $self, $amount ) = ( shift, shift );
-  my $pkg      = @_ ? shift : 'One-time charge';
-  my $comment  = @_ ? shift : '$'. sprintf("%.2f",$amount);
-  my $taxclass = @_ ? shift : '';
+  my $self = shift;
+  my ( $amount, $pkg, $comment, $taxclass, $additional );
+  if ( ref( $_[0] ) ) {
+    $amount     = $_[0]->{amount};
+    $pkg        = exists($_[0]->{pkg}) ? $_[0]->{pkg} : 'One-time charge';
+    $comment    = exists($_[0]->{comment}) ? $_[0]->{comment}
+                                           : '$'. sprintf("%.2f",$amount);
+    $taxclass   = exists($_[0]->{taxclass}) ? $_[0]->{taxclass} : '';
+    $additional = $_[0]->{additional};
+  }else{
+    $amount     = shift;
+    $pkg        = @_ ? shift : 'One-time charge';
+    $comment    = @_ ? shift : '$'. sprintf("%.2f",$amount);
+    $taxclass   = @_ ? shift : '';
+    $additional = [];
+  }
 
   local $SIG{HUP} = 'IGNORE';
   local $SIG{INT} = 'IGNORE';
@@ -3355,16 +3688,20 @@ sub charge {
   my $part_pkg = new FS::part_pkg ( {
     'pkg'      => $pkg,
     'comment'  => $comment,
-    #'setup'    => $amount,
-    #'recur'    => '0',
     'plan'     => 'flat',
-    'plandata' => "setup_fee=$amount",
     'freq'     => 0,
     'disabled' => 'Y',
     'taxclass' => $taxclass,
   } );
 
-  my $error = $part_pkg->insert;
+  my %options = ( ( map { ("additional_info$_" => $additional->[$_] ) }
+                        ( 0 .. @$additional - 1 )
+                  ),
+                  'additional_count' => scalar(@$additional),
+                  'setup_fee' => $amount,
+                );
+
+  my $error = $part_pkg->insert( options => \%options );
   if ( $error ) {
     $dbh->rollback if $oldAutoCommit;
     return $error;
@@ -3470,18 +3807,6 @@ sub cust_refund {
     qsearch( 'cust_refund', { 'custnum' => $self->custnum } )
 }
 
-=item select_for_update
-
-Selects this record with the SQL "FOR UPDATE" command.  This can be useful as
-a mutex.
-
-=cut
-
-sub select_for_update {
-  my $self = shift;
-  qsearch('cust_main', { 'custnum' => $self->custnum }, '*', 'FOR UPDATE' );
-}
-
 =item name
 
 Returns a name string for this customer, either "Company (Last, First)" or
@@ -3538,6 +3863,19 @@ sub ship_contact {
     : $self->contact;
 }
 
+=item country_full
+
+Returns this customer's full country name
+
+=cut
+
+sub country_full {
+  my $self = shift;
+  code2country($self->country);
+}
+
+=item cust_status
+
 =item status
 
 Returns a status string for this customer, currently:
@@ -3548,6 +3886,8 @@ Returns a status string for this customer, currently:
 
 =item active - One or more recurring packages is active
 
+=item inactive - No active recurring packages, but otherwise unsuspended/uncancelled (the inactive status is new - previously inactive customers were mis-identified as cancelled)
+
 =item suspended - All non-cancelled recurring packages are suspended
 
 =item cancelled - All recurring packages are cancelled
@@ -3556,15 +3896,33 @@ Returns a status string for this customer, currently:
 
 =cut
 
-sub status {
+sub status { shift->cust_status(@_); }
+
+sub cust_status {
   my $self = shift;
-  for my $status (qw( prospect active suspended cancelled )) {
+  for my $status (qw( prospect active inactive suspended cancelled )) {
     my $method = $status.'_sql';
     my $numnum = ( my $sql = $self->$method() ) =~ s/cust_main\.custnum/?/g;
     my $sth = dbh->prepare("SELECT $sql") or die dbh->errstr;
-    $sth->execute( ($self->custnum) x $numnum ) or die $sth->errstr;
+    $sth->execute( ($self->custnum) x $numnum )
+      or die "Error executing 'SELECT $sql': ". $sth->errstr;
     return $status if $sth->fetchrow_arrayref->[0];
   }
+}
+
+=item ucfirst_cust_status
+
+=item ucfirst_status
+
+Returns the status with the first character capitalized.
+
+=cut
+
+sub ucfirst_status { shift->ucfirst_cust_status(@_); }
+
+sub ucfirst_cust_status {
+  my $self = shift;
+  ucfirst($self->cust_status);
 }
 
 =item statuscolor
@@ -3573,15 +3931,20 @@ Returns a hex triplet color string for this customer's status.
 
 =cut
 
-my %statuscolor = (
-  'prospect'  => '000000',
-  'active'    => '00CC00',
-  'suspended' => 'FF9900',
-  'cancelled' => 'FF0000',
+use vars qw(%statuscolor);
+%statuscolor = (
+  'prospect'  => '7e0079', #'000000', #black?  naw, purple
+  'active'    => '00CC00', #green
+  'inactive'  => '0000CC', #blue
+  'suspended' => 'FF9900', #yellow
+  'cancelled' => 'FF0000', #red
 );
-sub statuscolor {
+
+sub statuscolor { shift->cust_statuscolor(@_); }
+
+sub cust_statuscolor {
   my $self = shift;
-  $statuscolor{$self->status};
+  $statuscolor{$self->cust_status};
 }
 
 =back
@@ -3597,23 +3960,42 @@ with no packages ever ordered)
 
 =cut
 
+use vars qw($select_count_pkgs);
+$select_count_pkgs =
+  "SELECT COUNT(*) FROM cust_pkg
+    WHERE cust_pkg.custnum = cust_main.custnum";
+
+sub select_count_pkgs_sql {
+  $select_count_pkgs;
+}
+
 sub prospect_sql { "
-  0 = ( SELECT COUNT(*) FROM cust_pkg
-          WHERE cust_pkg.custnum = cust_main.custnum
-      )
+  0 = ( $select_count_pkgs )
 "; }
 
 =item active_sql
 
-Returns an SQL expression identifying active cust_main records.
+Returns an SQL expression identifying active cust_main records (customers with
+no active recurring packages, but otherwise unsuspended/uncancelled).
 
 =cut
 
 sub active_sql { "
-  0 < ( SELECT COUNT(*) FROM cust_pkg
-          WHERE cust_pkg.custnum = cust_main.custnum
-            AND ". FS::cust_pkg->active_sql. "
+  0 < ( $select_count_pkgs AND ". FS::cust_pkg->active_sql. "
       )
+"; }
+
+=item inactive_sql
+
+Returns an SQL expression identifying inactive cust_main records (customers with
+active recurring packages).
+
+=cut
+
+sub inactive_sql { "
+  0 = ( $select_count_pkgs AND ". FS::cust_pkg->active_sql. " )
+  AND
+  0 < ( $select_count_pkgs AND ". FS::cust_pkg->inactive_sql. " )
 "; }
 
 =item susp_sql
@@ -3623,23 +4005,12 @@ Returns an SQL expression identifying suspended cust_main records.
 
 =cut
 
-#my $recurring_sql = FS::cust_pkg->recurring_sql;
-my $recurring_sql = "
-  '0' != ( select freq from part_pkg
-             where cust_pkg.pkgpart = part_pkg.pkgpart )
-";
 
 sub suspended_sql { susp_sql(@_); }
 sub susp_sql { "
-    0 < ( SELECT COUNT(*) FROM cust_pkg
-            WHERE cust_pkg.custnum = cust_main.custnum
-              AND $recurring_sql
-              AND ( cust_pkg.cancel IS NULL OR cust_pkg.cancel = 0 )
-        )
-    AND 0 = ( SELECT COUNT(*) FROM cust_pkg
-                WHERE cust_pkg.custnum = cust_main.custnum
-                  AND ". FS::cust_pkg->active_sql. "
-            )
+    0 < ( $select_count_pkgs AND ". FS::cust_pkg->suspended_sql. " )
+    AND
+    0 = ( $select_count_pkgs AND ". FS::cust_pkg->active_sql. " )
 "; }
 
 =item cancel_sql
@@ -3650,22 +4021,45 @@ Returns an SQL expression identifying cancelled cust_main records.
 =cut
 
 sub cancelled_sql { cancel_sql(@_); }
-sub cancel_sql { "
-  0 < ( SELECT COUNT(*) FROM cust_pkg
-          WHERE cust_pkg.custnum = cust_main.custnum
-      )
-  AND 0 = ( SELECT COUNT(*) FROM cust_pkg
-              WHERE cust_pkg.custnum = cust_main.custnum
-                AND $recurring_sql
-                AND ( cust_pkg.cancel IS NULL OR cust_pkg.cancel = 0 )
-          )
+sub cancel_sql {
+
+  my $recurring_sql = FS::cust_pkg->recurring_sql;
+  #my $recurring_sql = "
+  #  '0' != ( select freq from part_pkg
+  #             where cust_pkg.pkgpart = part_pkg.pkgpart )
+  #";
+
+  "
+    0 < ( $select_count_pkgs )
+    AND 0 = ( $select_count_pkgs AND $recurring_sql
+                  AND ( cust_pkg.cancel IS NULL OR cust_pkg.cancel = 0 )
+            )
+  ";
+}
+
+=item uncancel_sql
+=item uncancelled_sql
+
+Returns an SQL expression identifying un-cancelled cust_main records.
+
+=cut
+
+sub uncancelled_sql { uncancel_sql(@_); }
+sub uncancel_sql { "
+  ( 0 < ( $select_count_pkgs
+                   AND ( cust_pkg.cancel IS NULL
+                         OR cust_pkg.cancel = 0
+                       )
+        )
+    OR 0 = ( $select_count_pkgs )
+  )
 "; }
 
 =item fuzzy_search FUZZY_HASHREF [ HASHREF, SELECT, EXTRA_SQL, CACHE_OBJ ]
 
 Performs a fuzzy (approximate) search and returns the matching FS::cust_main
-records.  Currently, only I<last> or I<company> may be specified (the
-appropriate ship_ field is also searched if applicable).
+records.  Currently, I<first>, I<last> and/or I<company> may be specified (the
+appropriate ship_ field is also searched).
 
 Additional options are the same as FS::Record::qsearch
 
@@ -3679,19 +4073,25 @@ sub fuzzy_search {
 
   check_and_rebuild_fuzzyfiles();
   foreach my $field ( keys %$fuzzy ) {
-    my $sub = \&{"all_$field"};
-    my %match = ();
-    $match{$_}=1 foreach ( amatch($fuzzy->{$field}, ['i'], @{ &$sub() } ) );
 
+    my $all = $self->all_X($field);
+    next unless scalar(@$all);
+
+    my %match = ();
+    $match{$_}=1 foreach ( amatch( $fuzzy->{$field}, ['i'], @$all ) );
+
+    my @fcust = ();
     foreach ( keys %match ) {
-      push @cust_main, qsearch('cust_main', { %$hash, $field=>$_}, @opt);
-      push @cust_main, qsearch('cust_main', { %$hash, "ship_$field"=>$_}, @opt)
-        if defined dbdef->table('cust_main')->column('ship_last');
+      push @fcust, qsearch('cust_main', { %$hash, $field=>$_}, @opt);
+      push @fcust, qsearch('cust_main', { %$hash, "ship_$field"=>$_}, @opt);
     }
+    my %fsaw = ();
+    push @cust_main, grep { ! $fsaw{$_->custnum}++ } @fcust;
   }
 
+  # we want the components of $fuzzy ANDed, not ORed, but still don't want dupes
   my %saw = ();
-  @cust_main = grep { !$saw{$_->custnum}++ } @cust_main;
+  @cust_main = grep { ++$saw{$_->custnum} == scalar(keys %$fuzzy) } @cust_main;
 
   @cust_main;
 
@@ -3706,10 +4106,11 @@ sub fuzzy_search {
 =item smart_search OPTION => VALUE ...
 
 Accepts the following options: I<search>, the string to search for.  The string
-will be searched for as a customer number, last name or company name, first
-searching for an exact match then fuzzy and substring matches.
+will be searched for as a customer number, phone number, name or company name,
+as an exact, or, in some cases, a substring or fuzzy match (see the source code
+for the exact heuristics used).
 
-Any additional options treated as an additional qualifier on the search
+Any additional options are treated as an additional qualifier on the search
 (i.e. I<agentnum>).
 
 Returns a (possibly empty) array of FS::cust_main objects.
@@ -3718,72 +4119,215 @@ Returns a (possibly empty) array of FS::cust_main objects.
 
 sub smart_search {
   my %options = @_;
-  my $search = delete $options{'search'};
+
+  #here is the agent virtualization
+  my $agentnums_sql = $FS::CurrentUser::CurrentUser->agentnums_sql;
+
   my @cust_main = ();
 
-  if ( $search =~ /^\s*(\d+)\s*$/ ) { # customer # search
+  my $search = delete $options{'search'};
+  ( my $alphanum_search = $search ) =~ s/\W//g;
+  
+  if ( $alphanum_search =~ /^1?(\d{3})(\d{3})(\d{4})(\d*)$/ ) { #phone# search
 
-    push @cust_main, qsearch('cust_main', { 'custnum' => $1, %options } );
+    #false laziness w/Record::ut_phone
+    my $phonen = "$1-$2-$3";
+    $phonen .= " x$4" if $4;
 
-  } elsif ( $search =~ /^\s*(\S.*\S)\s*$/ ) { #value search
+    push @cust_main, qsearch( {
+      'table'   => 'cust_main',
+      'hashref' => { %options },
+      'extra_sql' => ( scalar(keys %options) ? ' AND ' : ' WHERE ' ).
+                     ' ( '.
+                         join(' OR ', map "$_ = '$phonen'",
+                                          qw( daytime night fax
+                                              ship_daytime ship_night ship_fax )
+                             ).
+                     ' ) '.
+                     " AND $agentnums_sql", #agent virtualization
+    } );
+
+    unless ( @cust_main || $phonen =~ /x\d+$/ ) { #no exact match
+      #try looking for matches with extensions unless one was specified
+
+      push @cust_main, qsearch( {
+        'table'   => 'cust_main',
+        'hashref' => { %options },
+        'extra_sql' => ( scalar(keys %options) ? ' AND ' : ' WHERE ' ).
+                       ' ( '.
+                           join(' OR ', map "$_ LIKE '$phonen\%'",
+                                            qw( daytime night
+                                                ship_daytime ship_night )
+                               ).
+                       ' ) '.
+                       " AND $agentnums_sql", #agent virtualization
+      } );
+
+    }
+
+  } elsif ( $search =~ /^\s*(\d+)\s*$/ ) { # customer # search
+
+    push @cust_main, qsearch( {
+      'table'     => 'cust_main',
+      'hashref'   => { 'custnum' => $1, %options },
+      'extra_sql' => " AND $agentnums_sql", #agent virtualization
+    } );
+
+  } elsif ( $search =~ /^\s*(\S.*\S)\s+\((.+), ([^,]+)\)\s*$/ ) {
+
+    my($company, $last, $first) = ( $1, $2, $3 );
+
+    # "Company (Last, First)"
+    #this is probably something a browser remembered,
+    #so just do an exact search
+
+    foreach my $prefix ( '', 'ship_' ) {
+      push @cust_main, qsearch( {
+        'table'     => 'cust_main',
+        'hashref'   => { $prefix.'first'   => $first,
+                         $prefix.'last'    => $last,
+                         $prefix.'company' => $company,
+                         %options,
+                       },
+        'extra_sql' => " AND $agentnums_sql",
+      } );
+    }
+
+  } elsif ( $search =~ /^\s*(\S.*\S)\s*$/ ) { # value search
+                                              # try (ship_){last,company}
 
     my $value = lc($1);
+
+    # # remove "(Last, First)" in "Company (Last, First)", otherwise the
+    # # full strings the browser remembers won't work
+    # $value =~ s/\([\w \,\.\-\']*\)$//; #false laziness w/Record::ut_name
+
+    use Lingua::EN::NameParse;
+    my $NameParse = new Lingua::EN::NameParse(
+             auto_clean     => 1,
+             allow_reversed => 1,
+    );
+
+    my($last, $first) = ( '', '' );
+    #maybe disable this too and just rely on NameParse?
+    if ( $value =~ /^(.+),\s*([^,]+)$/ ) { # Last, First
+    
+      ($last, $first) = ( $1, $2 );
+    
+    #} elsif  ( $value =~ /^(.+)\s+(.+)$/ ) {
+    } elsif ( ! $NameParse->parse($value) ) {
+
+      my %name = $NameParse->components;
+      $first = $name{'given_name_1'};
+      $last  = $name{'surname_1'};
+
+    }
+
+    if ( $first && $last ) {
+
+      my($q_last, $q_first) = ( dbh->quote($last), dbh->quote($first) );
+
+      #exact
+      my $sql = scalar(keys %options) ? ' AND ' : ' WHERE ';
+      $sql .= "
+        (     ( LOWER(last) = $q_last AND LOWER(first) = $q_first )
+           OR ( LOWER(ship_last) = $q_last AND LOWER(ship_first) = $q_first )
+        )";
+
+      push @cust_main, qsearch( {
+        'table'     => 'cust_main',
+        'hashref'   => \%options,
+        'extra_sql' => "$sql AND $agentnums_sql", #agent virtualization
+      } );
+
+      # or it just be something that was typed in... (try that in a sec)
+
+    }
+
     my $q_value = dbh->quote($value);
 
     #exact
     my $sql = scalar(keys %options) ? ' AND ' : ' WHERE ';
-    $sql .= " ( LOWER(last) = $q_value OR LOWER(company) = $q_value";
-    $sql .= " OR LOWER(ship_last) = $q_value OR LOWER(ship_company) = $q_value"
-      if defined dbdef->table('cust_main')->column('ship_last');
-    $sql .= ' )';
+    $sql .= " (    LOWER(last)         = $q_value
+                OR LOWER(company)      = $q_value
+                OR LOWER(ship_last)    = $q_value
+                OR LOWER(ship_company) = $q_value
+              )";
 
-    push @cust_main, qsearch( 'cust_main', \%options, '', $sql );
+    push @cust_main, qsearch( {
+      'table'     => 'cust_main',
+      'hashref'   => \%options,
+      'extra_sql' => "$sql AND $agentnums_sql", #agent virtualization
+    } );
 
-    unless ( @cust_main ) {  #no exact match, trying substring/fuzzy
+    #always do substring & fuzzy,
+    #getting complains searches are not returning enough
+    #unless ( @cust_main ) {  #no exact match, trying substring/fuzzy
 
       #still some false laziness w/ search/cust_main.cgi
 
       #substring
-      push @cust_main, qsearch( 'cust_main',
-                                { 'last'     => { 'op'    => 'ILIKE',
-                                                  'value' => "%$q_value%" },
-                                  %options,
-                                }
-                              );
-      push @cust_main, qsearch( 'cust_main',
-                                { 'ship_last' => { 'op'    => 'ILIKE',
-                                                   'value' => "%$q_value%" },
-                                  %options,
 
-                                }
-                              )
-        if defined dbdef->table('cust_main')->column('ship_last');
+      my @hashrefs = (
+        { 'company'      => { op=>'ILIKE', value=>"%$value%" }, },
+        { 'ship_company' => { op=>'ILIKE', value=>"%$value%" }, },
+      );
 
-      push @cust_main, qsearch( 'cust_main',
-                                { 'company'  => { 'op'    => 'ILIKE',
-                                                  'value' => "%$q_value%" },
-                                  %options,
-                                }
-                              );
-      push @cust_main, qsearch( 'cust_main',
-                                { 'ship_company' => { 'op' => 'ILIKE',
-                                                   'value' => "%$q_value%" },
-                                  %options,
-                                }
-                              )
-        if defined dbdef->table('cust_main')->column('ship_last');
+      if ( $first && $last ) {
+
+        push @hashrefs,
+          { 'first'        => { op=>'ILIKE', value=>"%$first%" },
+            'last'         => { op=>'ILIKE', value=>"%$last%" },
+          },
+          { 'ship_first'   => { op=>'ILIKE', value=>"%$first%" },
+            'ship_last'    => { op=>'ILIKE', value=>"%$last%" },
+          },
+        ;
+
+      } else {
+
+        push @hashrefs,
+          { 'last'         => { op=>'ILIKE', value=>"%$value%" }, },
+          { 'ship_last'    => { op=>'ILIKE', value=>"%$value%" }, },
+        ;
+      }
+
+      foreach my $hashref ( @hashrefs ) {
+
+        push @cust_main, qsearch( {
+          'table'     => 'cust_main',
+          'hashref'   => { %$hashref,
+                           %options,
+                         },
+          'extra_sql' => " AND $agentnums_sql", #agent virtualizaiton
+        } );
+
+      }
 
       #fuzzy
-      push @cust_main, FS::cust_main->fuzzy_search(
-        { 'last'     => $value },
-        \%options,
-      );
-      push @cust_main, FS::cust_main->fuzzy_search(
-        { 'company'  => $value },
-        \%options,
+      my @fuzopts = (
+        \%options,                #hashref
+        '',                       #select
+        " AND $agentnums_sql",    #extra_sql  #agent virtualization
       );
 
-    }
+      if ( $first && $last ) {
+        push @cust_main, FS::cust_main->fuzzy_search(
+          { 'last'   => $last,    #fuzzy hashref
+            'first'  => $first }, #
+          @fuzopts
+        );
+      }
+      foreach my $field ( 'last', 'company' ) {
+        push @cust_main,
+          FS::cust_main->fuzzy_search( { $field => $value }, @fuzopts );
+      }
+
+    #}
+
+    #eliminate duplicates
+    my %saw = ();
+    @cust_main = grep { !$saw{$_->custnum}++ } @cust_main;
 
   }
 
@@ -3795,10 +4339,12 @@ sub smart_search {
 
 =cut
 
+use vars qw(@fuzzyfields);
+@fuzzyfields = ( 'last', 'first', 'company' );
+
 sub check_and_rebuild_fuzzyfiles {
   my $dir = $FS::UID::conf_dir. "cache.". $FS::UID::datasrc;
-  -e "$dir/cust_main.last" && -e "$dir/cust_main.company"
-    or &rebuild_fuzzyfiles;
+  rebuild_fuzzyfiles() if grep { ! -e "$dir/cust_main.$_" } @fuzzyfields
 }
 
 =item rebuild_fuzzyfiles
@@ -3810,72 +4356,48 @@ sub rebuild_fuzzyfiles {
   use Fcntl qw(:flock);
 
   my $dir = $FS::UID::conf_dir. "cache.". $FS::UID::datasrc;
+  mkdir $dir, 0700 unless -d $dir;
 
-  #last
+  foreach my $fuzzy ( @fuzzyfields ) {
 
-  open(LASTLOCK,">>$dir/cust_main.last")
-    or die "can't open $dir/cust_main.last: $!";
-  flock(LASTLOCK,LOCK_EX)
-    or die "can't lock $dir/cust_main.last: $!";
+    open(LOCK,">>$dir/cust_main.$fuzzy")
+      or die "can't open $dir/cust_main.$fuzzy: $!";
+    flock(LOCK,LOCK_EX)
+      or die "can't lock $dir/cust_main.$fuzzy: $!";
 
-  my @all_last = map $_->getfield('last'), qsearch('cust_main', {});
-  push @all_last,
-                 grep $_, map $_->getfield('ship_last'), qsearch('cust_main',{})
-    if defined dbdef->table('cust_main')->column('ship_last');
+    open (CACHE,">$dir/cust_main.$fuzzy.tmp")
+      or die "can't open $dir/cust_main.$fuzzy.tmp: $!";
 
-  open (LASTCACHE,">$dir/cust_main.last.tmp")
-    or die "can't open $dir/cust_main.last.tmp: $!";
-  print LASTCACHE join("\n", @all_last), "\n";
-  close LASTCACHE or die "can't close $dir/cust_main.last.tmp: $!";
+    foreach my $field ( $fuzzy, "ship_$fuzzy" ) {
+      my $sth = dbh->prepare("SELECT $field FROM cust_main".
+                             " WHERE $field != '' AND $field IS NOT NULL");
+      $sth->execute or die $sth->errstr;
 
-  rename "$dir/cust_main.last.tmp", "$dir/cust_main.last";
-  close LASTLOCK;
+      while ( my $row = $sth->fetchrow_arrayref ) {
+        print CACHE $row->[0]. "\n";
+      }
 
-  #company
+    } 
 
-  open(COMPANYLOCK,">>$dir/cust_main.company")
-    or die "can't open $dir/cust_main.company: $!";
-  flock(COMPANYLOCK,LOCK_EX)
-    or die "can't lock $dir/cust_main.company: $!";
-
-  my @all_company = grep $_ ne '', map $_->company, qsearch('cust_main',{});
-  push @all_company,
-       grep $_ ne '', map $_->ship_company, qsearch('cust_main', {})
-    if defined dbdef->table('cust_main')->column('ship_last');
-
-  open (COMPANYCACHE,">$dir/cust_main.company.tmp")
-    or die "can't open $dir/cust_main.company.tmp: $!";
-  print COMPANYCACHE join("\n", @all_company), "\n";
-  close COMPANYCACHE or die "can't close $dir/cust_main.company.tmp: $!";
-
-  rename "$dir/cust_main.company.tmp", "$dir/cust_main.company";
-  close COMPANYLOCK;
+    close CACHE or die "can't close $dir/cust_main.$fuzzy.tmp: $!";
+  
+    rename "$dir/cust_main.$fuzzy.tmp", "$dir/cust_main.$fuzzy";
+    close LOCK;
+  }
 
 }
 
-=item all_last
+=item all_X
 
 =cut
 
-sub all_last {
+sub all_X {
+  my( $self, $field ) = @_;
   my $dir = $FS::UID::conf_dir. "cache.". $FS::UID::datasrc;
-  open(LASTCACHE,"<$dir/cust_main.last")
-    or die "can't open $dir/cust_main.last: $!";
-  my @array = map { chomp; $_; } <LASTCACHE>;
-  close LASTCACHE;
-  \@array;
-}
-
-=item all_company
-
-=cut
-
-sub all_company {
-  my $dir = $FS::UID::conf_dir. "cache.". $FS::UID::datasrc;
-  open(COMPANYCACHE,"<$dir/cust_main.company")
-    or die "can't open $dir/cust_main.last: $!";
-  my @array = map { chomp; $_; } <COMPANYCACHE>;
-  close COMPANYCACHE;
+  open(CACHE,"<$dir/cust_main.$field")
+    or die "can't open $dir/cust_main.$field: $!";
+  my @array = map { chomp; $_; } <CACHE>;
+  close CACHE;
   \@array;
 }
 
@@ -3884,7 +4406,7 @@ sub all_company {
 =cut
 
 sub append_fuzzyfiles {
-  my( $last, $company ) = @_;
+  #my( $first, $last, $company ) = @_;
 
   &check_and_rebuild_fuzzyfiles;
 
@@ -3892,33 +4414,23 @@ sub append_fuzzyfiles {
 
   my $dir = $FS::UID::conf_dir. "cache.". $FS::UID::datasrc;
 
-  if ( $last ) {
+  foreach my $field (qw( first last company )) {
+    my $value = shift;
 
-    open(LAST,">>$dir/cust_main.last")
-      or die "can't open $dir/cust_main.last: $!";
-    flock(LAST,LOCK_EX)
-      or die "can't lock $dir/cust_main.last: $!";
+    if ( $value ) {
 
-    print LAST "$last\n";
+      open(CACHE,">>$dir/cust_main.$field")
+        or die "can't open $dir/cust_main.$field: $!";
+      flock(CACHE,LOCK_EX)
+        or die "can't lock $dir/cust_main.$field: $!";
 
-    flock(LAST,LOCK_UN)
-      or die "can't unlock $dir/cust_main.last: $!";
-    close LAST;
-  }
+      print CACHE "$value\n";
 
-  if ( $company ) {
+      flock(CACHE,LOCK_UN)
+        or die "can't unlock $dir/cust_main.$field: $!";
+      close CACHE;
+    }
 
-    open(COMPANY,">>$dir/cust_main.company")
-      or die "can't open $dir/cust_main.company: $!";
-    flock(COMPANY,LOCK_EX)
-      or die "can't lock $dir/cust_main.company: $!";
-
-    print COMPANY "$company\n";
-
-    flock(COMPANY,LOCK_UN)
-      or die "can't unlock $dir/cust_main.company: $!";
-
-    close COMPANY;
   }
 
   1;
@@ -3933,12 +4445,34 @@ sub batch_import {
   #warn join('-',keys %$param);
   my $fh = $param->{filehandle};
   my $agentnum = $param->{agentnum};
+
   my $refnum = $param->{refnum};
   my $pkgpart = $param->{pkgpart};
-  my @fields = @{$param->{fields}};
 
-  eval "use Date::Parse;";
-  die $@ if $@;
+  #my @fields = @{$param->{fields}};
+  my $format = $param->{'format'};
+  my @fields;
+  my $payby;
+  if ( $format eq 'simple' ) {
+    @fields = qw( cust_pkg.setup dayphone first last
+                  address1 address2 city state zip comments );
+    $payby = 'BILL';
+  } elsif ( $format eq 'extended' ) {
+    @fields = qw( agent_custid refnum
+                  last first address1 address2 city state zip country
+                  daytime night
+                  ship_last ship_first ship_address1 ship_address2
+                  ship_city ship_state ship_zip ship_country
+                  payinfo paycvv paydate
+                  invoicing_list
+                  cust_pkg.pkgpart
+                  svc_acct.username svc_acct._password 
+                );
+    $payby = 'BILL';
+  } else {
+    die "unknown format $format";
+  }
+
   eval "use Text::CSV_XS;";
   die $@ if $@;
 
@@ -3976,51 +4510,111 @@ sub batch_import {
       agentnum => $agentnum,
       refnum   => $refnum,
       country  => $conf->config('countrydefault') || 'US',
-      payby    => 'BILL', #default
+      payby    => $payby, #default
       paydate  => '12/2037', #default
     );
     my $billtime = time;
     my %cust_pkg = ( pkgpart => $pkgpart );
+    my %svc_acct = ();
     foreach my $field ( @fields ) {
-      if ( $field =~ /^cust_pkg\.(setup|bill|susp|expire|cancel)$/ ) {
+
+      if ( $field =~ /^cust_pkg\.(pkgpart|setup|bill|susp|expire|cancel)$/ ) {
+
         #$cust_pkg{$1} = str2time( shift @$columns );
-        if ( $1 eq 'setup' ) {
+        if ( $1 eq 'pkgpart' ) {
+          $cust_pkg{$1} = shift @columns;
+        } elsif ( $1 eq 'setup' ) {
           $billtime = str2time(shift @columns);
         } else {
           $cust_pkg{$1} = str2time( shift @columns );
-        }
+        } 
+
+      } elsif ( $field =~ /^svc_acct\.(username|_password)$/ ) {
+
+        $svc_acct{$1} = shift @columns;
+        
       } else {
+
+        #refnum interception
+        if ( $field eq 'refnum' && $columns[0] !~ /^\s*(\d+)\s*$/ ) {
+
+          my $referral = $columns[0];
+          my %hash = ( 'referral' => $referral,
+                       'agentnum' => $agentnum,
+                       'disabled' => '',
+                     );
+
+          my $part_referral = qsearchs('part_referral', \%hash )
+                              || new FS::part_referral \%hash;
+
+          unless ( $part_referral->refnum ) {
+            my $error = $part_referral->insert;
+            if ( $error ) {
+              $dbh->rollback if $oldAutoCommit;
+              return "can't auto-insert advertising source: $referral: $error";
+            }
+          }
+
+          $columns[0] = $part_referral->refnum;
+        }
+
         #$cust_main{$field} = shift @$columns; 
         $cust_main{$field} = shift @columns; 
       }
     }
 
-    my $cust_pkg = new FS::cust_pkg ( \%cust_pkg ) if $pkgpart;
+    $cust_main{'payby'} = 'CARD' if length($cust_main{'payinfo'});
+
+    my $invoicing_list = $cust_main{'invoicing_list'}
+                           ? [ delete $cust_main{'invoicing_list'} ]
+                           : [];
+
     my $cust_main = new FS::cust_main ( \%cust_main );
+
     use Tie::RefHash;
     tie my %hash, 'Tie::RefHash'; #this part is important
-    $hash{$cust_pkg} = [] if $pkgpart;
-    my $error = $cust_main->insert( \%hash );
+
+    if ( $cust_pkg{'pkgpart'} ) {
+      my $cust_pkg = new FS::cust_pkg ( \%cust_pkg );
+
+      my @svc_acct = ();
+      if ( $svc_acct{'username'} ) {
+        my $part_pkg = $cust_pkg->part_pkg;
+	unless ( $part_pkg ) {
+	  $dbh->rollback if $oldAutoCommit;
+	  return "unknown pkgnum ". $cust_pkg{'pkgpart'};
+	} 
+        $svc_acct{svcpart} = $part_pkg->svcpart( 'svc_acct' );
+        push @svc_acct, new FS::svc_acct ( \%svc_acct )
+      }
+
+      $hash{$cust_pkg} = \@svc_acct;
+    }
+
+    my $error = $cust_main->insert( \%hash, $invoicing_list );
 
     if ( $error ) {
       $dbh->rollback if $oldAutoCommit;
       return "can't insert customer for $line: $error";
     }
 
-    #false laziness w/bill.cgi
-    $error = $cust_main->bill( 'time' => $billtime );
-    if ( $error ) {
-      $dbh->rollback if $oldAutoCommit;
-      return "can't bill customer for $line: $error";
-    }
+    if ( $format eq 'simple' ) {
 
-    $cust_main->apply_payments;
-    $cust_main->apply_credits;
+      #false laziness w/bill.cgi
+      $error = $cust_main->bill( 'time' => $billtime );
+      if ( $error ) {
+        $dbh->rollback if $oldAutoCommit;
+        return "can't bill customer for $line: $error";
+      }
+  
+      $cust_main->apply_payments_and_credits;
+  
+      $error = $cust_main->collect();
+      if ( $error ) {
+        $dbh->rollback if $oldAutoCommit;
+        return "can't collect customer for $line: $error";
+      }
 
-    $error = $cust_main->collect();
-    if ( $error ) {
-      $dbh->rollback if $oldAutoCommit;
-      return "can't collect customer for $line: $error";
     }
 
     $imported++;
@@ -4044,8 +4638,6 @@ sub batch_charge {
   my $fh = $param->{filehandle};
   my @fields = @{$param->{fields}};
 
-  eval "use Date::Parse;";
-  die $@ if $@;
   eval "use Text::CSV_XS;";
   die $@ if $@;
 
@@ -4119,6 +4711,94 @@ sub batch_charge {
 
 }
 
+=item notify CUSTOMER_OBJECT TEMPLATE_NAME OPTIONS
+
+Sends a templated email notification to the customer (see L<Text::Template).
+
+OPTIONS is a hash and may include
+
+I<from> - the email sender (default is invoice_from)
+
+I<to> - comma-separated scalar or arrayref of recipients 
+   (default is invoicing_list)
+
+I<subject> - The subject line of the sent email notification
+   (default is "Notice from company_name")
+
+I<extra_fields> - a hashref of name/value pairs which will be substituted
+   into the template
+
+The following variables are vavailable in the template.
+
+I<$first> - the customer first name
+I<$last> - the customer last name
+I<$company> - the customer company
+I<$payby> - a description of the method of payment for the customer
+            # would be nice to use FS::payby::shortname
+I<$payinfo> - the account information used to collect for this customer
+I<$expdate> - the expiration of the customer payment in seconds from epoch
+
+=cut
+
+sub notify {
+  my ($customer, $template, %options) = @_;
+
+  return unless $conf->exists($template);
+
+  my $from = $conf->config('invoice_from') if $conf->exists('invoice_from');
+  $from = $options{from} if exists($options{from});
+
+  my $to = join(',', $customer->invoicing_list_emailonly);
+  $to = $options{to} if exists($options{to});
+  
+  my $subject = "Notice from " . $conf->config('company_name')
+    if $conf->exists('company_name');
+  $subject = $options{subject} if exists($options{subject});
+
+  my $notify_template = new Text::Template (TYPE => 'ARRAY',
+                                            SOURCE => [ map "$_\n",
+                                              $conf->config($template)]
+                                           )
+    or die "can't create new Text::Template object: Text::Template::ERROR";
+  $notify_template->compile()
+    or die "can't compile template: Text::Template::ERROR";
+
+  my $paydate = $customer->paydate;
+  $FS::notify_template::_template::first = $customer->first;
+  $FS::notify_template::_template::last = $customer->last;
+  $FS::notify_template::_template::company = $customer->company;
+  $FS::notify_template::_template::payinfo = $customer->mask_payinfo;
+  my $payby = $customer->payby;
+  my ($payyear,$paymonth,$payday) = split (/-/,$paydate);
+  my $expire_time = timelocal(0,0,0,$payday,--$paymonth,$payyear);
+
+  #credit cards expire at the end of the month/year of their exp date
+  if ($payby eq 'CARD' || $payby eq 'DCRD') {
+    $FS::notify_template::_template::payby = 'credit card';
+    ($paymonth < 11) ? $paymonth++ : ($paymonth=0, $payyear++);
+    $expire_time = timelocal(0,0,0,$payday,$paymonth,$payyear);
+    $expire_time--;
+  }elsif ($payby eq 'COMP') {
+    $FS::notify_template::_template::payby = 'complimentary account';
+  }else{
+    $FS::notify_template::_template::payby = 'current method';
+  }
+  $FS::notify_template::_template::expdate = $expire_time;
+
+  for (keys %{$options{extra_fields}}){
+    no strict "refs";
+    ${"FS::notify_template::_template::$_"} = $options{extra_fields}->{$_};
+  }
+
+  send_email(from => $from,
+             to => $to,
+             subject => $subject,
+             body => $notify_template->fill_in( PACKAGE =>
+                                                'FS::notify_template::_template'                                              ),
+            );
+
+}
+
 =back
 
 =head1 BUGS
@@ -4137,6 +4817,8 @@ card types.
 No multiple currency support (probably a larger project than just this module).
 
 payinfo_masked false laziness with cust_pay.pm and cust_refund.pm
+
+Birthdates rely on negative epoch values.
 
 =head1 SEE ALSO
 

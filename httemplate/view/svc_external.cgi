@@ -1,11 +1,50 @@
-<!-- mason kludge -->
-<%
+<% include("/elements/header.html",'External Service View', menubar(
+  ( ( $custnum )
+    ? ( "View this customer (#$custnum)" => "${p}view/cust_main.cgi?$custnum",
+      )                                                                       
+    : ( "Cancel this (unaudited) external service" =>
+          "${p}misc/cancel-unaudited.cgi?$svcnum" )
+  ),
+  "Main menu" => $p,
+)) %>
+
+<A HREF="<%$p%>edit/svc_external.cgi?<%$svcnum%>">Edit this information</A><BR>
+<% ntable("#cccccc") %><TR><TD><% ntable("#cccccc",2) %>
+
+<TR><TD ALIGN="right">Service number</TD>
+  <TD BGCOLOR="#ffffff"><% $svcnum %></TD></TR>
+<TR><TD ALIGN="right"><% FS::Msgcat::_gettext('svc_external-id') || 'External&nbsp;ID' %></TD>
+  <TD BGCOLOR="#ffffff"><% $conf->config('svc_external-display_type') eq 'artera_turbo' ? sprintf('%010d', $svc_external->id) : $svc_external->id %></TD></TR>
+<TR><TD ALIGN="right"><% FS::Msgcat::_gettext('svc_external-title') || 'Title' %></TD>
+  <TD BGCOLOR="#ffffff"><% $svc_external->title %></TD></TR>
+% foreach (sort { $a cmp $b } $svc_external->virtual_fields) { 
+
+  <% $svc_external->pvf($_)->widget('HTML', 'view', $svc_external->getfield($_)) %>
+% } 
+
+
+</TABLE></TD></TR></TABLE>
+<BR><% joblisting({'svcnum'=>$svcnum}, 1) %>
+
+<% include('/elements/footer.html') %>
+<%init>
+
+die "access denied"
+  unless $FS::CurrentUser::CurrentUser->access_right('View customer services')
+      || $FS::CurrentUser::CurrentUser->access_right('View customer'); #XXX remove me
 
 my($query) = $cgi->keywords;
 $query =~ /^(\d+)$/;
 my $svcnum = $1;
-my $svc_external = qsearchs( 'svc_external', { 'svcnum' => $svcnum } )
-  or die "svc_external: Unknown svcnum $svcnum";
+my $svc_external = qsearchs({
+  'select'    => 'svc_external.*',
+  'table'     => 'svc_external',
+  'addl_from' => ' LEFT JOIN cust_svc  USING ( svcnum  ) '.
+                 ' LEFT JOIN cust_pkg  USING ( pkgnum  ) '.
+                 ' LEFT JOIN cust_main USING ( custnum ) ',
+  'hashref'   => { 'svcnum' => $svcnum },
+  'extra_sql' => ' AND '. $FS::CurrentUser::CurrentUser->agentnums_sql,
+}) or die "svc_external: Unknown svcnum $svcnum";
 
 my $conf = new FS::Conf;
 
@@ -22,33 +61,4 @@ if ($pkgnum) {
 }
 #eofalse
 
-
-%>
-
-<%= header('External Service View', menubar(
-  ( ( $custnum )
-    ? ( "View this customer (#$custnum)" => "${p}view/cust_main.cgi?$custnum",
-      )                                                                       
-    : ( "Cancel this (unaudited) external service" =>
-          "${p}misc/cancel-unaudited.cgi?$svcnum" )
-  ),
-  "Main menu" => $p,
-)) %>
-
-<A HREF="<%=$p%>edit/svc_external.cgi?<%=$svcnum%>">Edit this information</A><BR>
-<%= ntable("#cccccc") %><TR><TD><%= ntable("#cccccc",2) %>
-
-<TR><TD ALIGN="right">Service number</TD>
-  <TD BGCOLOR="#ffffff"><%= $svcnum %></TD></TR>
-<TR><TD ALIGN="right"><%= FS::Msgcat::_gettext('svc_external-id') || 'External&nbsp;ID' %></TD>
-  <TD BGCOLOR="#ffffff"><%= $conf->config('svc_external-display_type') eq 'artera_turbo' ? sprintf('%010d', $svc_external->id) : $svc_external->id %></TD></TR>
-<TR><TD ALIGN="right"><%= FS::Msgcat::_gettext('svc_external-title') || 'Title' %></TD>
-  <TD BGCOLOR="#ffffff"><%= $svc_external->title %></TD></TR>
-
-<% foreach (sort { $a cmp $b } $svc_external->virtual_fields) { %>
-  <%= $svc_external->pvf($_)->widget('HTML', 'view', $svc_external->getfield($_)) %>
-<% } %>
-
-</TABLE></TD></TR></TABLE>
-<BR><%= joblisting({'svcnum'=>$svcnum}, 1) %>
-</BODY></HTML>
+</%init>

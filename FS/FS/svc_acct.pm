@@ -8,7 +8,10 @@ use vars qw( @ISA $DEBUG $me $conf $skip_fuzzyfiles
              $username_noperiod $username_nounderscore $username_nodash
              $username_uppercase $username_percent
              $password_noampersand $password_noexclamation
-             $welcome_template $welcome_from $welcome_subject $welcome_mimetype
+             $welcome_template $welcome_from
+             $welcome_subject $welcome_subject_template $welcome_mimetype
+             $warning_template $warning_from $warning_subject $warning_mimetype
+             $warning_cc
              $smtpmachine
              $radius_password $radius_ip
              $dirhash
@@ -17,9 +20,11 @@ use Carp;
 use Fcntl qw(:flock);
 use Date::Format;
 use Crypt::PasswdMD5 1.2;
+use Data::Dumper;
 use FS::UID qw( datasrc );
 use FS::Conf;
 use FS::Record qw( qsearch qsearchs fields dbh dbdef );
+use FS::Msgcat qw(gettext);
 use FS::svc_Common;
 use FS::cust_svc;
 use FS::part_svc;
@@ -31,9 +36,9 @@ use FS::queue;
 use FS::radius_usergroup;
 use FS::export_svc;
 use FS::part_export;
-use FS::Msgcat qw(gettext);
 use FS::svc_forward;
 use FS::svc_www;
+use FS::cdr;
 
 @ISA = qw( FS::svc_Common );
 
@@ -67,12 +72,32 @@ $FS::UID::callback{'FS::svc_acct'} = sub {
     ) or warn "can't create welcome email template: $Text::Template::ERROR";
     $welcome_from = $conf->config('welcome_email-from'); # || 'your-isp-is-dum'
     $welcome_subject = $conf->config('welcome_email-subject') || 'Welcome';
+    $welcome_subject_template = new Text::Template (
+      TYPE   => 'STRING',
+      SOURCE => $welcome_subject,
+    ) or warn "can't create welcome email subject template: $Text::Template::ERROR";
     $welcome_mimetype = $conf->config('welcome_email-mimetype') || 'text/plain';
   } else {
     $welcome_template = '';
     $welcome_from = '';
     $welcome_subject = '';
     $welcome_mimetype = '';
+  }
+  if ( $conf->exists('warning_email') ) {
+    $warning_template = new Text::Template (
+      TYPE   => 'ARRAY',
+      SOURCE => [ map "$_\n", $conf->config('warning_email') ]
+    ) or warn "can't create warning email template: $Text::Template::ERROR";
+    $warning_from = $conf->config('warning_email-from'); # || 'your-isp-is-dum'
+    $warning_subject = $conf->config('warning_email-subject') || 'Warning';
+    $warning_mimetype = $conf->config('warning_email-mimetype') || 'text/plain';
+    $warning_cc = $conf->config('warning_email-cc');
+  } else {
+    $warning_template = '';
+    $warning_from = '';
+    $warning_subject = '';
+    $warning_mimetype = '';
+    $warning_cc = '';
   }
   $smtpmachine = $conf->config('smtpmachine');
   $radius_password = $conf->config('radius-password') || 'Password';
@@ -166,6 +191,12 @@ FS::svc_Common.  The following fields are currently supported:
 
 =item seconds - 
 
+=item upbytes - 
+
+=item downbytes - 
+
+=item totalbytes - 
+
 =item domsvc - svcnum from svc_domain
 
 =item radius_I<Radius_Attribute> - I<Radius-Attribute> (reply)
@@ -184,7 +215,147 @@ Creates a new account.  To add the account to the database, see L<"insert">.
 
 =cut
 
+sub table_info {
+  {
+    'name'   => 'Account',
+    'longname_plural' => 'Access accounts and mailboxes',
+    'sorts' => [ 'username', 'uid', ],
+    'display_weight' => 10,
+    'cancel_weight'  => 50, 
+    'fields' => {
+        'dir'       => 'Home directory',
+        'uid'       => {
+                         label     => 'UID',
+		         def_label => 'UID (set to fixed and blank for no UIDs)',
+		         type      => 'text',
+		       },
+        'slipip'    => 'IP address',
+    #    'popnum'    => qq!<A HREF="$p/browse/svc_acct_pop.cgi/">POP number</A>!,
+        'popnum'    => {
+                         label => 'Access number',
+                         type => 'select',
+                         select_table => 'svc_acct_pop',
+                         select_key   => 'popnum',
+                         select_label => 'city',
+                         disable_select => 1,
+                       },
+        'username'  => {
+                         label => 'Username',
+                         type => 'text',
+                         disable_default => 1,
+                         disable_fixed => 1,
+                         disable_select => 1,
+                       },
+        'quota'     => { 
+                         label => 'Quota',
+                         type => 'text',
+                         disable_inventory => 1,
+                         disable_select => 1,
+                       },
+        '_password' => 'Password',
+        'gid'       => {
+                         label     => 'GID',
+		         def_label => 'GID (when blank, defaults to UID)',
+		         type      => 'text',
+		       },
+        'shell'     => {
+                         #desc =>'Shell (all service definitions should have a default or fixed shell that is present in the <b>shells</b> configuration file, set to blank for no shell tracking)',
+		         label    => 'Shell',
+                         def_label=> 'Shell (set to blank for no shell tracking)',
+                         type     =>'select',
+                         select_list => [ $conf->config('shells') ],
+                         disable_inventory => 1,
+                         disable_select => 1,
+                       },
+        'finger'    => 'Real name (GECOS)',
+        'domsvc'    => {
+                         label     => 'Domain',
+                         #def_label => 'svcnum from svc_domain',
+                         type      => 'select',
+                         select_table => 'svc_domain',
+                         select_key   => 'svcnum',
+                         select_label => 'domain',
+                         disable_inventory => 1,
+
+                       },
+        'usergroup' => {
+                         label => 'RADIUS groups',
+                         type  => 'radius_usergroup_selector',
+                         disable_inventory => 1,
+                         disable_select => 1,
+                       },
+        'seconds'   => { label => 'Seconds',
+                         type  => 'text',
+                         disable_inventory => 1,
+                         disable_select => 1,
+                       },
+    },
+  };
+}
+
 sub table { 'svc_acct'; }
+
+sub _fieldhandlers {
+  {
+    #false laziness with edit/svc_acct.cgi
+    'usergroup' => sub { 
+                         my( $self, $groups ) = @_;
+                         if ( ref($groups) eq 'ARRAY' ) {
+                           $groups;
+                         } elsif ( length($groups) ) {
+                           [ split(/\s*,\s*/, $groups) ];
+                         } else {
+                           [];
+                         }
+                       },
+  };
+}
+
+=item search_sql STRING
+
+Class method which returns an SQL fragment to search for the given string.
+
+=cut
+
+sub search_sql {
+  my( $class, $string ) = @_;
+  if ( $string =~ /^([^@]+)@([^@]+)$/ ) {
+    my( $username, $domain ) = ( $1, $2 );
+    my $q_username = dbh->quote($username);
+    my @svc_domain = qsearch('svc_domain', { 'domain' => $domain } );
+    if ( @svc_domain ) {
+      "svc_acct.username = $q_username AND ( ".
+        join( ' OR ', map { "svc_acct.domsvc = ". $_->svcnum; } @svc_domain ).
+      " )";
+    } else {
+      '1 = 0'; #false
+    }
+  } elsif ( $string =~ /^(\d{1,3}\.){3}\d{1,3}$/ ) {
+    ' ( '.
+      $class->search_sql_field('slipip',   $string ).
+    ' OR '.
+      $class->search_sql_field('username', $string ).
+    ' ) ';
+  } else {
+    $class->search_sql_field('username', $string);
+  }
+}
+
+=item label [ END_TIMESTAMP [ START_TIMESTAMP ] ]
+
+Returns the "username@domain" string for this account.
+
+END_TIMESTAMP and START_TIMESTAMP can optionally be passed when dealing with
+history records.
+
+=cut
+
+sub label {
+  my $self = shift;
+  $self->email(@_);
+}
+
+=cut
 
 =item insert [ , OPTION => VALUE ... ]
 
@@ -220,7 +391,11 @@ jobnum(s) (they will not run until the specific job(s) complete(s)).
 sub insert {
   my $self = shift;
   my %options = @_;
-  my $error;
+
+  if ( $DEBUG ) {
+    warn "[$me] insert called on $self: ". Dumper($self).
+         "\nwith options: ". Dumper(%options);
+  }
 
   local $SIG{HUP} = 'IGNORE';
   local $SIG{INT} = 'IGNORE';
@@ -233,7 +408,7 @@ sub insert {
   local $FS::UID::AutoCommit = 0;
   my $dbh = dbh;
 
-  $error = $self->check;
+  my $error = $self->check;
   return $error if $error;
 
   if ( $self->svcnum && qsearchs('cust_svc',{'svcnum'=>$self->svcnum}) ) {
@@ -290,7 +465,10 @@ sub insert {
   if ( $cust_pkg ) {
     my $cust_main = $cust_pkg->cust_main;
 
-    if ( $conf->exists('emailinvoiceauto') ) {
+    if (   $conf->exists('emailinvoiceautoalways')
+        || $conf->exists('emailinvoiceauto')
+        && ! $cust_main->invoicing_list_emailonly
+       ) {
       my @invoicing_list = $cust_main->invoicing_list;
       push @invoicing_list, $self->email;
       $cust_main->invoicing_list(\@invoicing_list);
@@ -301,6 +479,15 @@ sub insert {
     if ( $welcome_template && $cust_pkg ) {
       my $to = join(', ', grep { $_ !~ /^(POST|FAX)$/ } $cust_main->invoicing_list );
       if ( $to ) {
+
+        my %hash = (
+                     'custnum'  => $self->custnum,
+                     'username' => $self->username,
+                     'password' => $self->_password,
+                     'first'    => $cust_main->first,
+                     'last'     => $cust_main->getfield('last'),
+                     'pkg'      => $cust_pkg->part_pkg->pkg,
+                   );
         my $wqueue = new FS::queue {
           'svcnum' => $self->svcnum,
           'job'    => 'FS::svc_acct::send_email'
@@ -308,16 +495,9 @@ sub insert {
         my $error = $wqueue->insert(
           'to'       => $to,
           'from'     => $welcome_from,
-          'subject'  => $welcome_subject,
+          'subject'  => $welcome_subject_template->fill_in( HASH => \%hash, ),
           'mimetype' => $welcome_mimetype,
-          'body'     => $welcome_template->fill_in( HASH => {
-                          'custnum'  => $self->custnum,
-                          'username' => $self->username,
-                          'password' => $self->_password,
-                          'first'    => $cust_main->first,
-                          'last'     => $cust_main->getfield('last'),
-                          'pkg'      => $cust_pkg->part_pkg->pkg,
-                        } ),
+          'body'     => $welcome_template->fill_in( HASH => \%hash, ),
         );
         if ( $error ) {
           $dbh->rollback if $oldAutoCommit;
@@ -461,6 +641,11 @@ sub replace {
   my ( $new, $old ) = ( shift, shift );
   my $error;
   warn "$me replacing $old with $new\n" if $DEBUG;
+
+  # We absolutely have to have an old vs. new record to make this work.
+  if (!defined($old)) {
+    $old = qsearchs( 'svc_acct', { 'svcnum' => $new->svcnum } );
+  }
 
   return "can't modify system account" if $old->_check_system;
 
@@ -681,7 +866,7 @@ sub check {
 
   my($recref) = $self->hashref;
 
-  my $x = $self->setfixed;
+  my $x = $self->setfixed( $self->_fieldhandlers );
   return $x unless ref($x);
   my $part_svc = $x;
 
@@ -694,6 +879,10 @@ sub check {
               #|| $self->ut_number('domsvc')
               || $self->ut_foreign_key('domsvc', 'svc_domain', 'svcnum' )
               || $self->ut_textn('sec_phrase')
+              || $self->ut_snumbern('seconds')
+              || $self->ut_snumbern('upbytes')
+              || $self->ut_snumbern('downbytes')
+              || $self->ut_snumbern('totalbytes')
   ;
   return $error if $error;
 
@@ -843,7 +1032,7 @@ sub check {
     unless ( $recref->{_password} );
 
   #if ( $recref->{_password} =~ /^((\*SUSPENDED\* )?)([^\t\n]{4,16})$/ ) {
-  if ( $recref->{_password} =~ /^((\*SUSPENDED\* )?)([^\t\n]{$passwordmin,$passwordmax})$/ ) {
+  if ( $recref->{_password} =~ /^((\*SUSPENDED\* |!!?)?)([^\t\n]{$passwordmin,$passwordmax})$/ ) {
     $recref->{_password} = $1.$3;
     #uncomment this to encrypt password immediately upon entry, or run
     #bin/crypt_pw in cron to give new users a window during which their
@@ -852,7 +1041,7 @@ sub check {
     #$recref->{password} = $1.
     #  crypt($3,$saltset[int(rand(64))].$saltset[int(rand(64))]
     #;
-  } elsif ( $recref->{_password} =~ /^((\*SUSPENDED\* )?)([\w\.\/\$\;\+]{13,60})$/ ) {
+  } elsif ( $recref->{_password} =~ /^((\*SUSPENDED\* |!!?)?)([\w\.\/\$\;\+]{13,64})$/ ) {
     $recref->{_password} = $1.$3;
   } elsif ( $recref->{_password} eq '*' ) {
     $recref->{_password} = '*';
@@ -901,6 +1090,9 @@ per export and with identical I<svcpart> values.
 sub _check_duplicate {
   my $self = shift;
 
+  my $global_unique = $conf->config('global_unique-username') || 'none';
+  return '' if $global_unique eq 'disabled';
+
   #this is Pg-specific.  what to do for mysql etc?
   # ( mysql LOCK TABLES certainly isn't equivalent or useful here :/ )
   warn "$me locking svc_acct table for duplicate search" if $DEBUG;
@@ -912,8 +1104,6 @@ sub _check_duplicate {
   unless ( $part_svc ) {
     return 'unknown svcpart '. $self->svcpart;
   }
-
-  my $global_unique = $conf->config('global_unique-username') || 'none';
 
   my @dup_user = grep { !$self->svcnum || $_->svcnum != $self->svcnum }
                  qsearch( 'svc_acct', { 'username' => $self->username } );
@@ -1077,7 +1267,10 @@ sub radius_check {
   my $password = $self->_password;
   my $pw_attrib = length($password) <= 12 ? $radius_password : 'Crypt-Password';  $check{$pw_attrib} = $password;
 
-  my $cust_pkg = $self->cust_svc->cust_pkg;
+  my $cust_svc = $self->cust_svc;
+  die "FATAL: no cust_svc record for svc_acct.svcnum ". $self->svcnum. "\n"
+    unless $cust_svc;
+  my $cust_pkg = $cust_svc->cust_pkg;
   if ( $cust_pkg && $cust_pkg->part_pkg->is_prepaid && $cust_pkg->bill ) {
     $check{'Expiration'} = time2str('%B %e %Y %T', $cust_pkg->bill ); #http://lists.cistron.nl/pipermail/freeradius-users/2005-January/040184.html
   }
@@ -1121,9 +1314,12 @@ sub forget_snapshot {
 
 }
 
-=item domain
+=item domain [ END_TIMESTAMP [ START_TIMESTAMP ] ]
 
 Returns the domain associated with this account.
+
+END_TIMESTAMP and START_TIMESTAMP can optionally be passed when dealing with
+history records.
 
 =cut
 
@@ -1142,6 +1338,8 @@ L<FS::svc_domain>).
 
 =cut
 
+# FS::h_svc_acct has a history-aware svc_domain override
+
 sub svc_domain {
   my $self = shift;
   $self->{'_domsvc'}
@@ -1157,9 +1355,12 @@ Returns the FS::cust_svc record for this account (see L<FS::cust_svc>).
 
 #inherited from svc_Common
 
-=item email
+=item email [ END_TIMESTAMP [ START_TIMESTAMP ] ]
 
 Returns an email address associated with the account.
+
+END_TIMESTAMP and START_TIMESTAMP can optionally be passed when dealing with
+history records.
 
 =cut
 
@@ -1184,6 +1385,72 @@ sub acct_snarf {
   qsearch('acct_snarf', { 'svcnum' => $self->svcnum } );
 }
 
+=item decrement_upbytes OCTETS
+
+Decrements the I<upbytes> field of this record by the given amount.  If there
+is an error, returns the error, otherwise returns false.
+
+=cut
+
+sub decrement_upbytes {
+  shift->_op_usage('-', 'upbytes', @_);
+}
+
+=item increment_upbytes OCTETS
+
+Increments the I<upbytes> field of this record by the given amount.  If there
+is an error, returns the error, otherwise returns false.
+
+=cut
+
+sub increment_upbytes {
+  shift->_op_usage('+', 'upbytes', @_);
+}
+
+=item decrement_downbytes OCTETS
+
+Decrements the I<downbytes> field of this record by the given amount.  If there
+is an error, returns the error, otherwise returns false.
+
+=cut
+
+sub decrement_downbytes {
+  shift->_op_usage('-', 'downbytes', @_);
+}
+
+=item increment_downbytes OCTETS
+
+Increments the I<downbytes> field of this record by the given amount.  If there
+is an error, returns the error, otherwise returns false.
+
+=cut
+
+sub increment_downbytes {
+  shift->_op_usage('+', 'downbytes', @_);
+}
+
+=item decrement_totalbytes OCTETS
+
+Decrements the I<totalbytes> field of this record by the given amount.  If there
+is an error, returns the error, otherwise returns false.
+
+=cut
+
+sub decrement_totalbytes {
+  shift->_op_usage('-', 'totalbytes', @_);
+}
+
+=item increment_totalbytes OCTETS
+
+Increments the I<totalbytes> field of this record by the given amount.  If there
+is an error, returns the error, otherwise returns false.
+
+=cut
+
+sub increment_totalbytes {
+  shift->_op_usage('+', 'totalbytes', @_);
+}
+
 =item decrement_seconds SECONDS
 
 Decrements the I<seconds> field of this record by the given amount.  If there
@@ -1192,7 +1459,7 @@ is an error, returns the error, otherwise returns false.
 =cut
 
 sub decrement_seconds {
-  shift->_op_seconds('-', @_);
+  shift->_op_usage('-', 'seconds', @_);
 }
 
 =item increment_seconds SECONDS
@@ -1203,7 +1470,7 @@ is an error, returns the error, otherwise returns false.
 =cut
 
 sub increment_seconds {
-  shift->_op_seconds('+', @_);
+  shift->_op_usage('+', 'seconds', @_);
 }
 
 
@@ -1212,19 +1479,31 @@ my %op2action = (
   '+' => 'unsuspend',
 );
 my %op2condition = (
-  '-' => sub { my($self, $seconds) = @_;
-               $self->seconds - $seconds <= 0;
+  '-' => sub { my($self, $column, $amount) = @_;
+               $self->$column - $amount <= 0;
              },
-  '+' => sub { my($self, $seconds) = @_;
-               $self->seconds + $seconds > 0;
+  '+' => sub { my($self, $column, $amount) = @_;
+               $self->$column + $amount > 0;
+             },
+);
+my %op2warncondition = (
+  '-' => sub { my($self, $column, $amount) = @_;
+               my $threshold = $column . '_threshold';
+               $self->$column - $amount <= $self->$threshold + 0;
+             },
+  '+' => sub { my($self, $column, $amount) = @_;
+               $self->$column + $amount > 0;
              },
 );
 
-sub _op_seconds {
-  my( $self, $op, $seconds ) = @_;
-  warn "$me _op_seconds called for svcnum ". $self->svcnum.
-       ' ('. $self->email. "): $op $seconds\n"
+sub _op_usage {
+  my( $self, $op, $column, $amount ) = @_;
+
+  warn "$me _op_usage called for $column on svcnum ". $self->svcnum.
+       ' ('. $self->email. "): $op $amount\n"
     if $DEBUG;
+
+  return '' unless $amount;
 
   local $SIG{HUP} = 'IGNORE';
   local $SIG{INT} = 'IGNORE';
@@ -1237,24 +1516,46 @@ sub _op_seconds {
   local $FS::UID::AutoCommit = 0;
   my $dbh = dbh;
 
-  my $sql = "UPDATE svc_acct SET seconds = ".
-            " CASE WHEN seconds IS NULL THEN 0 ELSE seconds END ". #$seconds||0
+  my $sql = "UPDATE svc_acct SET $column = ".
+            " CASE WHEN $column IS NULL THEN 0 ELSE $column END ". #$column||0
             " $op ? WHERE svcnum = ?";
   warn "$me $sql\n"
     if $DEBUG;
 
   my $sth = $dbh->prepare( $sql )
     or die "Error preparing $sql: ". $dbh->errstr;
-  my $rv = $sth->execute($seconds, $self->svcnum);
+  my $rv = $sth->execute($amount, $self->svcnum);
   die "Error executing $sql: ". $sth->errstr
     unless defined($rv);
-  die "Can't update seconds for svcnum". $self->svcnum
+  die "Can't update $column for svcnum". $self->svcnum
     if $rv == 0;
 
   my $action = $op2action{$op};
 
+  if ( &{$op2condition{$op}}($self, $column, $amount) ) {
+    foreach my $part_export ( $self->cust_svc->part_svc->part_export ) {
+      if ($part_export->option('overlimit_groups')) {
+        my ($new,$old);
+        my $other = new FS::svc_acct $self->hashref;
+        my $groups = &{ $self->_fieldhandlers->{'usergroup'} }
+                       ($self, $part_export->option('overlimit_groups'));
+        $other->usergroup( $groups );
+        if ($action eq 'suspend'){
+          $new = $other; $old = $self;
+        }else{
+          $new = $self; $old = $other;
+        }
+        my $error = $part_export->export_replace($new, $old);
+        if ( $error ) {
+          $dbh->rollback if $oldAutoCommit;
+          return "Error replacing radius groups in export, ${op}: $error";
+        }
+      }
+    }
+  }
+
   if ( $conf->exists("svc_acct-usage_$action")
-       && &{$op2condition{$op}}($self, $seconds)    ) {
+       && &{$op2condition{$op}}($self, $column, $amount)    ) {
     #my $error = $self->$action();
     my $error = $self->cust_svc->cust_pkg->$action();
     if ( $error ) {
@@ -1263,13 +1564,134 @@ sub _op_seconds {
     }
   }
 
-  warn "$me update sucessful; committing\n"
+  if ($warning_template && &{$op2warncondition{$op}}($self, $column, $amount)) {
+    my $wqueue = new FS::queue {
+      'svcnum' => $self->svcnum,
+      'job'    => 'FS::svc_acct::reached_threshold',
+    };
+
+    my $to = '';
+    if ($op eq '-'){
+      $to = $warning_cc if &{$op2condition{$op}}($self, $column, $amount);
+    }
+
+    # x_threshold race
+    my $error = $wqueue->insert(
+      'svcnum' => $self->svcnum,
+      'op'     => $op,
+      'column' => $column,
+      'to'     => $to,
+    );
+    if ( $error ) {
+      $dbh->rollback if $oldAutoCommit;
+      return "Error queuing threshold activity: $error";
+    }
+  }
+
+  warn "$me update successful; committing\n"
     if $DEBUG;
   $dbh->commit or die $dbh->errstr if $oldAutoCommit;
   '';
 
 }
 
+sub set_usage {
+  my( $self, $valueref ) = @_;
+
+  warn "$me set_usage called for svcnum ". $self->svcnum.
+       ' ('. $self->email. "): ".
+       join(', ', map { "$_ => " . $valueref->{$_}} keys %$valueref) . "\n"
+    if $DEBUG;
+
+  local $SIG{HUP} = 'IGNORE';
+  local $SIG{INT} = 'IGNORE';
+  local $SIG{QUIT} = 'IGNORE';
+  local $SIG{TERM} = 'IGNORE';
+  local $SIG{TSTP} = 'IGNORE';
+  local $SIG{PIPE} = 'IGNORE';
+
+  local $FS::svc_Common::noexport_hack = 1;
+  my $oldAutoCommit = $FS::UID::AutoCommit;
+  local $FS::UID::AutoCommit = 0;
+  my $dbh = dbh;
+
+  my $reset = 0;
+  foreach my $field (keys %$valueref){
+    $reset = 1 if $valueref->{$field};
+    $self->setfield($field, $valueref->{$field});
+    $self->setfield( $field.'_threshold',
+                     int($self->getfield($field)
+                         * ( $conf->exists('svc_acct-usage_threshold') 
+                             ? 1 - $conf->config('svc_acct-usage_threshold')/100
+                             : 0.20
+                           )
+                       )
+                     );
+  }
+  my $error = $self->replace;
+  die $error if $error;
+
+  if ( $conf->exists("svc_acct-usage_unsuspend") && $reset ) {
+    my $error = $self->cust_svc->cust_pkg->unsuspend;
+    if ( $error ) {
+      $dbh->rollback if $oldAutoCommit;
+      return "Error unsuspending: $error";
+    }
+  }
+
+  warn "$me update successful; committing\n"
+    if $DEBUG;
+  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
+  '';
+
+}
+
+
+=item recharge HASHREF
+
+  Increments usage columns by the amount specified in HASHREF as
+  column=>amount pairs.
+
+=cut
+
+sub recharge {
+  my ($self, $vhash) = @_;
+   
+  if ( $DEBUG ) {
+    warn "[$me] recharge called on $self: ". Dumper($self).
+         "\nwith vhash: ". Dumper($vhash);
+  }
+
+  my $oldAutoCommit = $FS::UID::AutoCommit;
+  local $FS::UID::AutoCommit = 0;
+  my $dbh = dbh;
+  my $error = '';
+
+  foreach my $column (keys %$vhash){
+    $error ||= $self->_op_usage('+', $column, $vhash->{$column});
+  }
+
+  if ( $error ) {
+    $dbh->rollback if $oldAutoCommit;
+  }else{
+    $dbh->commit or die $dbh->errstr if $oldAutoCommit;
+  }
+  return $error;
+}
+
+=item is_rechargeable
+
+Returns true if this svc_account can be "recharged" and false otherwise.
+
+=cut
+
+sub is_rechargable {
+  my $self = shift;
+  $self->seconds ne ''
+    || $self->upbytes ne ''
+    || $self->downbytes ne ''
+    || $self->totalbytes ne '';
+}
 
 =item seconds_since TIMESTAMP
 
@@ -1341,6 +1763,67 @@ sub get_session_history {
   $self->cust_svc->get_session_history(@_);
 }
 
+=item get_cdrs TIMESTAMP_START TIMESTAMP_END [ 'OPTION' => 'VALUE ... ]
+
+=cut
+
+sub get_cdrs {
+  my($self, $start, $end, %opt ) = @_;
+
+  my $did = $self->username; #yup
+
+  my $prefix = $opt{'default_prefix'}; #convergent.au '+61'
+
+  my $for_update = $opt{'for_update'} ? 'FOR UPDATE' : '';
+
+  #SELECT $for_update * FROM cdr
+  #  WHERE calldate >= $start #need a conversion
+  #    AND calldate <  $end   #ditto
+  #    AND (    charged_party = "$did"
+  #          OR charged_party = "$prefix$did" #if length($prefix);
+  #          OR ( ( charged_party IS NULL OR charged_party = '' )
+  #               AND
+  #               ( src = "$did" OR src = "$prefix$did" ) # if length($prefix)
+  #             )
+  #        )
+  #    AND ( freesidestatus IS NULL OR freesidestatus = '' )
+
+  my $charged_or_src;
+  if ( length($prefix) ) {
+    $charged_or_src =
+      " AND (    charged_party = '$did' 
+              OR charged_party = '$prefix$did'
+              OR ( ( charged_party IS NULL OR charged_party = '' )
+                   AND
+                   ( src = '$did' OR src = '$prefix$did' )
+                 )
+            )
+      ";
+  } else {
+    $charged_or_src = 
+      " AND (    charged_party = '$did' 
+              OR ( ( charged_party IS NULL OR charged_party = '' )
+                   AND
+                   src = '$did'
+                 )
+            )
+      ";
+
+  }
+
+  qsearch(
+    'select'    => "$for_update *",
+    'table'     => 'cdr',
+    'hashref'   => {
+                     #( freesidestatus IS NULL OR freesidestatus = '' )
+                     'freesidestatus' => '',
+                   },
+    'extra_sql' => $charged_or_src,
+
+  );
+
+}
+
 =item radius_groups
 
 Returns all RADIUS groups for this account (see L<FS::radius_usergroup>).
@@ -1350,6 +1833,8 @@ Returns all RADIUS groups for this account (see L<FS::radius_usergroup>).
 sub radius_groups {
   my $self = shift;
   if ( $self->usergroup ) {
+    confess "explicitly specified usergroup not an arrayref: ". $self->usergroup
+      unless ref($self->usergroup) eq 'ARRAY';
     #when provisioning records, export callback runs in svc_Common.pm before
     #radius_usergroup records can be inserted...
     @{$self->usergroup};
@@ -1390,7 +1875,7 @@ sub clone_kludge_unsuspend {
 =item check_password 
 
 Checks the supplied password against the (possibly encrypted) password in the
-database.  Returns true for a sucessful authentication, false for no match.
+database.  Returns true for a successful authentication, false for no match.
 
 Currently supported encryptions are: classic DES crypt() and MD5
 
@@ -1457,11 +1942,65 @@ sub crypt_password {
     } elsif ( $encryption eq 'md5' ) {
       unix_md5_crypt( $self->_password );
     } elsif ( $encryption eq 'blowfish' ) {
-      die "unknown encryption method $encryption";
+      croak "unknown encryption method $encryption";
     } else {
-      die "unknown encryption method $encryption";
+      croak "unknown encryption method $encryption";
     }
   }
+}
+
+=item ldap_password [ DEFAULT_ENCRYPTION_TYPE ]
+
+Returns an encrypted password in "LDAP" format, with a curly-bracked prefix
+describing the format, for example, "{CRYPT}94pAVyK/4oIBk" or
+"{PLAIN-MD5}5426824942db4253f87a1009fd5d2d4f".
+
+The optional DEFAULT_ENCRYPTION_TYPE is not yet used, but the idea is for it
+to work the same as the B</crypt_password> method.
+
+=cut
+
+sub ldap_password {
+  my $self = shift;
+  #eventually should check a "password-encoding" field
+  if ( length($self->_password) == 13 ) { #crypt
+    return '{CRYPT}'. $self->_password;
+  } elsif ( $self->_password =~ /^\$1\$(.*)$/ && length($1) == 31 ) { #passwdMD5
+    return '{MD5}'. $1;
+  } elsif ( $self->_password =~ /^\$2a?\$(.*)$/ ) { #Blowfish
+    die "Blowfish encryption not supported in this context, svcnum ".
+        $self->svcnum. "\n";
+  } elsif ( $self->_password =~ /^(\w{48})$/ ) { #LDAP SSHA
+    return '{SSHA}'. $1;
+  } elsif ( $self->_password =~ /^(\w{64})$/ ) { #LDAP NS-MTA-MD5
+    return '{NS-MTA-MD5}'. $1;
+  } else { #plaintext
+    return '{PLAIN}'. $self->_password;
+    #my $encryption = ( scalar(@_) && $_[0] ) ? shift : 'crypt';
+    #if ( $encryption eq 'crypt' ) {
+    #  return '{CRYPT}'. crypt(
+    #    $self->_password,
+    #    $saltset[int(rand(64))].$saltset[int(rand(64))]
+    #  );
+    #} elsif ( $encryption eq 'md5' ) {
+    #  unix_md5_crypt( $self->_password );
+    #} elsif ( $encryption eq 'blowfish' ) {
+    #  croak "unknown encryption method $encryption";
+    #} else {
+    #  croak "unknown encryption method $encryption";
+    #}
+  }
+}
+
+=item domain_slash_username
+
+Returns $domain/$username/
+
+=cut
+
+sub domain_slash_username {
+  my $self = shift;
+  $self->domain. '/'. $self->username. '/';
 }
 
 =item virtual_maildir
@@ -1635,6 +2174,82 @@ END
            qq!<INPUT TYPE="button" VALUE="Add new group" onClick="${selectname}_doadd(this.form)">!;
 
   $html;
+}
+
+=item reached_threshold
+
+Performs some activities when svc_acct thresholds (such as number of seconds
+remaining) are reached.  
+
+=cut
+
+sub reached_threshold {
+  my %opt = @_;
+
+  my $svc_acct = qsearchs('svc_acct', { 'svcnum' => $opt{'svcnum'} } );
+  die "Cannot find svc_acct with svcnum " . $opt{'svcnum'} unless $svc_acct;
+
+  if ( $opt{'op'} eq '+' ){
+    $svc_acct->setfield( $opt{'column'}.'_threshold',
+                         int($svc_acct->getfield($opt{'column'})
+                             * ( $conf->exists('svc_acct-usage_threshold') 
+                                 ? $conf->config('svc_acct-usage_threshold')/100
+                                 : 0.80
+                               )
+                         )
+                       );
+    my $error = $svc_acct->replace;
+    die $error if $error;
+  }elsif ( $opt{'op'} eq '-' ){
+    
+    my $threshold = $svc_acct->getfield( $opt{'column'}.'_threshold' );
+    return '' if ($threshold eq '' );
+
+    $svc_acct->setfield( $opt{'column'}.'_threshold', 0 );
+    my $error = $svc_acct->replace;
+    die $error if $error; # email next time, i guess
+
+    if ( $warning_template ) {
+      eval "use FS::Misc qw(send_email)";
+      die $@ if $@;
+
+      my $cust_pkg  = $svc_acct->cust_svc->cust_pkg;
+      my $cust_main = $cust_pkg->cust_main;
+
+      my $to = join(', ', grep { $_ !~ /^(POST|FAX)$/ } 
+                               $cust_main->invoicing_list,
+                               $svc_acct->email,
+                               ($opt{'to'} ? $opt{'to'} : ())
+                   );
+
+      my $mimetype = $warning_mimetype;
+      $mimetype .= '; charset="iso-8859-1"' unless $opt{mimetype} =~ /charset/;
+
+      my $body       =  $warning_template->fill_in( HASH => {
+                        'custnum'   => $cust_main->custnum,
+                        'username'  => $svc_acct->username,
+                        'password'  => $svc_acct->_password,
+                        'first'     => $cust_main->first,
+                        'last'      => $cust_main->getfield('last'),
+                        'pkg'       => $cust_pkg->part_pkg->pkg,
+                        'column'    => $opt{'column'},
+                        'amount'    => $svc_acct->getfield($opt{'column'}),
+                        'threshold' => $threshold,
+                      } );
+
+
+      my $error = send_email(
+        'from'         => $warning_from,
+        'to'           => $to,
+        'subject'      => $warning_subject,
+        'content-type' => $mimetype,
+        'body'         => [ map "$_\n", split("\n", $body) ],
+      );
+      die $error if $error;
+    }
+  }else{
+    die "unknown op: " . $opt{'op'};
+  }
 }
 
 =back

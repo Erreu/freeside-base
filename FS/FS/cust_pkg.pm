@@ -1,7 +1,9 @@
 package FS::cust_pkg;
 
 use strict;
-use vars qw(@ISA $disable_agentcheck @SVCDB_CANCEL_SEQ $DEBUG);
+use vars qw(@ISA $disable_agentcheck $DEBUG);
+use List::Util qw(max);
+use Tie::IxHash;
 use FS::UID qw( getotaker dbh );
 use FS::Misc qw( send_email );
 use FS::Record qw( qsearch qsearchs );
@@ -14,6 +16,9 @@ use FS::pkg_svc;
 use FS::cust_bill_pkg;
 use FS::h_cust_svc;
 use FS::reg_code;
+use FS::part_svc;
+use FS::cust_pkg_reason;
+use FS::reason;
 
 # need to 'use' these instead of 'require' in sub { cancel, suspend, unsuspend,
 # setup }
@@ -26,19 +31,11 @@ use FS::svc_forward;
 # for sending cancel emails in sub cancel
 use FS::Conf;
 
-@ISA = qw( FS::cust_main_Mixin FS::Record );
+@ISA = qw( FS::cust_main_Mixin FS::option_Common FS::Record );
 
 $DEBUG = 0;
 
 $disable_agentcheck = 0;
-
-# The order in which to unprovision services.
-@SVCDB_CANCEL_SEQ = qw( svc_external
-			svc_www
-			svc_forward 
-			svc_acct 
-			svc_domain 
-			svc_broadband );
 
 sub _cache {
   my $self = shift;
@@ -178,7 +175,7 @@ sub insert {
   local $FS::UID::AutoCommit = 0;
   my $dbh = dbh;
 
-  my $error = $self->SUPER::insert;
+  my $error = $self->SUPER::insert($options{options} ? %{$options{options}} : ());
   if ( $error ) {
     $dbh->rollback if $oldAutoCommit;
     return $error;
@@ -269,8 +266,12 @@ Calls
 =cut
 
 sub replace {
-  my( $new, $old ) = ( shift, shift );
+  my( $new, $old, %options ) = @_;
 
+  # We absolutely have to have an old vs. new record to make this work.
+  if (!defined($old)) {
+    $old = qsearchs( 'cust_pkg', { 'pkgnum' => $new->pkgnum } );
+  }
   #return "Can't (yet?) change pkgpart!" if $old->pkgpart != $new->pkgpart;
   return "Can't change otaker!" if $old->otaker ne $new->otaker;
 
@@ -294,6 +295,16 @@ sub replace {
   local $FS::UID::AutoCommit = 0;
   my $dbh = dbh;
 
+  if ($options{'reason'} && $new->expire && $old->expire ne $new->expire) {
+    my $error = $new->insert_reason( 'reason' => $options{'reason'},
+                                     'date'      => $new->expire,
+		                    );
+    if ( $error ) {
+      dbh->rollback if $oldAutoCommit;
+      return "Error inserting cust_pkg_reason: $error";
+    }
+  }
+
   #save off and freeze RADIUS attributes for any associated svc_acct records
   my @svc_acct = ();
   if ( $old->part_pkg->is_prepaid || $new->part_pkg->is_prepaid ) {
@@ -308,7 +319,9 @@ sub replace {
 
   }
 
-  my $error = $new->SUPER::replace($old);
+  my $error = $new->SUPER::replace($old,
+                                   $options{options} ? ${options{options}} : ()
+                                  );
   if ( $error ) {
     $dbh->rollback if $oldAutoCommit;
     return $error;
@@ -430,21 +443,28 @@ sub cancel {
   local $FS::UID::AutoCommit = 0;
   my $dbh = dbh;
 
-  my %svc;
-  foreach my $cust_svc (
-      qsearch( 'cust_svc', { 'pkgnum' => $self->pkgnum } )
-  ) {
-    push @{ $svc{$cust_svc->part_svc->svcdb} }, $cust_svc;
+  if ($options{'reason'}) {
+    $error = $self->insert_reason( 'reason' => $options{'reason'} );
+    if ( $error ) {
+      dbh->rollback if $oldAutoCommit;
+      return "Error inserting cust_pkg_reason: $error";
+    }
   }
 
-  foreach my $svcdb (@SVCDB_CANCEL_SEQ) {
-    foreach my $cust_svc (@{ $svc{$svcdb} }) {
-      my $error = $cust_svc->cancel;
+  my %svc;
+  foreach my $cust_svc (
+    #schwartz
+    map  { $_->[0] }
+    sort { $a->[1] <=> $b->[1] }
+    map  { [ $_, $_->svc_x->table_info->{'cancel_weight'} ]; }
+    qsearch( 'cust_svc', { 'pkgnum' => $self->pkgnum } )
+  ) {
 
-      if ( $error ) {
-	$dbh->rollback if $oldAutoCommit;
-	return "Error cancelling cust_svc: $error";
-      }
+    my $error = $cust_svc->cancel;
+
+    if ( $error ) {
+      $dbh->rollback if $oldAutoCommit;
+      return "Error cancelling cust_svc: $error";
     }
   }
 
@@ -466,7 +486,7 @@ sub cancel {
     my %hash = $self->hash;
     $hash{'cancel'} = time;
     my $new = new FS::cust_pkg ( \%hash );
-    $error = $new->replace($self);
+    $error = $new->replace( $self, options => { $self->options } );
     if ( $error ) {
       $dbh->rollback if $oldAutoCommit;
       return $error;
@@ -502,7 +522,7 @@ If there is an error, returns the error, otherwise returns false.
 =cut
 
 sub suspend {
-  my $self = shift;
+  my( $self, %options ) = @_;
   my $error ;
 
   local $SIG{HUP} = 'IGNORE';
@@ -515,6 +535,14 @@ sub suspend {
   my $oldAutoCommit = $FS::UID::AutoCommit;
   local $FS::UID::AutoCommit = 0;
   my $dbh = dbh;
+
+  if ($options{'reason'}) {
+    $error = $self->insert_reason( 'reason' => $options{'reason'} );
+    if ( $error ) {
+      dbh->rollback if $oldAutoCommit;
+      return "Error inserting cust_pkg_reason: $error";
+    }
+  }
 
   foreach my $cust_svc (
     qsearch( 'cust_svc', { 'pkgnum' => $self->pkgnum } )
@@ -543,7 +571,7 @@ sub suspend {
     my %hash = $self->hash;
     $hash{'susp'} = time;
     my $new = new FS::cust_pkg ( \%hash );
-    $error = $new->replace($self);
+    $error = $new->replace( $self, options => { $self->options } );
     if ( $error ) {
       $dbh->rollback if $oldAutoCommit;
       return $error;
@@ -555,18 +583,27 @@ sub suspend {
   ''; #no errors
 }
 
-=item unsuspend
+=item unsuspend [ OPTION => VALUE ... ]
 
 Unsuspends all services (see L<FS::cust_svc> and L<FS::part_svc>) in this
 package, then unsuspends the package itself (clears the susp field).
+
+Available options are: I<adjust_next_bill>.
+
+I<adjust_next_bill> can be set true to adjust the next bill date forward by
+the amount of time the account was inactive.  This was set true by default
+since 1.4.2 and 1.5.0pre6; however, starting with 1.7.0 this needs to be
+explicitly requested.  Price plans for which this makes sense (anniversary-date
+based than prorate or subscription) could have an option to enable this
+behaviour?
 
 If there is an error, returns the error, otherwise returns false.
 
 =cut
 
 sub unsuspend {
-  my $self = shift;
-  my($error);
+  my( $self, %opt ) = @_;
+  my $error;
 
   local $SIG{HUP} = 'IGNORE';
   local $SIG{INT} = 'IGNORE';
@@ -605,11 +642,17 @@ sub unsuspend {
   unless ( ! $self->getfield('susp') ) {
     my %hash = $self->hash;
     my $inactive = time - $hash{'susp'};
-    $hash{'susp'} = '';
+
+    my $conf = new FS::Conf;
+
     $hash{'bill'} = ( $hash{'bill'} || $hash{'setup'} ) + $inactive
-      if $inactive > 0 && ( $hash{'bill'} || $hash{'setup'} );
+      if ( $opt{'adjust_next_bill'}
+           || $conf->config('unsuspend-always_adjust_next_bill_date') )
+      && $inactive > 0 && ( $hash{'bill'} || $hash{'setup'} );
+
+    $hash{'susp'} = '';
     my $new = new FS::cust_pkg ( \%hash );
-    $error = $new->replace($self);
+    $error = $new->replace( $self, options => { $self->options } );
     if ( $error ) {
       $dbh->rollback if $oldAutoCommit;
       return $error;
@@ -637,6 +680,23 @@ sub last_bill {
   my $cust_bill_pkg = qsearchs('cust_bill_pkg', { 'pkgnum' => $self->pkgnum,
                                                   'edate'  => $self->bill,  } );
   $cust_bill_pkg ? $cust_bill_pkg->sdate : $self->setup || 0;
+}
+
+=item last_reason
+
+Returns the most recent FS::reason associated with the package.
+
+=cut
+
+sub last_reason {
+  my $self = shift;
+  my $cust_pkg_reason = qsearchs( {
+                                    'table' => 'cust_pkg_reason',
+				    'hashref' => { 'pkgnum' => $self->pkgnum, },
+				    'extra_sql'=> 'ORDER BY date DESC LIMIT 1',
+				  } );
+  qsearchs ( 'reason', { 'reasonnum' => $cust_pkg_reason->reasonnum } )
+    if $cust_pkg_reason;
 }
 
 =item part_pkg
@@ -700,6 +760,17 @@ billing item.
 sub calc_cancel {
   my $self = shift;
   $self->part_pkg->calc_cancel($self, @_);
+}
+
+=item cust_bill_pkg
+
+Returns any invoice line items for this package (see L<FS::cust_bill_pkg>).
+
+=cut
+
+sub cust_bill_pkg {
+  my $self = shift;
+  qsearch( 'cust_bill_pkg', { 'pkgnum' => $self->pkgnum } );
 }
 
 =item cust_svc [ SVCPART ]
@@ -783,7 +854,7 @@ sub num_cust_svc {
 
 =item available_part_svc 
 
-Returns a list FS::part_svc objects representing services included in this
+Returns a list of FS::part_svc objects representing services included in this
 package but not yet provisioned.  Each FS::part_svc object also has an extra
 field, I<num_avail>, which specifies the number of available services.
 
@@ -799,6 +870,87 @@ sub available_part_svc {
           $part_svc;
         }
       $self->part_pkg->pkg_svc;
+}
+
+=item 
+
+Returns a list of FS::part_svc objects representing provisioned and available
+services included in this package.  Each FS::part_svc object also has the
+following extra fields:
+
+=over 4
+
+=item num_cust_svc  (count)
+
+=item num_avail     (quantity - count)
+
+=item cust_pkg_svc (services) - array reference containing the provisioned services, as cust_svc objects
+
+svcnum
+label -> ($cust_svc->label)[1]
+
+=back
+
+=cut
+
+sub part_svc {
+  my $self = shift;
+
+  #XXX some sort of sort order besides numeric by svcpart...
+  my @part_svc = sort { $a->svcpart <=> $b->svcpart } map {
+    my $pkg_svc = $_;
+    my $part_svc = $pkg_svc->part_svc;
+    my $num_cust_svc = $self->num_cust_svc($part_svc->svcpart);
+    $part_svc->{'Hash'}{'num_cust_svc'} = $num_cust_svc; #more evil
+    $part_svc->{'Hash'}{'num_avail'}    =
+      max( 0, $pkg_svc->quantity - $num_cust_svc );
+    $part_svc->{'Hash'}{'cust_pkg_svc'} = [ $self->cust_svc($part_svc->svcpart) ];
+    $part_svc;
+  } $self->part_pkg->pkg_svc;
+
+  #extras
+  push @part_svc, map {
+    my $part_svc = $_;
+    my $num_cust_svc = $self->num_cust_svc($part_svc->svcpart);
+    $part_svc->{'Hash'}{'num_cust_svc'} = $num_cust_svc; #speak no evail
+    $part_svc->{'Hash'}{'num_avail'}    = 0; #0-$num_cust_svc ?
+    $part_svc->{'Hash'}{'cust_pkg_svc'} = [ $self->cust_svc($part_svc->svcpart) ];
+    $part_svc;
+  } $self->extra_part_svc;
+
+  @part_svc;
+
+}
+
+=item extra_part_svc
+
+Returns a list of FS::part_svc objects corresponding to services in this
+package which are still provisioned but not (any longer) available in the
+package definition.
+
+=cut
+
+sub extra_part_svc {
+  my $self = shift;
+
+  my $pkgnum  = $self->pkgnum;
+  my $pkgpart = $self->pkgpart;
+
+  qsearch( {
+    'table'     => 'part_svc',
+    'hashref'   => {},
+    'extra_sql' => "WHERE 0 = ( SELECT COUNT(*) FROM pkg_svc 
+                                  WHERE pkg_svc.svcpart = part_svc.svcpart 
+				    AND pkg_svc.pkgpart = $pkgpart
+				    AND quantity > 0 
+			      )
+	              AND 0 < ( SELECT count(*)
+		                  FROM cust_svc
+		                    LEFT JOIN cust_pkg using ( pkgnum )
+				  WHERE cust_svc.svcpart = part_svc.svcpart
+				    AND pkgnum = $pkgnum
+			      )",
+  } );
 }
 
 =item status
@@ -824,11 +976,37 @@ Returns a short status string for this package, currently:
 sub status {
   my $self = shift;
 
+  my $freq = length($self->freq) ? $self->freq : $self->part_pkg->freq;
+
   return 'cancelled' if $self->get('cancel');
   return 'suspended' if $self->susp;
   return 'not yet billed' unless $self->setup;
-  return 'one-time charge' if $self->part_pkg->freq =~ /^(0|$)/;
+  return 'one-time charge' if $freq =~ /^(0|$)/;
   return 'active';
+}
+
+=item statuses
+
+Class method that returns the list of possible status strings for pacakges
+(see L<the status method|/status>).  For example:
+
+  @statuses = FS::cust_pkg->statuses();
+
+=cut
+
+tie my %statuscolor, 'Tie::IxHash', 
+  'not yet billed'  => '000000',
+  'one-time charge' => '000000',
+  'active'          => '00CC00',
+  'suspended'       => 'FF9900',
+  'cancelled'       => 'FF0000',
+;
+
+sub statuses {
+  my $self = shift; #could be class...
+  grep { $_ !~ /^(not yet billed)$/ } #this is a dumb status anyway
+                                      # mayble split btw one-time vs. recur
+    keys %statuscolor;
 }
 
 =item statuscolor
@@ -837,13 +1015,6 @@ Returns a hex triplet color string for this package's status.
 
 =cut
 
-my %statuscolor = (
-  'not yet billed'  => '000000',
-  'one-time charge' => '000000',
-  'active'          => '00CC00',
-  'suspended'       => 'FF9900',
-  'cancelled'       => 'FF0000',
-);
 sub statuscolor {
   my $self = shift;
   $statuscolor{$self->status};
@@ -1163,7 +1334,7 @@ sub reexport {
 
 =back
 
-=head1 CLASS METHOD
+=head1 CLASS METHODS
 
 =over 4
 
@@ -1178,6 +1349,17 @@ sub recurring_sql { "
              where cust_pkg.pkgpart = part_pkg.pkgpart )
 "; }
 
+=item onetime_sql
+
+Returns an SQL expression identifying one-time packages.
+
+=cut
+
+sub onetime_sql { "
+  '0' = ( select freq from part_pkg
+            where cust_pkg.pkgpart = part_pkg.pkgpart )
+"; }
+
 =item active_sql
 
 Returns an SQL expression identifying active packages.
@@ -1190,6 +1372,19 @@ sub active_sql { "
   AND ( cust_pkg.susp   IS NULL OR cust_pkg.susp   = 0 )
 "; }
 
+=item inactive_sql
+
+Returns an SQL expression identifying inactive packages (one-time packages
+that are otherwise unsuspended/uncancelled).
+
+=cut
+
+sub inactive_sql { "
+  ". $_[0]->onetime_sql(). "
+  AND ( cust_pkg.cancel IS NULL OR cust_pkg.cancel = 0 )
+  AND ( cust_pkg.susp   IS NULL OR cust_pkg.susp   = 0 )
+"; }
+
 =item susp_sql
 =item suspended_sql
 
@@ -1198,11 +1393,13 @@ Returns an SQL expression identifying suspended packages.
 =cut
 
 sub suspended_sql { susp_sql(@_); }
-sub susp_sql { "
-  ". $_[0]->recurring_sql(). "
-  AND ( cust_pkg.cancel IS NULL OR cust_pkg.cancel = 0 )
-  AND cust_pkg.susp IS NOT NULL AND cust_pkg.susp != 0
-"; }
+sub susp_sql {
+  #$_[0]->recurring_sql(). ' AND '.
+  "
+        ( cust_pkg.cancel IS     NULL  OR cust_pkg.cancel = 0 )
+    AND   cust_pkg.susp   IS NOT NULL AND cust_pkg.susp  != 0
+  ";
+}
 
 =item cancel_sql
 =item cancelled_sql
@@ -1212,10 +1409,10 @@ Returns an SQL exprression identifying cancelled packages.
 =cut
 
 sub cancelled_sql { cancel_sql(@_); }
-sub cancel_sql { "
-  ". $_[0]->recurring_sql(). "
-  AND cust_pkg.cancel IS NOT NULL AND cust_pkg.cancel != 0
-"; }
+sub cancel_sql { 
+  #$_[0]->recurring_sql(). ' AND '.
+  "cust_pkg.cancel IS NOT NULL AND cust_pkg.cancel != 0";
+}
 
 =head1 SUBROUTINES
 
@@ -1319,7 +1516,7 @@ sub order {
       $dbh->rollback if $oldAutoCommit;
       return "Unable to transfer all services from package ".$old_pkg->pkgnum;
     }
-    $error = $old_pkg->cancel;
+    $error = $old_pkg->cancel( quiet=>1 );
     if ($error) {
       $dbh->rollback;
       return $error;
@@ -1327,6 +1524,44 @@ sub order {
   }
   $dbh->commit or die $dbh->errstr if $oldAutoCommit;
   '';
+}
+
+sub insert_reason {
+  my ($self, %options) = @_;
+
+  my $otaker = $FS::CurrentUser::CurrentUser->name;
+  $otaker = $FS::CurrentUser::CurrentUser->username
+    if (($otaker) eq "User, Legacy");
+
+  my $cust_pkg_reason =
+    new FS::cust_pkg_reason({ 'pkgnum'    => $self->pkgnum,
+                              'reasonnum' => $options{'reason'}, 
+		              'otaker'    => $otaker,
+		              'date'      => $options{'date'}
+			                       ? $options{'date'}
+					       : time,
+	                    });
+  return $cust_pkg_reason->insert;
+}
+
+=item set_usage USAGE_VALUE_HASHREF 
+
+USAGE_VALUE_HASHREF is a hashref of svc_acct usage columns and the amounts
+to which they should be set (see L<FS::svc_acct>).  Currently seconds,
+upbytes, downbytes, and totalbytes are appropriate keys.
+
+All svc_accts which are part of this package have their values reset.
+
+=cut
+
+sub set_usage {
+  my ($self, $valueref) = @_;
+
+  foreach my $cust_svc ($self->cust_svc){
+    my $svc_x = $cust_svc->svc_x;
+    $svc_x->set_usage($valueref)
+      if $svc_x->can("set_usage");
+  }
 }
 
 =back

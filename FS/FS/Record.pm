@@ -2,7 +2,8 @@ package FS::Record;
 
 use strict;
 use vars qw( $AUTOLOAD @ISA @EXPORT_OK $DEBUG
-             $me %virtual_fields_cache $nowarn_identical );
+             $conf $me
+             %virtual_fields_cache $nowarn_identical );
 use Exporter;
 use Carp qw(carp cluck croak confess);
 use File::CounterFile;
@@ -10,6 +11,7 @@ use Locale::Country;
 use DBI qw(:sql_types);
 use DBIx::DBSchema 0.25;
 use FS::UID qw(dbh getotaker datasrc driver_name);
+use FS::CurrentUser;
 use FS::Schema qw(dbdef);
 use FS::SearchCache;
 use FS::Msgcat qw(gettext);
@@ -29,7 +31,6 @@ $me = '[FS::Record]';
 
 $nowarn_identical = 0;
 
-my $conf;
 my $rsa_module;
 my $rsa_loaded;
 my $rsa_encrypt;
@@ -37,8 +38,9 @@ my $rsa_decrypt;
 
 FS::UID->install_callback( sub {
   $conf = new FS::Conf; 
-  $File::CounterFile::DEFAULT_DIR = "/usr/local/etc/freeside/counters.". datasrc;
+  $File::CounterFile::DEFAULT_DIR = $conf->base_dir . "/counters.". datasrc;
 } );
+
 
 =head1 NAME
 
@@ -82,8 +84,11 @@ FS::Record - Database record objects
     $value = $record->unique('column');
 
     $error = $record->ut_float('column');
+    $error = $record->ut_floatn('column');
     $error = $record->ut_number('column');
     $error = $record->ut_numbern('column');
+    $error = $record->ut_snumber('column');
+    $error = $record->ut_snumbern('column');
     $error = $record->ut_money('column');
     $error = $record->ut_text('column');
     $error = $record->ut_textn('column');
@@ -250,7 +255,7 @@ sub qsearch {
   my $table = $cache ? $cache->table : $stable;
   my $dbdef_table = dbdef->table($table)
     or die "No schema for table $table found - ".
-           "do you need to create it or run dbdef-create?";
+           "do you need to run freeside-upgrade?";
   my $pkey = $dbdef_table->primary_key;
 
   my @real_fields = grep exists($record->{$_}), real_fields($table);
@@ -285,7 +290,7 @@ sub qsearch {
         if ( $op eq '=' ) {
           if ( driver_name eq 'Pg' ) {
             my $type = dbdef->table($table)->column($column)->type;
-            if ( $type =~ /(int|serial)/i ) {
+            if ( $type =~ /(int|(big)?serial)/i ) {
               qq-( $column IS NULL )-;
             } else {
               qq-( $column IS NULL OR $column = '' )-;
@@ -296,7 +301,7 @@ sub qsearch {
         } elsif ( $op eq '!=' ) {
           if ( driver_name eq 'Pg' ) {
             my $type = dbdef->table($table)->column($column)->type;
-            if ( $type =~ /(int|serial)/i ) {
+            if ( $type =~ /(int|(big)?serial)/i ) {
               qq-( $column IS NOT NULL )-;
             } else {
               qq-( $column IS NOT NULL AND $column != '' )-;
@@ -365,7 +370,7 @@ sub qsearch {
     grep defined( $record->{$_} ) && $record->{$_} ne '', @real_fields
   ) {
     if ( $record->{$field} =~ /^\d+(\.\d+)?$/
-         && dbdef->table($table)->column($field)->type =~ /(int|serial)/i
+         && dbdef->table($table)->column($field)->type =~ /(int|(big)?serial)/i
     ) {
       $sth->bind_param($bind++, $record->{$field}, { TYPE => SQL_INTEGER } );
     } else {
@@ -389,7 +394,7 @@ sub qsearch {
   my %result;
   tie %result, "Tie::IxHash";
   my @stuff = @{ $sth->fetchall_arrayref( {} ) };
-  if($pkey) {
+  if ( $pkey && scalar(@stuff) && $stuff[0]->{$pkey} ) {
     %result = map { $_->{$pkey}, $_ } @stuff;
   } else {
     @result{@stuff} = @stuff;
@@ -441,7 +446,11 @@ sub qsearch {
     }
 
     # Check for encrypted fields and decrypt them.
-    if ($conf->exists('encryption') && eval 'defined(@FS::'. $table . '::encrypted_fields)') {
+   ## only in the local copy, not the cached object
+    if ( $conf && $conf->exists('encryption') # $conf doesn't exist when doing
+                                              # the initial search for
+                                              # access_user
+         && eval 'defined(@FS::'. $table . '::encrypted_fields)') {
       foreach my $record (@return) {
         foreach my $field (eval '@FS::'. $table . '::encrypted_fields') {
           # Set it directly... This may cause a problem in the future...
@@ -552,6 +561,17 @@ sub dbdef_table {
   my($self)=@_;
   my($table)=$self->table;
   dbdef->table($table);
+}
+
+=item primary_key
+
+Returns the primary key for the table.
+
+=cut
+
+sub primary_key {
+  my $self = shift;
+  my $pkey = $self->dbdef_table->primary_key;
 }
 
 =item get, getfield COLUMN
@@ -668,6 +688,24 @@ sub modified {
   $self->{'modified'};
 }
 
+=item select_for_update
+
+Selects this record with the SQL "FOR UPDATE" command.  This can be useful as
+a mutex.
+
+=cut
+
+sub select_for_update {
+  my $self = shift;
+  my $primary_key = $self->primary_key;
+  qsearchs( {
+    'select'    => '*',
+    'table'     => $self->table,
+    'hashref'   => { $primary_key => $self->$primary_key() },
+    'extra_sql' => 'FOR UPDATE',
+  } );
+}
+
 =item insert
 
 Inserts this record to the database.  If there is an error, returns the error,
@@ -678,6 +716,8 @@ otherwise returns false.
 sub insert {
   my $self = shift;
   my $saved = {};
+
+  warn "$self -> insert" if $DEBUG;
 
   my $error = $self->check;
   return $error if $error;
@@ -695,7 +735,7 @@ sub insert {
     my $col = $self->dbdef_table->column($primary_key);
     
     $db_seq =
-      uc($col->type) eq 'SERIAL'
+      uc($col->type) =~ /^(BIG)?SERIAL\d?/
       || ( driver_name eq 'Pg'
              && defined($col->default)
              && $col->default =~ /^nextval\(/i
@@ -711,28 +751,34 @@ sub insert {
 
   
   # Encrypt before the database
-  if ($conf->exists('encryption') && defined(eval '@FS::'. $table . 'encrypted_fields')) {
+  if ($conf->exists('encryption') && defined(eval '@FS::'. $table . '::encrypted_fields')) {
     foreach my $field (eval '@FS::'. $table . '::encrypted_fields') {
       $self->{'saved'} = $self->getfield($field);
-      $self->setfield($field, $self->enrypt($self->getfield($field)));
+      $self->setfield($field, $self->encrypt($self->getfield($field)));
     }
   }
 
 
   #false laziness w/delete
   my @real_fields =
-    grep defined($self->getfield($_)) && $self->getfield($_) ne "",
+    grep { defined($self->getfield($_)) && $self->getfield($_) ne "" }
     real_fields($table)
   ;
   my @values = map { _quote( $self->getfield($_), $table, $_) } @real_fields;
   #eslaf
 
-  my $statement = "INSERT INTO $table ( ".
-      join( ', ', @real_fields ).
-    ") VALUES (".
-      join( ', ', @values ).
-    ")"
-  ;
+  my $statement = "INSERT INTO $table ";
+  if ( @real_fields ) {
+    $statement .=
+      "( ".
+        join( ', ', @real_fields ).
+      ") VALUES (".
+        join( ', ', @values ).
+       ")"
+    ;
+  } else {
+    $statement .= 'DEFAULT VALUES';
+  }
   warn "[debug]$me $statement\n" if $DEBUG > 1;
   my $sth = dbh->prepare($statement) or return dbh->errstr;
 
@@ -757,7 +803,7 @@ sub insert {
       #my $i_sql = "SELECT $primary_key FROM $table WHERE oid = ?";
 
       my $default = $self->dbdef_table->column($primary_key)->default;
-      unless ( $default =~ /^nextval\('"?([\w\.]+)"?'/i ) {
+      unless ( $default =~ /^nextval\(\(?'"?([\w\.]+)"?'/i ) {
         dbh->rollback if $FS::UID::AutoCommit;
         return "can't parse $table.$primary_key default value".
                " for sequence name: $default";
@@ -769,8 +815,7 @@ sub insert {
         dbh->rollback if $FS::UID::AutoCommit;
         return dbh->errstr;
       };
-      #$i_sth->execute($oid) or do {
-      $i_sth->execute() or do {
+      $i_sth->execute() or do { #$i_sth->execute($oid)
         dbh->rollback if $FS::UID::AutoCommit;
         return $i_sth->errstr;
       };
@@ -959,23 +1004,16 @@ returns the error, otherwise returns false.
 =cut
 
 sub replace {
-  my $new = shift;
-  my $old = shift;  
+  my ($new, $old) = (shift, shift);
 
-  if (!defined($old)) { 
-    warn "[debug]$me replace called with no arguments; autoloading old record\n"
-     if $DEBUG;
-    my $primary_key = $new->dbdef_table->primary_key;
-    if ( $primary_key ) {
-      $old = qsearchs($new->table, { $primary_key => $new->$primary_key() } )
-        or croak "can't find ". $new->table. ".$primary_key ".
-                 $new->$primary_key();
-    } else {
-      croak $new->table. " has no primary key; pass old record as argument";
-    }
-  }
+  $old = $new->replace_old unless defined($old);
 
   warn "[debug]$me $new ->replace $old\n" if $DEBUG;
+
+  if ( $new->can('replace_check') ) {
+    my $error = $new->replace_check($old);
+    return $error if $error;
+  }
 
   return "Records not in same table!" unless $new->table eq $old->table;
 
@@ -990,8 +1028,9 @@ sub replace {
   return $error if $error;
   
   # Encrypt for replace
+  my $conf = new FS::Conf;
   my $saved = {};
-  if ($conf->exists('encryption') && defined(eval '@FS::'. $new->table . 'encrypted_fields')) {
+  if ($conf->exists('encryption') && defined(eval '@FS::'. $new->table . '::encrypted_fields')) {
     foreach my $field (eval '@FS::'. $new->table . '::encrypted_fields') {
       $saved->{$field} = $new->getfield($field);
       $new->setfield($field, $new->encrypt($new->getfield($field)));
@@ -1021,7 +1060,7 @@ sub replace {
          #false laziness w/qsearch
          if ( driver_name eq 'Pg' ) {
             my $type = $old->dbdef_table->column($_)->type;
-            if ( $type =~ /(int|serial)/i ) {
+            if ( $type =~ /(int|(big)?serial)/i ) {
               qq-( $_ IS NULL )-;
             } else {
               qq-( $_ IS NULL OR $_ = '' )-;
@@ -1137,6 +1176,22 @@ sub replace {
 
 }
 
+sub replace_old {
+  my( $self ) = shift;
+  warn "[$me] replace called with no arguments; autoloading old record\n"
+    if $DEBUG;
+
+  my $primary_key = $self->dbdef_table->primary_key;
+  if ( $primary_key ) {
+    $self->by_key( $self->$primary_key() ) #this is what's returned
+      or croak "can't find ". $self->table. ".$primary_key ".
+        $self->$primary_key();
+  } else {
+    croak $self->table. " has no primary key; pass old record as argument";
+  }
+
+}
+
 =item rep
 
 Depriciated (use replace instead).
@@ -1187,9 +1242,15 @@ sub _h_statement {
   $time ||= time;
 
   my @fields =
-    grep defined($self->getfield($_)) && $self->getfield($_) ne "",
+    grep { defined($self->getfield($_)) && $self->getfield($_) ne "" }
     real_fields($self->table);
   ;
+
+  # If we're encrypting then don't ever store the payinfo or CVV2 in the history....
+  # You can see if it changed by the paymask...
+  if ($conf->exists('encryption') ) {
+    @fields = grep  $_ ne 'payinfo' && $_ ne 'cvv2', @fields;
+  }
   my @values = map { _quote( $self->getfield($_), $self->table, $_) } @fields;
 
   "INSERT INTO h_". $self->table. " ( ".
@@ -1259,11 +1320,28 @@ sub ut_float {
   $self->setfield($field,$1);
   '';
 }
+=item ut_floatn COLUMN
+
+Check/untaint floating point numeric data: 1.1, 1, 1.1e10, 1e10.  May be
+null.  If there is an error, returns the error, otherwise returns false.
+
+=cut
+
+#false laziness w/ut_ipn
+sub ut_floatn {
+  my( $self, $field ) = @_;
+  if ( $self->getfield($field) =~ /^()$/ ) {
+    $self->setfield($field,'');
+    '';
+  } else {
+    $self->ut_float($field);
+  }
+}
 
 =item ut_snumber COLUMN
 
-Check/untaint signed numeric data (whole numbers).  May not be null.  If there
-is an error, returns the error, otherwise returns false.
+Check/untaint signed numeric data (whole numbers).  If there is an error,
+returns the error, otherwise returns false.
 
 =cut
 
@@ -1271,6 +1349,25 @@ sub ut_snumber {
   my($self, $field) = @_;
   $self->getfield($field) =~ /^(-?)\s*(\d+)$/
     or return "Illegal or empty (numeric) $field: ". $self->getfield($field);
+  $self->setfield($field, "$1$2");
+  '';
+}
+
+=item ut_snumbern COLUMN
+
+Check/untaint signed numeric data (whole numbers).  If there is an error,
+returns the error, otherwise returns false.
+
+=cut
+
+sub ut_snumbern {
+  my($self, $field) = @_;
+  $self->getfield($field) =~ /^(-?)\s*(\d*)$/
+    or return "Illegal (numeric) $field: ". $self->getfield($field);
+  if ($1) {
+    return "Illegal (numeric) $field: ". $self->getfield($field)
+      unless $2;
+  }
   $self->setfield($field, "$1$2");
   '';
 }
@@ -1325,7 +1422,7 @@ sub ut_money {
 =item ut_text COLUMN
 
 Check/untaint text.  Alphanumerics, spaces, and the following punctuation
-symbols are currently permitted: ! @ # $ % & ( ) - + ; : ' " , . ? / =
+symbols are currently permitted: ! @ # $ % & ( ) - + ; : ' " , . ? / = [ ]
 May not be null.  If there is an error, returns the error, otherwise returns
 false.
 
@@ -1336,9 +1433,10 @@ sub ut_text {
   #warn "msgcat ". \&msgcat. "\n";
   #warn "notexist ". \&notexist. "\n";
   #warn "AUTOLOAD ". \&AUTOLOAD. "\n";
-  $self->getfield($field) =~ /^([\w \!\@\#\$\%\&\(\)\-\+\;\:\'\"\,\.\?\/\=]+)$/
-    or return gettext('illegal_or_empty_text'). " $field: ".
-               $self->getfield($field);
+  $self->getfield($field)
+    =~ /^([\w \!\@\#\$\%\&\(\)\-\+\;\:\'\"\,\.\?\/\=\[\]]+)$/
+      or return gettext('illegal_or_empty_text'). " $field: ".
+                 $self->getfield($field);
   $self->setfield($field,$1);
   '';
 }
@@ -1353,8 +1451,9 @@ May be null.  If there is an error, returns the error, otherwise returns false.
 
 sub ut_textn {
   my($self,$field)=@_;
-  $self->getfield($field) =~ /^([\w \!\@\#\$\%\&\(\)\-\+\;\:\'\"\,\.\?\/\=]*)$/
-    or return gettext('illegal_text'). " $field: ". $self->getfield($field);
+  $self->getfield($field)
+    =~ /^([\w \!\@\#\$\%\&\(\)\-\+\;\:\'\"\,\.\?\/\=\[\]]*)$/
+      or return gettext('illegal_text'). " $field: ". $self->getfield($field);
   $self->setfield($field,$1);
   '';
 }
@@ -1420,6 +1519,33 @@ sub ut_phonen {
   '';
 }
 
+=item ut_hex COLUMN
+
+Check/untaint hexadecimal values.
+
+=cut
+
+sub ut_hex {
+  my($self, $field) = @_;
+  $self->getfield($field) =~ /^([\da-fA-F]+)$/
+    or return "Illegal (hex) $field: ". $self->getfield($field);
+  $self->setfield($field, uc($1));
+  '';
+}
+
+=item ut_hexn COLUMN
+
+Check/untaint hexadecimal values.  May be null.
+
+=cut
+
+sub ut_hexn {
+  my($self, $field) = @_;
+  $self->getfield($field) =~ /^([\da-fA-F]*)$/
+    or return "Illegal (hex) $field: ". $self->getfield($field);
+  $self->setfield($field, uc($1));
+  '';
+}
 =item ut_ip COLUMN
 
 Check/untaint ip addresses.  IPv4 only for now.
@@ -1489,16 +1615,27 @@ Check/untaint zip codes.
 
 =cut
 
-my @zip_reqd_countries = qw( CA ); #US implicit...
+my @zip_reqd_countries = qw( AU CA US ); #CA, US implicit...
 
 sub ut_zip {
   my( $self, $field, $country ) = @_;
+
   if ( $country eq 'US' ) {
-    $self->getfield($field) =~ /\s*(\d{5}(\-\d{4})?)\s*$/
+
+    $self->getfield($field) =~ /^\s*(\d{5}(\-\d{4})?)\s*$/
       or return gettext('illegal_zip'). " $field for country $country: ".
                 $self->getfield($field);
-    $self->setfield($field,$1);
+    $self->setfield($field, $1);
+
+  } elsif ( $country eq 'CA' ) {
+
+    $self->getfield($field) =~ /^\s*([A-Z]\d[A-Z])\s*(\d[A-Z]\d)\s*$/i
+      or return gettext('illegal_zip'). " $field for country $country: ".
+                $self->getfield($field);
+    $self->setfield($field, "$1 $2");
+
   } else {
+
     if ( $self->getfield($field) =~ /^\s*$/
          && ( !$country || ! grep { $_ eq $country } @zip_reqd_countries )
        )
@@ -1509,7 +1646,9 @@ sub ut_zip {
         or return gettext('illegal_zip'). " $field: ". $self->getfield($field);
       $self->setfield($field,$1);
     }
+
   }
+
   '';
 }
 
@@ -1593,6 +1732,36 @@ sub ut_foreign_keyn {
     : '';
 }
 
+=item ut_agentnum_acl
+
+Checks this column as an agentnum, taking into account the current users's
+ACLs.
+
+=cut
+
+sub ut_agentnum_acl {
+  my( $self, $field, $null_acl ) = @_;
+
+  my $error = $self->ut_foreign_keyn($field, 'agent', 'agentnum');
+  return "Illegal agentnum: $error" if $error;
+
+  my $curuser = $FS::CurrentUser::CurrentUser;
+
+  if ( $self->$field() ) {
+
+    return "Access deined"
+      unless $curuser->agentnum($self->$field());
+
+  } else {
+
+    return "Access denied"
+      unless $curuser->access_right($null_acl);
+
+  }
+
+  '';
+
+}
 
 =item virtual_fields [ TABLE ]
 
@@ -1615,7 +1784,8 @@ sub virtual_fields {
                 "WHERE dbtable = '$table'";
     my $dbh = dbh;
     my $result = $dbh->selectcol_arrayref($query);
-    confess $dbh->errstr if $dbh->err;
+    confess "Error executing virtual fields query: $query: ". $dbh->errstr
+      if $dbh->err;
     $virtual_fields_cache{$table} = $result;
   }
 
@@ -1699,14 +1869,12 @@ sub _quote {
        ( $nullable ? ' NULL' : ' NOT NULL' ).
        ")\n" if $DEBUG > 2;
 
-  if ( $value eq '' && $column_type =~ /^int/ ) {
-    if ( $nullable ) {
-      'NULL';
-    } else {
-      cluck "WARNING: Attempting to set non-null integer $table.$column null; ".
-            "using 0 instead";
-      0;
-    }
+  if ( $value eq '' && $nullable ) {
+    'NULL'
+  } elsif ( $value eq '' && $column_type =~ /^(int|numeric)/ ) {
+    cluck "WARNING: Attempting to set non-null integer $table.$column null; ".
+          "using 0 instead";
+    0;
   } elsif ( $value =~ /^\d+(\.\d+)?$/ && 
             ! $column_type =~ /(char|binary|text)$/i ) {
     $value;
@@ -1764,10 +1932,22 @@ sub _dump {
   } (fields($self->table)) );
 }
 
+=item encrypt($value)
+
+Encrypts the credit card using a combination of PK to encrypt and uuencode to armour.
+
+Returns the encrypted string.
+
+You should generally not have to worry about calling this, as the system handles this for you.
+
+=cut
+
+
 sub encrypt {
   my ($self, $value) = @_;
   my $encrypted;
 
+  my $conf = new FS::Conf;
   if ($conf->exists('encryption')) {
     if ($self->is_encrypted($value)) {
       # Return the original value if it isn't plaintext.
@@ -1787,25 +1967,42 @@ sub encrypt {
   return $encrypted;
 }
 
+=item is_encrypted($value)
+
+Checks to see if the string is encrypted and returns true or false (1/0) to indicate it's status.
+
+=cut
+
+
 sub is_encrypted {
   my ($self, $value) = @_;
   # Possible Bug - Some work may be required here....
 
-  if (length($value) > 80) {
+  if ($value =~ /^M/ && length($value) > 80) {
     return 1;
   } else {
     return 0;
   }
 }
 
+=item decrypt($value)
+
+Uses the private key to decrypt the string. Returns the decryoted string or undef on failure.
+
+You should generally not have to worry about calling this, as the system handles this for you.
+
+=cut
+
 sub decrypt {
   my ($self,$value) = @_;
   my $decrypted = $value; # Will return the original value if it isn't encrypted or can't be decrypted.
+  my $conf = new FS::Conf;
   if ($conf->exists('encryption') && $self->is_encrypted($value)) {
     $self->loadRSA;
     if (ref($rsa_decrypt) =~ /::RSA/) {
       my $encrypted = unpack ("u*", $value);
-      $decrypted =  unpack("Z*", $rsa_decrypt->decrypt($encrypted));
+      $decrypted =  unpack("Z*", eval{$rsa_decrypt->decrypt($encrypted)});
+      if ($@) {warn "Decryption Failed"};
     }
   }
   return $decrypted;
@@ -1816,6 +2013,7 @@ sub loadRSA {
     #Initialize the Module
     $rsa_module = 'Crypt::OpenSSL::RSA'; # The Default
 
+    my $conf = new FS::Conf;
     if ($conf->exists('encryptionmodule') && $conf->config('encryptionmodule') ne '') {
       $rsa_module = $conf->config('encryptionmodule');
     }

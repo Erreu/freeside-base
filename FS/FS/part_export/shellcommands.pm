@@ -4,6 +4,7 @@ use vars qw(@ISA %info);
 use Tie::IxHash;
 use String::ShellQuote;
 use FS::part_export;
+use FS::Record qw( qsearch qsearchs );
 
 @ISA = qw(FS::part_export);
 
@@ -60,6 +61,10 @@ tie my %options, 'Tie::IxHash',
                type=>'select', options=>[qw(crypt md5)],
                default => 'crypt',
              },
+  'groups_susp_reason' => { label =>
+                             'Radius group mapping to reason (via template user)',
+			    type  => 'textarea',
+			  },
 ;
 
 %info = (
@@ -151,21 +156,32 @@ old_ for replace operations):
 <UL>
   <LI><code>$username</code>
   <LI><code>$_password</code>
-  <LI><code>$quoted_password</code> - unencrypted password, already quoted for the shell (do not add additional quotes)
-  <LI><code>$crypt_password</code> - encrypted password, already quoted for the shell (do not add additional quotes)
+  <LI><code>$quoted_password</code> - unencrypted password, already quoted for the shell (do not add additional quotes).
+  <LI><code>$crypt_password</code> - encrypted password.  When used on the command line (rather than STDIN), it will be already quoted for the shell (do not add additional quotes).
   <LI><code>$uid</code>
   <LI><code>$gid</code>
-  <LI><code>$finger</code> - GECOS, already quoted for the shell (do not add additional quotes)
-  <LI><code>$first</code> - First name of GECOS, already quoted for the shell (do not add additional quotes)
-  <LI><code>$last</code> - Last name of GECOS, already quoted for the shell (do not add additional quotes)
+  <LI><code>$finger</code> - GECOS.  When used on the command line (rather than STDIN), it will be already quoted for the shell (do not add additional quotes).
+  <LI><code>$first</code> - First name of GECOS.  When used on the command line (rather than STDIN), it will be already quoted for the shell (do not add additional quotes).
+  <LI><code>$last</code> - Last name of GECOS.  When used on the command line (rather than STDIN), it will be already quoted for the shell (do not add additional quotes).
   <LI><code>$dir</code> - home directory
   <LI><code>$shell</code>
   <LI><code>$quota</code>
   <LI><code>@radius_groups</code>
+  <LI><code>$reasonnum (when suspending)</code>
+  <LI><code>$reasontext (when suspending)</code>
+  <LI><code>$reasontypenum (when suspending)</code>
+  <LI><code>$reasontypetext (when suspending)</code>
   <LI>All other fields in <a href="../docs/schema.html#svc_acct">svc_acct</a> are also available.
 </UL>
 END
 );
+
+sub _groups_susp_reason_map { shift->_map('groups_susp_reason'); }
+
+sub _map {
+  my $self = shift;
+  map { reverse(/^\s*(\S+)\s*(.*)\s*$/) } split("\n", $self->option(shift) );
+}
 
 sub rebless { shift; }
 
@@ -199,7 +215,6 @@ sub _export_command_or_super {
   }
 };
 
-
 sub _export_command {
   my ( $self, $action, $svc_acct) = (shift, shift, shift);
   my $command = $self->option($action);
@@ -211,6 +226,7 @@ sub _export_command {
     no strict 'refs';
     ${$_} = $svc_acct->getfield($_) foreach $svc_acct->fields;
 
+    # snarfs are unused at this point?
     my $count = 1;
     foreach my $acct_snarf ( $svc_acct->acct_snarf ) {
       ${"snarf_$_$count"} = shell_quote( $acct_snarf->get($_) )
@@ -228,22 +244,61 @@ sub _export_command {
 
   $finger =~ /^(.*)\s+(\S+)$/ or $finger =~ /^((.*))$/;
   ($first, $last ) = ( $1, $2 );
+  $domain = $svc_acct->domain;
+
+  $quoted_password = shell_quote $_password;
+
+  $crypt_password = $svc_acct->crypt_password( $self->option('crypt') );
+
+  @radius_groups = $svc_acct->radius_groups;
+
+  my ($reasonnum, $reasontext, $reasontypenum, $reasontypetext);
+  if ( $cust_pkg && $action eq 'suspend' && (my $r = $cust_pkg->last_reason) ) {
+    $reasonnum = $r->reasonnum;
+    $reasontext = $r->reason;
+    $reasontypenum = $r->reason_type;
+    $reasontypetext = $r->reasontype->type;
+
+    my %reasonmap = $self->_groups_susp_reason_map;
+    my $userspec = '';
+    $userspec = $reasonmap{$reasonnum}
+      if exists($reasonmap{$reasonnum});
+    $userspec = $reasonmap{$reasontext}
+      if (!$userspec && exists($reasonmap{$reasontext}));
+
+    my $suspend_user;
+    if ( $userspec =~ /^\d+$/ ) {
+      $suspend_user = qsearchs( 'svc_acct', { 'svcnum' => $userspec } );
+    } elsif ( $userspec =~ /^\S+\@\S+$/ ) {
+      my ($username,$domain) = split(/\@/, $userspec);
+      for my $user (qsearch( 'svc_acct', { 'username' => $username } )){
+        $suspend_user = $user if $userspec eq $user->email;
+      }
+    } elsif ($userspec) {
+      $suspend_user = qsearchs( 'svc_acct', { 'username' => $userspec } );
+    }
+
+    @radius_groups = $suspend_user->radius_groups
+      if $suspend_user;  
+
+  } else {
+    $reasonnum = $reasontext = $reasontypenum = $reasontypetext = '';
+  }
+
+  my $stdin_string = eval(qq("$stdin"));
+
   $first = shell_quote $first;
   $last = shell_quote $last;
   $finger = shell_quote $finger;
-  $quoted_password = shell_quote $_password;
-  $domain = $svc_acct->domain;
+  $crypt_password = shell_quote $crypt_password;
 
-  $crypt_password =
-    shell_quote( $svc_acct->crypt_password( $self->option('crypt') ) );
-
-  @radius_groups = $svc_acct->radius_groups;
+  my $command_string = eval(qq("$command"));
 
   $self->shellcommands_queue( $svc_acct->svcnum,
     user         => $self->option('user')||'root',
     host         => $self->machine,
-    command      => eval(qq("$command")),
-    stdin_string => eval(qq("$stdin")),
+    command      => $command_string,
+    stdin_string => $stdin_string,
   );
 }
 
@@ -257,18 +312,14 @@ sub _export_replace {
     ${"old_$_"} = $old->getfield($_) foreach $old->fields;
     ${"new_$_"} = $new->getfield($_) foreach $new->fields;
   }
-  $new_finger =~ /^(.*)\s+(\S+)$/ or $finger =~ /^((.*))$/;
+  $new_finger =~ /^(.*)\s+(\S+)$/ or $new_finger =~ /^((.*))$/;
   ($new_first, $new_last ) = ( $1, $2 );
-  $new_first = shell_quote $new_first;
-  $new_last = shell_quote $new_last;
-  $new_finger = shell_quote $new_finger;
   $quoted_new__password = shell_quote $new__password; #old, wrong?
   $new_quoted_password = shell_quote $new__password; #new, better?
   $old_domain = $old->domain;
   $new_domain = $new->domain;
 
-  $new_crypt_password =
-    shell_quote( $new->crypt_password( $self->option('crypt') ) );
+  $new_crypt_password = $new->crypt_password( $self->option('crypt') );
 
   @old_radius_groups = $old->radius_groups;
   @new_radius_groups = $new->radius_groups;
@@ -300,11 +351,20 @@ sub _export_replace {
   return $error. ' ('. $self->exporttype. ' to '. $self->machine. ')'
     if $error;
 
+  my $stdin_string = eval(qq("$stdin"));
+
+  $new_first = shell_quote $new_first;
+  $new_last = shell_quote $new_last;
+  $new_finger = shell_quote $new_finger;
+  $new_crypt_password = shell_quote $new_crypt_password;
+
+  my $command_string = eval(qq("$command"));
+
   $self->shellcommands_queue( $new->svcnum,
     user         => $self->option('user')||'root',
     host         => $self->machine,
-    command      => eval(qq("$command")),
-    stdin_string => eval(qq("$stdin")),
+    command      => $command_string,
+    stdin_string => $stdin_string,
   );
 }
 

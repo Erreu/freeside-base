@@ -1,31 +1,47 @@
-<!-- mason kludge -->
-<%
+<% include('elements/monthly.html',
+                'title'        => $agentname.
+                                  'Sales, Credits and Receipts Summary',
+                'items'        => \@items,
+                'labels'       => \%label,
+                'graph_labels' => \%graph_label,
+                'colors'       => \%color,
+                'links'        => \%link,
+                'start_month'  => $smonth,
+                'start_year'   => $syear,
+                'end_month'    => $emonth,
+                'end_year'     => $eyear,
+                'agentnum'     => $agentnum,
+                'nototal'      => scalar($cgi->param('12mo')),
+             )
+%>
+<%init>
 
-#my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
-my ($curmon,$curyear) = (localtime(time))[4,5];
+die "access denied"
+  unless $FS::CurrentUser::CurrentUser->access_right('Financial reports');
 
 #find first month
-my $syear = $cgi->param('syear') || 1899+$curyear;
-my $smonth = $cgi->param('smonth') || $curmon+1;
+my $syear = $cgi->param('start_year'); # || 1899+$curyear;
+my $smonth = $cgi->param('start_month'); # || $curmon+1;
 
 #find last month
-my $eyear = $cgi->param('eyear') || 1900+$curyear;
-my $emonth = $cgi->param('emonth') || $curmon+1;
+my $eyear = $cgi->param('end_year'); # || 1900+$curyear;
+my $emonth = $cgi->param('end_month'); # || $curmon+1;
 
-%>
+#XXX or virtual
+my( $agentnum, $agent ) = ('', '');
+if ( $cgi->param('agentnum') =~ /^(\d+)$/ ) {
+  $agentnum = $1;
+  $agent = qsearchs('agent', { 'agentnum' => $agentnum } );
+  die "agentnum $agentnum not found!" unless $agent;
+}
 
-<HTML>
-  <HEAD>
-    <TITLE>Sales, Credits and Receipts Summary</TITLE>
-  </HEAD>
-<BODY BGCOLOR="#e8e8e8">
-<IMG SRC="money_time-graph.cgi?<%= $cgi->query_string %>" WIDTH="976" HEIGHT="384">
-<BR>
-
-<%= table('e8e8e8') %>
-<%
+my $agentname = $agent ? $agent->agent.' ' : '';
 
 my @items = qw( invoiced netsales credits payments receipts );
+if ( $cgi->param('12mo') == 1 ) {
+  @items = map $_.'_12mo', @items;
+}
+
 my %label = (
   'invoiced' => 'Gross Sales',
   'netsales' => 'Net Sales',
@@ -33,6 +49,22 @@ my %label = (
   'payments' => 'Gross Receipts',
   'receipts' => 'Net Receipts',
 );
+
+my %graph_suffix = (
+ 'invoiced' => ' (invoiced)', 
+ 'netsales' => ' (invoiced - applied credits)',
+ 'credits'  => '',
+ 'payments' => ' (payments)',
+ 'receipts' => '/Cashflow (payments - refunds)',
+);
+my %graph_label = map { $_ => $label{$_}.$graph_suffix{$_} } keys %label;
+
+$label{$_.'_12mo'} = $label{$_}. " (previous 12 months)"
+  foreach keys %label;
+
+$graph_label{$_.'_12mo'} = $graph_label{$_}. " (previous 12 months)"
+  foreach keys %graph_label;
+
 my %color = (
   'invoiced' => '9999ff', #light blue
   'netsales' => '0000cc', #blue
@@ -40,86 +72,14 @@ my %color = (
   'payments' => '99cc99', #light green
   'receipts' => '00cc00', #green
 );
+$color{$_.'_12mo'} = $color{$_}
+  foreach keys %color;
+
 my %link = (
-  'invoiced' => "${p}search/cust_bill.html?",
-  'credits'  => "${p}search/cust_credit.html?",
-  'payments' => "${p}search/cust_pay.cgi?magic=_date;",
+  'invoiced' => "${p}search/cust_bill.html?agentnum=$agentnum;",
+  'credits'  => "${p}search/cust_credit.html?agentnum=$agentnum;",
+  'payments' => "${p}search/cust_pay.cgi?magic=_date;agentnum=$agentnum;",
 );
+# XXX link 12mo?
 
-my $report = new FS::Report::Table::Monthly (
-  'items' => \@items,
-  'start_month' => $smonth,
-  'start_year'  => $syear,
-  'end_month'   => $emonth,
-  'end_year'    => $eyear,
-);
-my $data = $report->data;
-
-my @mon = qw(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec);
-
-%>
-
-<TR><TD></TD>
-<% foreach my $column ( @{$data->{label}} ) {
-     #$column =~ s/^(\d+)\//$mon[$1-1]<BR>/e;
-     $column =~ s/^(\d+)\//$mon[$1-1]<BR>/;
-     %>
-     <TH><%= $column %></TH>
-<% } %>
-</TR>
-
-<% foreach my $row (@items) { %>
-  <TR><TH><FONT COLOR="#<%= $color{$row} %>"><%= $label{$row} %></FONT></TH>
-  <% my $link = exists($link{$row})
-       ? qq(<A HREF="$link{$row})
-       : '';
-     my @speriod = @{$data->{speriod}};
-     my @eperiod = @{$data->{eperiod}};
-  %>
-  <% foreach my $column ( @{$data->{$row}} ) { %>
-    <TD ALIGN="right" BGCOLOR="#ffffff">
-      <%= $link ? $link. 'begin='. shift(@speriod). ';end='. shift(@eperiod). '">' : '' %><FONT COLOR="#<%= $color{$row} %>">$<%= sprintf("%.2f", $column) %></FONT><%= $link ? '</A>' : '' %>
-    </TD>
-  <% } %>
-  </TR>
-<% } %>
-</TABLE>
-
-<BR>
-<FORM METHOD="POST">
-<!--
-<INPUT TYPE="checkbox" NAME="ar">
-  Accounts receivable (invoices - applied credits)<BR>
-<INPUT TYPE="checkbox" NAME="charged">
-  Just Invoices<BR>
-<INPUT TYPE="checkbox" NAME="defer">
-  Accounts receivable, with deferred revenue (invoices - applied credits, with charges for annual/semi-annual/quarterly/etc. services deferred over applicable time period) (there has got to be a shorter description for this)<BR>
-<INPUT TYPE="checkbox" NAME="cash">
-  Cashflow (payments - refunds)<BR>
-<BR>
--->
-From <SELECT NAME="smonth">
-<% foreach my $mon ( 1..12 ) { %>
-<OPTION VALUE="<%= $mon %>"<%= $mon == $smonth ? ' SELECTED' : '' %>><%= $mon[$mon-1] %>
-<% } %>
-</SELECT>
-<SELECT NAME="syear">
-<% foreach my $y ( 1999 .. 2010 ) { %>
-<OPTION VALUE="<%= $y %>"<%= $y == $syear ? ' SELECTED' : '' %>><%= $y %>
-<% } %>
-</SELECT>
- to <SELECT NAME="emonth">
-<% foreach my $mon ( 1..12 ) { %>
-<OPTION VALUE="<%= $mon %>"<%= $mon == $emonth ? ' SELECTED' : '' %>><%= $mon[$mon-1] %>
-<% } %>
-</SELECT>
-<SELECT NAME="eyear">
-<% foreach my $y ( 1999 .. 2010 ) { %>
-<OPTION VALUE="<%= $y %>"<%= $y == $eyear ? ' SELECTED' : '' %>><%= $y %>
-<% } %>
-</SELECT>
-
-<INPUT TYPE="submit" VALUE="Redisplay">
-</FORM>
-</BODY>
-</HTML>
+</%init>

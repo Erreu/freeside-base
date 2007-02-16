@@ -1,13 +1,20 @@
-<!-- mason kludge -->
-<%
+<% header("Edit Message catalog" ) %>
+<BR>
 
-print header("Edit Message catalog", menubar(
-#  'Main Menu' => $p,
-)), '<BR>';
+% if ( $cgi->param('error') ) {
+  <FONT SIZE="+1" COLOR="#ff0000">Error: <% $cgi->param('error') %></FONT>
+  <BR><BR>
+% }
 
-print qq!<FONT SIZE="+1" COLOR="#ff0000">Error: !. $cgi->param('error').
-      '</FONT><BR><BR>'
-  if $cgi->param('error');
+<% $widget->html %>
+
+    </TABLE>
+  </BODY>
+</HTML>
+<%init>
+
+die "access denied"
+  unless $FS::CurrentUser::CurrentUser->access_right('Configuration');
 
 my $widget = new HTML::Widgets::SelectLayers(
   'selected_layer' => 'en_US',
@@ -47,12 +54,4 @@ my $widget = new HTML::Widgets::SelectLayers(
 
 );
 
-print $widget->html;
-
-print <<END;
-    </TABLE>
-  </BODY>
-</HTML>
-END
-
-%>
+</%init>

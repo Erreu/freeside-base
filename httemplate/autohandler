@@ -9,7 +9,18 @@ if ( UNIVERSAL::can(dbh, 'sprintProfile') ) {
 
   if ( lc($r->content_type) eq 'text/html' ) {
 
-    $profile = '<PRE>'. encode_entities(dbh->sprintProfile()).
+    ## barely worth it, just in case someone tries to use profiling on a
+    ## non-RT install
+    #eval "use Text::Wrapper;";
+    #die $@ if $@;
+
+    my $wrapper = new Text::Wrapper( columns => 80 );
+    my $text = dbh->sprintProfile();
+    #my $text = $wrapper->wrap( dbh->sprintProfile() );
+    $text =~ s/^/                                                          /mg;
+    
+    $profile = '<PRE>'.
+               encode_entities( $text ).
                #"\n\n". &sprintAutoProfile(). '</PRE>';
                "\n\n".                        '</PRE>';
   } 
@@ -19,3 +30,6 @@ if ( UNIVERSAL::can(dbh, 'sprintProfile') ) {
 
 s/(<\/BODY>[\s\n]*<\/HTML>[\s\n]*)$/$profile$1/i;
 </%filter>
+<%cleanup>
+   dbh->commit();
+</%cleanup>

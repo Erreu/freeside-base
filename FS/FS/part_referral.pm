@@ -2,7 +2,8 @@ package FS::part_referral;
 
 use strict;
 use vars qw( @ISA );
-use FS::Record;
+use FS::Record qw( qsearch qsearchs dbh );
+use FS::agent;
 
 @ISA = qw( FS::Record );
 
@@ -39,6 +40,8 @@ The following fields are currently supported:
 =item referral - Text name of this advertising source
 
 =item disabled - Disabled flag, empty or 'Y'
+
+=item agentnum - Optional agentnum (see L<FS::agent>)
 
 =back
 
@@ -95,15 +98,90 @@ sub check {
 
   my $error = $self->ut_numbern('refnum')
     || $self->ut_text('referral')
+    || $self->ut_enum('disabled', [ '', 'Y' ] )
+    #|| $self->ut_foreign_keyn('agentnum', 'agent', 'agentnum')
+    || $self->ut_agentnum_acl('agentnum', 'Edit global advertising sources')
   ;
   return $error if $error;
 
-  if ( $self->dbdef_table->column('disabled') ) {
-    $error = $self->ut_enum('disabled', [ '', 'Y' ] );
-    return $error if $error;
-  }
-
   $self->SUPER::check;
+}
+
+=item agent 
+
+Returns the associated agent for this referral, if any, as an FS::agent object.
+
+=cut
+
+sub agent {
+  my $self = shift;
+  qsearchs('agent', { 'agentnum' => $self->agentnum } );
+}
+
+=back
+
+=head1 CLASS METHODS
+
+=over 4
+
+=item acl_agentnum_sql [ INCLUDE_GLOBAL_BOOL ]
+
+Returns an SQL fragment for searching for part_referral records allowed by the
+current users's agent ACLs (and "Edit global advertising sources" right).
+
+Pass a true value to include global advertising sources (for example, when
+simply using rather than editing advertising sources).
+
+=cut
+
+sub acl_agentnum_sql {
+  my $self = shift;
+
+  my $curuser = $FS::CurrentUser::CurrentUser;
+  my $sql = $curuser->agentnums_sql;
+  $sql = " ( $sql OR agentnum IS NULL ) "
+    if $curuser->access_right('Edit global advertising sources')
+    or defined($_[0]) && $_[0];
+
+  $sql;
+
+}
+
+=item all_part_referral [ INCLUDE_GLOBAL_BOOL ]
+
+Returns all part_referral records allowed by the current users's agent ACLs
+(and "Edit global advertising sources" right).
+
+Pass a true value to include global advertising sources (for example, when
+simply using rather than editing advertising sources).
+
+=cut
+
+sub all_part_referral {
+  my $self = shift;
+
+  qsearch({
+    'table'     => 'part_referral',
+    'extra_sql' => ' WHERE '. $self->acl_agentnum_sql(@_). ' ORDER BY refnum ',
+  });
+
+}
+
+=item num_part_referral [ INCLUDE_GLOBAL_BOOL ]
+
+Returns the number of part_referral records allowed by the current users's
+agent ACLs (and "Edit global advertising sources" right).
+
+=cut
+
+sub num_part_referral {
+  my $self = shift;
+
+  my $sth = dbh->prepare(
+    'SELECT COUNT(*) FROM part_referral WHERE '. $self->acl_agentnum_sql(@_)
+  ) or die dbh->errstr;
+  $sth->execute() or die $sth->errstr;
+  $sth->fetchrow_arrayref->[0];
 }
 
 =back

@@ -1,11 +1,17 @@
 package FS::cust_pay_batch;
 
 use strict;
-use vars qw( @ISA );
-use FS::Record qw(dbh qsearchs);
-use Business::CreditCard;
+use vars qw( @ISA $DEBUG );
+use FS::Record qw(dbh qsearch qsearchs);
+use FS::payinfo_Mixin;
+use Business::CreditCard 0.28;
 
-@ISA = qw( FS::Record );
+@ISA = qw( FS::Record FS::payinfo_Mixin );
+
+# 1 is mostly method/subroutine entry and options
+# 2 traces progress of some operations
+# 3 is even more information including possibly sensitive data
+$DEBUG = 0;
 
 =head1 NAME
 
@@ -26,6 +32,8 @@ FS::cust_pay_batch - Object methods for batch cards
 
   $error = $record->check;
 
+  $error = $record->retriable;
+
 =head1 DESCRIPTION
 
 An FS::cust_pay_batch object represents a credit card transaction ready to be
@@ -37,7 +45,11 @@ following fields are currently supported:
 
 =item paybatchnum - primary key (automatically assigned)
 
-=item cardnum
+=item batchnum - indentifies group in batch
+
+=item payby - CARD/CHEK/LECB/BILL/COMP
+
+=item payinfo
 
 =item exp - card expiration 
 
@@ -64,6 +76,8 @@ following fields are currently supported:
 =item zip 
 
 =item country 
+
+=item status
 
 =back
 
@@ -94,22 +108,14 @@ otherwise returns false.
 
 =item replace OLD_RECORD
 
-#inactive
-#
-#Replaces the OLD_RECORD with this one in the database.  If there is an error,
-#returns the error, otherwise returns false.
-
-=cut
-
-sub replace {
-  return "Can't (yet?) replace batched transactions!";
-}
+Replaces the OLD_RECORD with this one in the database.  If there is an error,
+returns the error, otherwise returns false.
 
 =item check
 
 Checks all fields to make sure this is a valid transaction.  If there is
 an error, returns the error, otherwise returns false.  Called by the insert
-and repalce methods.
+and replace methods.
 
 =cut
 
@@ -118,8 +124,7 @@ sub check {
 
   my $error = 
       $self->ut_numbern('paybatchnum')
-    || $self->ut_numbern('trancode') #depriciated
-    || $self->ut_number('cardnum') 
+    || $self->ut_numbern('trancode') #deprecated
     || $self->ut_money('amount')
     || $self->ut_number('invnum')
     || $self->ut_number('custnum')
@@ -137,17 +142,12 @@ sub check {
   $self->first =~ /^([\w \,\.\-\']+)$/ or return "Illegal first name";
   $self->first($1);
 
-  my $cardnum = $self->cardnum;
-  $cardnum =~ s/\D//g;
-  $cardnum =~ /^(\d{13,16})$/
-    or return "Illegal credit card number";
-  $cardnum = $1;
-  $self->cardnum($cardnum);
-  validate($cardnum) or return "Illegal credit card number";
-  return "Unknown card type" if cardtype($cardnum) eq "Unknown";
+  $error = $self->payinfo_check();
+  return $error if $error;
 
   if ( $self->exp eq '' ) {
-    return "Expriation date required"; #unless 
+    return "Expiration date required"
+      unless $self->payby =~ /^(CHEK|DCHK|LECB|WEST)$/;
     $self->exp('');
   } else {
     if ( $self->exp =~ /^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/ ) {
@@ -173,15 +173,16 @@ sub check {
     $self->payname($1);
   }
 
-  #$self->zip =~ /^\s*(\w[\w\-\s]{3,8}\w)\s*$/
-  #  or return "Illegal zip: ". $self->zip;
-  #$self->zip($1);
+  #we have lots of old zips in there... don't hork up batch results cause of em
+  $self->zip =~ /^\s*(\w[\w\-\s]{2,8}\w)\s*$/
+    or return "Illegal zip: ". $self->zip;
+  $self->zip($1);
 
   $self->country =~ /^(\w\w)$/ or return "Illegal country: ". $self->country;
   $self->country($1);
 
-  $error = $self->ut_zip('zip', $self->country);
-  return $error if $error;
+  #$error = $self->ut_zip('zip', $self->country);
+  #return $error if $error;
 
   #check invnum, custnum, ?
 
@@ -200,101 +201,22 @@ sub cust_main {
   qsearchs( 'cust_main', { 'custnum' => $self->custnum } );
 }
 
-=back
+=item retriable
 
-=head1 SUBROUTINES
+Marks the corresponding event (see L<FS::cust_bill_event>) for this batched
+credit card payment as retriable.  Useful if the corresponding financial
+institution account was declined for temporary reasons and/or a manual 
+retry is desired.
 
-=over 4
-
-=item import_results
+Implementation details: For the named customer's invoice, changes the
+statustext of the 'done' (without statustext) event to 'retriable.'
 
 =cut
 
-sub import_results {
-  use Time::Local;
-  use FS::cust_pay;
-  eval "use Text::CSV_XS;";
-  die $@ if $@;
-#
-  my $param = shift;
-  my $fh = $param->{'filehandle'};
-  my $format = $param->{'format'};
-  my $paybatch = $param->{'paybatch'};
+sub retriable {
+  my $self = shift;
 
-  my @fields;
-  my $end_condition;
-  my $end_hook;
-  my $hook;
-  my $approved_condition;
-  my $declined_condition;
-
-  if ( $format eq 'csv-td_canada_trust-merchant_pc_batch' ) {
-
-    @fields = (
-      'paybatchnum', # Reference#:  Invoice number of the transaction
-      'paid',        # Amount:  Amount of the transaction.  Dollars and cents
-                     #          with no decimal entered.
-      '',            # Card Type:  0 - MCrd, 1 - Visa, 2 - AMEX, 3 - Discover,
-                     #             4 - Insignia, 5 - Diners/EnRoute, 6 - JCB
-      '_date',       # Transaction Date:  Date the Transaction was processed
-      'time',        # Transaction Time:  Time the transaction was processed
-      'payinfo',     # Card Number:  Card number for the transaction
-      '',            # Expiry Date:  Expiry date of the card
-      '',            # Auth#:  Authorization number entered for force post
-                     #         transaction
-      'type',        # Transaction Type:  0 - purchase, 40 - refund,
-                     #                    20 - force post
-      'result',      # Processing Result: 3 - Approval,
-                     #                    4 - Declined/Amount over limit,
-                     #                    5 - Invalid/Expired/stolen card,
-                     #                    6 - Comm Error
-      '',            # Terminal ID: Terminal ID used to process the transaction
-    );
-
-    $end_condition = sub {
-      my $hash = shift;
-      $hash->{'type'} eq '0BC';
-    };
-
-    $end_hook = sub {
-      my( $hash, $total) = @_;
-      $total = sprintf("%.2f", $total);
-      my $batch_total = sprintf("%.2f", $hash->{'paybatchnum'} / 100 );
-      return "Our total $total does not match bank total $batch_total!"
-        if $total != $batch_total;
-      '';
-    };
-
-    $hook = sub {
-      my $hash = shift;
-      $hash->{'paid'} = sprintf("%.2f", $hash->{'paid'} / 100 );
-      $hash->{'_date'} = timelocal( substr($hash->{'time'},  4, 2),
-                                    substr($hash->{'time'},  2, 2),
-                                    substr($hash->{'time'},  0, 2),
-                                    substr($hash->{'_date'}, 6, 2),
-                                    substr($hash->{'_date'}, 4, 2)-1,
-                                    substr($hash->{'_date'}, 0, 4)-1900, );
-    };
-
-    $approved_condition = sub {
-      my $hash = shift;
-      $hash->{'type'} eq '0' && $hash->{'result'} == 3;
-    };
-
-    $declined_condition = sub {
-      my $hash = shift;
-      $hash->{'type'} eq '0' && (    $hash->{'result'} == 4
-                                  || $hash->{'result'} == 5 );
-    };
-
-
-  } else {
-    return "Unknown format $format";
-  }
-
-  my $csv = new Text::CSV_XS;
-
-  local $SIG{HUP} = 'IGNORE';
+  local $SIG{HUP} = 'IGNORE';        #Hmm
   local $SIG{INT} = 'IGNORE';
   local $SIG{QUIT} = 'IGNORE';
   local $SIG{TERM} = 'IGNORE';
@@ -305,79 +227,26 @@ sub import_results {
   local $FS::UID::AutoCommit = 0;
   my $dbh = dbh;
 
-  my $total = 0;
-  my $line;
-  while ( defined($line=<$fh>) ) {
+  my $cust_bill = qsearchs('cust_bill', { 'invnum' => $self->invnum } )
+    or return "event $self->eventnum references nonexistant invoice $self->invnum";
 
-    next if $line =~ /^\s*$/; #skip blank lines
-
-    $csv->parse($line) or do {
-      $dbh->rollback if $oldAutoCommit;
-      return "can't parse: ". $csv->error_input();
-    };
-
-    my @values = $csv->fields();
-    my %hash;
-    foreach my $field ( @fields ) {
-      my $value = shift @values;
-      next unless $field;
-      $hash{$field} = $value;
-    }
-
-    if ( &{$end_condition}(\%hash) ) {
-      my $error = &{$end_hook}(\%hash, $total);
-      if ( $error ) {
-        $dbh->rollback if $oldAutoCommit;
-        return $error;
-      }
-      last;
-    }
-
-    my $cust_pay_batch =
-      qsearchs('cust_pay_batch', { 'paybatchnum' => $hash{'paybatchnum'} } );
-    unless ( $cust_pay_batch ) {
-      $dbh->rollback if $oldAutoCommit;
-      return "unknown paybatchnum $hash{'paybatchnum'}\n";
-    }
-    my $custnum = $cust_pay_batch->custnum,
-
-    my $error = $cust_pay_batch->delete;
-    if ( $error ) {
-      $dbh->rollback if $oldAutoCommit;
-      return "error removing paybatchnum $hash{'paybatchnum'}: $error\n";
-    }
-
-    &{$hook}(\%hash);
-
-    if ( &{$approved_condition}(\%hash) ) {
-
-      my $cust_pay = new FS::cust_pay ( {
-        'custnum'  => $custnum,
-        'payby'    => 'CARD',
-        'paybatch' => $paybatch,
-        map { $_ => $hash{$_} } (qw( paid _date payinfo )),
-      } );
-      $error = $cust_pay->insert;
-      if ( $error ) {
-        $dbh->rollback if $oldAutoCommit;
-        return "error adding payment paybatchnum $hash{'paybatchnum'}: $error\n";
-      }
-      $total += $hash{'paid'};
-  
-      $cust_pay->cust_main->apply_payments;
-
-    } elsif ( &{$declined_condition}(\%hash) ) {
-
-      #this should be configurable... if anybody else ever uses batches
-      $cust_pay_batch->cust_main->suspend;
-
-    }
-
+  warn "cust_pay_batch->retriable working with self of " . $self->paybatchnum . " and invnum of " . $self->invnum;
+  my @cust_bill_event =
+    sort { $a->part_bill_event->seconds <=> $b->part_bill_event->seconds }
+      grep {
+        $_->part_bill_event->eventcode =~ /\$cust_bill->batch_card/
+	  && $_->status eq 'done'
+	  && ! $_->statustext
+	}
+      $cust_bill->cust_bill_event;
+  # complain loudly if scalar(@cust_bill_event) > 1 ?
+  my $error = $cust_bill_event[0]->retriable;
+  if ($error ) {
+    # gah, even with transactions.
+    $dbh->commit if $oldAutoCommit; #well.
+    return "error marking invoice event retriable: $error";
   }
-  
-  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
   '';
-
 }
 
 =back

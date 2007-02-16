@@ -10,11 +10,8 @@ use FS::Record qw(qsearch qsearchs);
 use FS::queue;
 use FS::queue_depend;
 
-# no autoloading just yet
-use FS::cust_main;
-use FS::svc_acct;
+# no autoloading for non-FS classes...
 use Net::SSH 0.07;
-use FS::part_export;
 
 $DEBUG = 0;
 
@@ -44,7 +41,7 @@ while ( $@ ) {
   }
 }
 
-logfile( "/usr/local/etc/freeside/queuelog.". $FS::UID::datasrc );
+logfile( "%%%FREESIDE_LOG%%%/queuelog.". $FS::UID::datasrc );
 
 warn "completing daemonization (detaching))\n" if $DEBUG;
 daemonize2();

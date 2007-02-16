@@ -1,0 +1,17 @@
+<% include('/elements/header.html', 'Call Detail Record Search' ) %>
+
+<FORM ACTION="cdr.html" METHOD="GET">
+Status: <SELECT NAME="freesidestatus">
+  <OPTION VALUE="">(all)
+  <OPTION VALUE="NULL">unprocessed
+  <OPTION VALUE="done">processed
+</SELECT><BR>
+<INPUT TYPE="submit" VALUE="Search Call Detail Records">
+
+<% include('/elements/footer.html') %>
+<%init>
+
+die "access denied"
+  unless $FS::CurrentUser::CurrentUser->access_right('List rating data');
+
+</%init>

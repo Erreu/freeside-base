@@ -20,21 +20,61 @@ use FS::part_pkg;
                                    ' of service at cancellation',
                          'type' => 'checkbox',
                        },
+    'externalid' => { 'name'   => 'Optional External ID',
+                      'default' => '',
+                    },
+    'seconds'       => { 'name' => 'Time limit for this package',
+                         'default' => '',
+                       },
+    'upbytes'       => { 'name' => 'Upload limit for this package',
+                         'default' => '',
+                       },
+    'downbytes'     => { 'name' => 'Download limit for this package',
+                         'default' => '',
+                       },
+    'totalbytes'    => { 'name' => 'Transfer limit for this package',
+                         'default' => '',
+                       },
+    'recharge_amount'       => { 'name' => 'Cost of recharge for this package',
+                         'default' => '',
+                       },
+    'recharge_seconds'      => { 'name' => 'Recharge time for this package',
+                         'default' => '',
+                       },
+    'recharge_upbytes'      => { 'name' => 'Recharge upload for this package',
+                         'default' => '',
+                       },
+    'recharge_downbytes'    => { 'name' => 'Recharge download for this package',
+                         'default' => '',
+                       },
+    'recharge_totalbytes'   => { 'name' => 'Recharge transfer for this package',
+                         'default' => '',
+                       },
   },
-  'fieldorder' => [ 'setup_fee', 'recur_fee', 'unused_credit' ],
-  #'setup' => 'what.setup_fee.value',
-  #'recur' => 'what.recur_fee.value',
+  'fieldorder' => [ 'setup_fee', 'recur_fee', 'unused_credit', 
+                    'seconds', 'upbytes', 'downbytes', 'totalbytes',
+                    'recharge_amount', 'recharge_seconds', 'recharge_upbytes',
+                    'recharge_downbytes', 'recharge_totalbytes',
+                    'externalid' ],
   'weight' => 10,
 );
 
 sub calc_setup {
-  my($self, $cust_pkg ) = @_;
+  my($self, $cust_pkg, $sdate, $details ) = @_;
+
+  my $i = 0;
+  my $count = $self->option( 'additional_count', 'quiet' ) || 0;
+  while ($i < $count) {
+    push @$details, $self->option( 'additional_info' . $i++ );
+  }
+
   $self->option('setup_fee');
 }
 
 sub calc_recur {
-  my $self = shift;
-  $self->base_recur(@_);
+  my($self, $cust_pkg) = @_;
+  $self->reset_usage($cust_pkg);
+  $self->base_recur($cust_pkg);
 }
 
 sub base_recur {
@@ -75,6 +115,14 @@ sub is_free_options {
 
 sub is_prepaid {
   0; #no, we're postpaid
+}
+
+sub reset_usage {
+  my($self, $cust_pkg) = @_;
+  my %values = map { $_, $self->option($_) } 
+    grep { $self->option($_, 'hush') } 
+    qw(seconds upbytes downbytes totalbytes);
+  $cust_pkg->set_usage(\%values);
 }
 
 1;

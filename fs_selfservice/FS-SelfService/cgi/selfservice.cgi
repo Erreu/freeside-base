@@ -1,21 +1,25 @@
 #!/usr/bin/perl -Tw
 
 use strict;
-use vars qw($cgi $session_id $form_max $template_dir);
+use vars qw($DEBUG $cgi $session_id $form_max $template_dir);
 use subs qw(do_template);
 use CGI;
 use CGI::Carp qw(fatalsToBrowser);
 use Text::Template;
 use HTML::Entities;
+use Date::Format;
 use FS::SelfService qw( login customer_info invoice
                         payment_info process_payment 
                         process_prepay
-                        list_pkgs
+                        list_pkgs order_pkg signup_info order_recharge
                         part_svc_info provision_acct provision_external
-                        unprovision_svc
+                        unprovision_svc change_pkg
+                        list_svcs list_svc_usage myaccount_passwd
                       );
 
 $template_dir = '.';
+
+$DEBUG = 1;
 
 $form_max = 255;
 
@@ -62,14 +66,19 @@ $session_id = $cgi->param('session');
 
 #order|pw_list XXX ???
 $cgi->param('action') =~
-    /^(myaccount|view_invoice|make_payment|payment_results|recharge_prepay|recharge_results|logout|change_bill|change_ship|provision|provision_svc|process_svc_acct|process_svc_external|delete_svc)$/
+    /^(myaccount|view_invoice|make_payment|payment_results|recharge_prepay|recharge_results|logout|change_bill|change_ship|customer_order_pkg|process_order_pkg|customer_change_pkg|process_change_pkg|process_order_recharge|provision|provision_svc|process_svc_acct|process_svc_external|delete_svc|view_usage|view_usage_details|change_password|process_change_password)$/
   or die "unknown action ". $cgi->param('action');
 my $action = $1;
 
+warn "calling $action sub\n"
+  if $DEBUG;
+$FS::SelfService::DEBUG = $DEBUG;
 my $result = eval "&$action();";
 die $@ if $@;
 
-if ( $result->{error} eq "Can't resume session" ) { #ick
+if ( $result->{error} eq "Can't resume session"
+  || $result->{error} eq "Expired session" ) { #ick
+
   do_template('login',{});
   exit;
 }
@@ -77,7 +86,8 @@ if ( $result->{error} eq "Can't resume session" ) { #ick
 #warn $result->{'open_invoices'};
 #warn scalar(@{$result->{'open_invoices'}});
 
-warn "processing template $action\n";
+warn "processing template $action\n"
+  if $DEBUG;
 do_template($action, {
   'session_id' => $session_id,
   'action'     => $action, #so the menu knows what tab we're on...
@@ -99,6 +109,127 @@ sub view_invoice {
 
 }
 
+sub customer_order_pkg {
+  my $init_data = signup_info( 'customer_session_id' => $session_id );
+  return $init_data if ( $init_data->{'error'} );
+
+  my $customer_info = customer_info( 'session_id' => $session_id );
+  return $customer_info if ( $customer_info->{'error'} );
+
+  return {
+    ( map { $_ => $init_data->{$_} }
+          qw( part_pkg security_phrase svc_acct_pop ),
+    ),
+    %$customer_info,
+  };
+}
+
+sub customer_change_pkg {
+  my $init_data = signup_info( 'customer_session_id' => $session_id );
+  return $init_data if ( $init_data->{'error'} );
+
+  my $customer_info = customer_info( 'session_id' => $session_id );
+  return $customer_info if ( $customer_info->{'error'} );
+
+  return {
+    ( map { $_ => $init_data->{$_} }
+          qw( part_pkg security_phrase svc_acct_pop ),
+    ),
+    ( map { $_ => $cgi->param($_) }
+        qw( pkgnum pkg )
+    ),
+    %$customer_info,
+  };
+}
+
+sub process_order_pkg {
+
+  my $results = '';
+
+  unless ( length($cgi->param('_password')) ) {
+    my $init_data = signup_info( 'customer_session_id' => $session_id );
+    $results = { 'error' => $init_data->{msgcat}{empty_password} };
+    $results = { 'error' => $init_data->{error} } if($init_data->{error});
+  }
+  if ( $cgi->param('_password') ne $cgi->param('_password2') ) {
+    my $init_data = signup_info( 'customer_session_id' => $session_id );
+    $results = { 'error' => $init_data->{msgcat}{passwords_dont_match} };
+    $results = { 'error' => $init_data->{error} } if($init_data->{error});
+    $cgi->param('_password', '');
+    $cgi->param('_password2', '');
+  }
+
+  $results ||= order_pkg (
+    'session_id' => $session_id,
+    map { $_ => $cgi->param($_) }
+        qw( custnum pkgpart username _password _password2 sec_phrase popnum )
+  );
+
+
+  if ( $results->{'error'} ) {
+    $action = 'customer_order_pkg';
+    return {
+      $cgi->Vars,
+      %{customer_order_pkg()},
+      'error' => '<FONT COLOR="#FF0000">'. $results->{'error'}. '</FONT>',
+    };
+  } else {
+    return $results;
+  }
+
+}
+
+sub process_change_pkg {
+
+  my $results = '';
+
+  $results ||= change_pkg (
+    'session_id' => $session_id,
+    map { $_ => $cgi->param($_) }
+        qw( pkgpart pkgnum )
+  );
+
+
+  if ( $results->{'error'} ) {
+    $action = 'customer_change_pkg';
+    return {
+      $cgi->Vars,
+      %{customer_change_pkg()},
+      'error' => '<FONT COLOR="#FF0000">'. $results->{'error'}. '</FONT>',
+    };
+  } else {
+    return $results;
+  }
+
+}
+
+sub process_order_recharge {
+
+  my $results = '';
+
+  $results ||= order_recharge (
+    'session_id' => $session_id,
+    map { $_ => $cgi->param($_) }
+        qw( svcnum )
+  );
+
+
+  if ( $results->{'error'} ) {
+    $action = 'view_usage';
+    if ($results->{'error'} eq '_decline') {
+      $results->{'error'} = "There has been an error processing your account.  Please contact customer support."
+    }
+    return {
+      $cgi->Vars,
+      %{view_usage()},
+      'error' => '<FONT COLOR="#FF0000">'. $results->{'error'}. '</FONT>',
+    };
+  } else {
+    return $results;
+  }
+
+}
+
 sub make_payment {
   payment_info( 'session_id' => $session_id );
 }
@@ -106,6 +237,10 @@ sub make_payment {
 sub payment_results {
 
   use Business::CreditCard;
+
+  #we should only do basic checking here for DoS attacks and things
+  #that couldn't be constructed by the web form...  let process_payment() do
+  #the rest, it gives better error messages
 
   $cgi->param('amount') =~ /^\s*(\d+(\.\d{2})?)\s*$/
     or die "illegal amount"; #!!!
@@ -120,9 +255,15 @@ sub payment_results {
   validate($payinfo)
     #or $error ||= $init_data->{msgcat}{invalid_card}; #. $self->payinfo;
     or die "invalid card"; #!!!
-  cardtype($payinfo) eq $cgi->param('card_type')
-    #or $error ||= $init_data->{msgcat}{not_a}. $cgi->param('CARD_type');
-    or die "not a ". $cgi->param('card_type');
+
+  if ( $cgi->param('card_type') ) {
+    cardtype($payinfo) eq $cgi->param('card_type')
+      #or $error ||= $init_data->{msgcat}{not_a}. $cgi->param('CARD_type');
+      or die "not a ". $cgi->param('card_type');
+  }
+
+  $cgi->param('paycvv') =~ /^\s*(.{0,4})\s*$/ or die "illegal CVV2";
+  my $paycvv = $1;
 
   $cgi->param('month') =~ /^(\d{2})$/ or die "illegal month";
   my $month = $1;
@@ -160,6 +301,7 @@ sub payment_results {
     'session_id' => $session_id,
     'amount'     => $amount,
     'payinfo'    => $payinfo,
+    'paycvv'     => $paycvv,
     'month'      => $month,
     'year'       => $year,
     'payname'    => $payname,
@@ -255,6 +397,58 @@ sub delete_svc {
     'session_id' => $session_id,
     'svcnum'     => $cgi->param('svcnum'),
   );
+}
+
+sub view_usage {
+  list_svcs(
+    'session_id'  => $session_id,
+    'svcdb'       => 'svc_acct',
+    'ncancelled'  => 1,
+  );
+}
+
+sub view_usage_details {
+  list_svc_usage(
+    'session_id'  => $session_id,
+    'svcnum'      => $cgi->param('svcnum'),
+    'beginning'   => $cgi->param('beginning') || '',
+    'ending'      => $cgi->param('ending') || '',
+  );
+}
+
+sub change_password {
+  list_svcs(
+    'session_id' => $session_id,
+    'svcdb'      => 'svc_acct',
+  );
+};
+
+sub process_change_password {
+
+  my $result = myaccount_passwd(
+    'session_id'    => $session_id,
+    map { $_ => $cgi->param($_) } qw( svcnum new_password new_password2 )
+  );
+
+  if ( exists $result->{'error'} && $result->{'error'} ) { 
+
+    $action = 'change_password';
+    return {
+      $cgi->Vars,
+      %{ list_svcs( 'session_id' => $session_id,
+                    'svcdb'      => 'svc_acct',
+                  )
+       },
+      #'svcnum' => $cgi->param('svcnum'),
+      'error'  => $result->{'error'}
+    };
+
+ } else {
+
+   return $result;
+
+ }
+
 }
 
 #--

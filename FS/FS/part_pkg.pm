@@ -1,7 +1,7 @@
 package FS::part_pkg;
 
 use strict;
-use vars qw( @ISA %freq %plans $DEBUG );
+use vars qw( @ISA %plans $DEBUG );
 use Carp qw(carp cluck confess);
 use Tie::IxHash;
 use FS::Conf;
@@ -12,8 +12,9 @@ use FS::cust_pkg;
 use FS::agent_type;
 use FS::type_pkgs;
 use FS::part_pkg_option;
+use FS::pkg_class;
 
-@ISA = qw( FS::Record ); # FS::option_Common ); # this can use option_Common
+@ISA = qw( FS::m2m_Common FS::Record ); # FS::option_Common ); # this can use option_Common
                                                 # when all the plandata bs is
                                                 # gone
 
@@ -58,6 +59,8 @@ inherits from FS::Record.  The following fields are currently supported:
 
 =item comment - Text name of this package definition (non-customer-viewable)
 
+=item classnum - Optional package class (see L<FS::pkg_class>)
+
 =item promo_code - Promotional code
 
 =item setup - Setup fee expression (deprecated)
@@ -77,6 +80,10 @@ inherits from FS::Record.  The following fields are currently supported:
 =item plandata - Price plan data (deprecated - see L<FS::part_pkg_option> instead)
 
 =item disabled - Disabled flag, empty or `Y'
+
+=item pay_weight - Weight (relative to credit_weight and other package definitions) that controls payment application to specific line items.
+
+=item credit_weight - Weight (relative to other package definitions) that controls credit application to specific line items.
 
 =back
 
@@ -304,6 +311,12 @@ FS::pkg_svc record will be updated.
 sub replace {
   my( $new, $old ) = ( shift, shift );
   my %options = @_;
+
+  # We absolutely have to have an old vs. new record to make this work.
+  if (!defined($old)) {
+    $old = qsearchs( 'part_pkg', { 'pkgpart' => $new->pkgpart } );
+  }
+
   warn "FS::part_pkg::replace called on $new to replace $old ".
        "with options %options"
     if $DEBUG;
@@ -434,9 +447,18 @@ sub check {
     || $self->ut_enum('recurtax', [ '', 'Y' ] )
     || $self->ut_textn('taxclass')
     || $self->ut_enum('disabled', [ '', 'Y' ] )
+    || $self->ut_floatn('pay_weight')
+    || $self->ut_floatn('credit_weight')
     || $self->SUPER::check
   ;
   return $error if $error;
+
+  if ( $self->classnum !~ /^$/ ) {
+    my $error = $self->ut_foreign_key('classnum', 'pkg_class', 'classnum');
+    return $error if $error;
+  } else {
+    $self->classnum('');
+  }
 
   return 'Unknown plan '. $self->plan
     unless exists($plans{$self->plan});
@@ -446,6 +468,37 @@ sub check {
     if ! $self->taxclass && $conf->exists('require_taxclasses');
 
   '';
+}
+
+=item pkg_class
+
+Returns the package class, as an FS::pkg_class object, or the empty string
+if there is no package class.
+
+=cut
+
+sub pkg_class {
+  my $self = shift;
+  if ( $self->classnum ) {
+    qsearchs('pkg_class', { 'classnum' => $self->classnum } );
+  } else {
+    return '';
+  }
+}
+
+=item classname 
+
+Returns the package class name, or the empty string if there is no package
+class.
+
+=cut
+
+sub classname {
+  my $self = shift;
+  my $pkg_class = $self->pkg_class;
+  $pkg_class
+    ? $pkg_class->classname
+    : '';
 }
 
 =item pkg_svc
@@ -530,6 +583,34 @@ sub is_free {
   }
 }
 
+
+sub freqs_href {
+  #method, class method or sub? #my $self = shift;
+
+  tie my %freq, 'Tie::IxHash', 
+    '0'   => '(no recurring fee)',
+    '1h'  => 'hourly',
+    '1d'  => 'daily',
+    '2d'  => 'every two days',
+    '1w'  => 'weekly',
+    '2w'  => 'biweekly (every 2 weeks)',
+    '1'   => 'monthly',
+    '45d' => 'every 45 days',
+    '2'   => 'bimonthly (every 2 months)',
+    '3'   => 'quarterly (every 3 months)',
+    '6'   => 'semiannually (every 6 months)',
+    '12'  => 'annually',
+    '24'  => 'biannually (every 2 years)',
+    '36'  => 'triannually (every 3 years)',
+    '48'  => '(every 4 years)',
+    '60'  => '(every 5 years)',
+    '120' => '(every 10 years)',
+  ;
+
+  \%freq;
+
+}
+
 =item freq_pretty
 
 Returns an english representation of the I<freq> field, such as "monthly",
@@ -537,29 +618,15 @@ Returns an english representation of the I<freq> field, such as "monthly",
 
 =cut
 
-tie %freq, 'Tie::IxHash', 
-  '0'  => '(no recurring fee)',
-  '1h' => 'hourly',
-  '1d' => 'daily',
-  '1w' => 'weekly',
-  '2w' => 'biweekly (every 2 weeks)',
-  '1'  => 'monthly',
-  '2'  => 'bimonthly (every 2 months)',
-  '3'  => 'quarterly (every 3 months)',
-  '6'  => 'semiannually (every 6 months)',
-  '12' => 'annually',
-  '24' => 'biannually (every 2 years)',
-  '36' => 'triannually (every 3 years)',
-  '48' => '(every 4 years)',
-  '60' => '(every 5 years)',
-  '120' => '(every 10 years)',
-;
-
 sub freq_pretty {
   my $self = shift;
   my $freq = $self->freq;
-  if ( exists($freq{$freq}) ) {
-    $freq{$freq};
+
+  #my $freqs_href = $self->freqs_href;
+  my $freqs_href = freqs_href();
+
+  if ( exists($freqs_href->{$freq}) ) {
+    $freqs_href->{$freq};
   } else {
     my $interval = 'month';
     if ( $freq =~ /^(\d+)([hdw])$/ ) {
@@ -634,7 +701,8 @@ sub option {
   my %plandata = map { /^(\w+)=(.*)$/; ( $1 => $2 ); }
                      split("\n", $self->get('plandata') );
   return $plandata{$opt} if exists $plandata{$opt};
-  cluck "Package definition option $opt not found in options or plandata!\n"
+  cluck "WARNING: (pkgpart ". $self->pkgpart. ") Package def option $opt ".
+        "not found in options or plandata!\n"
     unless $ornull;
   '';
 }
@@ -752,15 +820,16 @@ sub plan_info {
 
 =head1 NEW PLAN CLASSES
 
-A module should be added in FS/FS/part_pkg/ (an example may be found in
-eg/plan_template.pm)
+A module should be added in FS/FS/part_pkg/  Eventually, an example may be
+found in eg/plan_template.pm.  Until then, it is suggested that you use the
+other modules in FS/FS/part_pkg/ as a guide.
 
 =head1 BUGS
 
 The delete method is unimplemented.
 
 setup and recur semantics are not yet defined (and are implemented in
-FS::cust_bill.  hmm.).
+FS::cust_bill.  hmm.).  now they're deprecated and need to go.
 
 plandata should go
 

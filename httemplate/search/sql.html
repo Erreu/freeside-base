@@ -1,7 +1,13 @@
-<%= include( 'elements/search.html',
+<% include( 'elements/search.html',
                'title' => 'Query Results',
                'name'  => 'rows',
                'query' => 'SELECT '. ( $cgi->param('sql')
                                        || eidiot('Empty query') ),
     )
 %>
+<%init>
+
+die "access denied"
+  unless $FS::CurrentUser::CurrentUser->access_right('Raw SQL');
+
+</%init>

@@ -10,9 +10,10 @@ use subs qw(
   getsecrets cgisetotaker
 );
 use Exporter;
-use Carp qw(carp croak cluck);
+use Carp qw(carp croak cluck confess);
 use DBI;
 use FS::Conf;
+use FS::CurrentUser;
 
 @ISA = qw(Exporter);
 @EXPORT_OK = qw(checkeuid checkruid cgisuidsetup adminsuidsetup forksuidsetup
@@ -20,7 +21,7 @@ use FS::Conf;
 
 $freeside_uid = scalar(getpwnam('freeside'));
 
-$conf_dir = "/usr/local/etc/freeside/";
+$conf_dir = "%%%FREESIDE_CONF%%%/";
 
 $AutoCommit = 1; #ours, not DBI
 
@@ -71,10 +72,16 @@ sub adminsuidsetup {
 
 sub forksuidsetup {
   $user = shift;
-  croak "fatal: adminsuidsetup called without arguements" unless $user;
+  my $olduser = $user;
 
-  $user =~ /^([\w\-\.]+)$/ or croak "fatal: illegal user $user";
-  $user = $1;
+  if ( $FS::CurrentUser::upgrade_hack ) {
+    $user = 'fs_bootstrap';
+  } else {
+    croak "fatal: adminsuidsetup called without arguements" unless $user;
+
+    $user =~ /^([\w\-\.]+)$/ or croak "fatal: illegal user $user";
+    $user = $1;
+  }
 
   $ENV{'PATH'} ='/usr/local/bin:/usr/bin:/usr/ucb:/bin';
   $ENV{'SHELL'} = '/bin/sh';
@@ -85,7 +92,17 @@ sub forksuidsetup {
 
   croak "Not running uid freeside!" unless checkeuid();
 
-  $dbh = &myconnect;
+  if ( $FS::CurrentUser::upgrade_hack && $olduser ) {
+    $dbh = &myconnect($olduser);
+  } else {
+    $dbh = &myconnect();
+  }
+
+  use FS::Schema qw(reload_dbdef);
+  reload_dbdef("$conf_dir/dbdef.$datasrc")
+    unless $FS::Schema::setup_hack;
+
+  FS::CurrentUser->load_user($user);
 
   foreach ( keys %callback ) {
     &{$callback{$_}};
@@ -98,7 +115,11 @@ sub forksuidsetup {
 }
 
 sub myconnect {
-  DBI->connect( getsecrets, {'AutoCommit' => 0, 'ChopBlanks' => 1, } )
+  DBI->connect( getsecrets(@_), { 'AutoCommit'         => 0,
+                                  'ChopBlanks'         => 1,
+                                  'ShowErrorStatement' => 1,
+                                }
+              )
     or die "DBI->connect error: $DBI::errstr\n";
 }
 
@@ -254,15 +275,22 @@ the `/usr/local/etc/freeside/mapsecrets' file.
 sub getsecrets {
   my($setuser) = shift;
   $user = $setuser if $setuser;
-  die "No user!" unless $user;
   my($conf) = new FS::Conf $conf_dir;
-  my($line) = grep /^\s*$user\s/, $conf->config('mapsecrets');
-  die "User $user not found in mapsecrets!" unless $line;
-  $line =~ /^\s*$user\s+(.*)$/;
-  $secrets = $1;
-  die "Illegal mapsecrets line for user?!" unless $secrets;
+
+  if ( $conf->exists('mapsecrets') ) {
+    die "No user!" unless $user;
+    my($line) = grep /^\s*($user|\*)\s/, $conf->config('mapsecrets');
+    confess "User $user not found in mapsecrets!" unless $line;
+    $line =~ /^\s*($user|\*)\s+(.*)$/;
+    $secrets = $2;
+    die "Illegal mapsecrets line for user?!" unless $secrets;
+  } else {
+    # no mapsecrets file at all, so do the default thing
+    $secrets = 'secrets';
+  }
+
   ($datasrc, $db_user, $db_pass) = $conf->config($secrets)
-    or die "Can't get secrets: $!";
+    or die "Can't get secrets: $secrets: $!\n";
   $FS::Conf::default_dir = $conf_dir. "/conf.$datasrc";
   undef $driver_name;
   ($datasrc, $db_user, $db_pass);

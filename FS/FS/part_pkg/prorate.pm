@@ -9,7 +9,7 @@ use FS::part_pkg::flat;
 @ISA = qw(FS::part_pkg::flat);
 
 %info = (
-  'name' => 'First partial month pro-rated, then flat-rate (1st of month billing)',
+  'name' => 'First partial month pro-rated, then flat-rate (selectable billing day)',
   'fields' =>  {
     'setup_fee' => { 'name' => 'Setup fee for this package',
                      'default' => 0,
@@ -21,22 +21,71 @@ use FS::part_pkg::flat;
                                    ' of service at cancellation',
                          'type' => 'checkbox',
                        },
-  },
-  'fieldorder' => [ 'setup_fee', 'recur_fee', 'unused_credit' ],
-  #'setup' => 'what.setup_fee.value',
-  #'recur' => '\'my $mnow = $sdate; my ($sec,$min,$hour,$mday,$mon,$year) = (localtime($sdate) )[0,1,2,3,4,5]; my $mstart = timelocal(0,0,0,1,$mon,$year); my $mend = timelocal(0,0,0,1, $mon == 11 ? 0 : $mon+1, $year+($mon==11)); $sdate = $mstart; ( $part_pkg->freq - 1 ) * \' + what.recur_fee.value + \' / $part_pkg->freq + \' + what.recur_fee.value + \' / $part_pkg->freq * ($mend-$mnow) / ($mend-$mstart) ; \'',
+    'cutoff_day' => { 'name' => 'billing day',
+			 'default' => 1,
+					    },
+    'seconds'       => { 'name' => 'Time limit for this package',
+                         'default' => '',
+                       },
+    'upbytes'       => { 'name' => 'Upload limit for this package',
+                         'default' => '',
+                       },
+    'downbytes'     => { 'name' => 'Download limit for this package',
+                         'default' => '',
+                       },
+    'totalbytes'    => { 'name' => 'Transfer limit for this package',
+                         'default' => '',
+                       },
+    'recharge_amount'       => { 'name' => 'Cost of recharge for this package',
+                         'default' => '',
+                       },
+    'recharge_seconds'      => { 'name' => 'Recharge time for this package',
+                         'default' => '',
+                       },
+    'recharge_upbytes'      => { 'name' => 'Recharge upload for this package',
+                         'default' => '',
+                       },
+    'recharge_downbytes'    => { 'name' => 'Recharge download for this package',                         'default' => '',
+                       },
+    'recharge_totalbytes'   => { 'name' => 'Recharge transfer for this package',                         'default' => '',
+                       },
+    #it would be better if this had to be turned on, its confusing
+    'externalid' => { 'name'   => 'Optional External ID',
+                      'default' => '',
+                    },
+ },
+  'fieldorder' => [ 'setup_fee', 'recur_fee', 'unused_credit', 'cutoff_day',
+                    'seconds', 'upbyte', 'downbytes', 'totalbytes',
+                    'recharge_amount', 'recharge_seconds', 'recharge_upbytes',
+                    'recharge_downbytes', 'recharge_totalbytes',
+                    'externalid', ],
   'freq' => 'm',
   'weight' => 20,
 );
 
 sub calc_recur {
   my($self, $cust_pkg, $sdate ) = @_;
+  my $cutoff_day = $self->option('cutoff_day', 1) || 1;
   my $mnow = $$sdate;
   my ($sec,$min,$hour,$mday,$mon,$year) = (localtime($mnow) )[0,1,2,3,4,5];
-  my $mstart = timelocal(0,0,0,1,$mon,$year);
-  my $mend = timelocal(0,0,0,1, $mon == 11 ? 0 : $mon+1, $year+($mon==11));
-  $$sdate = $mstart;
+  my $mend;
+  my $mstart;
+  
+  $self->reset_usage($cust_pkg);
 
+  if ( $mday >= $cutoff_day ) {
+    $mend =
+      timelocal(0,0,0,$cutoff_day, $mon == 11 ? 0 : $mon+1, $year+($mon==11));
+    $mstart =
+      timelocal(0,0,0,$cutoff_day,$mon,$year);  
+
+  } else {
+    $mend = timelocal(0,0,0,$cutoff_day, $mon, $year);
+    if ($mon==0) {$mon=11;$year--;} else {$mon--;}
+    $mstart=  timelocal(0,0,0,$cutoff_day,$mon,$year);  
+  }
+
+  $$sdate = $mstart;
   my $permonth = $self->option('recur_fee') / $self->freq;
 
   $permonth * ( ( $self->freq - 1 ) + ($mend-$mnow) / ($mend-$mstart) );

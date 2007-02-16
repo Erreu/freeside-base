@@ -3,13 +3,16 @@
 username=$1
 domain=$2
 password=$3
+realdomain=$4
+FREESIDE_CONF=%%%FREESIDE_CONF%%%
 
-freeside-adduser -h /usr/local/etc/freeside/htpasswd \
-                 -s conf.DBI:Pg:dbname=$domain/secrets \
-                 -b \
-                 $username $password 2>/dev/null
+freeside-adduser -s conf.DBI:Pg:dbname=$domain/secrets \
+                 -n \
+                 $username #2>/dev/null
 
-[ -e /usr/local/etc/freeside/dbdef.DBI:Pg:dbname=$domain ] \
- || ( freeside-setup -s $username 2>/dev/null; \
-      /home/ivan/freeside/bin/populate-msgcat $username 2>/dev/null )
+[ -e $FREESIDE_CONF/dbdef.DBI:Pg:dbname=$domain ] \
+ || ( freeside-setup -d $realdomain -u $username )
 
+freeside-adduser -g 1 $username
+
+htpasswd -b $FREESIDE_CONF/htpasswd $username $password

@@ -1,46 +1,95 @@
-<%
+<% include( 'elements/search.html',
+                 'title'             => "Mail forward Search Results",
+                 'name'              => 'mail forwards',
+                 'query'             => $sql_query,
+                 'count_query'       => $count_query,
+                 'redirect'          => $link,
+                 'header'            => [ '#',
+                                          'Service',
+                                          'Mail to',
+                                          'Forwards to',
+                                          FS::UI::Web::cust_header(),
+                                        ],
+                 'fields'            => [ 'svcnum',
+                                          'svc',
+                                          $format_src,
+                                          $format_dst,
+                                          \&FS::UI::Web::cust_fields,
+                                        ],
+                 'links'             => [ $link,
+                                          $link,
+                                          $link_src,
+                                          $link_dst,
+                                          ( map { $_ ne 'Cust. Status' ? $link_cust : '' }
+                                                FS::UI::Web::cust_header()
+                                          ),
+                                        ],
+                 'align' => 'rlll'. FS::UI::Web::cust_aligns(),
+                 'color' => [ 
+                              '',
+                              '',
+                              '',
+                              '',
+                              FS::UI::Web::cust_colors(),
+                            ],
+                 'style' => [ 
+                              '',
+                              '',
+                              '',
+                              '',
+                              FS::UI::Web::cust_styles(),
+                            ],
+             )
+%>
+<%init>
+
+die "access denied"
+  unless $FS::CurrentUser::CurrentUser->access_right('List services');
+
 
 my $conf = new FS::Conf;
 
-my($query)=$cgi->keywords;
-$query ||= ''; #to avoid use of unitialized value errors
-
-
-my $orderby;
-
-my $cjoin = '';
+my $orderby = 'ORDER BY svcnum';
 my @extra_sql = ();
-if ( $query =~ /^UN_(.*)$/ ) {
-  $query = $1;
-  $cjoin = 'LEFT JOIN cust_svc USING ( svcnum )';
-  push @extra_sql, 'pkgnum IS NULL';
+if ( $cgi->param('magic') =~ /^(all|unlinked)$/ ) {
+
+  push @extra_sql, 'pkgnum IS NULL'
+    if $cgi->param('magic') eq 'unlinked';
+
+  if ( $cgi->param('sortby') =~ /^(\w+)$/ ) {
+    my $sortby = $1;
+    $orderby = "ORDER BY $sortby";
+  }
+
+} elsif ( $cgi->param('svcpart') =~ /^(\d+)$/ ) {
+  push @extra_sql, "svcpart = $1";
 }
 
-if ( $query eq 'svcnum' ) {
-  $orderby = 'ORDER BY svcnum';
-} else {
-  eidiot('unimplemented');
-}
+my $addl_from = ' LEFT JOIN cust_svc  USING ( svcnum  ) '.
+                ' LEFT JOIN part_svc  USING ( svcpart ) '.
+                ' LEFT JOIN cust_pkg  USING ( pkgnum  ) '.
+                ' LEFT JOIN cust_main USING ( custnum ) ';
+
+#here is the agent virtualization
+push @extra_sql, $FS::CurrentUser::CurrentUser->agentnums_sql;
 
 my $extra_sql = 
   scalar(@extra_sql)
     ? ' WHERE '. join(' AND ', @extra_sql )
     : '';
 
-my $count_query = "SELECT COUNT(*) FROM svc_forward $cjoin $extra_sql";
+my $count_query = "SELECT COUNT(*) FROM svc_forward $addl_from $extra_sql";
 my $sql_query = {
   'table'     => 'svc_forward',
   'hashref'   => {},
   'select'    => join(', ',
                    'svc_forward.*',
-                    'cust_main.custnum',
-                    FS::UI::Web::cust_sql_fields(),
+                   'part_svc.svc',
+                   'cust_main.custnum',
+                   FS::UI::Web::cust_sql_fields(),
                  ),
   'extra_sql' => "$extra_sql $orderby",
-  'addl_from' => ' LEFT JOIN cust_svc  USING ( svcnum  ) '.
-                 ' LEFT JOIN part_svc  USING ( svcpart ) '.
-                 ' LEFT JOIN cust_pkg  USING ( pkgnum  ) '.
-                 ' LEFT JOIN cust_main USING ( custnum ) ',
+  'addl_from' => $addl_from,
 };
 
 #        <TH>Service #<BR><FONT SIZE=-1>(click to view forward)</FONT></TH>
@@ -93,28 +142,4 @@ my $link_cust = sub {
   $svc_x->custnum ? [ "${p}view/cust_main.cgi?", 'custnum' ] : '';
 };
 
-%><%= include( 'elements/search.html',
-                 'title'             => "Mail forward Search Results",
-                 'name'              => 'mail forwards',
-                 'query'             => $sql_query,
-                 'count_query'       => $count_query,
-                 'redirect'          => $link,
-                 'header'            => [ '#',
-                                          'Mail to',
-                                          'Forwards to',
-                                          FS::UI::Web::cust_header(),
-                                        ],
-                 'fields'            => [ 'svcnum',
-                                          $format_src,
-                                          $format_dst,
-                                          \&FS::UI::Web::cust_fields,
-                                        ],
-                 'links'             => [ $link,
-                                          $link_src,
-                                          $link_dst,
-                                          ( map { $link_cust }
-                                                FS::UI::Web::cust_header()
-                                          ),
-                                        ],
-             )
-%>
+</%init>

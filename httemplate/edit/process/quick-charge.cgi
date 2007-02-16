@@ -1,41 +1,47 @@
-<%
-
-#untaint custnum
-$cgi->param('custnum') =~ /^(\d+)$/
-  or die 'illegal custnum '. $cgi->param('custnum');
-my $custnum = $1;
-
-$cgi->param('amount') =~ /^\s*(\d+(\.\d{1,2})?)\s*$/
-  or die 'illegal amount '. $cgi->param('amount');
-my $amount = $1;
-
-my( $error, $cust_main);
-if ( $cgi->param('taxclass') eq '(select)' ) {
-
-
- $error = 'Must select a tax class';
-} else {
-
-  my $cust_main = qsearchs('cust_main', { 'custnum' => $custnum } )
-    or die "unknown custnum $custnum";
-
-  $error = $cust_main->charge(
-    $amount,
-    $cgi->param('pkg'),
-    '$'. sprintf("%.2f",$amount),
-    $cgi->param('taxclass')
-  );
-
-}
-
-if ($error) {
-%>
-<!-- mason kludge -->
-<%
-  eidiot($error);
-} else {
-  print $cgi->redirect(popurl(3). "view/cust_main.cgi?$custnum" );
-}
-
-%>
+%
+%  my $error = '';
+%  my $param = $cgi->Vars;
+%
+%  my @description = ();
+%  for ( my $row = 0; exists($param->{"description$row"}); $row++ ) {
+%    push @description, $param->{"description$row"}
+%      if ($param->{"description$row"} =~ /\S/);
+%  }
+%
+%  $param->{"custnum"} =~ /^(\d+)$/
+%    or $error .= "Illegal customer number " . $param->{"custnum"} . "  ";
+%  my $custnum = $1;
+%
+%  $param->{"amount"} =~ /^\s*(\d+(\.\d{1,2})?)\s*$/
+%    or $error .= "Illegal amount " . $param->{"amount"} . "  ";
+%  my $amount = $1;
+%
+%  if ( $param->{'taxclass'} eq '(select)' ) {
+%    $error .= "Must select a tax class.  ";
+%  }
+%
+%  unless ( $error ) {
+%    my $cust_main = qsearchs('cust_main', { 'custnum' => $custnum } )
+%      or $error .= "Unknown customer number $custnum.  ";
+%
+%    $error ||= $cust_main->charge({ 'amount'   => $amount,
+%                                   'pkg'      => $cgi->param('pkg'),
+%                                   'taxclass' => $cgi->param('taxclass'),
+%                                   'additional' => \@description,
+%                                 }
+%                               );
+%  }
+%
+%  if ( $error ) {
+%
+%    $cgi->param('error', "$error" );
+%    
+<% $cgi->redirect($p.'quick-charge.html?'. $cgi->query_string) %>
+%
+% }
+<% header("One-time charge added") %>
+  <SCRIPT TYPE="text/javascript">
+    window.top.location.reload();
+  </SCRIPT>
+  </BODY></HTML>
 

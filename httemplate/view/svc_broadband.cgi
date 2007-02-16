@@ -1,11 +1,164 @@
-<!-- mason kludge -->
-<%
+<%include("/elements/header.html",'Broadband Service View', menubar(
+  ( ( $custnum )
+    ? ( "View this customer (#$custnum)" => "${p}view/cust_main.cgi?$custnum",
+      )                                                                       
+    : ( "Cancel this (unaudited) website" =>
+          "${p}misc/cancel-unaudited.cgi?$svcnum" )
+  ),
+  "Main menu" => $p,
+))
+%>
+
+<A HREF="<%${p}%>edit/svc_broadband.cgi?<%$svcnum%>">Edit this information</A>
+<BR>
+<%ntable("#cccccc")%>
+  <TR>
+    <TD>
+      <%ntable("#cccccc",2)%>
+        <TR>
+          <TD ALIGN="right">Service number</TD>
+          <TD BGCOLOR="#ffffff"><%$svcnum%></TD>
+        </TR>
+        <TR>
+          <TD ALIGN="right">Description</TD>
+          <TD BGCOLOR="#ffffff"><%$description%></TD>
+        </TR>
+        <TR>
+          <TD ALIGN="right">Router</TD>
+          <TD BGCOLOR="#ffffff"><%$routernum%>: <%$routername%></TD>
+        </TR>
+        <TR>
+          <TD ALIGN="right">Download Speed</TD>
+          <TD BGCOLOR="#ffffff"><%$speed_down%></TD>
+        </TR>
+        <TR>
+          <TD ALIGN="right">Upload Speed</TD>
+          <TD BGCOLOR="#ffffff"><%$speed_up%></TD>
+        </TR>
+        <TR>
+          <TD ALIGN="right">IP Address</TD>
+          <TD BGCOLOR="#ffffff"><%$ip_addr%></TD>
+        </TR>
+        <TR>
+          <TD ALIGN="right">IP Netmask</TD>
+          <TD BGCOLOR="#ffffff"><%$ip_netmask%></TD>
+        </TR>
+        <TR>
+          <TD ALIGN="right">IP Gateway</TD>
+          <TD BGCOLOR="#ffffff"><%$ip_gateway%></TD>
+        </TR>
+        <TR>
+          <TD ALIGN="right">MAC Address</TD>
+          <TD BGCOLOR="#ffffff"><%$mac_addr%></TD>
+        </TR>
+        <TR>
+          <TD ALIGN="right">Latitude</TD>
+          <TD BGCOLOR="#ffffff"><%$latitude%></TD>
+        </TR>
+        <TR>
+          <TD ALIGN="right">Longitude</TD>
+          <TD BGCOLOR="#ffffff"><%$longitude%></TD>
+        </TR>
+        <TR>
+          <TD ALIGN="right">Altitude</TD>
+          <TD BGCOLOR="#ffffff"><%$altitude%></TD>
+        </TR>
+        <TR>
+          <TD ALIGN="right">VLAN Profile</TD>
+          <TD BGCOLOR="#ffffff"><%$vlan_profile%></TD>
+        </TR>
+        <TR>
+          <TD ALIGN="right">Authentication Key</TD>
+          <TD BGCOLOR="#ffffff"><%$auth_key%></TD>
+        </TR>
+        <TR COLSPAN="2"><TD></TD></TR>
+%
+%foreach (sort { $a cmp $b } $svc_broadband->virtual_fields) {
+%  print $svc_broadband->pvf($_)->widget('HTML', 'view',
+%                                        $svc_broadband->getfield($_)), "\n";
+%}
+%
+%
+
+      </TABLE>
+    </TD>
+  </TR>
+</TABLE>
+
+<BR>
+<%ntable("#cccccc", 2)%>
+%
+%  my $sb_router = qsearchs('router', { svcnum => $svcnum });
+%  if ($sb_router) {
+%  
+
+  <B>Router associated: <%$sb_router->routername%> </B>
+  <A HREF="<%popurl(2)%>edit/router.cgi?<%$sb_router->routernum%>">
+    (details)
+  </A>
+  <BR>
+% my @sb_addr_block;
+%     if (@sb_addr_block = $sb_router->addr_block) {
+%     
+
+  <B>Address space </B>
+  <A HREF="<%popurl(2)%>browse/addr_block.cgi">
+    (edit)
+  </A>
+  <BR>
+%   print ntable("#cccccc", 1);
+%       foreach (@sb_addr_block) { 
+
+    <TR>
+      <TD><%$_->ip_gateway%>/<%$_->ip_netmask%></TD>
+    </TR>
+% } 
+
+  </TABLE>
+% } else { 
+
+  <B>No address space allocated.</B>
+% } 
+
+  <BR>
+%
+%  } else {
+%
+
+
+<FORM METHOD="GET" ACTION="<%popurl(2)%>edit/router.cgi">
+  <INPUT TYPE="hidden" NAME="svcnum" VALUE="<%$svcnum%>">
+Add router named 
+  <INPUT TYPE="text" NAME="routername" SIZE="32" VALUE="Broadband router (<%$svcnum%>)">
+  <INPUT TYPE="submit" VALUE="Add router">
+</FORM>
+%
+%}
+%
+
+
+<BR>
+<%joblisting({'svcnum'=>$svcnum}, 1)%>
+
+<% include('/elements/footer.html') %>
+<%init>
+
+die "access denied"
+  unless $FS::CurrentUser::CurrentUser->access_right('View customer services')
+      || $FS::CurrentUser::CurrentUser->access_right('View customer'); #XXX remove me
 
 my($query) = $cgi->keywords;
 $query =~ /^(\d+)$/;
 my $svcnum = $1;
-my $svc_broadband = qsearchs( 'svc_broadband', { 'svcnum' => $svcnum } )
-  or die "svc_broadband: Unknown svcnum $svcnum";
+my $svc_broadband = qsearchs({
+  'select'    => 'svc_broadband.*',
+  'table'     => 'svc_broadband',
+  'addl_from' => ' LEFT JOIN cust_svc  USING ( svcnum  ) '.
+                 ' LEFT JOIN cust_pkg  USING ( pkgnum  ) '.
+                 ' LEFT JOIN cust_main USING ( custnum ) ',
+  'hashref'   => { 'svcnum' => $svcnum },
+  'extra_sql' => ' AND '. $FS::CurrentUser::CurrentUser->agentnums_sql,
+}) or die "svc_broadband: Unknown svcnum $svcnum";
 
 #false laziness w/all svc_*.cgi
 my $cust_svc = qsearchs( 'cust_svc', { 'svcnum' => $svcnum } );
@@ -33,6 +186,13 @@ my (
      $ip_addr,
      $ip_gateway,
      $ip_netmask,
+     $mac_addr,
+     $latitude,
+     $longitude,
+     $altitude,
+     $vlan_profile,
+     $auth_key,
+     $description,
    ) = (
      $router->getfield('routername'),
      $router->getfield('routernum'),
@@ -41,115 +201,13 @@ my (
      $svc_broadband->getfield('ip_addr'),
      $addr_block->ip_gateway,
      $addr_block->NetAddr->mask,
+     $svc_broadband->mac_addr,
+     $svc_broadband->latitude,
+     $svc_broadband->longitude,
+     $svc_broadband->altitude,
+     $svc_broadband->vlan_profile,
+     $svc_broadband->auth_key,
+     $svc_broadband->description,
    );
-%>
 
-<%=header('Broadband Service View', menubar(
-  ( ( $custnum )
-    ? ( "View this customer (#$custnum)" => "${p}view/cust_main.cgi?$custnum",
-      )                                                                       
-    : ( "Cancel this (unaudited) website" =>
-          "${p}misc/cancel-unaudited.cgi?$svcnum" )
-  ),
-  "Main menu" => $p,
-))
-%>
-
-<A HREF="<%=${p}%>edit/svc_broadband.cgi?<%=$svcnum%>">Edit this information</A>
-<BR>
-<%=ntable("#cccccc")%>
-  <TR>
-    <TD>
-      <%=ntable("#cccccc",2)%>
-        <TR>
-          <TD ALIGN="right">Service number</TD>
-          <TD BGCOLOR="#ffffff"><%=$svcnum%></TD>
-        </TR>
-        <TR>
-          <TD ALIGN="right">Router</TD>
-          <TD BGCOLOR="#ffffff"><%=$routernum%>: <%=$routername%></TD>
-        </TR>
-        <TR>
-          <TD ALIGN="right">Download Speed</TD>
-          <TD BGCOLOR="#ffffff"><%=$speed_down%></TD>
-        </TR>
-        <TR>
-          <TD ALIGN="right">Upload Speed</TD>
-          <TD BGCOLOR="#ffffff"><%=$speed_up%></TD>
-        </TR>
-        <TR>
-          <TD ALIGN="right">IP Address</TD>
-          <TD BGCOLOR="#ffffff"><%=$ip_addr%></TD>
-        </TR>
-        <TR>
-          <TD ALIGN="right">IP Netmask</TD>
-          <TD BGCOLOR="#ffffff"><%=$ip_netmask%></TD>
-        </TR>
-        <TR>
-          <TD ALIGN="right">IP Gateway</TD>
-          <TD BGCOLOR="#ffffff"><%=$ip_gateway%></TD>
-        </TR>
-        <TR COLSPAN="2"><TD></TD></TR>
-
-<%
-foreach (sort { $a cmp $b } $svc_broadband->virtual_fields) {
-  print $svc_broadband->pvf($_)->widget('HTML', 'view',
-                                        $svc_broadband->getfield($_)), "\n";
-}
-
-%>
-      </TABLE>
-    </TD>
-  </TR>
-</TABLE>
-
-<BR>
-<%=ntable("#cccccc", 2)%>
-<%
-  my $sb_router = qsearchs('router', { svcnum => $svcnum });
-  if ($sb_router) {
-  %>
-  <B>Router associated: <%=$sb_router->routername%> </B>
-  <A HREF="<%=popurl(2)%>edit/router.cgi?<%=$sb_router->routernum%>">
-    (details)
-  </A>
-  <BR>
-  <% my @sb_addr_block;
-     if (@sb_addr_block = $sb_router->addr_block) {
-     %>
-  <B>Address space </B>
-  <A HREF="<%=popurl(2)%>browse/addr_block.cgi">
-    (edit)
-  </A>
-  <BR>
-  <%   print ntable("#cccccc", 1);
-       foreach (@sb_addr_block) { %>
-    <TR>
-      <TD><%=$_->ip_gateway%>/<%=$_->ip_netmask%></TD>
-    </TR>
-    <% } %>
-  </TABLE>
-  <% } else { %>
-  <B>No address space allocated.</B>
-    <% } %>
-  <BR>
-  <%
-  } else {
-%>
-
-<FORM METHOD="GET" ACTION="<%=popurl(2)%>edit/router.cgi">
-  <INPUT TYPE="hidden" NAME="svcnum" VALUE="<%=$svcnum%>">
-Add router named 
-  <INPUT TYPE="text" NAME="routername" SIZE="32" VALUE="Broadband router (<%=$svcnum%>)">
-  <INPUT TYPE="submit" VALUE="Add router">
-</FORM>
-
-<%
-}
-%>
-
-<BR>
-<%=joblisting({'svcnum'=>$svcnum}, 1)%>
-  </BODY>
-</HTML>
-
+</%init>

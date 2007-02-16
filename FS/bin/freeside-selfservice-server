@@ -1,7 +1,8 @@
 #!/usr/bin/perl -w
 
 use strict;
-use vars qw( $Debug %kids $kids $max_kids $ssh_pid $keepalives );
+use vars qw( $FREESIDE_LOG $FREESIDE_LOCK );
+use vars qw( $Debug %kids $kids $max_kids $ssh_pid %old_ssh_pid $keepalives );
 use subs qw( lock_write unlock_write myshutdown usage );
 use Fcntl qw(:flock);
 use POSIX qw(:sys_wait_h);
@@ -18,6 +19,9 @@ use FS::Conf;
 use FS::cust_bill;
 use FS::cust_pkg;
 
+$FREESIDE_LOG = "%%%FREESIDE_LOG%%%";
+$FREESIDE_LOCK = "%%%FREESIDE_LOCK%%%";
+
 $Debug = 1; # 2 will turn on more logging
             # 3 will log packet contents, including passwords
 
@@ -29,8 +33,7 @@ my $user = shift or die &usage;
 my $machine = shift or die &usage;
 my $tag = scalar(@ARGV) ? shift : '';
 
-my $lock_file = "/usr/local/etc/freeside/selfservice.$machine.writelock";
-
+my $lock_file = "$FREESIDE_LOCK/selfservice.$machine.writelock";
 
 # to keep pid files unique w/multi machines (and installs!)
 # $FS::UID::datasrc not posible
@@ -50,10 +53,9 @@ $ENV{HOME} = (getpwuid($>))[7]; #for ssh
 adminsuidsetup $user;
 
 #logfile("/usr/local/etc/freeside/selfservice.". $FS::UID::datasrc); #MACHINE
-logfile("/usr/local/etc/freeside/selfservice.$machine.log");
+logfile("$FREESIDE_LOG/selfservice.$machine.log");
 
 daemonize2();
-
 
 my $conf = new FS::Conf;
 
@@ -102,6 +104,7 @@ while (1) {
       if ( $ssh_pid ) {
         warn "sending TERM signal to ssh process $ssh_pid\n" if $Debug;
         kill 'TERM', $ssh_pid;
+        $old_ssh_pid{$ssh_pid} = 1;
         $ssh_pid = 0;
       }
       last;
@@ -133,11 +136,11 @@ while (1) {
     } else { #kid time
 
       ##get new db handle
-      #$FS::UID::dbh->{InactiveDestroy} = 1;
-      #forksuidsetup($user);
+      $FS::UID::dbh->{InactiveDestroy} = 1;
+      forksuidsetup($user);
 
       #get db handle
-      adminsuidsetup($user);
+      #adminsuidsetup($user);
 
       my $type = $packet->{_packet};
       warn "calling $type handler\n" if $Debug; 
@@ -179,6 +182,10 @@ sub reap_kids {
       $kids--;
       delete $kids{$kid};
     }
+  }
+
+  foreach my $pid ( keys %old_ssh_pid ) {
+    waitpid($pid, WNOHANG) and delete $old_ssh_pid{$pid};
   }
   #warn "done reaping\n";
 }

@@ -61,7 +61,7 @@ fields are currently supported:
 
 =item new HASHREF
 
-Creates a new pre-paid credit.  To add the example to the database, see
+Creates a new pre-paid credit.  To add the pre-paid credit to the database, see
 L<"insert">.
 
 Note that this stores the hash reference, not a distinct copy of the hash it
@@ -110,6 +110,9 @@ sub check {
   || $self->ut_alpha('identifier')
   || $self->ut_money('amount')
   || $self->ut_numbern('seconds')
+  || $self->ut_numbern('upbytes')
+  || $self->ut_numbern('downbytes')
+  || $self->ut_numbern('totalbytes')
   || $self->ut_foreign_keyn('agentnum', 'agent', 'agentnum')
   || $self->SUPER::check
   ;

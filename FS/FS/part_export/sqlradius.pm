@@ -2,7 +2,7 @@ package FS::part_export::sqlradius;
 
 use vars qw(@ISA $DEBUG %info %options $notes1 $notes2);
 use Tie::IxHash;
-use FS::Record qw( dbh qsearch );
+use FS::Record qw( dbh qsearch qsearchs );
 use FS::part_export;
 use FS::svc_acct;
 use FS::export_svc;
@@ -31,6 +31,12 @@ tie %options, 'Tie::IxHash',
     type  => 'checkbox',
     label => 'Show the Called-Station-ID on session reports',
   },
+  'overlimit_groups' => { label => 'Radius groups to assign to svc_acct which has exceeded its bandwidth or time limit', } ,
+  'groups_susp_reason' => { label =>
+                             'Radius group mapping to reason (via template user) (svcnum|username|username@domain  reasonnum|reason)',
+                            type  => 'textarea',
+                          },
+
 ;
 
 $notes1 = <<'END';
@@ -74,6 +80,10 @@ END
                 'sqlradius_withdomain).  '.
                 $notes2
 );
+
+sub _groups_susp_reason_map { map { reverse( /^\s*(\S+)\s*(.*)$/ ) } 
+                              split( "\n", shift->option('groups_susp_reason'));
+}
 
 sub rebless { shift; }
 
@@ -170,50 +180,99 @@ sub _export_replace {
     }
   }
 
-  # (sorta) false laziness with FS::svc_acct::replace
-  my @oldgroups = @{$old->usergroup}; #uuuh
-  my @newgroups = $new->radius_groups;
-  my @delgroups = ();
-  foreach my $oldgroup ( @oldgroups ) {
-    if ( grep { $oldgroup eq $_ } @newgroups ) {
-      @newgroups = grep { $oldgroup ne $_ } @newgroups;
-      next;
-    }
-    push @delgroups, $oldgroup;
+  my $error;
+  my (@oldgroups) = $old->radius_groups;
+  my (@newgroups) = $new->radius_groups;
+  $error = $self->sqlreplace_usergroups( $new->svcnum,
+                                         $self->export_username($new),
+                                         $jobnum ? $jobnum : '',
+                                         \@oldgroups,
+                                         \@newgroups,
+                                       );
+  if ( $error ) {
+    $dbh->rollback if $oldAutoCommit;
+    return $error;
   }
 
-  if ( @delgroups ) {
-    my $err_or_queue = $self->sqlradius_queue( $new->svcnum, 'usergroup_delete',
-      $self->export_username($new), @delgroups );
-    unless ( ref($err_or_queue) ) {
-      $dbh->rollback if $oldAutoCommit;
-      return $err_or_queue;
-    }
-    if ( $jobnum ) {
-      my $error = $err_or_queue->depend_insert( $jobnum );
-      if ( $error ) {
-        $dbh->rollback if $oldAutoCommit;
-        return $error;
-      }
-    }
+  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
+
+  '';
+}
+
+sub _export_suspend {
+  my( $self, $svc_acct ) = (shift, shift);
+
+  my $new = $svc_acct->clone_suspended;
+  
+  local $SIG{HUP} = 'IGNORE';
+  local $SIG{INT} = 'IGNORE';
+  local $SIG{QUIT} = 'IGNORE';
+  local $SIG{TERM} = 'IGNORE';
+  local $SIG{TSTP} = 'IGNORE';
+  local $SIG{PIPE} = 'IGNORE';
+
+  my $oldAutoCommit = $FS::UID::AutoCommit;
+  local $FS::UID::AutoCommit = 0;
+  my $dbh = dbh;
+
+  my $err_or_queue = $self->sqlradius_queue( $new->svcnum, 'insert',
+    'check', $self->export_username($new), $new->radius_check );
+  unless ( ref($err_or_queue) ) {
+    $dbh->rollback if $oldAutoCommit;
+    return $err_or_queue;
   }
 
-  if ( @newgroups ) {
-    my $err_or_queue = $self->sqlradius_queue( $new->svcnum, 'usergroup_insert',
-      $self->export_username($new), @newgroups );
-    unless ( ref($err_or_queue) ) {
-      $dbh->rollback if $oldAutoCommit;
-      return $err_or_queue;
-    }
-    if ( $jobnum ) {
-      my $error = $err_or_queue->depend_insert( $jobnum );
-      if ( $error ) {
-        $dbh->rollback if $oldAutoCommit;
-        return $error;
-      }
-    }
+  my $error;
+  my (@newgroups) = $self->suspended_usergroups($svc_acct);
+  $error =
+    $self->sqlreplace_usergroups( $new->svcnum,
+                                  $self->export_username($new),
+				  '',
+                                  $svc_acct->usergroup,
+				  \@newgroups,
+				);
+  if ( $error ) {
+    $dbh->rollback if $oldAutoCommit;
+    return $error;
+  }
+  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
+
+  '';
+}
+
+sub _export_unsuspend {
+  my( $self, $svc_acct ) = (shift, shift);
+
+  local $SIG{HUP} = 'IGNORE';
+  local $SIG{INT} = 'IGNORE';
+  local $SIG{QUIT} = 'IGNORE';
+  local $SIG{TERM} = 'IGNORE';
+  local $SIG{TSTP} = 'IGNORE';
+  local $SIG{PIPE} = 'IGNORE';
+
+  my $oldAutoCommit = $FS::UID::AutoCommit;
+  local $FS::UID::AutoCommit = 0;
+  my $dbh = dbh;
+
+  my $err_or_queue = $self->sqlradius_queue( $svc_acct->svcnum, 'insert',
+    'check', $self->export_username($svc_acct), $svc_acct->radius_check );
+  unless ( ref($err_or_queue) ) {
+    $dbh->rollback if $oldAutoCommit;
+    return $err_or_queue;
   }
 
+  my $error;
+  my (@oldgroups) = $self->suspended_usergroups($svc_acct);
+  $error = $self->sqlreplace_usergroups( $svc_acct->svcnum,
+                                         $self->export_username($svc_acct),
+                                         '',
+					 \@oldgroups,
+					 $svc_acct->usergroup,
+				       );
+  if ( $error ) {
+    $dbh->rollback if $oldAutoCommit;
+    return $error;
+  }
   $dbh->commit or die $dbh->errstr if $oldAutoCommit;
 
   '';
@@ -238,6 +297,39 @@ sub sqlradius_queue {
     $self->option('password'),
     @_,
   ) or $queue;
+}
+
+sub suspended_usergroups {
+  my ($self, $svc_acct) = (shift, shift);
+
+  return () unless $svc_acct;
+
+  #false laziness with FS::part_export::shellcommands
+  #subclass part_export?
+
+  my $r = $svc_acct->cust_svc->cust_pkg->last_reason;
+  my %reasonmap = $self->_groups_susp_reason_map;
+  my $userspec = '';
+  if ($r) {
+    $userspec = $reasonmap{$r->reasonnum}
+      if exists($reasonmap{$r->reasonnum});
+    $userspec = $reasonmap{$r->reason}
+      if (!$userspec && exists($reasonmap{$r->reason}));
+  }
+  my $suspend_user;
+  if ($userspec =~ /^d+$/ ){
+    $suspend_user = qsearchs( 'svc_acct', { 'svcnum' => $userspec } );
+  }elsif ($userspec =~ /^\S+\@\S+$/){
+    my ($username,$domain) = split(/\@/, $userspec);
+    for my $user (qsearch( 'svc_acct', { 'username' => $username } )){
+      $suspend_user = $user if $userspec eq $user->email;
+    }
+  }elsif ($userspec){
+    $suspend_user = qsearchs( 'svc_acct', { 'username' => $userspec } );
+  }
+  #esalf
+  return $suspend_user->radius_groups if $suspend_user;
+  ();
 }
 
 sub sqlradius_insert { #subroutine, not method
@@ -349,6 +441,46 @@ sub sqlradius_connect {
   #DBI->connect($datasrc, $username, $password) or die $DBI::errstr;
   DBI->connect(@_) or die $DBI::errstr;
 }
+
+sub sqlreplace_usergroups {
+  my ($self, $svcnum, $username, $jobnum, $old, $new) = @_;
+
+  # (sorta) false laziness with FS::svc_acct::replace
+  my @oldgroups = @$old;
+  my @newgroups = @$new;
+  my @delgroups = ();
+  foreach my $oldgroup ( @oldgroups ) {
+    if ( grep { $oldgroup eq $_ } @newgroups ) {
+      @newgroups = grep { $oldgroup ne $_ } @newgroups;
+      next;
+    }
+    push @delgroups, $oldgroup;
+  }
+
+  if ( @delgroups ) {
+    my $err_or_queue = $self->sqlradius_queue( $svcnum, 'usergroup_delete',
+      $username, @delgroups );
+    return $err_or_queue
+      unless ref($err_or_queue);
+    if ( $jobnum ) {
+      my $error = $err_or_queue->depend_insert( $jobnum );
+      return $error if $error;
+    }
+  }
+
+  if ( @newgroups ) {
+    my $err_or_queue = $self->sqlradius_queue( $svcnum, 'usergroup_insert',
+      $username, @newgroups );
+    return $err_or_queue
+      unless ref($err_or_queue);
+    if ( $jobnum ) {
+      my $error = $err_or_queue->depend_insert( $jobnum );
+      return $error if $error;
+    }
+  }
+  '';
+}
+
 
 #--
 
@@ -484,7 +616,8 @@ sub update_svc_acct {
   my $where = '';
 
   my $sth = $dbh->prepare("
-    SELECT RadAcctId, UserName, Realm, AcctSessionTime
+    SELECT RadAcctId, UserName, Realm, AcctSessionTime,
+           AcctInputOctets, AcctOutputOctets
       FROM radacct
       WHERE FreesideStatus IS NULL
         AND AcctStopTime != 0
@@ -492,7 +625,8 @@ sub update_svc_acct {
   $sth->execute() or die $sth->errstr;
 
   while ( my $row = $sth->fetchrow_arrayref ) {
-    my($RadAcctId, $UserName, $Realm, $AcctSessionTime) = @$row;
+    my($RadAcctId, $UserName, $Realm, $AcctSessionTime,
+       $AcctInputOctets, $AcctOutputOctets) = @$row;
     warn "processing record: ".
          "$RadAcctId ($UserName\@$Realm for ${AcctSessionTime}s"
       if $DEBUG;
@@ -502,7 +636,6 @@ sub update_svc_acct {
     if ( ref($self) =~ /withdomain/ ) { #well...
       $extra_sql = " AND '$Realm' = ( SELECT domain FROM svc_domain
                           WHERE svc_domain.svcnum = svc_acct.domsvc ) ";
-      my $svc_domain = qsearch
     }
 
     my @svc_acct =
@@ -523,18 +656,16 @@ sub update_svc_acct {
     } elsif ( scalar(@svc_acct) > 1 ) {
       warn "WARNING: multiple svc_acct records found $errinfo - skipping\n";
     } else {
-      my $svc_acct = $svc_acct[0];
-      warn "found svc_acct ". $svc_acct->svcnum. " $errinfo\n" if $DEBUG;
-      if ( $svc_acct->seconds !~ /^$/ ) {
-        warn "  svc_acct.seconds found (". $svc_acct->seconds.
-             ") - decrementing\n"
-          if $DEBUG;
-        my $error = $svc_acct->decrement_seconds($AcctSessionTime);
-        die $error if $error;
-        $status = 'done';
-      } else {
-        warn "  no existing seconds value for svc_acct - skiping\n" if $DEBUG;
-      }
+      warn "found svc_acct ". $svc_acct[0]->svcnum. " $errinfo\n" if $DEBUG;
+      _try_decrement($svc_acct[0], 'seconds', $AcctSessionTime) 
+        and $status='done';
+      _try_decrement($svc_acct[0], 'upbytes', $AcctInputOctets)
+        and $status='done';
+      _try_decrement($svc_acct[0], 'downbytes', $AcctOutputOctets)
+        and $status='done';
+      _try_decrement($svc_acct[0], 'totalbytes', $AcctInputOctets + 
+                     $AcctOutputOctets)
+        and $status='done';
     }
 
     warn "setting FreesideStatus to $status $errinfo\n" if $DEBUG; 
@@ -546,6 +677,22 @@ sub update_svc_acct {
 
   }
 
+}
+
+sub _try_decrement {
+  my ($svc_acct, $column, $amount) = @_;
+  if ( $svc_acct->$column !~ /^$/ ) {
+    warn "  svc_acct.$column found (". $svc_acct->$column.
+         ") - decrementing\n"
+      if $DEBUG;
+    my $method = 'decrement_' . $column;
+    my $error = $svc_acct->$method($amount);
+    die $error if $error;
+    return 'done';
+  } else {
+    warn "  no existing $column value for svc_acct - skipping\n" if $DEBUG;
+  }
+  return '';
 }
 
 1;

@@ -8,9 +8,11 @@ use Date::Format;
 use Business::CreditCard;
 use Time::Duration;
 use FS::CGI qw(small_custview); #doh
+use FS::UI::Web;
 use FS::Conf;
 use FS::Record qw(qsearch qsearchs);
 use FS::Msgcat qw(gettext);
+use FS::Misc qw(card_types);
 use FS::ClientAPI_SessionCache;
 use FS::svc_acct;
 use FS::svc_domain;
@@ -20,6 +22,15 @@ use FS::cust_main;
 use FS::cust_bill;
 use FS::cust_main_county;
 use FS::cust_pkg;
+use HTML::Entities;
+
+#false laziness with FS::cust_main
+BEGIN {
+  eval "use Time::Local;";
+  die "Time::Local minimum version 1.05 required with Perl versions before 5.6"
+    if $] < 5.006 && !defined($Time::Local::VERSION);
+  eval "use Time::Local qw(timelocal_nocheck);";
+}
 
 use vars qw( @cust_main_editable_fields );
 @cust_main_editable_fields = qw(
@@ -127,7 +138,7 @@ sub customer_info {
     }
 
     if ( $cust_main->payby =~ /^(CARD|DCRD)$/ ) {
-      $return{payinfo} = $cust_main->payinfo_masked;
+      $return{payinfo} = $cust_main->paymask;
       @return{'month', 'year'} = $cust_main->paydate_monthyear;
     }
 
@@ -172,7 +183,7 @@ sub edit_info {
 
   if ( $p->{'payby'} =~ /^(CARD|DCRD)$/ ) {
     $new->paydate($p->{'year'}. '-'. $p->{'month'}. '-01');
-    if ( $new->payinfo eq $cust_main->payinfo_masked ) {
+    if ( $new->payinfo eq $cust_main->paymask ) {
       $new->payinfo($cust_main->payinfo);
     } else {
       $new->paycvv($p->{'paycvv'});
@@ -204,33 +215,30 @@ sub payment_info {
   #generic
   ##
 
-  my $conf = new FS::Conf;
-  my %states = map { $_->state => 1 }
-                 qsearch('cust_main_county', {
-                   'country' => $conf->config('countrydefault') || 'US'
-                 } );
-
   use vars qw($payment_info); #cache for performance
-  $payment_info ||= {
+  unless ( $payment_info ) {
 
-    #list all counties/states/countries
-    'cust_main_county' => 
-      [ map { $_->hashref } qsearch('cust_main_county', {}) ],
+    my $conf = new FS::Conf;
+    my %states = map { $_->state => 1 }
+                   qsearch('cust_main_county', {
+                     'country' => $conf->config('countrydefault') || 'US'
+                   } );
 
-    #shortcut for one-country folks
-    'states' =>
-      [ sort { $a cmp $b } keys %states ],
+    $payment_info = {
 
-    'card_types' => {
-      'VISA' => 'VISA card',
-      'MasterCard' => 'MasterCard',
-      'Discover' => 'Discover card',
-      'American Express' => 'American Express card',
-      'Switch' => 'Switch',
-      'Solo' => 'Solo',
-    },
+      #list all counties/states/countries
+      'cust_main_county' => 
+        [ map { $_->hashref } qsearch('cust_main_county', {}) ],
 
-  };
+      #shortcut for one-country folks
+      'states' =>
+        [ sort { $a cmp $b } keys %states ],
+
+      'card_types' => card_types(),
+
+    };
+
+  }
 
   ##
   #customer-specific
@@ -253,7 +261,7 @@ sub payment_info {
   $return{payby} = $cust_main->payby;
 
   if ( $cust_main->payby =~ /^(CARD|DCRD)$/ ) {
-    #warn $return{card_type} = cardtype($cust_main->payinfo);
+    $return{card_type} = cardtype($cust_main->payinfo);
     $return{payinfo} = $cust_main->payinfo;
 
     @return{'month', 'year'} = $cust_main->paydate_monthyear;
@@ -318,17 +326,15 @@ sub process_payment {
     return { 'error' => gettext('unknown_card_type') }
       if cardtype($payinfo) eq "Unknown";
 
-    if ( defined $cust_main->dbdef_table->column('paycvv') ) {
-      if ( length($p->{'paycvv'} ) ) {
-        if ( cardtype($payinfo) eq 'American Express card' ) {
-          $p->{'paycvv'} =~ /^(\d{4})$/
-            or return { 'error' => "CVV2 (CID) for American Express cards is four digits." };
-          $paycvv = $1;
-        } else {
-          $p->{'paycvv'} =~ /^(\d{3})$/
-            or return { 'error' => "CVV2 (CVC2/CID) is three digits." };
-          $paycvv = $1;
-        }
+    if ( length($p->{'paycvv'}) && $p->{'paycvv'} !~ /^\s*$/ ) {
+      if ( cardtype($payinfo) eq 'American Express card' ) {
+        $p->{'paycvv'} =~ /^\s*(\d{4})\s*$/
+          or return { 'error' => "CVV2 (CID) for American Express cards is four digits." };
+        $paycvv = $1;
+      } else {
+        $p->{'paycvv'} =~ /^\s*(\d{3})\s*$/
+          or return { 'error' => "CVV2 (CVC2/CID) is three digits." };
+        $paycvv = $1;
       }
     }
   
@@ -380,18 +386,27 @@ sub process_prepay {
   my $cust_main = qsearchs('cust_main', { 'custnum' => $custnum } )
     or return { 'error' => "unknown custnum $custnum" };
 
-  my( $amount, $seconds ) = ( 0, 0 );
+  my( $amount, $seconds, $upbytes, $downbytes, $totalbytes ) = ( 0, 0, 0, 0, 0 );
   my $error = $cust_main->recharge_prepay( $p->{'prepaid_cardnum'},
                                            \$amount,
-                                           \$seconds
+                                           \$seconds,
+                                           \$upbytes,
+                                           \$downbytes,
+                                           \$totalbytes,
                                          );
 
   return { 'error' => $error } if $error;
 
-  return { 'error'    => '',
-           'amount'   => $amount,
-           'seconds'  => $seconds,
-           'duration' => duration_exact($seconds),
+  return { 'error'     => '',
+           'amount'    => $amount,
+           'seconds'   => $seconds,
+           'duration'  => duration_exact($seconds),
+           'upbytes'   => $upbytes,
+           'upload'    => FS::UI::Web::bytecount_unexact($upbytes),
+           'downbytes' => $downbytes,
+           'download'  => FS::UI::Web::bytecount_unexact($downbytes),
+           'totalbytes'=> $totalbytes,
+           'totalload' => FS::UI::Web::bytecount_unexact($totalbytes),
          };
 
 }
@@ -414,9 +429,36 @@ sub invoice {
   return { 'error'        => '',
            'invnum'       => $invnum,
            'invoice_text' => join('', $cust_bill->print_text ),
+           'invoice_html' => $cust_bill->print_html,
          };
 
 }
+
+sub invoice_logo {
+  my $p = shift;
+
+  #sessioning for this?  how do we get the session id to the backend invoice
+  # template so it can add it to the link, blah
+
+  my $templatename = $p->{'templatename'};
+
+  #false laziness-ish w/view/cust_bill-logo.cgi
+
+  my $conf = new FS::Conf;
+  if ( $templatename =~ /^([^\.\/]*)$/ && $conf->exists("logo_$1.png") ) {
+    $templatename = "_$1";
+  } else {
+    $templatename = '';
+  }
+
+  my $filename = "logo$templatename.png";
+
+  return { 'error'        => '',
+           'logo'         => $conf->config_binary($filename),
+           'content_type' => 'image/png', #should allow gif, jpg too
+         };
+}
+
 
 sub list_invoices {
   my $p = shift;
@@ -499,6 +541,141 @@ sub list_pkgs {
 
 }
 
+sub list_svcs {
+  my $p = shift;
+
+  my($context, $session, $custnum) = _custoragent_session_custnum($p);
+  return { 'error' => $session } if $context eq 'error';
+
+  my $search = { 'custnum' => $custnum };
+  $search->{'agentnum'} = $session->{'agentnum'} if $context eq 'agent';
+  my $cust_main = qsearchs('cust_main', $search )
+    or return { 'error' => "unknown custnum $custnum" };
+
+  my @cust_svc = ();
+  #foreach my $cust_pkg ( $cust_main->ncancelled_pkgs ) {
+  foreach my $cust_pkg ( $p->{'ncancelled'} 
+                         ? $cust_main->ncancelled_pkgs
+                         : $cust_main->unsuspended_pkgs ) {
+    push @cust_svc, @{[ $cust_pkg->cust_svc ]}; #@{[ ]} to force array context
+  }
+  @cust_svc = grep { $_->part_svc->svcdb eq $p->{'svcdb'} } @cust_svc
+    if $p->{'svcdb'};
+
+  #@svc_x = sort { $a->domain cmp $b->domain || $a->username cmp $b->username }
+  #              @svc_x;
+
+  { 
+    #no#'svcnum'   => $session->{'svcnum'},
+    'custnum'  => $custnum,
+    'svcs'     => [ map { 
+                          my $svc_x = $_->svc_x;
+                          my($label, $value) = $_->label;
+                          my $part_pkg = $svc_x->cust_svc->cust_pkg->part_pkg;
+
+                          { 'svcnum'    => $_->svcnum,
+                            'label'     => $label,
+                            'value'     => $value,
+                            'username'  => $svc_x->username,
+                            'email'     => $svc_x->email,
+                            'seconds'   => $svc_x->seconds,
+                            'upbytes'   => $svc_x->upbytes,
+                            'downbytes' => $svc_x->downbytes,
+                            'totalbytes'=> $svc_x->totalbytes,
+                            'recharge_amount' => $part_pkg->option('recharge_amount', 1),
+                            'recharge_seconds' => $part_pkg->option('recharge_seconds', 1),
+                            'recharge_upbytes' => $part_pkg->option('recharge_upbytes', 1),
+                            'recharge_downbytes' => $part_pkg->option('recharge_downbytes', 1),
+                            'recharge_totalbytes' => $part_pkg->option('recharge_totalbytes', 1),
+                            # more...
+                          };
+                        }
+                        @cust_svc
+                  ],
+  };
+
+}
+
+sub list_svc_usage {
+  my $p = shift;
+
+  my($context, $session, $custnum) = _custoragent_session_custnum($p);
+  return { 'error' => $session } if $context eq 'error';
+
+  my $search = { 'svcnum' => $p->{'svcnum'} };
+  $search->{'agentnum'} = $session->{'agentnum'} if $context eq 'agent';
+  my $svc_acct = qsearchs ( 'svc_acct', $search );
+  return { 'error' => 'No service selected in list_svc_usage' } 
+    unless $svc_acct;
+
+  my $freq   = $svc_acct->cust_svc->cust_pkg->part_pkg->freq;
+  my $start  = $svc_acct->cust_svc->cust_pkg->setup;
+  #my $end    = $svc_acct->cust_svc->cust_pkg->bill; # or time?
+  my $end    = time;
+
+  unless($p->{beginning}){
+    $p->{beginning} = $svc_acct->cust_svc->cust_pkg->last_bill;
+    $p->{ending} = $end;
+  }
+  my @usage = ();
+
+  foreach my $part_export ( 
+    map { qsearch ( 'part_export', { 'exporttype' => $_ } ) }
+    qw (sqlradius sqlradius_withdomain')
+  ) {
+
+    push @usage, @ { $part_export->usage_sessions($p->{beginning},
+                                                  $p->{ending},
+                                                  $svc_acct)
+                   };
+  }
+
+  #kinda false laziness with FS::cust_main::bill, but perhaps
+  #we should really change this bit to DateTime and DateTime::Duration
+  #
+  #change this bit to use Date::Manip? CAREFUL with timezones (see
+  # mailing list archive)
+  my ($nsec,$nmin,$nhour,$nmday,$nmon,$nyear) =
+    (localtime($p->{ending}) )[0,1,2,3,4,5];
+  my ($psec,$pmin,$phour,$pmday,$pmon,$pyear) =
+    (localtime($p->{beginning}) )[0,1,2,3,4,5];
+
+  if ( $freq =~ /^\d+$/ ) {
+    $nmon += $freq;
+    until ( $nmon < 12 ) { $nmon -= 12; $nyear++; }
+    $pmon -= $freq;
+    until ( $pmon >= 0 ) { $pmon += 12; $pyear--; }
+  } elsif ( $freq =~ /^(\d+)w$/ ) {
+    my $weeks = $1;
+    $nmday += $weeks * 7;
+    $pmday -= $weeks * 7;
+  } elsif ( $freq =~ /^(\d+)d$/ ) {
+    my $days = $1;
+    $nmday += $days;
+    $pmday -= $days;
+  } elsif ( $freq =~ /^(\d+)h$/ ) {
+    my $hours = $1;
+    $nhour += $hours;
+    $phour -= $hours;
+  } else {
+    return { 'error' => "unparsable frequency: ". $freq };
+  }
+  
+  my $previous  = timelocal_nocheck($psec,$pmin,$phour,$pmday,$pmon,$pyear);
+  my $next      = timelocal_nocheck($nsec,$nmin,$nhour,$nmday,$nmon,$nyear);
+
+
+  { 
+    'error'     => '',
+    'svcnum'    => $p->{svcnum},
+    'beginning' => $p->{beginning},
+    'ending'    => $p->{ending},
+    'previous'  => ($previous > $start) ? $previous : $start,
+    'next'      => ($next < $end) ? $next : $end,
+    'usage'     => \@usage,
+  };
+}
+
 sub order_pkg {
   my $p = shift;
 
@@ -535,7 +712,7 @@ sub order_pkg {
     $svcpart ||= $cust_pkg->part_pkg->svcpart($svcdb);
 
     my %fields = (
-      'svc_acct'     => [ qw( username _password sec_phrase popnum ) ],
+      'svc_acct'     => [ qw( username domsvc _password sec_phrase popnum ) ],
       'svc_domain'   => [ qw( domain ) ],
       'svc_external' => [ qw( id title ) ],
     );
@@ -581,23 +758,11 @@ sub order_pkg {
   my $conf = new FS::Conf;
   if ( $conf->exists('signup_server-realtime') ) {
 
-    my $old_balance = $cust_main->balance;
+    my $bill_error = _do_bop_realtime( $cust_main );
 
-    my $bill_error = $cust_main->bill;
-    $cust_main->apply_payments;
-    $cust_main->apply_credits;
-    $bill_error = $cust_main->collect;
-
-    if (    $cust_main->balance > $old_balance
-         && $cust_main->balance > 0
-         && $cust_main->payby !~ /^(BILL|DCRD|DCHK)$/ ) {
-      #this makes sense.  credit is "un-doing" the invoice
-      $cust_main->credit( sprintf("%.2f", $cust_main->balance - $old_balance ),
-                          'self-service decline' );
-      $cust_main->apply_credits( 'order' => 'newest' );
-
+    if ($bill_error) {
       $cust_pkg->cancel('quiet'=>1);
-      return { 'error' => '_decline', 'bill_error' => $bill_error };
+      return $bill_error;
     } else {
       $cust_pkg->reexport;
     }
@@ -608,6 +773,124 @@ sub order_pkg {
 
   return { error => '', pkgnum => $cust_pkg->pkgnum };
 
+}
+
+sub change_pkg {
+  my $p = shift;
+
+  my($context, $session, $custnum) = _custoragent_session_custnum($p);
+  return { 'error' => $session } if $context eq 'error';
+
+  my $search = { 'custnum' => $custnum };
+  $search->{'agentnum'} = $session->{'agentnum'} if $context eq 'agent';
+  my $cust_main = qsearchs('cust_main', $search )
+    or return { 'error' => "unknown custnum $custnum" };
+
+  my $cust_pkg = qsearchs('cust_pkg', { 'pkgnum' => $p->{pkgnum} } )
+    or return { 'error' => "unknown package $p->{pkgnum}" };
+
+  my @newpkg;
+  my $error = FS::cust_pkg::order( $custnum,
+                                   [$p->{pkgpart}],
+                                   [$p->{pkgnum}],
+                                   \@newpkg,
+                                 );
+
+  my $conf = new FS::Conf;
+  if ( $conf->exists('signup_server-realtime') ) {
+
+    my $bill_error = _do_bop_realtime( $cust_main );
+
+    if ($bill_error) {
+      $newpkg[0]->suspend;
+      return $bill_error;
+    } else {
+      $newpkg[0]->reexport;
+    }
+
+  } else {  
+    $newpkg[0]->reexport;
+  }
+
+  return { error => '', pkgnum => $cust_pkg->pkgnum };
+
+}
+
+sub order_recharge {
+  my $p = shift;
+
+  my($context, $session, $custnum) = _custoragent_session_custnum($p);
+  return { 'error' => $session } if $context eq 'error';
+
+  my $search = { 'custnum' => $custnum };
+  $search->{'agentnum'} = $session->{'agentnum'} if $context eq 'agent';
+  my $cust_main = qsearchs('cust_main', $search )
+    or return { 'error' => "unknown custnum $custnum" };
+
+  my $cust_svc = qsearchs( 'cust_svc', { 'svcnum' => $p->{'svcnum'} } )
+    or return { 'error' => "unknown service " . $p->{'svcnum'} };
+
+  my $svc_x = $cust_svc->svc_x;
+  my $part_pkg = $cust_svc->cust_pkg->part_pkg;
+
+  my %vhash =
+    map { $_ =~ /^recharge_(.*)$/; $1, $part_pkg->option($_, 1) } 
+    qw ( recharge_seconds recharge_upbytes recharge_downbytes
+         recharge_totalbytes );
+  my $amount = $part_pkg->option('recharge_amount', 1); 
+  
+  my ($l, $v, $d) = $cust_svc->label;  # blah
+  my $pkg = "Recharge $v"; 
+
+  my $bill_error = $cust_main->charge($amount, $pkg,
+     "time: $vhash{seconds}, up: $vhash{upbytes}," . 
+     "down: $vhash{downbytes}, total: $vhash{totalbytes}",
+     $part_pkg->taxclass); #meh
+
+  my $conf = new FS::Conf;
+  if ( $conf->exists('signup_server-realtime') && !$bill_error ) {
+
+    $bill_error = _do_bop_realtime( $cust_main );
+
+    if ('bill_error') {
+      return $bill_error;
+    } else {
+      my $error = $svc_x->recharge (\%vhash);
+      return { 'error' => $error } if $error;
+    }
+
+  } else {  
+    my $error = $bill_error;
+    $error ||= $svc_x->recharge (\%vhash);
+    return { 'error' => $error } if $error;
+  }
+
+  return { error => '', svc => $cust_svc->part_svc->svc };
+
+}
+
+sub _do_bop_realtime {
+  my ($cust_main) = @_;
+
+    my $old_balance = $cust_main->balance;
+
+    my $bill_error = $cust_main->bill;
+
+    $cust_main->apply_payments_and_credits;
+    $bill_error = $cust_main->collect('realtime' => 1);
+
+    if (    $cust_main->balance > $old_balance
+         && $cust_main->balance > 0
+         && $cust_main->payby !~ /^(BILL|DCRD|DCHK)$/ ) {
+      #this makes sense.  credit is "un-doing" the invoice
+      $cust_main->credit( sprintf("%.2f", $cust_main->balance - $old_balance ),
+                          'self-service decline' );
+      $cust_main->apply_credits( 'order' => 'newest' );
+
+      return { 'error' => '_decline', 'bill_error' => $bill_error };
+    }
+
+    '';
 }
 
 sub cancel_pkg {
@@ -768,6 +1051,45 @@ sub unprovision_svc {
            'error' => $cust_svc->cancel,
            'small_custview' =>
              small_custview( $cust_main, $conf->config('countrydefault') ),
+         };
+
+}
+
+sub myaccount_passwd {
+  my $p = shift;
+  my($context, $session, $custnum) = _custoragent_session_custnum($p);
+  return { 'error' => $session } if $context eq 'error';
+
+  return { 'error' => "New passwords don't match." }
+    if $p->{'new_password'} ne $p->{'new_password2'};
+
+  return { 'error' => 'Enter new password' }
+    unless length($p->{'new_password'});
+
+  #my $search = { 'custnum' => $custnum };
+  #$search->{'agentnum'} = $session->{'agentnum'} if $context eq 'agent';
+  $custnum =~ /^(\d+)$/ or die "illegal custnum";
+  my $search = " AND custnum = $1";
+  $search .= " AND agentnum = ". $session->{'agentnum'} if $context eq 'agent';
+
+  my $svc_acct = qsearchs( {
+    'table'     => 'svc_acct',
+    'addl_from' => 'LEFT JOIN cust_svc  USING ( svcnum  ) '.
+                   'LEFT JOIN cust_pkg  USING ( pkgnum  ) '.
+                   'LEFT JOIN cust_main USING ( custnum ) ',
+    'hashref'   => { 'svcnum' => $p->{'svcnum'}, },
+    'extra_sql' => $search, #important
+  } )
+    or return { 'error' => "Service not found" };
+
+  $svc_acct->_password($p->{'new_password'});
+  my $error = $svc_acct->replace();
+
+  my($label, $value) = $svc_acct->cust_svc->label;
+
+  return { 'error' => $error,
+           'label' => $label,
+           'value' => $value,
          };
 
 }

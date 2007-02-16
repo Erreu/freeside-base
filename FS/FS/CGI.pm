@@ -9,7 +9,7 @@ use URI::URL;
 use FS::UID;
 
 @ISA = qw(Exporter);
-@EXPORT_OK = qw(header menubar idiot eidiot popurl table itable ntable
+@EXPORT_OK = qw(header menubar idiot eidiot popurl rooturl table itable ntable
                 small_custview myexit http_header);
 
 =head1 NAME
@@ -62,9 +62,9 @@ sub header {
       </HEAD>
       <BODY BGCOLOR="#e8e8e8"$etc>
           <FONT SIZE=6>
-            $title
+            <CENTER>$title</CENTER>
           </FONT>
-          <BR><BR>
+          <BR><!--<BR>-->
 END
   $x .=  $menubar. "<BR><BR>" if $menubar;
   $x;
@@ -79,14 +79,7 @@ Sets an http header.
 sub http_header {
   my ( $header, $value ) = @_;
   if (exists $ENV{MOD_PERL}) {
-    if ( defined $main::Response
-         && $main::Response->isa('Apache::ASP::Response') ) {  #Apache::ASP
-      if ( $header =~ /^Content-Type$/ ) {
-        $main::Response->{ContentType} = $value;
-      } else {
-        $main::Response->AddHeader( $header => $value );
-      }
-    } elsif ( defined $HTML::Mason::Commands::r  ) { #Mason
+    if ( defined $HTML::Mason::Commands::r  ) { #Mason
       ## is this the correct pacakge for $r ???  for 1.0x and 1.1x ?
       if ( $header =~ /^Content-Type$/ ) {
         $HTML::Mason::Commands::r->content_type($value);
@@ -115,6 +108,7 @@ sub menubar { #$menubar=menubar('Main Menu', '../', 'Item', 'url', ... );
   my($item,$url,@html);
   while (@_) {
     ($item,$url)=splice(@_,0,2);
+    next if $item =~ /^\s*Main\s+Menu\s*$/i;
     push @html, qq!<A HREF="$url">$item</A>!;
   }
   join(' | ',@html);
@@ -185,12 +179,7 @@ If running under mod_perl, calles Apache::exit, otherwise, calls exit.
 sub myexit {
   if (exists $ENV{MOD_PERL}) {
 
-    if ( defined $main::Response
-         && $main::Response->isa('Apache::ASP::Response') ) {  #Apache::ASP
-      $main::Response->End();
-      require Apache;
-      Apache::exit();
-    } elsif ( defined $HTML::Mason::Commands::m  ) { #Mason
+    if ( defined $HTML::Mason::Commands::m  ) { #Mason
       #$HTML::Mason::Commands::m->flush_buffer();
       $HTML::Mason::Commands::m->abort();
       die "shouldn't fall through to here (mason \$m->abort didn't)";
@@ -223,6 +212,40 @@ sub popurl {
   my $x = $url->as_string;
   $x .= '/' unless $x =~ /\/$/;
   $x;
+}
+
+=item rooturl 
+
+=cut
+
+sub rooturl {
+  # better to start with the client-provided URL
+  my $cgi = &FS::UID::cgi;
+  my $url_string = $cgi->isa('Apache') ? $cgi->uri : $cgi->url;
+  $url_string =~ s/\?.*//;
+
+  #even though this is kludgy
+  $url_string =~ s{ / index\.html /? $ }
+                  {/}x;
+  $url_string =~
+    s{
+       /
+       (browse|config|docs|edit|graph|misc|search|view|pref|rt|elements)
+       /
+       (process/)?
+       ([\w\-\.\/]+)
+       $
+     }
+     {}x;
+
+  #elements because of progress-popup.html... 
+  #XXX remove anything from elements that is called directly & prevent
+  #those pages from being served up
+
+  $url_string .= '/' unless $url_string =~ /\/$/;
+
+  $url_string;
+
 }
 
 =item table
@@ -277,7 +300,7 @@ sub ntable {
 
 }
 
-=item small_custview CUSTNUM || CUST_MAIN_OBJECT, COUNTRYDEFAULT, NOBALANCE_FLAG
+=item small_custview CUSTNUM || CUST_MAIN_OBJECT, COUNTRYDEFAULT, NOBALANCE_FLAG, URL
 
 Sheesh. I should just switch to Mason.
 
@@ -290,12 +313,18 @@ sub small_custview {
   my $arg = shift;
   my $countrydefault = shift || 'US';
   my $nobalance = shift;
+  my $url = shift;
 
   my $cust_main = ref($arg) ? $arg
                   : qsearchs('cust_main', { 'custnum' => $arg } )
     or die "unknown custnum $arg";
 
-  my $html = 'Customer #<B>'. $cust_main->custnum. '</B></A>'.
+  my $html;
+  
+  $html = qq!View <A HREF="$url?! . $cust_main->custnum . '">'
+    if $url;
+
+  $html .= 'Customer #<B>'. $cust_main->custnum. '</B></A>'.
     ' - <B><FONT COLOR="'. $cust_main->statuscolor. '">'.
     ucfirst($cust_main->status). '</FONT></B>'.
     ntable('#e8e8e8'). '<TR><TD VALIGN="top">'. ntable("#cccccc",2).

@@ -60,7 +60,7 @@ my $ah = new HTML::Mason::ApacheHandler (
                 [ 'freeside' => '%%%FREESIDE_DOCUMENT_ROOT%%%'    ],
                 [ 'rt'       => '%%%FREESIDE_DOCUMENT_ROOT%%%/rt' ],
               ],
-  data_dir=>'/usr/local/etc/freeside/masondata',
+  data_dir=>'%%%MASONDATA%%%',
   #out_mode=>'stream',
 
   #RT
@@ -88,14 +88,18 @@ sub handler
     #rar
     { package HTML::Mason::Commands;
       use strict;
-      use vars qw( $cgi $p );
+      use vars qw( $cgi $p $fsurl);
       use vars qw( %session );
       use CGI 2.47 qw(-private_tempfiles);
       #use CGI::Carp qw(fatalsToBrowser);
+      use List::Util qw( max min );
       use Date::Format;
       use Date::Parse;
       use Time::Local;
       use Time::Duration;
+      use DateTime;
+      use DateTime::Format::Strptime;
+      use Lingua::EN::Inflect qw(PL);
       use Tie::IxHash;
       use URI::Escape;
       use HTML::Entities;
@@ -110,19 +114,23 @@ sub handler
       }
       use Text::CSV_XS;
       use Spreadsheet::WriteExcel;
-      use Business::CreditCard;
+      use Business::CreditCard 0.30; #for mask-aware cardtype()
       use String::Approx qw(amatch);
       use Chart::LinesPoints;
-      use HTML::Widgets::SelectLayers 0.05;
+      use Chart::Mountain;
+      use Color::Scheme;
+      use HTML::Widgets::SelectLayers 0.06;
+      #use HTML::Widgets::SelectLayers 0.07; # after 1.7.2
+      use Locale::Country;
       use FS;
       use FS::UID qw(cgisuidsetup dbh getotaker datasrc driver_name);
       use FS::Record qw(qsearch qsearchs fields dbdef);
       use FS::Conf;
-      use FS::CGI qw(header menubar popurl table itable ntable idiot eidiot
-                     small_custview myexit http_header);
+      use FS::CGI qw(header menubar popurl rooturl table itable ntable idiot
+                     eidiot small_custview myexit http_header);
       use FS::UI::Web;
       use FS::Msgcat qw(gettext geterror);
-      use FS::Misc qw( send_email send_fax );
+      use FS::Misc qw( send_email send_fax states_hash counties state_label );
       use FS::Report::Table::Monthly;
       use FS::TicketSystem;
 
@@ -137,6 +145,7 @@ sub handler
       use FS::cust_main_county;
       use FS::cust_pay;
       use FS::cust_pkg;
+      use FS::cust_pkg_reason;
       use FS::cust_refund;
       use FS::cust_svc;
       use FS::nas;
@@ -146,6 +155,7 @@ sub handler
       use FS::part_svc;
       use FS::part_svc_router;
       use FS::part_virtual_field;
+      use FS::pay_batch;
       use FS::pkg_svc;
       use FS::port;
       use FS::queue qw(joblisting);
@@ -171,6 +181,21 @@ sub handler
       use FS::payment_gateway;
       use FS::agent_payment_gateway;
       use FS::XMLRPC;
+      use FS::payby;
+      use FS::cdr;
+      use FS::inventory_class;
+      use FS::inventory_item;
+      use FS::pkg_class;
+      use FS::access_user;
+      use FS::access_group;
+      use FS::access_usergroup;
+      use FS::access_groupagent;
+      use FS::access_right;
+      use FS::AccessRight;
+      use FS::svc_phone;
+      use FS::reason_type;
+      use FS::reason;
+      use FS::cust_main_note;
 
       if ( %%%RT_ENABLED%%% ) {
         eval '
@@ -204,6 +229,7 @@ sub handler
         my( $self, $location ) = @_;
         use vars qw($m);
 
+        # false laziness w/below
         if ( defined(@DBIx::Profile::ISA) ) { #profiling redirect
 
           my $page =
@@ -233,8 +259,8 @@ sub handler
         &cgisuidsetup($cgi);
         #&cgisuidsetup($r);
         $p = popurl(2);
+        $fsurl = rooturl();
       }
-
 
       sub include {
         use vars qw($m);
@@ -261,7 +287,10 @@ sub handler
           );
           dbh->{'private_profile'} = {};
 
-          $m->abort(200);
+          #whew.  removing this is all that's needed to fix the annoying
+          #blank-page-instead-of-profiling-redirect-when-called-from-an-include
+          #bug triggered by mason 1.32
+          #my $rv = $m->abort(200);
 
         } else { #normal redirect
 
@@ -306,6 +335,8 @@ sub handler
     } else {
       $ah->interp->set_escape( 'h' => sub { ${$_[0]}; } );
     }
+
+    $ah->interp->ignore_warnings_expr('.');
 
     my %session;
     my $status;

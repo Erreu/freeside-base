@@ -1,16 +1,11 @@
 package FS::svc_external;
 
 use strict;
-use vars qw(@ISA); # $conf
-use FS::UID;
-#use FS::Record qw( qsearch qsearchs dbh);
-use FS::svc_Common;
+use vars qw(@ISA);
+use FS::Conf;
+use FS::svc_External_Common;
 
-@ISA = qw( FS::svc_Common );
-
-#FS::UID::install_callback( sub {
-#  $conf = new FS::Conf;
-#};
+@ISA = qw( FS::svc_External_Common );
 
 =head1 NAME
 
@@ -39,9 +34,9 @@ FS::svc_external - Object methods for svc_external records
 
 =head1 DESCRIPTION
 
-An FS::svc_external object represents a externally tracked service.
-FS::svc_external inherits from FS::svc_Common.  The following fields are
-currently supported:
+An FS::svc_external object represents a generic externally tracked service.
+FS::svc_external inherits from FS::svc_External_Common (and FS::svc_Common).
+The following fields are currently supported:
 
 =over 4
 
@@ -67,7 +62,30 @@ points to.  You can ask the object for a copy with the I<hash> method.
 
 =cut
 
+sub table_info {
+  {
+    'name' => 'External service',
+    'sorts' => 'id',
+    'display_weight' => 90,
+    'cancel_weight'  => 10,
+    'fields' => {
+    },
+  };
+}
+
 sub table { 'svc_external'; }
+
+# oh!  this should be moved to svc_artera_turbo or something now
+sub label {
+  my $self = shift;
+  my $conf = new FS::Conf;
+  if ( $conf->config('svc_external-display_type') eq 'artera_turbo' ) {
+    sprintf('%010d', $self->id). '-'.
+      substr('0000000000'.uc($self->title), -10);
+  } else {
+    $self->SUPER::label;
+  }
+}
 
 =item insert [ , OPTION => VALUE ... ]
 
@@ -145,25 +163,19 @@ Called by the cancel method of FS::cust_pkg (see L<FS::cust_pkg>).
 
 Checks all fields to make sure this is a valid external service.  If there is
 an error, returns the error, otherwise returns false.  Called by the insert
-and repalce methods.
+and replace methods.
 
 =cut
 
-sub check {
-  my $self = shift;
-
-  my $x = $self->setfixed;
-  return $x unless ref($x);
-  my $part_svc = $x;
-
-  my $error = 
-    $self->ut_numbern('svcnum')
-    || $self->ut_numbern('id')
-    || $self->ut_textn('title')
-  ;
-
-  $self->SUPER::check;
-}
+#sub check {
+#  my $self = shift;
+#  my $error;
+#
+#  $error = $self->SUPER::delete;
+#  return $error if $error;
+#
+#  '';
+#}
 
 =back
 
@@ -171,8 +183,8 @@ sub check {
 
 =head1 SEE ALSO
 
-L<FS::svc_Common>, L<FS::Record>, L<FS::cust_svc>, L<FS::part_svc>,
-L<FS::cust_pkg>, schema.html from the base documentation.
+L<FS::svc_External_Common>, L<FS::svc_Common>, L<FS::Record>, L<FS::cust_svc>,
+L<FS::part_svc>, L<FS::cust_pkg>, schema.html from the base documentation.
 
 =cut
 

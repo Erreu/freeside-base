@@ -1,4 +1,173 @@
-<%
+<% include("/elements/header.html", "$agentname Sales Tax Report - ".
+              ( $beginning
+                  ? time2str('%h %o %Y ', $beginning )
+                  : ''
+              ).
+              'through '.
+              ( $ending == 4294967295
+                  ? 'now'
+                  : time2str('%h %o %Y', $ending )
+              ),
+            menubar( 'Main Menu'=>$p, )
+          )
+%>
+
+<% include('/elements/table-grid.html') %>
+
+  <TR>
+    <TH CLASS="grid" BGCOLOR="#cccccc" ROWSPAN=2></TH>
+    <TH CLASS="grid" BGCOLOR="#cccccc" COLSPAN=9>Sales</TH>
+    <TH CLASS="grid" BGCOLOR="#cccccc" ROWSPAN=2></TH>
+    <TH CLASS="grid" BGCOLOR="#cccccc" ROWSPAN=2>Rate</TH>
+    <TH CLASS="grid" BGCOLOR="#cccccc" ROWSPAN=2></TH>
+    <TH CLASS="grid" BGCOLOR="#cccccc" ROWSPAN=2>Tax owed</TH>
+% unless ( $cgi->param('show_taxclasses') ) { 
+
+      <TH CLASS="grid" BGCOLOR="#cccccc" ROWSPAN=2>Tax invoiced</TH>
+% } 
+
+  </TR>
+  <TR>
+    <TH CLASS="grid" BGCOLOR="#cccccc">Total</TH>
+    <TH CLASS="grid" BGCOLOR="#cccccc"></TH>
+    <TH CLASS="grid" BGCOLOR="#cccccc">Non-taxable<BR><FONT SIZE=-1>(tax-exempt customer)</FONT></TH>
+    <TH CLASS="grid" BGCOLOR="#cccccc"></TH>
+    <TH CLASS="grid" BGCOLOR="#cccccc">Non-taxable<BR><FONT SIZE=-1>(tax-exempt package)</FONT></TH>
+    <TH CLASS="grid" BGCOLOR="#cccccc"></TH>
+    <TH CLASS="grid" BGCOLOR="#cccccc">Non-taxable<BR><FONT SIZE=-1>(monthly exemption)</FONT></TH>
+    <TH CLASS="grid" BGCOLOR="#cccccc"></TH>
+    <TH CLASS="grid" BGCOLOR="#cccccc">Taxable</TH>
+  </TR>
+% my $bgcolor1 = '#eeeeee';
+%   my $bgcolor2 = '#ffffff';
+%   my $bgcolor;
+%
+% foreach my $region ( @regions ) {
+%
+%       if ( $bgcolor eq $bgcolor1 ) {
+%         $bgcolor = $bgcolor2;
+%       } else {
+%         $bgcolor = $bgcolor1;
+%       }
+%
+%       my $link = '';
+%       if ( $region->{'label'} ne 'Total' ) {
+%         if ( $region->{'label'} eq $out ) {
+%           $link = ';out=1';
+%         } else {
+%           $link = ';'. $region->{'url_param'};
+%         }
+%       }
+%
+%
+%
+%
+%  
+
+
+    <TR>
+      <TD CLASS="grid" BGCOLOR="<% $bgcolor %>"><% $region->{'label'} %></TD>
+      <TD CLASS="grid" BGCOLOR="<% $bgcolor %>" ALIGN="right">
+        <A HREF="<% $baselink. $link %>;nottax=1"><% $money_char %><% sprintf('%.2f', $region->{'total'} ) %></A>
+      </TD>
+      <TD CLASS="grid" BGCOLOR="<% $bgcolor %>"><FONT SIZE="+1"><B> - </B></FONT></TD>
+      <TD CLASS="grid" BGCOLOR="<% $bgcolor %>" ALIGN="right">
+        <A HREF="<% $baselink. $link %>;nottax=1;cust_tax=Y"><% $money_char %><% sprintf('%.2f', $region->{'exempt_cust'} ) %></A>
+      </TD>
+      <TD CLASS="grid" BGCOLOR="<% $bgcolor %>"><FONT SIZE="+1"><B> - </B></FONT></TD>
+      <TD CLASS="grid" BGCOLOR="<% $bgcolor %>" ALIGN="right">
+        <A HREF="<% $baselink. $link %>;nottax=1;pkg_tax=Y"><% $money_char %><% sprintf('%.2f', $region->{'exempt_pkg'} ) %></A>
+      </TD>
+      <TD CLASS="grid" BGCOLOR="<% $bgcolor %>"><FONT SIZE="+1"><B> - </B></FONT></TD>
+      <TD CLASS="grid" BGCOLOR="<% $bgcolor %>" ALIGN="right">
+        <A HREF="<% $exemptlink. $link %>"><% $money_char %><% sprintf('%.2f', $region->{'exempt_monthly'} ) %></A>
+        </TD>
+      <TD CLASS="grid" BGCOLOR="<% $bgcolor %>"><FONT SIZE="+1"><B> = </B></FONT></TD>
+      <TD CLASS="grid" BGCOLOR="<% $bgcolor %>" ALIGN="right">
+        <% $money_char %><% sprintf('%.2f', $region->{'taxable'} ) %></A>
+      </TD>
+      <TD CLASS="grid" BGCOLOR="<% $bgcolor %>"><% $region->{'label'} eq 'Total' ? '' : '<FONT FACE="sans-serif" SIZE="+1"><B> X </B></FONT>' %></TD>
+      <TD CLASS="grid" BGCOLOR="<% $bgcolor %>" ALIGN="right"><% $region->{'rate'} %></TD>
+      <TD CLASS="grid" BGCOLOR="<% $bgcolor %>"><% $region->{'label'} eq 'Total' ? '' : '<FONT FACE="sans-serif" SIZE="+1"><B> = </B></FONT>' %></TD>
+      <TD CLASS="grid" BGCOLOR="<% $bgcolor %>" ALIGN="right">
+        <% $money_char %><% sprintf('%.2f', $region->{'owed'} ) %>
+      </TD>
+% unless ( $cgi->param('show_taxclasses') ) { 
+
+        <TD CLASS="grid" BGCOLOR="<% $bgcolor %>" ALIGN="right">
+          <A HREF="<% $baselink. $link %>;istax=1"><% $money_char %><% sprintf('%.2f', $region->{'tax'} ) %></A>
+        </TD>
+% } 
+
+    </TR>
+% } 
+
+
+</TABLE>
+% if ( $cgi->param('show_taxclasses') ) { 
+
+
+  <BR>
+  <% include('/elements/table-grid.html') %>
+  <TR>
+    <TH CLASS="grid" BGCOLOR="#cccccc"></TH>
+    <TH CLASS="grid" BGCOLOR="#cccccc">Tax invoiced</TH>
+  </TR>
+% #some false laziness w/above
+%     $bgcolor1 = '#eeeeee';
+%     $bgcolor2 = '#ffffff';
+%     foreach my $region ( @base_regions ) {
+%
+%       if ( $bgcolor eq $bgcolor1 ) {
+%         $bgcolor = $bgcolor2;
+%       } else {
+%         $bgcolor = $bgcolor1;
+%       }
+%
+%       my $link = '';
+%       #if ( $region->{'label'} ne 'Total' ) {
+%         if ( $region->{'label'} eq $out ) {
+%           $link = ';out=1';
+%         } else {
+%           $link = ';'. $region->{'url_param'};
+%         }
+%       #}
+%  
+
+
+    <TR>
+      <TD CLASS="grid" BGCOLOR="<% $bgcolor %>"><% $region->{'label'} %></TD>
+      <TD CLASS="grid" BGCOLOR="<% $bgcolor %>" ALIGN="right">
+        <A HREF="<% $baselink. $link %>;istax=1"><% $money_char %><% sprintf('%.2f', $region->{'tax'} ) %></A>
+      </TD>
+    </TR>
+% } 
+%
+%     if ( $bgcolor eq $bgcolor1 ) {
+%       $bgcolor = $bgcolor2;
+%     } else {
+%       $bgcolor = $bgcolor1;
+%     }
+%  
+
+
+  <TR>
+   <TD CLASS="grid" BGCOLOR="<% $bgcolor %>">Total</TD>
+    <TD CLASS="grid" BGCOLOR="<% $bgcolor %>" ALIGN="right">
+      <A HREF="<% $baselink %>;istax=1"><% $money_char %><% sprintf('%.2f', $tax ) %></A>
+    </TD>
+  </TR>
+
+  </TABLE>
+% } 
+
+
+</BODY>
+</HTML>
+<%init>
+
+die "access denied"
+  unless $FS::CurrentUser::CurrentUser->access_right('Financial reports');
 
 my $conf = new FS::Conf;
 my $money_char = $conf->config('money_char') || '$';
@@ -7,23 +176,50 @@ my $user = getotaker;
 
 my($beginning, $ending) = FS::UI::Web::parse_beginning_ending($cgi);
 
-my $from_join_cust = "
-  FROM cust_bill_pkg
+my $join_cust = "
     JOIN cust_bill USING ( invnum ) 
-    JOIN cust_main USING ( custnum )
+    LEFT JOIN cust_main USING ( custnum )
 ";
+my $from_join_cust = "
+    FROM cust_bill_pkg
+    $join_cust
+"; 
 my $join_pkg = "
-    JOIN cust_pkg USING ( pkgnum )
-    JOIN part_pkg USING ( pkgpart )
+    LEFT JOIN cust_pkg USING ( pkgnum )
+    LEFT JOIN part_pkg USING ( pkgpart )
 ";
-my $where = "
-  WHERE _date >= $beginning AND _date <= $ending
-    AND ( county  = ? OR ? = '' )
-    AND ( state   = ? OR ? = '' )
-    AND   country = ?
-    AND payby != 'COMP'
-";
+
+my $where = "WHERE _date >= $beginning AND _date <= $ending ";
 my @base_param = qw( county county state state country );
+if ( $conf->exists('tax-ship_address') ) {
+
+  $where .= "
+      AND (    (     ( ship_last IS NULL     OR  ship_last  = '' )
+                 AND ( county       = ? OR ? = '' )
+                 AND ( state        = ? OR ? = '' )
+                 AND   country      = ?
+               )
+            OR (       ship_last IS NOT NULL AND ship_last != ''
+                 AND ( ship_county  = ? OR ? = '' )
+                 AND ( ship_state   = ? OR ? = '' )
+                 AND   ship_country = ?
+               )
+          )
+  ";
+  #    AND payby != 'COMP'
+
+  push @base_param, @base_param;
+
+} else {
+
+  $where .= "
+      AND ( county  = ? OR ? = '' )
+      AND ( state   = ? OR ? = '' )
+      AND   country = ?
+  ";
+  #    AND payby != 'COMP'
+
+}
 
 my $agentname = '';
 if ( $cgi->param('agentnum') =~ /^(\d+)$/ ) {
@@ -35,19 +231,64 @@ if ( $cgi->param('agentnum') =~ /^(\d+)$/ ) {
 
 my $gotcust = "
   WHERE 0 < ( SELECT COUNT(*) FROM cust_main
-              WHERE ( cust_main.county  = cust_main_county.county
-                      OR cust_main_county.county = ''
-                      OR cust_main_county.county IS NULL )
-                AND ( cust_main.state   = cust_main_county.state
-                      OR cust_main_county.state = ''
-                      OR cust_main_county.state IS NULL )
-                AND ( cust_main.country = cust_main_county.country )
-              LIMIT 1
-            )
 ";
+if ( $conf->exists('tax-ship_address') ) {
 
-my $monthly_exempt_warning = 0;
-my $taxclass_flag = 0;
+  $gotcust .= "
+                WHERE
+
+                (    cust_main_county.country = cust_main.country
+                  OR cust_main_county.country = cust_main.ship_country
+                )
+
+                AND
+
+                ( 
+
+                  (     ( ship_last IS NULL     OR  ship_last = '' )
+                    AND (    cust_main_county.country = cust_main.country )
+                    AND (    cust_main_county.state = cust_main.state
+                          OR cust_main_county.state = ''
+                          OR cust_main_county.state IS NULL )
+                    AND (    cust_main_county.county = cust_main.county
+                          OR cust_main_county.county = ''
+                          OR cust_main_county.county IS NULL )
+                  )
+  
+                  OR
+  
+                  (       ship_last IS NOT NULL AND ship_last != ''
+                    AND (    cust_main_county.country = cust_main.ship_country )
+                    AND (    cust_main_county.state = cust_main.ship_state
+                          OR cust_main_county.state = ''
+                          OR cust_main_county.state IS NULL )
+                    AND (    cust_main_county.county = cust_main.ship_county
+                          OR cust_main_county.county = ''
+                          OR cust_main_county.county IS NULL )
+                  )
+
+                )
+
+                LIMIT 1
+            )
+  ";
+
+} else {
+
+  $gotcust .= "
+                WHERE ( cust_main.county  = cust_main_county.county
+                        OR cust_main_county.county = ''
+                        OR cust_main_county.county IS NULL )
+                  AND ( cust_main.state   = cust_main_county.state
+                        OR cust_main_county.state = ''
+                        OR cust_main_county.state IS NULL )
+                  AND ( cust_main.country = cust_main_county.country )
+                LIMIT 1
+            )
+  ";
+
+}
+
 my($total, $tot_taxable, $owed, $tax) = ( 0, 0, 0, 0, 0 );
 my( $exempt_cust, $exempt_pkg, $exempt_monthly ) = ( 0, 0 );
 my $out = 'Out of taxable region(s)';
@@ -59,16 +300,17 @@ foreach my $r (qsearch('cust_main_county', {}, '', $gotcust) ) {
   $regions{$label}->{'label'} = $label;
   $regions{$label}->{'url_param'} = join(';', map "$_=".$r->$_(), qw( county state country ) );
 
-  my $fromwhere = $from_join_cust. $join_pkg. $where;
   my @param = @base_param;
+  my $mywhere = $where;
 
   if ( $r->taxclass ) {
-    $fromwhere .= " AND taxclass = ? ";
+    $mywhere .= " AND taxclass = ? ";
     push @param, 'taxclass';
     $regions{$label}->{'url_param'} .= ';taxclass='. $r->taxclass
       if $cgi->param('show_taxclasses');
-    $taxclass_flag = 1;
   }
+
+  my $fromwhere = $from_join_cust. $join_pkg. $mywhere. " AND payby != 'COMP' ";
 
 #  my $label = getlabel($r);
 #  $regions{$label}->{'label'} = $label;
@@ -83,56 +325,79 @@ foreach my $r (qsearch('cust_main_county', {}, '', $gotcust) ) {
   $total += $t;
   $regions{$label}->{'total'} += $t;
 
-  ## calculate package-exemption for this region
-
-  foreach my $e ( grep { $r->get($_.'tax') =~ /^Y/i }
-                       qw( cust_bill_pkg.setup cust_bill_pkg.recur ) ) {
-    my $x = scalar_sql($r, \@param,
-      "SELECT SUM($e) $fromwhere AND $nottax"
-    );
-    $exempt_pkg += $x;
-    $regions{$label}->{'exempt_pkg'} += $x;
-  }
-
   ## calculate customer-exemption for this region
 
-  my($taxable, $x_cust) = (0, 0);
-  foreach my $e ( grep { $r->get($_.'tax') !~ /^Y/i }
-                       qw( cust_bill_pkg.setup cust_bill_pkg.recur ) ) {
-    $taxable += scalar_sql($r, \@param, 
-      "SELECT SUM($e) $fromwhere AND $nottax AND ( tax != 'Y' OR tax IS NULL )"
-    );
+##  my $taxable = $t;
 
-    $x_cust += scalar_sql($r, \@param, 
-      "SELECT SUM($e) $fromwhere AND $nottax AND tax = 'Y'"
-    );
-  }
+#  my($taxable, $x_cust) = (0, 0);
+#  foreach my $e ( grep { $r->get($_.'tax') !~ /^Y/i }
+#                       qw( cust_bill_pkg.setup cust_bill_pkg.recur ) ) {
+#    $taxable += scalar_sql($r, \@param, 
+#      "SELECT SUM($e) $fromwhere AND $nottax AND ( tax != 'Y' OR tax IS NULL )"
+#    );
+#
+#    $x_cust += scalar_sql($r, \@param, 
+#      "SELECT SUM($e) $fromwhere AND $nottax AND tax = 'Y'"
+#    );
+#  }
+
+  my $x_cust = scalar_sql($r, \@param,
+    "SELECT SUM(cust_bill_pkg.setup+cust_bill_pkg.recur)
+     $fromwhere AND $nottax AND tax = 'Y' "
+  );
 
   $exempt_cust += $x_cust;
   $regions{$label}->{'exempt_cust'} += $x_cust;
+  
+  ## calculate package-exemption for this region
+
+  my $x_pkg = scalar_sql($r, \@param,
+    "SELECT SUM(
+                 ( CASE WHEN part_pkg.setuptax = 'Y'
+                        THEN cust_bill_pkg.setup
+                        ELSE 0
+                   END
+                 )
+                 +
+                 ( CASE WHEN part_pkg.recurtax = 'Y'
+                        THEN cust_bill_pkg.recur
+                        ELSE 0
+                   END
+                 )
+               )
+       $fromwhere
+       AND $nottax
+       AND (
+                ( part_pkg.setuptax = 'Y' AND cust_bill_pkg.setup > 0 )
+             OR ( part_pkg.recurtax = 'Y' AND cust_bill_pkg.recur > 0 )
+           )
+       AND ( tax != 'Y' OR tax IS NULL )
+    "
+  );
+  $exempt_pkg += $x_pkg;
+  $regions{$label}->{'exempt_pkg'} += $x_pkg;
 
   ## calculate monthly exemption (texas tax) for this region
 
-  my($sday,$smon,$syear) = (localtime($beginning) )[ 3, 4, 5 ];
-  $monthly_exempt_warning=1 if $sday != 1 && $beginning;
-  $smon++; $syear+=1900;
+  # count up all the cust_tax_exempt_pkg records associated with
+  # the actual line items.
 
-  my $eending = ( $ending == 4294967295 ) ? time : $ending;
-  my($eday,$emon,$eyear) = (localtime($eending) )[ 3, 4, 5 ];
-  $emon++; $eyear+=1900;
-
-  my $x_monthly = scalar_sql($r, [ 'taxnum' ],
-    "SELECT SUM(amount) FROM cust_tax_exempt where taxnum = ? ".
-    "  AND ( year > $syear OR ( year = $syear and month >= $smon ) )".
-    "  AND ( year < $eyear OR ( year = $eyear and month <= $emon ) )"
+  my $x_monthly = scalar_sql($r, \@param,
+    "SELECT SUM(amount)
+       FROM cust_tax_exempt_pkg
+       JOIN cust_bill_pkg USING ( billpkgnum )
+       $join_cust $join_pkg
+     $mywhere"
   );
-  if ( $x_monthly ) {
-    warn $r->taxnum(). ": $x_monthly\n";
-    $taxable -= $x_monthly;
-  }
+#  if ( $x_monthly ) {
+#    #warn $r->taxnum(). ": $x_monthly\n";
+#    $taxable -= $x_monthly;
+#  }
 
   $exempt_monthly += $x_monthly;
   $regions{$label}->{'exempt_monthly'} += $x_monthly;
+
+  my $taxable = $t - $x_cust - $x_pkg - $x_monthly;
 
   $tot_taxable += $taxable;
   $regions{$label}->{'taxable'} += $taxable;
@@ -149,7 +414,7 @@ foreach my $r (qsearch('cust_main_county', {}, '', $gotcust) ) {
 
 }
 
-my $taxwhere = "$from_join_cust $where";
+my $taxwhere = "$from_join_cust $where AND payby != 'COMP' ";
 my @taxparam = @base_param;
 my %base_regions = ();
 #foreach my $label ( keys %regions ) {
@@ -165,8 +430,8 @@ foreach my $r (
 
   my $label = getlabel($r);
 
-  my $fromwhere = $join_pkg. $where;
-  my @param = @base_param; 
+  #my $fromwhere = $join_pkg. $where. " AND payby != 'COMP' ";
+  #my @param = @base_param; 
 
   #match itemdesc if necessary!
   my $named_tax =
@@ -246,7 +511,7 @@ sub getlabel {
     $label = "$label (". $r->taxclass. ")"
       if $r->taxclass
       && $cgi->param('show_taxclasses')
-      && ! $opt{'no_taxclasses'};
+      && ! $opt{'no_taxclass'};
     #$label = $r->taxname. " ($label)" if $r->taxname;
   }
   return $label;
@@ -263,170 +528,12 @@ sub scalar_sql {
   $sth->fetchrow_arrayref->[0] || 0;
 }
 
-%>
-
-<%
-
-my $baselink = $p. "search/cust_bill_pkg.cgi?begin=$beginning;end=$ending";
-
-%>
 
 
-<%= header( "$agentname Sales Tax Report - ".
-              time2str('%h %o %Y through ', $beginning ).
-              ( $ending == 4294967295
-                  ? 'now'
-                  : time2str('%h %o %Y', $ending )
-              ),
-            menubar( 'Main Menu'=>$p, )
-          )
-%>
+my $dateagentlink = "begin=$beginning;end=$ending";
+$dateagentlink .= ';agentnum='. $cgi->param('agentnum')
+  if length($agentname);
+my $baselink   = $p. "search/cust_bill_pkg.cgi?$dateagentlink";
+my $exemptlink = $p. "search/cust_tax_exempt_pkg.cgi?$dateagentlink";
 
-<%= include('/elements/table-grid.html') %>
-
-  <TR>
-    <TH CLASS="grid" BGCOLOR="#cccccc" ROWSPAN=2></TH>
-    <TH CLASS="grid" BGCOLOR="#cccccc" COLSPAN=9>Sales</TH>
-    <TH CLASS="grid" BGCOLOR="#cccccc" ROWSPAN=2></TH>
-    <TH CLASS="grid" BGCOLOR="#cccccc" ROWSPAN=2>Rate</TH>
-    <TH CLASS="grid" BGCOLOR="#cccccc" ROWSPAN=2></TH>
-    <TH CLASS="grid" BGCOLOR="#cccccc" ROWSPAN=2>Tax owed</TH>
-    <% unless ( $cgi->param('show_taxclasses') ) { %>
-      <TH CLASS="grid" BGCOLOR="#cccccc" ROWSPAN=2>Tax invoiced</TH>
-    <% } %>
-  </TR>
-  <TR>
-    <TH CLASS="grid" BGCOLOR="#cccccc">Total</TH>
-    <TH CLASS="grid" BGCOLOR="#cccccc"></TH>
-    <TH CLASS="grid" BGCOLOR="#cccccc">Non-taxable<BR><FONT SIZE=-1>(tax-exempt customer)</FONT></TH>
-    <TH CLASS="grid" BGCOLOR="#cccccc"></TH>
-    <TH CLASS="grid" BGCOLOR="#cccccc">Non-taxable<BR><FONT SIZE=-1>(tax-exempt package)</FONT></TH>
-    <TH CLASS="grid" BGCOLOR="#cccccc"></TH>
-    <TH CLASS="grid" BGCOLOR="#cccccc">Non-taxable<BR><FONT SIZE=-1>(monthly exemption)</FONT></TH>
-    <TH CLASS="grid" BGCOLOR="#cccccc"></TH>
-    <TH CLASS="grid" BGCOLOR="#cccccc">Taxable</TH>
-  </TR>
-
-<% my $bgcolor1 = '#eeeeee';
-   my $bgcolor2 = '#ffffff';
-   my $bgcolor;
-%>
-
-  <% foreach my $region ( @regions ) {
-
-       if ( $bgcolor eq $bgcolor1 ) {
-         $bgcolor = $bgcolor2;
-       } else {
-         $bgcolor = $bgcolor1;
-       }
-
-       my $link = $baselink;
-       if ( $region->{'label'} ne 'Total' ) {
-         if ( $region->{'label'} eq $out ) {
-           $link .= ';out=1';
-         } else {
-           $link .= ';'. $region->{'url_param'};
-         }
-       }
-  %>
-
-    <TR>
-      <TD CLASS="grid" BGCOLOR="<%= $bgcolor %>"><%= $region->{'label'} %></TD>
-      <TD CLASS="grid" BGCOLOR="<%= $bgcolor %>" ALIGN="right">
-        <A HREF="<%= $link %>;nottax=1"><%= $money_char %><%= sprintf('%.2f', $region->{'total'} ) %></A>
-      </TD>
-      <TD CLASS="grid" BGCOLOR="<%= $bgcolor %>"><FONT SIZE="+1"><B> - </B></FONT></TD>
-      <TD CLASS="grid" BGCOLOR="<%= $bgcolor %>" ALIGN="right">
-        <A HREF="<%= $link %>;nottax=1;cust_tax=Y"><%= $money_char %><%= sprintf('%.2f', $region->{'exempt_cust'} ) %></A>
-      </TD>
-      <TD CLASS="grid" BGCOLOR="<%= $bgcolor %>"><FONT SIZE="+1"><B> - </B></FONT></TD>
-      <TD CLASS="grid" BGCOLOR="<%= $bgcolor %>" ALIGN="right">
-        <A HREF="<%= $link %>;nottax=1;pkg_tax=Y"><%= $money_char %><%= sprintf('%.2f', $region->{'exempt_pkg'} ) %></A>
-      </TD>
-      <TD CLASS="grid" BGCOLOR="<%= $bgcolor %>"><FONT SIZE="+1"><B> - </B></FONT></TD>
-      <TD CLASS="grid" BGCOLOR="<%= $bgcolor %>" ALIGN="right">
-        <%= $money_char %><%= sprintf('%.2f', $region->{'exempt_monthly'} ) %></A>
-        </TD>
-      <TD CLASS="grid" BGCOLOR="<%= $bgcolor %>"><FONT SIZE="+1"><B> = </B></FONT></TD>
-      <TD CLASS="grid" BGCOLOR="<%= $bgcolor %>" ALIGN="right">
-        <%= $money_char %><%= sprintf('%.2f', $region->{'taxable'} ) %></A>
-      </TD>
-      <TD CLASS="grid" BGCOLOR="<%= $bgcolor %>"><%= $region->{'label'} eq 'Total' ? '' : '<FONT FACE="sans-serif" SIZE="+1"><B> X </B></FONT>' %></TD>
-      <TD CLASS="grid" BGCOLOR="<%= $bgcolor %>" ALIGN="right"><%= $region->{'rate'} %></TD>
-      <TD CLASS="grid" BGCOLOR="<%= $bgcolor %>"><%= $region->{'label'} eq 'Total' ? '' : '<FONT FACE="sans-serif" SIZE="+1"><B> = </B></FONT>' %></TD>
-      <TD CLASS="grid" BGCOLOR="<%= $bgcolor %>" ALIGN="right">
-        <%= $money_char %><%= sprintf('%.2f', $region->{'owed'} ) %>
-      </TD>
-      <% unless ( $cgi->param('show_taxclasses') ) { %>
-        <TD CLASS="grid" BGCOLOR="<%= $bgcolor %>" ALIGN="right">
-          <A HREF="<%= $link %>;istax=1"><%= $money_char %><%= sprintf('%.2f', $region->{'tax'} ) %></A>
-        </TD>
-      <% } %>
-    </TR>
-    
-  <% } %>
-
-</TABLE>
-
-
-<% if ( $cgi->param('show_taxclasses') ) { %>
-
-  <BR>
-  <%= include('/elements/table-grid.html') %>
-  <TR>
-    <TH CLASS="grid" BGCOLOR="#cccccc"></TH>
-    <TH CLASS="grid" BGCOLOR="#cccccc">Tax invoiced</TH>
-  </TR>
-
-  <% #some false laziness w/above
-     foreach my $region ( @base_regions ) {
-
-       if ( $bgcolor eq $bgcolor1 ) {
-         $bgcolor = $bgcolor2;
-       } else {
-         $bgcolor = $bgcolor1;
-       }
-
-       my $link = $baselink;
-       #if ( $region->{'label'} ne 'Total' ) {
-         if ( $region->{'label'} eq $out ) {
-           $link .= ';out=1';
-         } else {
-           $link .= ';'. $region->{'url_param'};
-         }
-       #}
-  %>
-
-    <TR>
-      <TD CLASS="grid" BGCOLOR="<%= $bgcolor %>"><%= $region->{'label'} %></TD>
-      <TD CLASS="grid" BGCOLOR="<%= $bgcolor %>" ALIGN="right">
-        <A HREF="<%= $link %>;istax=1"><%= $money_char %><%= sprintf('%.2f', $region->{'tax'} ) %></A>
-      </TD>
-    </TR>
-
-  <% } %>
-
-  <TR>
-   <TD CLASS="grid" BGCOLOR="<%= $bgcolor %>">Total</TD>
-    <TD CLASS="grid" BGCOLOR="<%= $bgcolor %>" ALIGN="right">
-      <A HREF="<%= $baselink %>;istax=1"><%= $money_char %><%= sprintf('%.2f', $tax ) %></A>
-    </TD>
-  </TR>
-
-  </TABLE>
-
-<% } %>
-
-
-<% if ( $monthly_exempt_warning ) { %>
-  <BR>
-  Partial-month tax reports (except for current month) may not be correct due
-  to month-granularity tax exemption (usually "texas tax").  For an accurate
-  report, start on the first of a month and end on the last day of a month (or
-  leave blank for to now).
-<% } %>
-
-</BODY>
-</HTML>
-
-
+</%init>

@@ -9,12 +9,25 @@ DATASOURCE = DBI:Pg:dbname=freeside
 DB_USER = freeside
 DB_PASSWORD=
 
-#TEMPLATE = asp
-TEMPLATE = mason
+#changable now (some things which should go to the others still go to CONF)
+FREESIDE_CONF = /usr/local/etc/freeside
+FREESIDE_LOG = /usr/local/etc/freeside
+FREESIDE_LOCK = /usr/local/etc/freeside
+FREESIDE_CACHE = /usr/local/etc/freeside
+FREESIDE_EXPORT = /usr/local/etc/freeside
 
-ASP_GLOBAL = /usr/local/etc/freeside/asp-global
-MASON_HANDLER = /usr/local/etc/freeside/handler.pl
-MASONDATA = /usr/local/etc/freeside/masondata
+MASON_HANDLER = ${FREESIDE_CONF}/handler.pl
+MASONDATA = ${FREESIDE_CACHE}/masondata
+
+#mod_perl v1
+APACHE_VERSION = 1
+#mod_perl v2 prereleases up to and including 1.999_21
+#APACHE_VERSON = 1.99
+#mod_perl v2 proper and prereleases 1.999_22 and after
+#APACHE_VERSION = 2
+
+# only mason now
+TEMPLATE = mason
 
 #deb
 FREESIDE_DOCUMENT_ROOT = /var/www/freeside
@@ -41,10 +54,8 @@ INIT_INSTALL = /usr/sbin/update-rc.d freeside defaults 21 20
 #not necessary (freebsd)
 #INIT_INSTALL = /usr/bin/true
 
-#deb
-HTTPD_RESTART = /etc/init.d/apache reload
-#suse
-#HTTPD_RESTART = /etc/init.d/apache restart
+#deb, suse
+HTTPD_RESTART = /etc/init.d/apache restart
 #redhat, fedora, mandrake
 #HTTPD_RESTART = /etc/init.d/httpd restart
 #freebsd
@@ -93,17 +104,16 @@ RT_DB_DATABASE = freeside
 
 #---
 
-#not changable yet
-FREESIDE_CONF = /usr/local/etc/freeside
+
 #rt/config.layout.in
 RT_PATH = /opt/rt3
 
 #only used for dev kludge now, not a big deal
 FREESIDE_PATH = `pwd`
-PERL_INC_DEV_KLUDGE = /usr/local/share/perl/5.8.7/
+PERL_INC_DEV_KLUDGE = /usr/local/share/perl/5.8.8/
 
-VERSION=1.5.8cvs
-TAG=freeside_1_5_8
+VERSION=1.7.2
+TAG=freeside_1_7_2
 
 help:
 	@echo "supported targets:"
@@ -119,27 +129,20 @@ help:
 	@echo
 	@echo "                   dev dev-docs dev-perl-modules"
 	@echo
-	@echo "                   aspdocs masondocs alldocs docs"
+	@echo "                   masondocs alldocs docs"
 	@echo "                   htmlman forcehtmlman"
 	@echo "                   perl-modules"
 	#@echo
 	#@echo "                   upload-docs release update-webdemo"
 
-aspdocs: htmlman httemplate/* httemplate/*/* httemplate/*/*/* httemplate/*/*/*/* httemplate/*/*/*/*/*
-	rm -rf aspdocs
-	cp -pr httemplate aspdocs
-	touch aspdocs
 
-
-masondocs: htmlman httemplate/* httemplate/*/* httemplate/*/*/* httemplate/*/*/*/* httemplate/*/*/*/*/*
+#masondocs: htmlman httemplate/* httemplate/*/* httemplate/*/*/* httemplate/*/*/*/* httemplate/*/*/*/*/*
+masondocs: htmlman httemplate/* httemplate/*/* httemplate/*/*/* httemplate/*/*/*/*
 	rm -rf masondocs
 	cp -pr httemplate masondocs
-	( cd masondocs; \
-	  ../bin/masonize; \
-	)
 	touch masondocs
 
-alldocs: aspdocs masondocs
+alldocs: masondocs
 
 docs:
 	make ${TEMPLATE}docs
@@ -164,29 +167,24 @@ forcehtmlman:
 install-docs: docs
 	[ -e ${FREESIDE_DOCUMENT_ROOT} ] && mv ${FREESIDE_DOCUMENT_ROOT} ${FREESIDE_DOCUMENT_ROOT}.`date +%Y%m%d%H%M%S` || true
 	cp -r ${TEMPLATE}docs ${FREESIDE_DOCUMENT_ROOT}
-	[ "${TEMPLATE}" = "asp" -a ! -e ${ASP_GLOBAL} ] && mkdir ${ASP_GLOBAL} || true
-	[ "${TEMPLATE}" = "asp" ] && chown -R freeside ${ASP_GLOBAL} || true
-	[ "${TEMPLATE}" = "asp" ] && cp htetc/global.asa ${ASP_GLOBAL} || true
-	[ "${TEMPLATE}" = "asp" ] && \
-	  perl -p -i -e "\
-	    s'%%%FREESIDE_DOCUMENT_ROOT%%%'${FREESIDE_DOCUMENT_ROOT}'g; \
-	  " ${ASP_GLOBAL}/global.asa || true
-	[ "${TEMPLATE}" = "mason" ] && cp htetc/handler.pl ${MASON_HANDLER} || true
-	[ "${TEMPLATE}" = "mason" ] && \
+	chown -R freeside:freeside ${FREESIDE_DOCUMENT_ROOT}
+	cp htetc/handler.pl ${MASON_HANDLER}
 	  perl -p -i -e "\
 	    s'%%%FREESIDE_DOCUMENT_ROOT%%%'${FREESIDE_DOCUMENT_ROOT}'g; \
 	    s'%%%RT_ENABLED%%%'${RT_ENABLED}'g; \
-	  " ${MASON_HANDLER} || true
-	[ "${TEMPLATE}" = "mason" -a ! -e ${MASONDATA} ] && mkdir ${MASONDATA} || true
-	[ "${TEMPLATE}" = "mason" ] && chown -R freeside ${MASONDATA} || true
+	    s'%%%MASONDATA%%%'${MASONDATA}'g;\
+	  " ${MASON_HANDLER}
+	[ ! -e ${MASONDATA} ] && mkdir ${MASONDATA} || true
+	chown -R freeside ${MASONDATA}
 
-dev-docs: docs
+dev-docs:
 	[ -e ${FREESIDE_DOCUMENT_ROOT} ] && mv ${FREESIDE_DOCUMENT_ROOT} ${FREESIDE_DOCUMENT_ROOT}.`date +%Y%m%d%H%M%S` || true
-	ln -s ${FREESIDE_PATH}/masondocs ${FREESIDE_DOCUMENT_ROOT}
+	ln -s ${FREESIDE_PATH}/httemplate ${FREESIDE_DOCUMENT_ROOT}
 	cp htetc/handler.pl ${MASON_HANDLER}
 	perl -p -i -e "\
 	  s'%%%FREESIDE_DOCUMENT_ROOT%%%'${FREESIDE_DOCUMENT_ROOT}'g; \
 	  s'%%%RT_ENABLED%%%'${RT_ENABLED}'g; \
+	  s'%%%MASONDATA%%%'${MASONDATA}'g;\
 	  s'###use Module::Refresh;###'use Module::Refresh;'; \
 	  s'###Module::Refresh->refresh;###'Module::Refresh->refresh;'; \
 	" ${MASON_HANDLER} || true
@@ -198,7 +196,20 @@ perl-modules:
 	make; \
 	perl -p -i -e "\
 	  s/%%%VERSION%%%/${VERSION}/g;\
-	" blib/lib/FS.pm
+	" blib/lib/FS.pm;\
+	perl -p -i -e "\
+	  s|%%%FREESIDE_CONF%%%|${FREESIDE_CONF}|g;\
+	" blib/lib/FS/*.pm;\
+	perl -p -i -e "\
+	  s|%%%FREESIDE_EXPORT%%%|${FREESIDE_EXPORT}|g;\
+	" blib/lib/FS/part_export/*.pm;\
+	perl -p -i -e "\
+	  s|%%%FREESIDE_CONF%%%|${FREESIDE_CONF}|g;\
+	  s|%%%FREESIDE_LOG%%%|${FREESIDE_LOG}|g;\
+	  s|%%%FREESIDE_LOCK%%%|${FREESIDE_LOCK}|g;\
+	  s|%%%FREESIDE_CACHE%%%|${FREESIDE_CACHE}|g;\
+	  s|%%%FREESIDE_EXPORT%%%|${FREESIDE_EXPORT}|g;\
+	" blib/script/*
 
 install-perl-modules: perl-modules
 	[ -L ${PERL_INC_DEV_KLUDGE}/FS ] \
@@ -208,13 +219,13 @@ install-perl-modules: perl-modules
 	cd FS; \
 	make install UNINST=1
 
-dev-perl-modules:
+dev-perl-modules: perl-modules
 	[ -d ${PERL_INC_DEV_KLUDGE}/FS -a ! -L ${PERL_INC_DEV_KLUDGE}/FS ] \
 	  && mv ${PERL_INC_DEV_KLUDGE}/FS ${PERL_INC_DEV_KLUDGE}/FS.old \
 	  || true
 
 	rm -rf ${PERL_INC_DEV_KLUDGE}/FS
-	ln -sf ${FREESIDE_PATH}/FS/FS ${PERL_INC_DEV_KLUDGE}/FS
+	ln -sf ${FREESIDE_PATH}/FS/blib/lib/FS ${PERL_INC_DEV_KLUDGE}/FS
 
 install-init:
 	#[ -e ${INIT_FILE} ] || install -o root -g ${INSTALLGROUP} -m 711 init.d/freeside-init ${INIT_FILE}
@@ -227,11 +238,13 @@ install-init:
 	${INIT_INSTALL}
 
 install-apache:
+	[ -e ${APACHE_CONF}/freeside-base.conf ] && rm ${APACHE_CONF}/freeside-base.conf || true
 	[ -d ${APACHE_CONF} ] && \
-	  ( install -o root -m 755 htetc/freeside-base.conf ${APACHE_CONF} && \
+	  ( install -o root -m 755 htetc/freeside-base${APACHE_VERSION}.conf ${APACHE_CONF} && \
 	    ( [ ${RT_ENABLED} -eq 1 ] && install -o root -m 755 htetc/freeside-rt.conf ${APACHE_CONF} || true ) && \
 	    perl -p -i -e "\
 	      s'%%%FREESIDE_DOCUMENT_ROOT%%%'${FREESIDE_DOCUMENT_ROOT}'g; \
+	      s'%%%MASON_HANDLER%%%'${MASON_HANDLER}'g; \
 	    " ${APACHE_CONF}/freeside-*.conf \
 	  ) || true
 
@@ -283,14 +296,14 @@ create-config: install-perl-modules
 	cp `ls -d conf/[a-z]* | grep -v CVS` "${FREESIDE_CONF}/conf.${DATASOURCE}"
 	chown -R freeside "${FREESIDE_CONF}/conf.${DATASOURCE}"
 
-	mkdir "${FREESIDE_CONF}/counters.${DATASOURCE}"
-	chown freeside "${FREESIDE_CONF}/counters.${DATASOURCE}"
+	mkdir "${FREESIDE_CACHE}/counters.${DATASOURCE}"
+	chown freeside "${FREESIDE_CACHE}/counters.${DATASOURCE}"
 
-	mkdir "${FREESIDE_CONF}/cache.${DATASOURCE}"
-	chown freeside "${FREESIDE_CONF}/cache.${DATASOURCE}"
+	mkdir "${FREESIDE_CACHE}/cache.${DATASOURCE}"
+	chown freeside "${FREESIDE_CACHE}/cache.${DATASOURCE}"
 
-	mkdir "${FREESIDE_CONF}/export.${DATASOURCE}"
-	chown freeside "${FREESIDE_CONF}/export.${DATASOURCE}"
+	mkdir "${FREESIDE_EXPORT}/export.${DATASOURCE}"
+	chown freeside "${FREESIDE_EXPORT}/export.${DATASOURCE}"
 
 configure-rt:
 	cd rt; \
@@ -334,8 +347,13 @@ install-rt:
 	[ ${RT_ENABLED} -eq 1 ] && ( cd rt; make install ) || true
 
 clean:
-	rm -rf aspdocs masondocs
-	cd FS; \
+	rm -rf masondocs
+	rm -rf httemplate/docs/man
+	rm -rf pod2htmi.tmp
+	rm -rf pod2htmd.tmp
+	-cd FS; \
+	make clean
+	-cd fs_selfservice/FS-SelfService; \
 	make clean
 
 #these are probably only useful if you're me...
@@ -344,7 +362,8 @@ upload-docs: forcehtmlman
 	ssh 420.am rm -rf /var/www/www.sisd.com/freeside/docs
 	scp -pr httemplate/docs 420.am:/var/www/www.sisd.com/freeside/docs
 
-release: upload-docs
+#release: upload-docs
+release:
 	cd /home/ivan/freeside
 	#cvs tag ${TAG}
 	cvs tag -F ${TAG}

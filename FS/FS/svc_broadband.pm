@@ -85,7 +85,50 @@ points to.  You can ask the object for a copy with the I<hash> method.
 
 =cut
 
+sub table_info {
+  {
+    'name' => 'Broadband',
+    'name_plural' => 'Broadband services',
+    'longname_plural' => 'Fixed (username-less) broadband services',
+    'display_weight' => 50,
+    'cancel_weight'  => 70,
+    'fields' => {
+      'description' => 'Descriptive label for this particular device.',
+      'speed_down'  => 'Maximum download speed for this service in Kbps.  0 denotes unlimited.',
+      'speed_up'    => 'Maximum upload speed for this service in Kbps.  0 denotes unlimited.',
+      'ip_addr'     => 'IP address.  Leave blank for automatic assignment.',
+      'blocknum'    => 'Address block.',
+    },
+  };
+}
+
 sub table { 'svc_broadband'; }
+
+=item search_sql STRING
+
+Class method which returns an SQL fragment to search for the given string.
+
+=cut
+
+sub search_sql {
+  my( $class, $string ) = @_;
+  if ( $string =~ /^(\d{1,3}\.){3}\d{1,3}$/ ) {
+    $class->search_sql_field('ip_addr', $string );
+  } else {
+    '1 = 0'; #false
+  }
+}
+
+=item label
+
+Returns the IP address.
+
+=cut
+
+sub label {
+  my $self = shift;
+  $self->ip_addr;
+}
 
 =item insert [ , OPTION => VALUE ... ]
 
@@ -151,14 +194,28 @@ sub check {
   my $error =
     $self->ut_numbern('svcnum')
     || $self->ut_foreign_key('blocknum', 'addr_block', 'blocknum')
+    || $self->ut_textn('description')
     || $self->ut_number('speed_up')
     || $self->ut_number('speed_down')
     || $self->ut_ipn('ip_addr')
+    || $self->ut_hexn('mac_addr')
+    || $self->ut_hexn('auth_key')
+    || $self->ut_floatn('latitude')
+    || $self->ut_floatn('longitude')
+    || $self->ut_floatn('altitude')
+    || $self->ut_textn('vlan_profile')
   ;
   return $error if $error;
 
   if($self->speed_up < 0) { return 'speed_up must be positive'; }
   if($self->speed_down < 0) { return 'speed_down must be positive'; }
+
+  if($self->latitude < -90 || $self->latitude > 90) {
+    return 'latitude must be between -90 and 90';
+  }
+  if($self->longitude < -180 || $self->longitude > 180) {
+    return 'longitude must be between -180 and 180';
+  }
 
   if (not($self->ip_addr) or $self->ip_addr eq '0.0.0.0') {
     my $next_addr = $self->addr_block->next_free_addr;

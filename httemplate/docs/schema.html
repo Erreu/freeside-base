@@ -199,10 +199,19 @@
         <li>amount
         <li>_date
       </ul>
-    <li><a name="cust_pay_batch" href="man/FS/cust_pay_batch.html">cust_pay_batch</a> - Pending batch
+    <li><a name="pay_batch" href="man/FS/pay_batch.html">pay_batch</a> - Pending batch
+      <ul>
+        <li>batchnum
+        <li>status
+        <li>download
+        <li>upload
+      </ul>
+    <li><a name="cust_pay_batch" href="man/FS/cust_pay_batch.html">cust_pay_batch</a> - Pending batch members
       <ul>
         <li>paybatchnum
-        <li>cardnum
+        <li>batchnum
+        <li>payby - CARD, CHEK, LECB, BILL, or COMP
+        <li>payinfo - account number
         <li>exp - card expiration
         <li>amount
         <li>invnum - <a href="#cust_bill">invoice</a>
@@ -216,6 +225,7 @@
         <li>state
         <li>zip
         <li>country
+        <li>status
       </ul>
     <li><a name="cust_pkg" href="man/FS/cust_pkg.html">cust_pkg</a> - Customer billing items
       <ul>

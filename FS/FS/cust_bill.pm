@@ -1,9 +1,10 @@
 package FS::cust_bill;
 
 use strict;
-use vars qw( @ISA $DEBUG $conf $money_char );
+use vars qw( @ISA $DEBUG $me $conf $money_char );
 use vars qw( $invoice_lines @buf ); #yuck
 use Fcntl qw(:flock); #for spool_csv
+use List::Util qw(min max);
 use IPC::Run3;
 use Date::Format;
 use Text::Template 1.20;
@@ -13,7 +14,7 @@ use HTML::Entities;
 use Locale::Country;
 use FS::UID qw( datasrc );
 use FS::Misc qw( send_email send_fax );
-use FS::Record qw( qsearch qsearchs );
+use FS::Record qw( qsearch qsearchs dbh );
 use FS::cust_main_Mixin;
 use FS::cust_main;
 use FS::cust_bill_pkg;
@@ -21,15 +22,19 @@ use FS::cust_credit;
 use FS::cust_pay;
 use FS::cust_pkg;
 use FS::cust_credit_bill;
+use FS::pay_batch;
 use FS::cust_pay_batch;
 use FS::cust_bill_event;
 use FS::part_pkg;
 use FS::cust_bill_pay;
+use FS::cust_bill_pay_batch;
 use FS::part_bill_event;
+use FS::payby;
 
 @ISA = qw( FS::cust_main_Mixin FS::Record );
 
 $DEBUG = 0;
+$me = '[FS::cust_bill]';
 
 #ask FS::UID to run this stuff for us later
 FS::UID->install_callback( sub { 
@@ -121,8 +126,14 @@ returns the error, otherwise returns false.
 
 =item delete
 
-Currently unimplemented.  I don't remove invoices because there would then be
-no record you ever posted this invoice (which is bad, no?)
+This method now works but you probably shouldn't use it.  Instead, apply a
+credit against the invoice.
+
+Using this method to delete invoices outright is really, really bad.  There
+would be no record you ever posted this invoice, and there are no check to
+make sure charged = 0 or that there are no associated cust_bill_pkg records.
+
+Really, don't use it.
 
 =cut
 
@@ -142,14 +153,20 @@ collect method of a customer object (see L<FS::cust_main>).
 
 =cut
 
-sub replace {
+#replace can be inherited from Record.pm
+
+# replace_check is now the preferred way to #implement replace data checks
+# (so $object->replace() works without an argument)
+
+sub replace_check {
   my( $new, $old ) = ( shift, shift );
   return "Can't change custnum!" unless $old->custnum == $new->custnum;
   #return "Can't change _date!" unless $old->_date eq $new->_date;
   return "Can't change _date!" unless $old->_date == $new->_date;
-  return "Can't change charged!" unless $old->charged == $new->charged;
+  return "Can't change charged!" unless $old->charged == $new->charged
+                                     || $old->charged == 0;
 
-  $new->SUPER::replace($old);
+  '';
 }
 
 =item check
@@ -212,6 +229,47 @@ sub cust_bill_pkg {
   qsearch( 'cust_bill_pkg', { 'invnum' => $self->invnum } );
 }
 
+=item cust_pkg
+
+Returns the packages (see L<FS::cust_pkg>) corresponding to the line items for
+this invoice.
+
+=cut
+
+sub cust_pkg {
+  my $self = shift;
+  my @cust_pkg = map { $_->cust_pkg } $self->cust_bill_pkg;
+  my %saw = ();
+  grep { ! $saw{$_->pkgnum}++ } @cust_pkg;
+}
+
+=item open_cust_bill_pkg
+
+Returns the open line items for this invoice.
+
+Note that cust_bill_pkg with both setup and recur fees are returned as two
+separate line items, each with only one fee.
+
+=cut
+
+# modeled after cust_main::open_cust_bill
+sub open_cust_bill_pkg {
+  my $self = shift;
+
+  # grep { $_->owed > 0 } $self->cust_bill_pkg
+
+  my %other = ( 'recur' => 'setup',
+                'setup' => 'recur', );
+  my @open = ();
+  foreach my $field ( qw( recur setup )) {
+    push @open, map  { $_->set( $other{$field}, 0 ); $_; }
+                grep { $_->owed($field) > 0 }
+                $self->cust_bill_pkg;
+  }
+
+  @open;
+}
+
 =item cust_bill_event
 
 Returns the completed invoice events (see L<FS::cust_bill_event>) for this
@@ -251,7 +309,7 @@ sub cust_suspend_if_balance_over {
   if ( $cust_main->total_owed_date($self->_date) < $amount ) {
     return ();
   } else {
-    $cust_main->suspend;
+    $cust_main->suspend(@_);
   }
 }
 
@@ -354,6 +412,79 @@ sub owed {
   $balance;
 }
 
+=item apply_payments_and_credits
+
+=cut
+
+sub apply_payments_and_credits {
+  my $self = shift;
+
+  my @payments = grep { $_->unapplied > 0 } $self->cust_main->cust_pay;
+  my @credits  = grep { $_->credited > 0 } $self->cust_main->cust_credit;
+
+  while ( $self->owed > 0 and ( @payments || @credits ) ) {
+
+    my $app = '';
+    if ( @payments && @credits ) {
+
+      #decide which goes first by weight of top (unapplied) line item
+
+      my @open_lineitems = $self->open_cust_bill_pkg;
+
+      my $max_pay_weight =
+        max( map { $_->cust_pkg->part_pkg->pay_weight || 0 }
+	         @open_lineitems
+	   );
+      my $max_credit_weight =
+        max( map { $_->cust_pkg->part_pkg->credit_weight || 0 }
+	         @open_lineitems
+           );
+
+      #if both are the same... payments first?  it has to be something
+      if ( $max_pay_weight >= $max_credit_weight ) {
+        $app = 'pay';
+      } else {
+        $app = 'credit';
+      }
+    
+    } elsif ( @payments ) {
+      $app = 'pay';
+    } elsif ( @credits ) {
+      $app = 'credit';
+    } else {
+      die "guru meditation #12 and 35";
+    }
+
+    if ( $app eq 'pay' ) {
+
+      my $payment = shift @payments;
+
+      $app = new FS::cust_bill_pay {
+        'paynum'  => $payment->paynum,
+	'amount'  => sprintf('%.2f', min( $payment->unapplied, $self->owed ) ),
+      };
+
+    } elsif ( $app eq 'credit' ) {
+
+      my $credit = shift @credits;
+
+      $app = new FS::cust_credit_bill {
+        'crednum' => $credit->crednum,
+	'amount'  => sprintf('%.2f', min( $credit->credited, $self->owed ) ),
+      };
+
+    } else {
+      die "guru meditation #12 and 35";
+    }
+
+    $app->invnum( $self->invnum );
+
+    my $error = $app->insert;
+    die $error if $error;
+
+  }
+
+}
 
 =item generate_email PARAMHASH
 
@@ -440,16 +571,17 @@ sub generate_email {
       'Disposition' => 'inline',
     );
 
-    $args{'from'} =~ /\@([\w\.\-]+)/ or $1 = 'example.com';
-    my $content_id = join('.', rand()*(2**32), $$, time). "\@$1";
+    $args{'from'} =~ /\@([\w\.\-]+)/;
+    my $from = $1 || 'example.com';
+    my $content_id = join('.', rand()*(2**32), $$, time). "\@$from";
 
     my $path = "$FS::UID::conf_dir/conf.$FS::UID::datasrc";
     my $file;
-    if ( defined($args{'_template'}) && length($args{'_template'})
-         && -e "$path/logo_". $args{'_template'}. ".png"
+    if ( defined($args{'template'}) && length($args{'template'})
+         && -e "$path/logo_". $args{'template'}. ".png"
        )
     {
-      $file = "$path/logo_". $args{'_template'}. ".png";
+      $file = "$path/logo_". $args{'template'}. ".png";
     } else {
       $file = "$path/logo.png";
     }
@@ -597,6 +729,21 @@ INVOICE_FROM, if specified, overrides the default email invoice From: address.
 
 =cut
 
+sub queueable_send {
+  my %opt = @_;
+
+  my $self = qsearchs('cust_bill', { 'invnum' => $opt{invnum} } )
+    or die "invalid invoice number: " . $opt{invnum};
+
+  my @args = ( $opt{template}, $opt{agentnum} );
+  push @args, $opt{invoice_from}
+    if exists($opt{invoice_from}) && $opt{invoice_from};
+
+  my $error = $self->send( @args );
+  die $error if $error;
+
+}
+
 sub send {
   my $self = shift;
   my $template = scalar(@_) ? shift : '';
@@ -634,6 +781,21 @@ TEMPLATENAME, if specified, is the name of a suffix for alternate invoices.
 INVOICE_FROM, if specified, overrides the default email invoice From: address.
 
 =cut
+
+sub queueable_email {
+  my %opt = @_;
+
+  my $self = qsearchs('cust_bill', { 'invnum' => $opt{invnum} } )
+    or die "invalid invoice number: " . $opt{invnum};
+
+  my @args = ( $opt{template} );
+  push @args, $opt{invoice_from}
+    if exists($opt{invoice_from}) && $opt{invoice_from};
+
+  my $error = $self->email( @args );
+  die $error if $error;
+
+}
 
 sub email {
   my $self = shift;
@@ -824,6 +986,8 @@ Options are:
 
 =item agent_spools - if set to a true value, will spool to per-agent files rather than a single global file
 
+=item balanceover - if set, only spools the invoice if the total amount owed on this invoice and all older invoices is greater than the specified amount.
+
 =back
 
 =cut
@@ -838,6 +1002,11 @@ sub spool_csv {
                              $cust_main->invoicing_list;
     return 'N/A' unless $invoicing_list{$opt{'dest'}}
                      || ! keys %invoicing_list;
+  }
+
+  if ( $opt{'balanceover'} ) {
+    return 'N/A'
+      if $cust_main->total_owed_date($self->_date) < $opt{'balanceover'};
   }
 
   my $spooldir = "/usr/local/etc/freeside/export.". datasrc. "/cust_bill";
@@ -1253,36 +1422,118 @@ sub realtime_bop {
 
 }
 
-=item batch_card
+=item batch_card OPTION => VALUE...
 
 Adds a payment for this invoice to the pending credit card batch (see
-L<FS::cust_pay_batch>).
+L<FS::cust_pay_batch>), or, if the B<realtime> option is set to a true value,
+runs the payment using a realtime gateway.
 
 =cut
 
 sub batch_card {
-  my $self = shift;
+  my ($self, %options) = @_;
   my $cust_main = $self->cust_main;
 
+  my $amount = sprintf("%.2f", $cust_main->balance - $cust_main->in_transit_payments);
+  return '' unless $amount > 0;
+  
+  if ($options{'realtime'}) {
+    return $cust_main->realtime_bop( FS::payby->payby2bop($cust_main->payby),
+                                     $amount,
+                                     %options,
+                                   );
+  }
+
+  my $oldAutoCommit = $FS::UID::AutoCommit;
+  local $FS::UID::AutoCommit = 0;
+  my $dbh = dbh;
+
+  $dbh->do("LOCK TABLE pay_batch IN SHARE ROW EXCLUSIVE MODE")
+    or return "Cannot lock pay_batch: " . $dbh->errstr;
+
+  my %pay_batch = (
+    'status' => 'O',
+    'payby'  => FS::payby->payby2payment($cust_main->payby),
+  );
+
+  my $pay_batch = qsearchs( 'pay_batch', \%pay_batch );
+
+  unless ( $pay_batch ) {
+    $pay_batch = new FS::pay_batch \%pay_batch;
+    my $error = $pay_batch->insert;
+    if ( $error ) {
+      $dbh->rollback if $oldAutoCommit;
+      die "error creating new batch: $error\n";
+    }
+  }
+
+  my $old_cust_pay_batch = qsearchs('cust_pay_batch', {
+      'batchnum' => $pay_batch->batchnum,
+      'custnum'  => $cust_main->custnum,
+  } );
+
   my $cust_pay_batch = new FS::cust_pay_batch ( {
-    'invnum'   => $self->getfield('invnum'),
-    'custnum'  => $cust_main->getfield('custnum'),
+    'batchnum' => $pay_batch->batchnum,
+    'invnum'   => $self->getfield('invnum'),       # is there a better value?
+                                                   # this field should be
+						   # removed...
+						   # cust_bill_pay_batch now
+    'custnum'  => $cust_main->custnum,
     'last'     => $cust_main->getfield('last'),
     'first'    => $cust_main->getfield('first'),
-    'address1' => $cust_main->getfield('address1'),
-    'address2' => $cust_main->getfield('address2'),
-    'city'     => $cust_main->getfield('city'),
-    'state'    => $cust_main->getfield('state'),
-    'zip'      => $cust_main->getfield('zip'),
-    'country'  => $cust_main->getfield('country'),
-    'cardnum'  => $cust_main->payinfo,
-    'exp'      => $cust_main->getfield('paydate'),
-    'payname'  => $cust_main->getfield('payname'),
-    'amount'   => $self->owed,
+    'address1' => $cust_main->address1,
+    'address2' => $cust_main->address2,
+    'city'     => $cust_main->city,
+    'state'    => $cust_main->state,
+    'zip'      => $cust_main->zip,
+    'country'  => $cust_main->country,
+    'payby'    => $cust_main->payby,
+    'payinfo'  => $cust_main->payinfo,
+    'exp'      => $cust_main->paydate,
+    'payname'  => $cust_main->payname,
+    'amount'   => $amount,                          # consolidating
   } );
-  my $error = $cust_pay_batch->insert;
-  die $error if $error;
+  
+  $cust_pay_batch->paybatchnum($old_cust_pay_batch->paybatchnum)
+    if $old_cust_pay_batch;
 
+  my $error;
+  if ($old_cust_pay_batch) {
+    $error = $cust_pay_batch->replace($old_cust_pay_batch)
+  } else {
+    $error = $cust_pay_batch->insert;
+  }
+
+  if ( $error ) {
+    $dbh->rollback if $oldAutoCommit;
+    die $error;
+  }
+
+  my $unapplied = $cust_main->total_credited + $cust_main->total_unapplied_payments + $cust_main->in_transit_payments;
+  foreach my $cust_bill ($cust_main->open_cust_bill) {
+    #$dbh->commit or die $dbh->errstr if $oldAutoCommit;
+    my $cust_bill_pay_batch = new FS::cust_bill_pay_batch {
+      'invnum' => $cust_bill->invnum,
+      'paybatchnum' => $cust_pay_batch->paybatchnum,
+      'amount' => $cust_bill->owed,
+      '_date' => time,
+    };
+    if ($unapplied >= $cust_bill_pay_batch->amount){
+      $unapplied -= $cust_bill_pay_batch->amount;
+      next;
+    }else{
+      $cust_bill_pay_batch->amount(sprintf ( "%.2f", 
+                                   $cust_bill_pay_batch->amount - $unapplied ));
+      $unapplied = 0;
+    }
+    $error = $cust_bill_pay_batch->insert;
+    if ( $error ) {
+      $dbh->rollback if $oldAutoCommit;
+      die $error;
+    }
+  }
+
+  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
   '';
 }
 
@@ -1496,12 +1747,14 @@ sub print_text {
 
   #setup template variables
   package FS::cust_bill::_template; #!
-  use vars qw( $invnum $date $page $total_pages @address $overdue @buf $agent );
+  use vars qw( $custnum $invnum $date $agent @address $overdue
+               $page $total_pages @buf );
 
+  $custnum = $self->custnum;
   $invnum = $self->invnum;
   $date = $self->_date;
-  $page = 1;
   $agent = $self->cust_main->agent->agent;
+  $page = 1;
 
   if ( $FS::cust_bill::invoice_lines ) {
     $total_pages =
@@ -1634,6 +1887,7 @@ sub print_latex {
   }
 
   my %invoice_data = (
+    'custnum'      => $self->custnum,
     'invnum'       => $self->invnum,
     'date'         => time2str('%b %o, %Y', $self->_date),
     'today'        => time2str('%b %o, %Y', $today),
@@ -2034,6 +2288,7 @@ sub print_html {
     or die 'While compiling ' . $templatefile . ': ' . $Text::Template::ERROR;
 
   my %invoice_data = (
+    'custnum'      => $self->custnum,
     'invnum'       => $self->invnum,
     'date'         => time2str('%b&nbsp;%o,&nbsp;%Y', $self->_date),
     'today'        => time2str('%b %o, %Y', $today),
@@ -2095,6 +2350,7 @@ sub print_html {
                        s/\\item /  <li>/;
                        s/\\end\{enumerate\}/<\/ol>/;
                        s/\\textbf\{(.*)\}/<b>$1<\/b>/;
+                       s/\\\\\*/ /;
                        $_;
                      } 
                      $conf->config_orbase('invoice_latexnotes', $template)
@@ -2444,6 +2700,7 @@ use Data::Dumper;
 use MIME::Base64;
 sub process_re_X {
   my( $method, $job ) = ( shift, shift );
+  warn "process_re_X $method for job $job\n" if $DEBUG;
 
   my $param = thaw(decode_base64(shift));
   warn Dumper($param) if $DEBUG;
@@ -2459,6 +2716,10 @@ sub process_re_X {
 sub re_X {
   my($method, $job, %param ) = @_;
 #              [ 'begin', 'end', 'agentnum', 'open', 'days', 'newest_percust' ],
+  if ( $DEBUG ) {
+    warn "re_X $method for job $job with param:\n".
+         join( '', map { "  $_ => ". $param{$_}. "\n" } keys %param );
+  }
 
   #some false laziness w/search/cust_bill.html
   my $distinct = '';

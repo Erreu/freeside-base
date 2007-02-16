@@ -1,0 +1,234 @@
+%
+%
+%  # options example...
+%  #
+%  # 'name'  =>
+%  # 'table' =>
+%  # #? 'primary_key' => #required when the dbdef doesn't know...???
+%  # 'labels' => {
+%  #               'column' => 'Label',
+%  #             }
+%  #
+%  # listref - each item is a literal column name (or method) or hashref
+%  #                                                          or (notyet) coderef
+%  # if not specified all columns (except for the primary key) will be editable
+%  # 'fields' => [
+%  #               'columname',
+%  #               { 'field' => 'another_columname',
+%  #                 'type'  => 'text', #text
+%  #                                    #checkbox
+%  #                                    #select
+%  #                                    #hidden - hidden value from object
+%  #                                    #fixed - display fixed value from here
+%  #                                    #fixedhidden - hidden value from here
+%  #                 'value' => 'Y', #for checkbox, fixed, fixedhidden
+%  #               },
+%  #             ]
+%  #
+%  # 'menubar'     => '', #menubar arrayref
+%  #
+%  # #run when re-displaying with an error
+%  # 'error_callback' => sub { my( $cgi, $object ) = @_; },
+%  #
+%  # #run when editing
+%  # 'edit_callback' => sub { my( $cgi, $object ) = @_; },
+%  #
+%  # # returns a hashref for the new object
+%  # 'new_hashref_callback'
+%  #
+%  # #run when adding
+%  # 'new_callback' => sub { my( $cgi, $object ) = @_; },
+%  #
+%  # #XXX describe
+%  # 'field_callback' => sub { },
+%  #
+%  # #string or coderef of additional HTML to add before </TABLE>
+%  # 'html_table_bottom' => '',
+%  #
+%  # 'viewall_dir' => '', #'search' or 'browse', defaults to 'search'
+%  #
+%  # 'html_bottom' => '', #string
+%  # 'html_bottom' => sub {
+%  #                        my $object = shift;
+%  #                        # ...
+%  #                        "html_string";
+%  #                      },
+%  #
+%  # # overrides default popurl(1)."process/$table.html"
+%  # 'post_url' => popurl(1).'process/something', 
+%
+%  my(%opt) = @_;
+%
+%  #false laziness w/process.html
+%  my $table = $opt{'table'};
+%  my $class = "FS::$table";
+%  my $pkey = dbdef->table($table)->primary_key; #? $opt{'primary_key'} || 
+%  my $fields = $opt{'fields'}
+%               #|| [ grep { $_ ne $pkey } dbdef->table($table)->columns ];
+%               || [ grep { $_ ne $pkey } fields($table) ];
+%  #my @actualfields = map { ref($_) ? $_->{'field'} : $_ } @$fields;
+%
+%  my $object;
+%  if ( $cgi->param('error') ) {
+%
+%    $object = $class->new( {
+%      map { $_ => scalar($cgi->param($_)) } fields($table)
+%    });
+%
+%    &{$opt{'error_callback'}}($cgi, $object)
+%      if $opt{'error_callback'};
+%
+%  } elsif ( $cgi->keywords || $cgi->param($pkey) ) { #editing
+%
+%    my $value;
+%    if ( $cgi->param($pkey) ) {
+%      $value = $cgi->param($pkey)
+%    } else { 
+%      my( $query ) = $cgi->keywords;
+%      $value = $query;
+%    }
+%    $value =~ /^(\d+)$/ or die "unparsable $pkey";
+%    $object = qsearchs( $table, { $pkey => $1 } );
+%    warn "$table $pkey => $1"
+%      if $opt{'debug'};
+%
+%    &{$opt{'edit_callback'}}($cgi, $object)
+%      if $opt{'edit_callback'};
+%
+%  } else { #adding
+%
+%    my $hashref = $opt{'new_hashref_callback'}
+%                    ? &{$opt{'new_hashref_callback'}}
+%                    : {};
+%
+%    $object = $class->new( $hashref );
+%
+%    &{$opt{'new_callback'}}($cgi, $object)
+%      if $opt{'new_callback'};
+%
+%  }
+%
+%  my $action = $object->$pkey() ? 'Edit' : 'Add';
+%
+%  my $title = "$action $opt{'name'}";
+%
+%  my $viewall_url = $p . ( $opt{'viewall_dir'} || 'search' ) . "/$table.html";
+%  $viewall_url = $opt{'viewall_url'} if $opt{'viewall_url'};  
+%
+%  my @menubar = ();
+%  if ( $opt{'menubar'} ) {
+%    @menubar = @{ $opt{'menubar'} };
+%  } else {
+%    @menubar = (
+%      'Main menu' => $p, #eventually get rid of this when the ACL/UI update is done
+%      #eventually use Lingua::bs to pluralize
+%      "View all $opt{'name'}s" => $viewall_url,
+%    );
+%  }
+%
+%
+<% include("/elements/header.html", $title,
+              include( '/elements/menubar.html', @menubar )
+           )
+%>
+% if ( $cgi->param('error') ) { 
+
+  <FONT SIZE="+1" COLOR="#ff0000">Error: <% $cgi->param('error') %></FONT>
+  <BR><BR>
+% } 
+
+% my $url = $opt{'post_url'} || popurl(1)."process/$table.html";
+
+<FORM ACTION="<% $url %>" METHOD=POST>
+<INPUT TYPE="hidden" NAME="svcdb" VALUE="<% $table %>">
+<INPUT TYPE="hidden" NAME="<% $pkey %>" VALUE="<% $object->$pkey() %>">
+<% ( $opt{labels} && exists $opt{labels}->{$pkey} )
+      ? $opt{labels}->{$pkey}
+      : $pkey
+%>
+#<% $object->$pkey() || "(NEW)" %>
+
+<% ntable("#cccccc",2) %>
+% foreach my $f ( map { ref($_) ? $_ : {'field'=>$_} }
+%                       @$fields
+%                 ) {
+%
+%    &{ $opt{'field_callback'} }( $f )
+%      if $opt{'field_callback'};
+%
+%    my $field = $f->{'field'};
+%    my $type = $f->{'type'} ||= 'text';
+%
+%
+
+
+  <TR>
+
+    <TD ALIGN="right">
+      <% ( $opt{labels} && exists $opt{labels}->{$field} )
+              ? $opt{labels}->{$field}
+              : $field
+      %>
+    </TD>
+
+% if ( $type eq 'fixed' ) { 
+
+      <TD BGCOLOR="#dddddd"><% $f->{'value'} %></TD>
+      <INPUT TYPE="hidden" NAME="<% $field %>" VALUE="<% $f->{'value'} %>">
+
+% } elsif ( $type eq 'fixedhidden' ) {
+
+      <INPUT TYPE="hidden" NAME="<% $field %>" VALUE="<% $f->{'value'} %>">
+
+% } elsif ( $type eq 'checkbox' ) { 
+
+      <TD>
+        <INPUT TYPE="checkbox" NAME="<% $field %>" VALUE="<% $f->{'value'} %>" <% $object->$field() eq $f->{'value'} ? ' CHECKED' : '' %>>
+      </TD>
+
+% } elsif ( $type eq 'select' ) { 
+
+      <TD>
+        <SELECT NAME="<% $field %>" 
+%     my $aref = $f->{'value'}{'values'};
+%     my $vkey = $f->{'value'}{'vcolumn'};
+%     my $ckey = $f->{'value'}{'ccolumn'};
+%     foreach my $v (@$aref) {
+	  <OPTION <% ($object->$field() eq $v->$vkey) ? 'SELECTED' : '' %>
+	    VALUE="<% $v->$vkey %>"><% $v->$ckey %></OPTION>
+%     }
+	</SELECT>
+      </TD>
+
+% } else { 
+
+      <TD>
+        <INPUT TYPE="<% $type %>" NAME="<% $field %>" VALUE="<% $object->$field() %>">
+      <TD>
+
+% } 
+
+  </TR>
+
+% } 
+
+<% ref( $opt{'html_table_bottom'} )
+      ? &{ $opt{'html_table_bottom'} }( $object )
+      : $opt{'html_table_bottom'}
+%>
+
+</TABLE>
+
+<% ref( $opt{'html_bottom'} )
+      ? &{ $opt{'html_bottom'} }( $object )
+      : $opt{'html_bottom'}
+%>
+
+<BR>
+
+<INPUT TYPE="submit" VALUE="<% $object->$pkey() ? "Apply changes" : "Add $opt{'name'}" %>">
+
+</FORM>
+
+<% include("/elements/footer.html") %>
+

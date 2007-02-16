@@ -1,20 +1,21 @@
 package FS::cust_pay;
 
 use strict;
-use vars qw( @ISA $conf $unsuspendauto $ignore_noapply );
+use vars qw( @ISA $conf $unsuspendauto $ignore_noapply @encrypted_fields );
 use Date::Format;
 use Business::CreditCard;
 use Text::Template;
 use FS::Misc qw(send_email);
 use FS::Record qw( dbh qsearch qsearchs );
 use FS::cust_main_Mixin;
+use FS::payinfo_Mixin;
 use FS::cust_bill;
 use FS::cust_bill_pay;
 use FS::cust_pay_refund;
 use FS::cust_main;
 use FS::cust_pay_void;
 
-@ISA = qw( FS::cust_main_Mixin FS::Record );
+@ISA = qw(FS::Record FS::cust_main_Mixin FS::payinfo_Mixin  );
 
 $ignore_noapply = 0;
 
@@ -23,6 +24,8 @@ FS::UID->install_callback( sub {
   $conf = new FS::Conf;
   $unsuspendauto = $conf->exists('unsuspendauto');
 } );
+
+@encrypted_fields = ('payinfo');
 
 =head1 NAME
 
@@ -60,12 +63,11 @@ currently supported:
 =item _date - specified as a UNIX timestamp; see L<perlfunc/"time">.  Also see
 L<Time::Local> and L<Date::Parse> for conversion functions.
 
-=item payby - `CARD' (credit cards), `CHEK' (electronic check/ACH),
-`LECB' (phone bill billing), `BILL' (billing), `PREP` (prepaid card),
-`CASH' (cash), `WEST' (Western Union), `MCRD' (Manual credit card), or
-`COMP' (free)
+=item payby - Payment Type (See L<FS::payinfo_Mixin> for valid payby values)
 
-=item payinfo - card number, check #, or comp issuer (4-8 lowercase alphanumerics; think username), respectively
+=item payinfo - Payment Information (See L<FS::payinfo_Mixin> for data format)
+
+=item paymask - Masked payinfo (See L<FS::payinfo_Mixin> for how this works)
 
 =item paybatch - text field for tracking card processing
 
@@ -97,12 +99,15 @@ Adds this payment to the database.
 
 For backwards-compatibility and convenience, if the additional field invnum
 is defined, an FS::cust_bill_pay record for the full amount of the payment
-will be created.  In this case, custnum is optional.
+will be created.  In this case, custnum is optional.  An hash of optional
+arguments may be passed.  Currently "manual" is supported.  If true, a
+payment receipt is sent instead of a statement when 'payment_receipt_email'
+configuration option is set.
 
 =cut
 
 sub insert {
-  my $self = shift;
+  my ($self, %options) = @_;
 
   local $SIG{HUP} = 'IGNORE';
   local $SIG{INT} = 'IGNORE';
@@ -115,8 +120,9 @@ sub insert {
   local $FS::UID::AutoCommit = 0;
   my $dbh = dbh;
 
+  my $cust_bill;
   if ( $self->invnum ) {
-    my $cust_bill = qsearchs('cust_bill', { 'invnum' => $self->invnum } )
+    $cust_bill = qsearchs('cust_bill', { 'invnum' => $self->invnum } )
       or do {
         $dbh->rollback if $oldAutoCommit;
         return "Unknown cust_bill.invnum: ". $self->invnum;
@@ -187,27 +193,36 @@ sub insert {
        && grep { $_ !~ /^(POST|FAX)$/ } $cust_main->invoicing_list
   ) {
 
-    my $receipt_template = new Text::Template (
-      TYPE   => 'ARRAY',
-      SOURCE => [ map "$_\n", $conf->config('payment_receipt_email') ],
-    ) or do {
-      warn "can't create payment receipt template: $Text::Template::ERROR";
-      return '';
-    };
+    $cust_bill ||= ($cust_main->cust_bill)[-1]; #rather inefficient though?
 
-    my @invoicing_list = grep { $_ !~ /^(POST|FAX)$/ } $cust_main->invoicing_list;
+    my $error;
+    if (    ( exists($options{'manual'}) && $options{'manual'} )
+         || ! $conf->exists('invoice_html_statement')
+         || ! $cust_bill
+       ) {
 
-    my $payby = $self->payby;
-    my $payinfo = $self->payinfo;
-    $payby =~ s/^BILL$/Check/ if $payinfo;
-    $payinfo = $self->payinfo_masked if $payby eq 'CARD' || $payby eq 'CHEK';
-    $payby =~ s/^CHEK$/Electronic check/;
+      my $receipt_template = new Text::Template (
+        TYPE   => 'ARRAY',
+        SOURCE => [ map "$_\n", $conf->config('payment_receipt_email') ],
+      ) or do {
+        warn "can't create payment receipt template: $Text::Template::ERROR";
+        return '';
+      };
 
-    my $error = send_email(
-      'from'    => $conf->config('invoice_from'), #??? well as good as any
-      'to'      => \@invoicing_list,
-      'subject' => 'Payment receipt',
-      'body'    => [ $receipt_template->fill_in( HASH => {
+      my @invoicing_list = grep { $_ !~ /^(POST|FAX)$/ }
+                             $cust_main->invoicing_list;
+
+      my $payby = $self->payby;
+      my $payinfo = $self->payinfo;
+      $payby =~ s/^BILL$/Check/ if $payinfo;
+      $payinfo = $self->paymask if $payby eq 'CARD' || $payby eq 'CHEK';
+      $payby =~ s/^CHEK$/Electronic check/;
+
+      $error = send_email(
+        'from'    => $conf->config('invoice_from'), #??? well as good as any
+        'to'      => \@invoicing_list,
+        'subject' => 'Payment receipt',
+        'body'    => [ $receipt_template->fill_in( HASH => {
                        'date'    => time2str("%a %B %o, %Y", $self->_date),
                        'name'    => $cust_main->name,
                        'paynum'  => $self->paynum,
@@ -215,10 +230,24 @@ sub insert {
                        'payby'   => ucfirst(lc($payby)),
                        'payinfo' => $payinfo,
                        'balance' => $cust_main->balance,
-                   } ) ],
-    );
+                     } ) ],
+      );
+
+    } else {
+
+      my $queue = new FS::queue {
+         'paynum' => $self->paynum,
+         'job'    => 'FS::cust_bill::queueable_email',
+      };
+      $error = $queue->insert(
+        'invnum' => $cust_bill->invnum,
+        'template' => 'statement',
+      );
+
+    }
+
     if ( $error ) {
-      warn "can't send payment receipt: $error";
+      warn "can't send payment receipt/statement: $error";
     }
 
   }
@@ -272,12 +301,14 @@ sub void {
 
 =item delete
 
-Deletes this payment and all associated applications (see L<FS::cust_bill_pay>),
-unless the closed flag is set.  In most cases, you want to use the void
-method instead to leave a record of the deleted payment.
+Unless the closed flag is set, deletes this payment and all associated
+applications (see L<FS::cust_bill_pay> and L<FS::cust_pay_refund>).  In most
+cases, you want to use the void method instead to leave a record of the
+deleted payment.
 
 =cut
 
+# very similar to FS::cust_credit::delete
 sub delete {
   my $self = shift;
   return "Can't delete closed payment" if $self->closed =~ /^Y/i;
@@ -325,7 +356,7 @@ sub delete {
         'paid: $'. sprintf("%.2f", $self->paid). "\n",
         'date: '. time2str("%a %b %e %T %Y", $self->_date). "\n",
         'payby: '. $self->payby. "\n",
-        'payinfo: '. $self->payinfo. "\n",
+        'payinfo: '. $self->paymask. "\n",
         'paybatch: '. $self->paybatch. "\n",
       ],
     );
@@ -345,7 +376,16 @@ sub delete {
 
 =item replace OLD_RECORD
 
-You probably shouldn't modify payments...
+You can, but probably shouldn't modify payments...
+
+=cut
+
+sub replace {
+  #return "Can't modify payment!"
+  my $self = shift;
+  return "Can't modify closed payment" if $self->closed =~ /^Y/i;
+  $self->SUPER::replace(@_);
+}
 
 =item check
 
@@ -364,6 +404,7 @@ sub check {
     || $self->ut_numbern('_date')
     || $self->ut_textn('paybatch')
     || $self->ut_enum('closed', [ '', 'Y' ])
+    || $self->payinfo_check()
   ;
   return $error if $error;
 
@@ -374,30 +415,6 @@ sub check {
            || qsearchs( 'cust_main', { 'custnum' => $self->custnum } );
 
   $self->_date(time) unless $self->_date;
-
-  $self->payby =~ /^(CARD|CHEK|LECB|BILL|COMP|PREP|CASH|WEST|MCRD)$/
-    or return "Illegal payby";
-  $self->payby($1);
-
-  #false laziness with cust_refund::check
-  if ( $self->payby eq 'CARD' ) {
-    my $payinfo = $self->payinfo;
-    $payinfo =~ s/\D//g;
-    $self->payinfo($payinfo);
-    if ( $self->payinfo ) {
-      $self->payinfo =~ /^(\d{13,16})$/
-        or return "Illegal (mistyped?) credit card number (payinfo)";
-      $self->payinfo($1);
-      validate($self->payinfo) or return "Illegal credit card number";
-      return "Unknown card type" if cardtype($self->payinfo) eq "Unknown";
-    } else {
-      $self->payinfo('N/A');
-    }
-
-  } else {
-    $error = $self->ut_textn('payinfo');
-    return $error if $error;
-  }
 
   $self->SUPER::check;
 }
@@ -438,7 +455,7 @@ sub batch_insert {
   my $errors = 0;
   
   my @errors = map {
-    my $error = $_->insert;
+    my $error = $_->insert( 'manual' => 1 );
     if ( $error ) { 
       $errors++;
     } else {
@@ -529,33 +546,11 @@ sub cust_main {
   qsearchs( 'cust_main', { 'custnum' => $self->custnum } );
 }
 
-=item payinfo_masked
-
-Returns a "masked" payinfo field with all but the last four characters replaced
-by 'x'es.  Useful for displaying credit cards.
-
-=cut
-
-sub payinfo_masked {
-  my $self = shift;
-  #some false laziness w/cust_main::paymask
-  if ( $self->payby eq 'CARD' ) {
-    my $payinfo = $self->payinfo;
-    'x'x(length($payinfo)-4). substr($payinfo,(length($payinfo)-4));
-  } elsif ( $self->payby eq 'CHEK' ) {
-    my( $account, $aba ) = split('@', $self->payinfo );
-    'x'x(length($account)-2). substr($account,(length($account)-2)). "@". $aba;
-  } else {
-    $self->payinfo;
-  }
-}
-
 =back
 
 =head1 BUGS
 
-Delete and replace methods.  payinfo_masked false laziness with cust_main.pm
-and cust_refund.pm
+Delete and replace methods.  
 
 =head1 SEE ALSO
 

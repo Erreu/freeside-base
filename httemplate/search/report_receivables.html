@@ -1,0 +1,26 @@
+<% include('/elements/header.html', 'Accounts Receivable Aging Summary' ) %>
+
+    <FORM ACTION="report_receivables.cgi" METHOD="GET">
+
+    <TABLE>
+
+      <% include( '/elements/tr-select-agent.html' ) %>
+
+      <TR>
+        <TD ALIGN="right">Over </TD>
+        <TD><INPUT NAME="days" TYPE="text" SIZE=4 MAXLENGTH=3> days</TD>
+      </TR>
+
+    </TABLE>
+
+    <BR><INPUT TYPE="submit" VALUE="Get Report">
+    </FORM>
+
+  </BODY>
+</HTML>
+<%init>
+
+die "access denied"
+  unless $FS::CurrentUser::CurrentUser->access_right('Financial reports');
+
+</%init>

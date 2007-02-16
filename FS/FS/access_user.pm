@@ -1,0 +1,399 @@
+package FS::access_user;
+
+use strict;
+use vars qw( @ISA $htpasswd_file );
+use FS::UID;
+use FS::Conf;
+use FS::Record qw( qsearch qsearchs dbh );
+use FS::m2m_Common;
+use FS::option_Common;
+use FS::access_usergroup;
+use FS::agent;
+
+@ISA = qw( FS::m2m_Common FS::option_Common FS::Record );
+#@ISA = qw( FS::m2m_Common FS::option_Common );
+
+#kludge htpasswd for now (i hope this bootstraps okay)
+FS::UID->install_callback( sub {
+  my $conf = new FS::Conf;
+  $htpasswd_file = $conf->base_dir. '/htpasswd';
+} );
+
+=head1 NAME
+
+FS::access_user - Object methods for access_user records
+
+=head1 SYNOPSIS
+
+  use FS::access_user;
+
+  $record = new FS::access_user \%hash;
+  $record = new FS::access_user { 'column' => 'value' };
+
+  $error = $record->insert;
+
+  $error = $new_record->replace($old_record);
+
+  $error = $record->delete;
+
+  $error = $record->check;
+
+=head1 DESCRIPTION
+
+An FS::access_user object represents an internal access user.  FS::access_user inherits from
+FS::Record.  The following fields are currently supported:
+
+=over 4
+
+=item usernum - primary key
+
+=item username - 
+
+=item _password - 
+
+=item last -
+
+=item first -
+
+=item disabled - empty or 'Y'
+
+=back
+
+=head1 METHODS
+
+=over 4
+
+=item new HASHREF
+
+Creates a new internal access user.  To add the user to the database, see L<"insert">.
+
+Note that this stores the hash reference, not a distinct copy of the hash it
+points to.  You can ask the object for a copy with the I<hash> method.
+
+=cut
+
+# the new method can be inherited from FS::Record, if a table method is defined
+
+sub table { 'access_user'; }
+
+sub _option_table    { 'access_user_pref'; }
+sub _option_namecol  { 'prefname'; }
+sub _option_valuecol { 'prefvalue'; }
+
+=item insert
+
+Adds this record to the database.  If there is an error, returns the error,
+otherwise returns false.
+
+=cut
+
+sub insert {
+  my $self = shift;
+
+  local $SIG{HUP} = 'IGNORE';
+  local $SIG{INT} = 'IGNORE';
+  local $SIG{QUIT} = 'IGNORE';
+  local $SIG{TERM} = 'IGNORE';
+  local $SIG{TSTP} = 'IGNORE';
+  local $SIG{PIPE} = 'IGNORE';
+
+  my $oldAutoCommit = $FS::UID::AutoCommit;
+  local $FS::UID::AutoCommit = 0;
+  my $dbh = dbh;
+
+  my $error = $self->htpasswd_kludge();
+  if ( $error ) {
+    $dbh->rollback or die $dbh->errstr if $oldAutoCommit;
+    return $error;
+  }
+
+  $error = $self->SUPER::insert(@_);
+
+  if ( $error ) {
+    $dbh->rollback or die $dbh->errstr if $oldAutoCommit;
+    return $error;
+  } else {
+    $dbh->commit or die $dbh->errstr if $oldAutoCommit;
+    '';
+  }
+
+}
+
+sub htpasswd_kludge {
+  my $self = shift;
+  
+  #awful kludge to skip setting htpasswd for fs_* users
+  return '' if $self->username =~ /^fs_/;
+
+  unshift @_, '-c' unless -e $htpasswd_file;
+  if ( 
+       system('htpasswd', '-b', @_,
+                          $htpasswd_file,
+                          $self->username,
+                          $self->_password,
+             ) == 0
+     )
+  {
+    return '';
+  } else {
+    return 'htpasswd exited unsucessfully';
+  }
+}
+
+=item delete
+
+Delete this record from the database.
+
+=cut
+
+sub delete {
+  my $self = shift;
+
+  local $SIG{HUP} = 'IGNORE';
+  local $SIG{INT} = 'IGNORE';
+  local $SIG{QUIT} = 'IGNORE';
+  local $SIG{TERM} = 'IGNORE';
+  local $SIG{TSTP} = 'IGNORE';
+  local $SIG{PIPE} = 'IGNORE';
+
+  my $oldAutoCommit = $FS::UID::AutoCommit;
+  local $FS::UID::AutoCommit = 0;
+  my $dbh = dbh;
+
+  my $error =
+       $self->SUPER::delete(@_)
+    || $self->htpasswd_kludge('-D')
+  ;
+
+  if ( $error ) {
+    $dbh->rollback or die $dbh->errstr if $oldAutoCommit;
+    return $error;
+  } else {
+    $dbh->commit or die $dbh->errstr if $oldAutoCommit;
+    '';
+  }
+
+}
+
+=item replace OLD_RECORD
+
+Replaces the OLD_RECORD with this one in the database.  If there is an error,
+returns the error, otherwise returns false.
+
+=cut
+
+sub replace {
+  my $new = shift;
+
+  my $old = ( ref($_[0]) eq ref($new) )
+              ? shift
+              : $new->replace_old;
+
+  local $SIG{HUP} = 'IGNORE';
+  local $SIG{INT} = 'IGNORE';
+  local $SIG{QUIT} = 'IGNORE';
+  local $SIG{TERM} = 'IGNORE';
+  local $SIG{TSTP} = 'IGNORE';
+  local $SIG{PIPE} = 'IGNORE';
+
+  my $oldAutoCommit = $FS::UID::AutoCommit;
+  local $FS::UID::AutoCommit = 0;
+  my $dbh = dbh;
+
+  if ( $new->_password ne $old->_password ) {
+    my $error = $new->htpasswd_kludge();
+    if ( $error ) {
+      $dbh->rollback or die $dbh->errstr if $oldAutoCommit;
+      return $error;
+    }
+  }
+
+  my $error = $new->SUPER::replace($old, @_);
+
+  if ( $error ) {
+    $dbh->rollback or die $dbh->errstr if $oldAutoCommit;
+    return $error;
+  } else {
+    $dbh->commit or die $dbh->errstr if $oldAutoCommit;
+    '';
+  }
+
+}
+
+=item check
+
+Checks all fields to make sure this is a valid internal access user.  If there is
+an error, returns the error, otherwise returns false.  Called by the insert
+and replace methods.
+
+=cut
+
+# the check method should currently be supplied - FS::Record contains some
+# data checking routines
+
+sub check {
+  my $self = shift;
+
+  my $error = 
+    $self->ut_numbern('usernum')
+    || $self->ut_alpha('username')
+    || $self->ut_text('_password')
+    || $self->ut_text('last')
+    || $self->ut_text('first')
+    || $self->ut_enum('disabled', [ '', 'Y' ] )
+  ;
+  return $error if $error;
+
+  $self->SUPER::check;
+}
+
+=item name
+
+Returns a name string for this user: "Last, First".
+
+=cut
+
+sub name {
+  my $self = shift;
+  $self->get('last'). ', '. $self->first;
+}
+
+=item access_usergroup
+
+=cut
+
+sub access_usergroup {
+  my $self = shift;
+  qsearch( 'access_usergroup', { 'usernum' => $self->usernum } );
+}
+
+#=item access_groups
+#
+#=cut
+#
+#sub access_groups {
+#
+#}
+#
+#=item access_groupnames
+#
+#=cut
+#
+#sub access_groupnames {
+#
+#}
+
+=item agentnums 
+
+Returns a list of agentnums this user can view (via group membership).
+
+=cut
+
+sub agentnums {
+  my $self = shift;
+  my $sth = dbh->prepare(
+    "SELECT DISTINCT agentnum FROM access_usergroup
+                              JOIN access_groupagent USING ( groupnum )
+       WHERE usernum = ?"
+  ) or die dbh->errstr;
+  $sth->execute($self->usernum) or die $sth->errstr;
+  map { $_->[0] } @{ $sth->fetchall_arrayref };
+}
+
+=item agentnums_href
+
+Returns a hashref of agentnums this user can view.
+
+=cut
+
+sub agentnums_href {
+  my $self = shift;
+  { map { $_ => 1 } $self->agentnums };
+}
+
+=item agentnums_sql
+
+Returns an sql fragement to select only agentnums this user can view.
+
+=cut
+
+sub agentnums_sql {
+  my $self = shift;
+
+  my @agentnums = map { "agentnum = $_" } $self->agentnums;
+
+  push @agentnums, 'agentnum IS NULL'
+    if $self->access_right('View/link unlinked services');
+
+  return ' 1 = 0 ' unless scalar(@agentnums);
+  '( '. join( ' OR ', @agentnums ). ' )';
+}
+
+=item agentnum
+
+Returns true if the user can view the specified agent.
+
+=cut
+
+sub agentnum {
+  my( $self, $agentnum ) = @_;
+  my $sth = dbh->prepare(
+    "SELECT COUNT(*) FROM access_usergroup
+                     JOIN access_groupagent USING ( groupnum )
+       WHERE usernum = ? AND agentnum = ?"
+  ) or die dbh->errstr;
+  $sth->execute($self->usernum, $agentnum) or die $sth->errstr;
+  $sth->fetchrow_arrayref->[0];
+}
+
+=item agents
+
+Returns the list of agents this user can view (via group membership), as
+FS::agent objects.
+
+=cut
+
+sub agents {
+  my $self = shift;
+  qsearch({
+    'table'     => 'agent',
+    'hashref'   => { disabled=>'' },
+    'extra_sql' => ' AND '. $self->agentnums_sql,
+  });
+}
+
+=item access_right
+
+Given a right name, returns true if this user has this right (currently via
+group membership, eventually also via user overrides).
+
+=cut
+
+sub access_right {
+  my( $self, $rightname ) = @_;
+  my $sth = dbh->prepare("
+    SELECT groupnum FROM access_usergroup
+                    LEFT JOIN access_group USING ( groupnum )
+                    LEFT JOIN access_right
+                         ON ( access_group.groupnum = access_right.rightobjnum )
+      WHERE usernum = ?
+        AND righttype = 'FS::access_group'
+        AND rightname = ?
+  ") or die dbh->errstr;
+  $sth->execute($self->usernum, $rightname) or die $sth->errstr;
+  my $row = $sth->fetchrow_arrayref;
+  $row ? $row->[0] : '';
+}
+
+=back
+
+=head1 BUGS
+
+=head1 SEE ALSO
+
+L<FS::Record>, schema.html from the base documentation.
+
+=cut
+
+1;
+

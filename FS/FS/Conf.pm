@@ -1,9 +1,14 @@
 package FS::Conf;
 
-use vars qw($default_dir @config_items $DEBUG );
+use vars qw($default_dir $base_dir @config_items @card_types $DEBUG );
 use IO::File;
 use File::Basename;
 use FS::ConfItem;
+use FS::ConfDefaults;
+
+$base_dir = '%%%FREESIDE_CONF%%%';
+$default_dir = '%%%FREESIDE_CONF%%%';
+
 
 $DEBUG = 0;
 
@@ -51,13 +56,15 @@ $FS::Conf::default_dir has not been set.
 sub new {
   my($proto,$dir) = @_;
   my($class) = ref($proto) || $proto;
-  my($self) = { 'dir' => $dir || $default_dir } ;
+  my($self) = { 'dir'      => $dir || $default_dir,
+                'base_dir' => $base_dir,
+              };
   bless ($self, $class);
 }
 
 =item dir
 
-Returns the directory.
+Returns the conf directory.
 
 =cut
 
@@ -69,6 +76,23 @@ sub dir {
   -r $dir or die "FATAL: Can't read $dir!";
   -x $dir or die "FATAL: $dir not searchable (executable)!";
   $dir =~ /^(.*)$/;
+  $1;
+}
+
+=item base_dir
+
+Returns the base directory.  By default this is /usr/local/etc/freeside.
+
+=cut
+
+sub base_dir {
+  my($self) = @_;
+  my $base_dir = $self->{base_dir};
+  -e $base_dir or die "FATAL: $base_dir doesn't exist!";
+  -d $base_dir or die "FATAL: $base_dir isn't a directory!";
+  -r $base_dir or die "FATAL: Can't read $base_dir!";
+  -x $base_dir or die "FATAL: $base_dir not searchable (executable)!";
+  $base_dir =~ /^(.*)$/;
   $1;
 }
 
@@ -283,6 +307,20 @@ httemplate/docs/config.html
 
 =cut
 
+#Business::CreditCard
+@card_types = (
+  "VISA card",
+  "MasterCard",
+  "Discover card",
+  "American Express card",
+  "Diner's Club/Carte Blanche",
+  "enRoute",
+  "JCB",
+  "BankCard",
+  "Switch",
+  "Solo",
+);
+
 @config_items = map { new FS::ConfItem $_ } (
 
   {
@@ -412,6 +450,17 @@ httemplate/docs/config.html
   },
 
   {
+    'key'         => 'date_format',
+    'section'     => 'UI',
+    'description' => 'Format for displaying dates',
+    'type'        => 'select',
+    'select_hash' => [
+                       '%m/%d/%Y' => 'MM/DD/YYYY',
+		       '%Y/%m/%d' => 'YYYY/MM/DD',
+                     ],
+  },
+
+  {
     'key'         => 'cyrus',
     'section'     => 'deprecated',
     'description' => '<b>DEPRECATED</b>, add a <i>cyrus</i> <a href="../browse/part_export.cgi">export</a> instead.  This option used to integrate with <a href="http://asg.web.cmu.edu/cyrus/imapd/">Cyrus IMAP Server</a>, three lines: IMAP server, admin username, and admin password.  Cyrus::IMAP::Admin should be installed locally and the connection to the server secured.',
@@ -434,29 +483,36 @@ httemplate/docs/config.html
 
   {
     'key'         => 'deletepayments',
-    'section'     => 'UI',
-    'description' => 'Enable deletion of unclosed payments.  Be very careful!  Only delete payments that were data-entry errors, not adjustments.  Optionally specify one or more comma-separated email addresses to be notified when a payment is deleted.',
+    'section'     => 'billing',
+    'description' => 'Enable deletion of unclosed payments.  Really, with voids this is pretty much not recommended in any situation anymore.  Be very careful!  Only delete payments that were data-entry errors, not adjustments.  Optionally specify one or more comma-separated email addresses to be notified when a payment is deleted.',
     'type'        => [qw( checkbox text )],
   },
 
   {
     'key'         => 'deletecredits',
-    'section'     => 'UI',
-    'description' => 'Enable deletion of unclosed credits.  Be very careful!  Only delete credits that were data-entry errors, not adjustments.  Optionally specify one or more comma-separated email addresses to be notified when a credit is deleted.',
+    'section'     => 'deprecated',
+    'description' => '<B>DEPRECATED</B>, now controlled by ACLs.  Used to enable deletion of unclosed credits.  Be very careful!  Only delete credits that were data-entry errors, not adjustments.  Optionally specify one or more comma-separated email addresses to be notified when a credit is deleted.',
     'type'        => [qw( checkbox text )],
   },
 
   {
+    'key'         => 'deleterefunds',
+    'section'     => 'billing',
+    'description' => 'Enable deletion of unclosed refunds.  Be very careful!  Only delete refunds that were data-entry errors, not adjustments.',
+    'type'        => 'checkbox',
+  },
+
+  {
     'key'         => 'unapplypayments',
-    'section'     => 'UI',
-    'description' => 'Enable "unapplication" of unclosed payments.',
+    'section'     => 'deprecated',
+    'description' => '<B>DEPRECATED</B>, now controlled by ACLs.  Used to enable "unapplication" of unclosed payments.',
     'type'        => 'checkbox',
   },
 
   {
     'key'         => 'unapplycredits',
-    'section'     => 'UI',
-    'description' => 'Enable "unapplication" of unclosed credits.',
+    'section'     => 'deprecated',
+    'description' => '<B>DEPRECATED</B>, now controlled by ACLs.  Used to nable "unapplication" of unclosed credits.',
     'type'        => 'checkbox',
   },
 
@@ -499,6 +555,13 @@ httemplate/docs/config.html
     'key'         => 'emailinvoiceauto',
     'section'     => 'billing',
     'description' => 'Automatically adds new accounts to the email invoice list',
+    'type'       => 'checkbox',
+  },
+
+  {
+    'key'         => 'emailinvoiceautoalways',
+    'section'     => 'billing',
+    'description' => 'Automatically adds new accounts to the email invoice list even when the list contains email addresses',
     'type'       => 'checkbox',
   },
 
@@ -988,6 +1051,13 @@ httemplate/docs/config.html
   },
 
   {
+    'key'         => 'unsuspend-always_adjust_next_bill_date',
+    'section'     => 'billing',
+    'description' => 'Global override that causes unsuspensions to always adjust the next bill date under any circumstances.  This is now controlled on a per-package bases - probably best not to use this option unless you are a legacy installation that requires this behaviour.',
+    'type'        => 'checkbox',
+  },
+
+  {
     'key'         => 'usernamemin',
     'section'     => 'username',
     'description' => 'Minimum username length (default 2)',
@@ -1176,15 +1246,63 @@ httemplate/docs/config.html
   {
     'key'         => 'signup_server-default_agentnum',
     'section'     => '',
-    'description' => 'Default agentnum for the signup server',
-    'type'        => 'text',
+    'description' => 'Default agent for the signup server',
+    'type'        => 'select-sub',
+    'options_sub' => sub { require FS::Record;
+                           require FS::agent;
+			   map { $_->agentnum => $_->agent }
+                               FS::Record::qsearch('agent', { disabled=>'' } );
+			 },
+    'option_sub'  => sub { require FS::Record;
+                           require FS::agent;
+			   my $agent = FS::Record::qsearchs(
+			     'agent', { 'agentnum'=>shift }
+			   );
+                           $agent ? $agent->agent : '';
+			 },
   },
 
   {
     'key'         => 'signup_server-default_refnum',
     'section'     => '',
-    'description' => 'Default advertising source number for the signup server',
-    'type'        => 'text',
+    'description' => 'Default advertising source for the signup server',
+    'type'        => 'select-sub',
+    'options_sub' => sub { require FS::Record;
+                           require FS::part_referral;
+                           map { $_->refnum => $_->referral }
+                               FS::Record::qsearch( 'part_referral', 
+			                            { 'disabled' => '' }
+						  );
+			 },
+    'option_sub'  => sub { require FS::Record;
+                           require FS::part_referral;
+                           my $part_referral = FS::Record::qsearchs(
+			     'part_referral', { 'refnum'=>shift } );
+                           $part_referral ? $part_referral->referral : '';
+			 },
+  },
+
+  {
+    'key'         => 'signup_server-default_pkgpart',
+    'section'     => '',
+    'description' => 'Default pakcage for the signup server',
+    'type'        => 'select-sub',
+    'options_sub' => sub { require FS::Record;
+                           require FS::part_pkg;
+                           map { $_->pkgpart => $_->pkg.' - '.$_->comment }
+                               FS::Record::qsearch( 'part_pkg',
+			                            { 'disabled' => ''}
+						  );
+			 },
+    'option_sub'  => sub { require FS::Record;
+                           require FS::part_pkg;
+                           my $part_pkg = FS::Record::qsearchs(
+			     'part_pkg', { 'pkgpart'=>shift }
+			   );
+                           $part_pkg
+			     ? $part_pkg->pkg.' - '.$part_pkg->comment
+			     : '';
+			 },
   },
 
   {
@@ -1199,6 +1317,43 @@ httemplate/docs/config.html
     'section'     => '',
     'description' => 'Run billing for signup server signups immediately, and do not provision accounts which subsequently have a balance.',
     'type'        => 'checkbox',
+  },
+  {
+    'key'         => 'signup_server-classnum2',
+    'section'     => '',
+    'description' => 'Package Class for first optional purchase',
+    'type'        => 'select-sub',
+    'options_sub' => sub { require FS::Record;
+                           require FS::pkg_class;
+                           map { $_->classnum => $_->classname }
+                               FS::Record::qsearch('pkg_class', {} );
+		         },
+    'option_sub'  => sub { require FS::Record;
+                           require FS::pkg_class;
+                           my $pkg_class = FS::Record::qsearchs(
+			     'pkg_class', { 'classnum'=>shift }
+			   );
+                           $pkg_class ? $pkg_class->classname : '';
+			 },
+  },
+
+  {
+    'key'         => 'signup_server-classnum3',
+    'section'     => '',
+    'description' => 'Package Class for second optional purchase',
+    'type'        => 'select-sub',
+    'options_sub' => sub { require FS::Record;
+                           require FS::pkg_class;
+                           map { $_->classnum => $_->classname }
+                               FS::Record::qsearch('pkg_class', {} );
+		         },
+    'option_sub'  => sub { require FS::Record;
+                           require FS::pkg_class;
+                           my $pkg_class = FS::Record::qsearchs(
+			     'pkg_class', { 'classnum'=>shift }
+			   );
+                           $pkg_class ? $pkg_class->classname : '';
+			 },
   },
 
   {
@@ -1301,6 +1456,42 @@ httemplate/docs/config.html
   },
 
   {
+    'key'         => 'warning_email',
+    'section'     => '',
+    'description' => 'Template file for warning email.  Warning emails are sent to the customer email invoice destination(s) each time a svc_acct record has its usage drop below a threshold or 0.  See the <a href="http://search.cpan.org/~mjd/Text-Template/lib/Text/Template.pm">Text::Template</a> documentation for details on the template substitution language.  The following variables are available<ul><li><code>$username</code> <li><code>$password</code> <li><code>$first</code> <li><code>$last</code> <li><code>$pkg</code> <li><code>$column</code> <li><code>$amount</code> <li><code>$threshold</code></ul>',
+    'type'        => 'textarea',
+  },
+
+  {
+    'key'         => 'warning_email-from',
+    'section'     => '',
+    'description' => 'From: address header for warning email',
+    'type'        => 'text',
+  },
+
+  {
+    'key'         => 'warning_email-cc',
+    'section'     => '',
+    'description' => 'Additional recipient(s) (comma separated) for warning email when remaining usage reaches zero.',
+    'type'        => 'text',
+  },
+
+  {
+    'key'         => 'warning_email-subject',
+    'section'     => '',
+    'description' => 'Subject: header for warning email',
+    'type'        => 'text',
+  },
+  
+  {
+    'key'         => 'warning_email-mimetype',
+    'section'     => '',
+    'description' => 'MIME type for warning email',
+    'type'        => 'select',
+    'select_enum' => [ 'text/plain', 'text/html' ],
+  },
+
+  {
     'key'         => 'payby',
     'section'     => 'billing',
     'description' => 'Available payment types.',
@@ -1362,8 +1553,8 @@ httemplate/docs/config.html
 
   {
     'key'         => 'users-allow_comp',
-    'section'     => '',
-    'description' => 'Usernames (Freeside users, created with <a href="../docs/man/bin/freeside-adduser.html">freeside-adduser</a>) which can create complimentary customers, one per line.  If no usernames are entered, all users can create complimentary accounts.',
+    'section'     => 'deprecated',
+    'description' => '<b>DEPRECATED</b>, enable the <i>Complimentary customer</i> access right instead.  Was: Usernames (Freeside users, created with <a href="../docs/man/bin/freeside-adduser.html">freeside-adduser</a>) which can create complimentary customers, one per line.  If no usernames are entered, all users can create complimentary accounts.',
     'type'        => 'textarea',
   },
 
@@ -1372,15 +1563,7 @@ httemplate/docs/config.html
     'section'     => 'billing',
     'description' => 'Save CVV2 information after the initial transaction for the selected credit card types.  Enabling this option may be in violation of your merchant agreement(s), so please check them carefully before enabling this option for any credit card types.',
     'type'        => 'selectmultiple',
-    'select_enum' => [ "VISA card",
-                       "MasterCard",
-                       "Discover card",
-                       "American Express card",
-                       "Diner's Club/Carte Blanche",
-                       "enRoute",
-                       "JCB",
-                       "BankCard",
-                     ],
+    'select_enum' => \@card_types,
   },
 
   {
@@ -1455,9 +1638,9 @@ httemplate/docs/config.html
   {
     'key'         => 'global_unique-username',
     'section'     => 'username',
-    'description' => 'Global username uniqueness control: none (usual setting - check uniqueness per exports), username (all usernames are globally unique, regardless of domain or exports), or username@domain (all username@domain pairs are globally unique, regardless of exports)',
+    'description' => 'Global username uniqueness control: none (usual setting - check uniqueness per exports), username (all usernames are globally unique, regardless of domain or exports), or username@domain (all username@domain pairs are globally unique, regardless of exports).  disabled turns off duplicate checking completely and is STRONGLY NOT RECOMMENDED unless you REALLY need to turn this off.',
     'type'        => 'select',
-    'select_enum' => [ 'none', 'username', 'username@domain' ],
+    'select_enum' => [ 'none', 'username', 'username@domain', 'disabled' ],
   },
 
   {
@@ -1556,22 +1739,22 @@ httemplate/docs/config.html
 
   {
     'key'         => 'echeck-void',
-    'section'     => 'billing',
-    'description' => 'Enable local-only voiding of echeck payments in addition to refunds against the payment gateway',
+    'section'     => 'deprecated',
+    'description' => '<B>DEPRECATED</B>, now controlled by ACLs.  Used to enable local-only voiding of echeck payments in addition to refunds against the payment gateway',
     'type'        => 'checkbox',
   },
 
   {
     'key'         => 'cc-void',
-    'section'     => 'billing',
-    'description' => 'Enable local-only voiding of credit card payments in addition to refunds against the payment gateway',
+    'section'     => 'deprecated',
+    'description' => '<B>DEPRECATED</B>, now controlled by ACLs.  Used to enable local-only voiding of credit card payments in addition to refunds against the payment gateway',
     'type'        => 'checkbox',
   },
 
   {
     'key'         => 'unvoid',
-    'section'     => 'billing',
-    'description' => 'Enable unvoiding of voided payments',
+    'section'     => 'deprecated',
+    'description' => '<B>DEPRECATED</B>, now controlled by ACLs.  Used to enable unvoiding of voided payments',
     'type'        => 'checkbox',
   },
 
@@ -1605,32 +1788,30 @@ httemplate/docs/config.html
   {
     'key'         => 'svc_acct-usage_suspend',
     'section'     => 'billing',
-    'description' => 'Suspends the package an account belongs to when svc_acct.seconds is decremented to 0 or below (accounts with an empty seconds value are ignored).  Typically used in conjunction with prepaid packages and freeside-sqlradius-radacctd.',
+    'description' => 'Suspends the package an account belongs to when svc_acct.seconds or a bytecount is decremented to 0 or below (accounts with an empty seconds and up|down|totalbytes value are ignored).  Typically used in conjunction with prepaid packages and freeside-sqlradius-radacctd.',
     'type'        => 'checkbox',
   },
 
   {
     'key'         => 'svc_acct-usage_unsuspend',
     'section'     => 'billing',
-    'description' => 'Unuspends the package an account belongs to when svc_acct.seconds is incremented from 0 or below to a positive value (accounts with an empty seconds value are ignored).  Typically used in conjunction with prepaid packages and freeside-sqlradius-radacctd.',
+    'description' => 'Unuspends the package an account belongs to when svc_acct.seconds or a bytecount is incremented from 0 or below to a positive value (accounts with an empty seconds and up|down|totalbytes value are ignored).  Typically used in conjunction with prepaid packages and freeside-sqlradius-radacctd.',
     'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'svc_acct-usage_threshold',
+    'section'     => 'billing',
+    'description' => 'The threshold (expressed as percentage) of acct.seconds or acct.up|down|totalbytes at which a warning message is sent to a service holder.  Typically used in conjunction with prepaid packages and freeside-sqlradius-radacctd.  Defaults to 80.',
+    'type'        => 'text',
   },
 
   {
     'key'         => 'cust-fields',
     'section'     => 'UI',
-    'description' => 'Which customer fields to display on reports',
+    'description' => 'Which customer fields to display on reports by default',
     'type'        => 'select',
-    'select_enum' => [
-      'Customer: Last, First</b> or</i> Company (Last, First)</b>',
-      'Cust# | Customer: custnum | Last, First or Company (Last, First)',
-      'Name | Company: Last, First | Company',
-      'Cust# | Name | Company: custnum | Last, First | Company',
-      '(bill) Customer | (service) Customer: Last, First or Company (Last, First) | (same for service address if present)',
-      'Cust# | (bill) Customer | (service) Customer:  custnum | Last, First or Company (Last, First) | (same for service address if present)',
-      '(bill) Name | (bill) Company | (service) Name | (service) Company: Last, First | Company | (same for service address if present)',
-      'Cust# | (bill) Name | (bill) Company | (service) Name | (service) Company: custnum | Last, First | Company | (same for service address if present)',
-    ],
+    'select_hash' => [ FS::ConfDefaults->cust_fields_avail() ],
   },
 
   {
@@ -1659,6 +1840,209 @@ httemplate/docs/config.html
     'section'     => 'BIND',
     'description' => 'Allow underscores in zone names.  As underscores are illegal characters in zone names, this option is not recommended.',
     'type'        => 'checkbox',
+  },
+
+  #these should become per-user...
+  {
+    'key'         => 'vonage-username',
+    'section'     => '',
+    'description' => 'Vonage Click2Call username (see <a href="https://secure.click2callu.com/">https://secure.click2callu.com/</a>)',
+    'type'        => 'text',
+  },
+  {
+    'key'         => 'vonage-password',
+    'section'     => '',
+    'description' => 'Vonage Click2Call username (see <a href="https://secure.click2callu.com/">https://secure.click2callu.com/</a>)',
+    'type'        => 'text',
+  },
+  {
+    'key'         => 'vonage-fromnumber',
+    'section'     => '',
+    'description' => 'Vonage Click2Call number (see <a href="https://secure.click2callu.com/">https://secure.click2callu.com/</a>)',
+    'type'        => 'text',
+  },
+
+  {
+    'key'         => 'echeck-nonus',
+    'section'     => 'billing',
+    'description' => 'Disable ABA-format account checking for Electronic Check payment info',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'voip-cust_cdr_spools',
+    'section'     => '',
+    'description' => 'Enable the per-customer option for individual CDR spools.',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'svc_forward-arbitrary_dst',
+    'section'     => '',
+    'description' => "Allow forwards to point to arbitrary strings that don't necessarily look like email addresses.  Only used when using forwards for weird, non-email things.",
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'tax-ship_address',
+    'section'     => 'billing',
+    'description' => 'By default, tax calculations are done based on the billing address.  Enable this switch to calculate tax based on the shipping address instead.  Note: Tax reports can take a long time when enabled.',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'batch-enable',
+    'section'     => 'billing',
+    'description' => 'Enable credit card batching - leave disabled for real-time installations.',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'batch-default_format',
+    'section'     => 'billing',
+    'description' => 'Default format for batches.',
+    'type'        => 'select',
+    'select_enum' => [ 'csv-td_canada_trust-merchant_pc_batch',
+                       'csv-chase_canada-E-xactBatch', 'BoM', 'PAP' ]
+  },
+
+  {
+    'key'         => 'batch-fixed_format-CARD',
+    'section'     => 'billing',
+    'description' => 'Fixed (unchangeable) format for credit card batches.',
+    'type'        => 'select',
+    'select_enum' => [ 'csv-td_canada_trust-merchant_pc_batch', 'BoM', 'PAP' ,
+                       'csv-chase_canada-E-xactBatch', 'BoM', 'PAP' ]
+  },
+
+  {
+    'key'         => 'batch-fixed_format-CHEK',
+    'section'     => 'billing',
+    'description' => 'Fixed (unchangeable) format for electronic check batches.',
+    'type'        => 'select',
+    'select_enum' => [ 'csv-td_canada_trust-merchant_pc_batch', 'BoM', 'PAP' ]
+  },
+
+  {
+    'key'         => 'batch-increment_expiration',
+    'section'     => 'billing',
+    'description' => 'Increment expiration date years in batches until cards are current.  Make sure this is acceptable to your batching provider before enabling.',
+    'type'        => 'checkbox'
+  },
+
+  {
+    'key'         => 'batchconfig-BoM',
+    'section'     => 'billing',
+    'description' => 'Configuration for Bank of Montreal batching, seven lines: 1. Origin ID, 2. Datacenter, 3. Typecode, 4. Short name, 5. Long name, 6. Bank, 7. Bank account',
+    'type'        => 'textarea',
+  },
+
+  {
+    'key'         => 'batchconfig-PAP',
+    'section'     => 'billing',
+    'description' => 'Configuration for PAP batching, seven lines: 1. Origin ID, 2. Datacenter, 3. Typecode, 4. Short name, 5. Long name, 6. Bank, 7. Bank account',
+    'type'        => 'textarea',
+  },
+
+  {
+    'key'         => 'batchconfig-csv-chase_canada-E-xactBatch',
+    'section'     => 'billing',
+    'description' => 'Gateway ID for Chase Canada E-xact batching',
+    'type'        => 'text',
+  },
+
+  {
+    'key'         => 'payment_history-years',
+    'section'     => 'UI',
+    'description' => 'Number of years of payment history to show by default.  Currently defaults to 2.',
+    'type'        => 'text',
+  },
+
+  {
+    'key'         => 'cust_main-use_comments',
+    'section'     => 'UI',
+    'description' => 'Display free form comments on the customer edit screen.  Useful as a scratch pad.',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'cust_main-disable_notes',
+    'section'     => 'UI',
+    'description' => 'Disable new style customer notes - timestamped and user identified customer notes.  Useful in tracking who did what.',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'cust_main_note-display_times',
+    'section'     => 'UI',
+    'description' => 'Display full timestamps (not just dates) for customer notes.',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'cust_main-ticket_statuses',
+    'section'     => 'UI',
+    'description' => 'Show tickets with these statuses on the customer view page.',
+    'type'        => 'selectmultiple',
+    'select_enum' => [qw( new open stalled resolved rejected deleted )],
+  },
+
+  {
+    'key'         => 'cust_main-max_tickets',
+    'section'     => 'UI',
+    'description' => 'Maximum number of tickets to show on the customer view page.',
+    'type'        => 'text',
+  },
+
+  {
+    'key'         => 'cust_main-skeleton_tables',
+    'section'     => '',
+    'description' => 'Tables which will have skeleton records inserted into them for each customer.  Syntax for specifying tables is unfortunately a tricky perl data structure for now.',
+    'type'        => 'textarea',
+  },
+
+  {
+    'key'         => 'cust_main-skeleton_custnum',
+    'section'     => '',
+    'description' => 'Customer number specifying the source data to copy into skeleton tables for new customers.',
+    'type'        => 'text',
+  },
+
+  {
+    'key'         => 'cust_main-enable_birthdate',
+    'section'     => 'UI',
+    'descritpion' => 'Enable tracking of a birth date with each customer record',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'support-key',
+    'section'     => '',
+    'description' => 'A support key enables access to commercial services delivered over the network, such as the payroll module, access to the internal ticket system, priority support and optional backups.',
+    'type'        => 'text',
+  },
+
+  {
+    'key'         => 'card-types',
+    'section'     => 'billing',
+    'description' => 'Select one or more card types to enable only those card types.  If no card types are selected, all card types are available.',
+    'type'        => 'selectmultiple',
+    'select_enum' => \@card_types,
+  },
+
+  {
+    'key'         => 'dashboard-toplist',
+    'section'     => 'UI',
+    'description' => 'List of items to display on the top of the front page',
+    'type'        => 'textarea',
+  },
+
+  {
+    'key'         => 'impending_recur_template',
+    'section'     => 'billing',
+    'description' => 'Template file for alerts about looming first time recurrant billing.  See the <a href="http://search.cpan.org/~mjd/Text-Template.pm">Text::Template</a> documentation for details on the template substitition language.  Also see packages with a <a href="../browse/part_pkg.cgi">flat price plan</a>  The following variables are available<ul><li><code>$packages</code> allowing <code>$packages->[0]</code> thru <code>$packages->[n]</code> <li><code>$package</code> the first package, same as <code>$packages->[0]</code> <li><code>$recurdates</code> allowing <code>$recurdates->[0]</code> thru <code>$recurdates->[n]</code> <li><code>$recurdate</code> the first recurdate, same as <code>$recurdate->[0]</code> <li><code>$first</code> <li><code>$last</code></ul>',
+# <li><code>$payby</code> <li><code>$expdate</code> most likely only confuse
+    'type'        => 'textarea',
   },
 
 );

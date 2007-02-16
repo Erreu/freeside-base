@@ -1,7 +1,7 @@
 package FS::cust_refund;
 
 use strict;
-use vars qw( @ISA );
+use vars qw( @ISA @encrypted_fields );
 use Business::CreditCard;
 use FS::Record qw( qsearch qsearchs dbh );
 use FS::UID qw(getotaker);
@@ -9,8 +9,11 @@ use FS::cust_credit;
 use FS::cust_credit_refund;
 use FS::cust_pay_refund;
 use FS::cust_main;
+use FS::payinfo_Mixin;
 
-@ISA = qw( FS::Record );
+@ISA = qw( FS::Record FS::payinfo_Mixin );
+
+@encrypted_fields = ('payinfo');
 
 =head1 NAME
 
@@ -50,11 +53,11 @@ inherits from FS::Record.  The following fields are currently supported:
 =item _date - specified as a UNIX timestamp; see L<perlfunc/"time">.  Also see
 L<Time::Local> and L<Date::Parse> for conversion functions.
 
-=item payby - `CARD' (credit cards), `CHEK' (electronic check/ACH),
-`LECB' (Phone bill billing), `BILL' (billing), `CASH' (cash),
-`WEST' (Western Union), `MCRD' (Manual credit card), or `COMP' (free)
+=item payby - Payment Type (See L<FS::payinfo_Mixin> for valid payby values)
 
-=item payinfo - card number, P.O.#, or comp issuer (4-8 lowercase alphanumerics; think username)
+=item payinfo - Payment Information (See L<FS::payinfo_Mixin> for data format)
+
+=item paymask - Masked payinfo (See L<FS::payinfo_Mixin> for how this works)
 
 =item paybatch - text field for tracking card processing
 
@@ -163,14 +166,52 @@ sub insert {
 
 =item delete
 
-Currently unimplemented (accounting reasons).
+Unless the closed flag is set, deletes this refund and all associated
+applications (see L<FS::cust_credit_refund> and L<FS::cust_pay_refund>).
 
 =cut
 
 sub delete {
   my $self = shift;
   return "Can't delete closed refund" if $self->closed =~ /^Y/i;
-  $self->SUPER::delete(@_);
+
+  local $SIG{HUP} = 'IGNORE';
+  local $SIG{INT} = 'IGNORE';
+  local $SIG{QUIT} = 'IGNORE';
+  local $SIG{TERM} = 'IGNORE';
+  local $SIG{TSTP} = 'IGNORE';
+  local $SIG{PIPE} = 'IGNORE';
+
+  my $oldAutoCommit = $FS::UID::AutoCommit;
+  local $FS::UID::AutoCommit = 0;
+  my $dbh = dbh;
+
+  foreach my $cust_credit_refund ( $self->cust_credit_refund ) {
+    my $error = $cust_credit_refund->delete;
+    if ( $error ) {
+      $dbh->rollback if $oldAutoCommit;
+      return $error;
+    }
+  }
+
+  foreach my $cust_pay_refund ( $self->cust_pay_refund ) {
+    my $error = $cust_pay_refund->delete;
+    if ( $error ) {
+      $dbh->rollback if $oldAutoCommit;
+      return $error;
+    }
+  }
+
+  my $error = $self->SUPER::delete(@_);
+  if ( $error ) {
+    $dbh->rollback if $oldAutoCommit;
+    return $error;
+  }
+
+  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
+
+  '';
+
 }
 
 =item replace OLD_RECORD
@@ -212,29 +253,8 @@ sub check {
     unless $self->crednum 
            || qsearchs( 'cust_main', { 'custnum' => $self->custnum } );
 
-  $self->payby =~ /^(CARD|CHEK|LECB|BILL|COMP|CASH|WEST|MCRD)$/
-    or return "Illegal payby";
-  $self->payby($1);
-
-  #false laziness with cust_pay::check
-  if ( $self->payby eq 'CARD' ) {
-    my $payinfo = $self->payinfo;
-    $payinfo =~ s/\D//g;
-    $self->payinfo($payinfo);
-    if ( $self->payinfo ) {
-      $self->payinfo =~ /^(\d{13,16})$/
-        or return "Illegal (mistyped?) credit card number (payinfo)";
-      $self->payinfo($1);
-      validate($self->payinfo) or return "Illegal credit card number";
-      return "Unknown card type" if cardtype($self->payinfo) eq "Unknown";
-    } else {
-      $self->payinfo('N/A');
-    }
-
-  } else {
-    $error = $self->ut_textn('payinfo');
-    return $error if $error;
-  }
+  $error = $self->payinfo_check;
+  return $error if $error;
 
   $self->otaker(getotaker);
 
@@ -285,29 +305,11 @@ sub unapplied {
   sprintf("%.2f", $amount );
 }
 
-
-
-=item payinfo_masked
-
-Returns a "masked" payinfo field with all but the last four characters replaced
-by 'x'es.  Useful for displaying credit cards.
-
-=cut
-
-
-sub payinfo_masked {
-  my $self = shift;
-  my $payinfo = $self->payinfo;
-  'x'x(length($payinfo)-4). substr($payinfo,(length($payinfo)-4));
-}
-
-
 =back
 
 =head1 BUGS
 
-Delete and replace methods.  payinfo_masked false laziness with cust_main.pm
-and cust_pay.pm
+Delete and replace methods.
 
 =head1 SEE ALSO
 

@@ -3,6 +3,8 @@ package FS::cust_tax_exempt;
 use strict;
 use vars qw( @ISA );
 use FS::Record qw( qsearch qsearchs );
+use FS::cust_main;
+use FS::cust_main_county;
 
 @ISA = qw(FS::Record);
 
@@ -27,7 +29,7 @@ FS::cust_tax_exempt - Object methods for cust_tax_exempt records
 
 =head1 DESCRIPTION
 
-An FS::cust_tax_exempt object represents a historical record of a customer tax
+An FS::cust_tax_exempt object represents a record of an old-style customer tax
 exemption.  Currently this is only used for "texas tax".  FS::cust_tax_exempt
 inherits from FS::Record.  The following fields are currently supported:
 
@@ -46,6 +48,12 @@ inherits from FS::Record.  The following fields are currently supported:
 =item amount
 
 =back
+
+=head1 NOTE
+
+Old-style customer tax exemptions are only useful for legacy migrations - if
+you are looking for current customer tax exemption data see
+L<FS::cust_tax_exempt_pkg>.
 
 =head1 METHODS
 
@@ -113,6 +121,17 @@ sub check {
     || $self->ut_money('amount')
     || $self->SUPER::check
   ;
+}
+
+=item cust_main_county
+
+Returns the FS::cust_main_county object associated with this tax exemption.
+
+=cut
+
+sub cust_main_county {
+  my $self = shift;
+  qsearchs( 'cust_main_county', { 'taxnum' => $self->taxnum } );
 }
 
 =back
