@@ -2045,6 +2045,13 @@ httemplate/docs/config.html
     'type'        => 'textarea',
   },
 
+  {
+    'key'         => 'disable_setup_suspended_pkgs',
+    'section'     => 'billing',
+    'description' => 'Disables charging of setup fees for suspended packages.',
+    'type'       => 'checkbox',
+  },
+
 );
 
 1;
