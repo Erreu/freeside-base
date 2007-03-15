@@ -1616,6 +1616,7 @@ sub set_usage {
   my $dbh = dbh;
 
   my $reset = 0;
+  my %handyhash = ();
   foreach my $field (keys %$valueref){
     $reset = 1 if $valueref->{$field};
     $self->setfield($field, $valueref->{$field});
@@ -1627,9 +1628,28 @@ sub set_usage {
                            )
                        )
                      );
+    $handyhash{$field} = $self->getfield($field);
+    $handyhash{$field.'_threshold'} = $self->getfield($field.'_threshold');
   }
-  my $error = $self->replace;
-  die $error if $error;
+  #my $error = $self->replace;   #NO! we avoid the call to ->check for
+  #die $error if $error;         #services not explicity changed via the UI
+
+  my $sql = "UPDATE svc_acct SET " .
+    join (',', map { "$_ =  ?" } (keys %handyhash) ).
+    " WHERE svcnum = ?";
+
+  warn "$me $sql\n"
+    if $DEBUG;
+
+  if (scalar(keys %handyhash)) {
+    my $sth = $dbh->prepare( $sql )
+      or die "Error preparing $sql: ". $dbh->errstr;
+    my $rv = $sth->execute((grep{$_} values %handyhash), $self->svcnum);
+    die "Error executing $sql: ". $sth->errstr
+      unless defined($rv);
+    die "Can't update usage for svcnum ". $self->svcnum
+      if $rv == 0;
+  }
 
   if ( $conf->exists("svc_acct-usage_unsuspend") && $reset ) {
     my $error = $self->cust_svc->cust_pkg->unsuspend;
