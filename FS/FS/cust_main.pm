@@ -4133,7 +4133,7 @@ sub smart_search {
 
   my @cust_main = ();
 
-  my $skup_fuzzy = delete $options{'no_fuzzy_on_exact'};
+  my $skip_fuzzy = delete $options{'no_fuzzy_on_exact'};
   my $search = delete $options{'search'};
   ( my $alphanum_search = $search ) =~ s/\W//g;
   
