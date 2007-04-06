@@ -1893,7 +1893,7 @@ httemplate/docs/config.html
   {
     'key'         => 'batch-enable',
     'section'     => 'billing',
-    'description' => 'Enable credit card batching - leave disabled for real-time installations.',
+    'description' => 'Enable credit card and/or ACH batching - leave disabled for real-time installations.',
     'type'        => 'checkbox',
   },
 
@@ -1903,7 +1903,9 @@ httemplate/docs/config.html
     'description' => 'Default format for batches.',
     'type'        => 'select',
     'select_enum' => [ 'csv-td_canada_trust-merchant_pc_batch',
-                       'csv-chase_canada-E-xactBatch', 'BoM', 'PAP' ]
+                       'csv-chase_canada-E-xactBatch', 'BoM', 'PAP',
+                       'ach-spiritone',
+                    ]
   },
 
   {
@@ -1920,7 +1922,9 @@ httemplate/docs/config.html
     'section'     => 'billing',
     'description' => 'Fixed (unchangeable) format for electronic check batches.',
     'type'        => 'select',
-    'select_enum' => [ 'csv-td_canada_trust-merchant_pc_batch', 'BoM', 'PAP' ]
+    'select_enum' => [ 'csv-td_canada_trust-merchant_pc_batch', 'BoM', 'PAP',
+                       'ach-spiritone',
+                     ]
   },
 
   {
