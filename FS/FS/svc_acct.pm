@@ -102,6 +102,7 @@ $FS::UID::callback{'FS::svc_acct'} = sub {
   $smtpmachine = $conf->config('smtpmachine');
   $radius_password = $conf->config('radius-password') || 'Password';
   $radius_ip = $conf->config('radius-ip') || 'Framed-IP-Address';
+  @pw_set = ( 'A'..'Z' ) if $conf->exists('password-generated-allcaps');
 };
 
 @saltset = ( 'a'..'z' , 'A'..'Z' , '0'..'9' , '.' , '/' );
