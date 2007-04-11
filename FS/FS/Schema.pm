@@ -722,6 +722,7 @@ sub tables_hashref {
         'svcnum',    'serial',    '',   '', '', '', 
         'pkgnum',    'int',    'NULL',   '', '', '', 
         'svcpart',   'int',    '',   '', '', '', 
+        'overlimit', @date_type, '', '', 
       ],
       'primary_key' => 'svcnum',
       'unique' => [],
