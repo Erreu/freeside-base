@@ -325,10 +325,12 @@ Line-item revenue recognition
 %
 %      $html .= '<TR><TD ALIGN="right">'. $href->{$field}{'name'}. '</TD><TD>';
 %
+%      my $format = sub { shift };
+%      $format = $href->{$field}{'format'} if exists($href->{$field}{'format'});
 %      if ( ! exists($href->{$field}{'type'}) ) {
 %        $html .= qq!<INPUT TYPE="text" NAME="$field" VALUE="!.
 %                 ( exists($plandata{$field})
-%                     ? $plandata{$field}
+%                     ? &$format($plandata{$field})
 %                     : $href->{$field}{'default'} ).
 %                 qq!" onChange="fchanged(this)">!;  #after 1.7.2
 %      } elsif ( $href->{$field}{'type'} eq 'checkbox' ) {
