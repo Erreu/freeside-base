@@ -1508,6 +1508,13 @@ httemplate/docs/config.html
   },
 
   {
+    'key'         => 'paymentforcedtobatch',
+    'section'     => 'UI',
+    'description' => 'Causes per customer payment entry to be forced to a batch processor rather than performed realtime.',
+    'type'        => 'checkbox',
+  },
+
+  {
     'key'         => 'svc_acct-notes',
     'section'     => 'UI',
     'description' => 'Extra HTML to be displayed on the Account View screen.',
