@@ -942,6 +942,7 @@ sub tables_hashref {
         'svcnum',   'int',    '',  '', '', '', 
         'recnum',   'int',    '',  '', '', '', 
         'usersvc',  'int',    '',  '', '', '', 
+        'config',   'text',   'NULL',  '', '', '', 
       ],
       'primary_key' => 'svcnum',
       'unique'      => [],
