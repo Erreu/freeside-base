@@ -1172,6 +1172,13 @@ httemplate/docs/config.html
   },
 
   { 
+    'key'         => 'show_stateid',
+    'section'     => 'UI',
+    'description' => "Turns on display/collection of driver's license/state issued id numbers in the web interface.  Sometimes required by electronic check (ACH) processors.",
+    'type'        => 'checkbox',
+  },
+
+  { 
     'key'         => 'agent_defaultpkg',
     'section'     => 'UI',
     'description' => 'Setting this option will cause new packages to be available to all agent types by default.',
