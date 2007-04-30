@@ -205,7 +205,7 @@
 %
 %        qq!<TR><TD ALIGN="right" WIDTH="200">${r}Bank name </TD>!.
 %          qq!<TD COLSPAN="3" WIDTH="408"><INPUT TYPE="text" NAME="payname" VALUE="!. ( $payby =~ /^(CHEK|DCHK)$/ ? $cust_main->payname : '' ). qq!"></TD></TR>!.
-       ( $conf->exists('show_bankstate) ?
+%      ( $conf->exists('show_bankstate') ?
 %          qq!<TR><TD ALIGN="right" WIDTH="200">$paystate_label</TD>!.
 %          qq!<TD COLSPAN="3" WIDTH="408">!.
 %          include('select-state.html',
@@ -213,7 +213,7 @@
 %                    'state'   => $cust_main->paystate,
 %                    'country' => $cust_main->country,
 %                    'prefix' => 'pay',
-%                 ). "</TD></TR>".
+%                 ). "</TD></TR>"
 %         : '<INPUT TYPE="hidden" NAME="paystate" VALUE ="'.
 %            $cust_main->paystate. '">'
 %       ).
