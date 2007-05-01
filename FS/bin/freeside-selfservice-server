@@ -14,6 +14,7 @@ use Net::SSH qw(sshopen2);
 use FS::Daemon qw(daemonize1 drop_root logfile daemonize2 sigint sigterm);
 use FS::UID qw(adminsuidsetup forksuidsetup);
 use FS::ClientAPI;
+use FS::ClientAPI_SessionCache;
 
 use FS::Conf;
 use FS::cust_bill;
@@ -58,6 +59,13 @@ logfile("$FREESIDE_LOG/selfservice.$machine.log");
 daemonize2();
 
 my $conf = new FS::Conf;
+
+#clear the signup info cache so an "/etc/init.d/freeside restart" will pick
+#up new info... (better as a callback in Signup.pm?)
+my $cache = new FS::ClientAPI_SessionCache( {
+  'namespace' => 'FS::ClientAPI::Signup',
+} );
+$cache->remove('signup_info_cache');
 
 my $clientd = "/usr/local/sbin/freeside-selfservice-clientd"; #better name?
 
