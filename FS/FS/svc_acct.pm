@@ -1581,7 +1581,10 @@ sub _op_usage {
 
   my $action = $op2action{$op};
 
-  if ( &{$op2condition{$op}}($self, $column, $amount) ) {
+  if ( &{$op2condition{$op}}($self, $column, $amount) &&
+        ( $action eq 'suspend'   && !$self->overlimit 
+       || $action eq 'unsuspend' &&  $self->overlimit ) 
+     ) {
     foreach my $part_export ( $self->cust_svc->part_svc->part_export ) {
       if ($part_export->option('overlimit_groups')) {
         my ($new,$old);
@@ -1608,7 +1611,7 @@ sub _op_usage {
        && &{$op2condition{$op}}($self, $column, $amount)    ) {
     #my $error = $self->$action();
     my $error = $self->cust_svc->cust_pkg->$action();
-    $error ||= $self->overlimit($action);
+    # $error ||= $self->overlimit($action);
     if ( $error ) {
       $dbh->rollback if $oldAutoCommit;
       return "Error ${action}ing: $error";
@@ -1703,15 +1706,18 @@ sub set_usage {
   }
 
   if ( $reset ) {
-    my $error = $self->overlimit('unsuspend');
+    my $error;
 
-    foreach my $part_export ( $self->cust_svc->part_svc->part_export ) {
-      if ($part_export->option('overlimit_groups')) {
-        my $old = new FS::svc_acct $self->hashref;
-        my $groups = &{ $self->_fieldhandlers->{'usergroup'} }
-                       ($self, $part_export->option('overlimit_groups'));
-        $old->usergroup( $groups );
-        $error ||= $part_export->export_replace($self, $old);
+    if ($self->overlimit) {
+      $error = $self->overlimit('unsuspend');
+      foreach my $part_export ( $self->cust_svc->part_svc->part_export ) {
+        if ($part_export->option('overlimit_groups')) {
+          my $old = new FS::svc_acct $self->hashref;
+          my $groups = &{ $self->_fieldhandlers->{'usergroup'} }
+                         ($self, $part_export->option('overlimit_groups'));
+          $old->usergroup( $groups );
+          $error ||= $part_export->export_replace($self, $old);
+        }
       }
     }
 
