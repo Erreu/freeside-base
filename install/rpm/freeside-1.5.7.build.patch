@@ -1,0 +1,47 @@
+diff -Naur freeside-1.5.7.orig/FS/bin/freeside-deloutsource freeside-1.5.7/FS/bin/freeside-deloutsource
+--- freeside-1.5.7.orig/FS/bin/freeside-deloutsource	2002-09-20 11:47:58.000000000 -0400
++++ freeside-1.5.7/FS/bin/freeside-deloutsource	2005-08-27 17:59:05.000000000 -0400
+@@ -3,9 +3,9 @@
+ domain=$1
+ 
+ dropdb $domain && \
+-rm -rf /usr/local/etc/freeside/conf.DBI:Pg:host=localhost\;dbname=$domain && \
+-rm -rf /usr/local/etc/freeside/counters.DBI:Pg:host=localhost\;dbname=$domain && \
+-rm -rf /usr/local/etc/freeside/cache.DBI:Pg:host=localhost\;dbname=$domain && \
+-rm -rf /usr/local/etc/freeside/export.DBI:Pg:host=localhost\;dbname=$domain && \
+-rm /usr/local/etc/freeside/dbdef.DBI:Pg:host=localhost\;dbname=$domain
++rm -rf /usr/local/etc/freeside/conf.DBI:Pg:dbname=$domain && \
++rm -rf /usr/local/etc/freeside/counters.DBI:Pg:dbname=$domain && \
++rm -rf /usr/local/etc/freeside/cache.DBI:Pg:dbname=$domain && \
++rm -rf /usr/local/etc/freeside/export.DBI:Pg:dbname=$domain && \
++rm /usr/local/etc/freeside/dbdef.DBI:Pg:dbname=$domain
+ 
+diff -Naur freeside-1.5.7.orig/Makefile freeside-1.5.7/Makefile
+--- freeside-1.5.7.orig/Makefile	2005-07-11 09:01:16.000000000 -0400
++++ freeside-1.5.7/Makefile	2005-08-30 22:04:10.320868163 -0400
+@@ -136,8 +136,12 @@
+ 	[ -e ./httemplate/docs/man ] || mkdir httemplate/docs/man
+ 	[ -e ./httemplate/docs/man/bin ] || mkdir httemplate/docs/man/bin
+ 	[ -e ./httemplate/docs/man/FS ] || mkdir httemplate/docs/man/FS
++	[ -e ./httemplate/docs/man/FS/ClientAPI ] || mkdir httemplate/docs/man/FS/ClientAPI
++	[ -e ./httemplate/docs/man/FS/Report ] || mkdir httemplate/docs/man/FS/Report
++	[ -e ./httemplate/docs/man/FS/TicketSystem ] || mkdir httemplate/docs/man/FS/TicketSystem
+ 	[ -e ./httemplate/docs/man/FS/UI ] || mkdir httemplate/docs/man/FS/UI
+ 	[ -e ./httemplate/docs/man/FS/part_export ] || mkdir httemplate/docs/man/FS/part_export
++	[ -e ./httemplate/docs/man/FS/part_pkg ] || mkdir httemplate/docs/man/FS/part_pkg
+ 	chmod a+rx bin/pod2x
+ 	[ -e DONT_REBUILD_DOCS ] || bin/pod2x
+ 
+@@ -145,8 +149,12 @@
+ 	[ -e ./httemplate/docs/man ] || mkdir httemplate/docs/man
+ 	[ -e ./httemplate/docs/man/bin ] || mkdir httemplate/docs/man/bin
+ 	[ -e ./httemplate/docs/man/FS ] || mkdir httemplate/docs/man/FS
++	[ -e ./httemplate/docs/man/FS/ClientAPI ] || mkdir httemplate/docs/man/FS/ClientAPI
++	[ -e ./httemplate/docs/man/FS/Report ] || mkdir httemplate/docs/man/FS/Report
++	[ -e ./httemplate/docs/man/FS/TicketSystem ] || mkdir httemplate/docs/man/FS/TicketSystem
+ 	[ -e ./httemplate/docs/man/FS/UI ] || mkdir httemplate/docs/man/FS/UI
+ 	[ -e ./httemplate/docs/man/FS/part_export ] || mkdir httemplate/docs/man/FS/part_export
++	[ -e ./httemplate/docs/man/FS/part_pkg ] || mkdir httemplate/docs/man/FS/part_pkg
+ 	bin/pod2x
+ 
+ install-docs: docs
