@@ -1,0 +1,56 @@
+#!/bin/sh
+# Modified for FC3/yum
+
+## Create the freeside user account and create the database in PostgreSQL
+#add_freeside_user()
+#{
+##	/usr/sbin/useradd freeside
+##	chsh freeside -s /bin/bash
+#}
+
+#start_pg()
+#{
+##	/sbin/chkconfig postgresql on
+##	/etc/init.d/postgresql start
+#}
+
+create_freeside_pg_user_and_db()
+{
+	echo "Creating Freeside database user for Pg"
+	su postgres -c "createuser -P -A -d freeside"
+
+	su freeside -c "createdb freeside"
+}
+
+## Install Freeside's Perl modules, create the configuration, and create the first user
+#install_freeside()
+#{
+##	cd ../../..
+##	make install-perl-modules
+##	make create-config
+#}
+
+add_first_freeside_user()
+{
+	echo "Creating first Freeside application user"
+	freeside-adduser -c -h /usr/local/etc/freeside/htpasswd $USER
+	su freeside -c "freeside-setup -s $USER"
+	su freeside -c "/usr/share/freeside-1.5.7/populate-msgcat $USER"
+#	make deploy
+}
+
+USER=$1
+
+# Should check that we're root...
+
+if [ "$USER" = "" ]; then
+        echo "usage: fsinstall <first_user>"
+        exit 1
+fi
+
+create_freeside_pg_user_and_db;
+
+add_first_freeside_user;
+
+exit 0;
+
