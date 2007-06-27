@@ -1,0 +1,15 @@
+diff -Naur freeside-1.5.7.orig/FS/FS/Record.pm freeside-1.5.7/FS/FS/Record.pm
+--- freeside-1.5.7.orig/FS/FS/Record.pm	2005-05-04 05:20:34.000000000 -0400
++++ freeside-1.5.7/FS/FS/Record.pm	2005-07-26 14:10:31.000000000 -0400
+@@ -337,9 +337,9 @@
+     if ( $record->{$field} =~ /^\d+(\.\d+)?$/
+          && $dbdef->table($table)->column($field)->type =~ /(int|serial)/i
+     ) {
+-      $sth->bind_param($bind++, $record->{$field}, { TYPE => SQL_INTEGER } );
++      $sth->bind_param($bind++, $record->{$field}, SQL_INTEGER );
+     } else {
+-      $sth->bind_param($bind++, $record->{$field}, { TYPE => SQL_VARCHAR } );
++      $sth->bind_param($bind++, $record->{$field}, SQL_VARCHAR );
+     }
+   }
+ 
