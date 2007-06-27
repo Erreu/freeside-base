@@ -1,0 +1,101 @@
+<html>
+<head>
+<title>Installation from RPM</title>
+</head>
+<body>
+<h1>Installing Freeside from RPMs</h1>
+		<h2>Warning!</h2>
+		<p>The RPM installation of Freeside is experimental! The instructions below may be incomplete or incorrect and are subject to change. You should only attempt to use the RPM installation if you are prepared to work around omissions and inaccuracies, and can recover data in the event of a loss.</p>
+		<h2>Introduction</h2>
+		<p>RPM is a build-once, install-many package manager for system management. Originally for RedHat, it is now used on a wide range of Linux distros including Fedora, SUSE, etc.</p>
+<p>Well-structured RPMs include dependency information that RPM can use to warn you that additional components are required. Tools such as yum and apt-get (RPM version) can use this dependency information to download additional components from a repository and include them in the installation. This has the potential to make installing Freeside almost as easy as installing a Windows program.</p>
+		<p>(Check the /install and /debian directories in the Freeside tarball for scripts and notes on installing on various distros.)</p>
+		<p>Installing the RPM version of Freeside may not be a good idea if you plan to do development on Freeside. The RPMs may not include all the files supplied in the tarball.</p>
+		<h2>Installation using RPM</h2>
+<p>Installation is much easier if you have a repository that works with a tool such as <a href="#yum">yum</a> or <a href="#apt">apt-get</a>. If you only have rpm and wish to use that, enter:</p>
+<pre>  rpm -Uvh --test freeside-1.5.7-1.noarch.rpm freeside-<i>interface</i>-1.5.7-1.noarch.rpm freeside-<i>backend</i>-1.5.7-1.noarch.rpm perl-Business-OnlinePayment-<i>processor-version</i></pre>
+		<p>Where:</p>
+		<ul>
+			<li><i>interface</i> is the web framework you wish to use for the Freeside interface (either <b>mason</b> or <b>apacheasp</b>). See the main installation document for which frameworks are supported.<li><i>backend</i> is the database you wish to use as the Freeside back-end (either <b>postgresql</b> or <b>mysql</b>). See the main installation document for which databases are supported.
+			<li>1.5.7-1 is the version of Freeside and the release of the RPM.
+			<li><i>processor</i> is the credit card processor you wish to use for real-time transactions and <i>version</i> is the current version of the corresponding RPM.</ul>
+		<p>The command should result in some warnings about unsatisfied dependencies.  Find the corresponding RPMs and add them to the list on the command line.  Keep doing this until the command results in no warnings, then issue the command one last time without the --test to actually install all the RPMs.</p>
+		<p>Installing the freeside RPM will install the <b><a href="#fsinstall">fsinstall</a></b> command line utility that you can use to finish the installation.</p>
+<h2><a id="yum" name="yum"></a>Installing using yum</h2>
+<ul>
+<li>First, find a repository containing all the required RPMs. If no such repository exists, you can <a href="#repository">create your own</a>.</li>
+<li>Next, add the repository to your /etc/yum.repo.d directory or /etc/yum.conf file.</li>
+<li>Finally, install the required components by issuing the command:</li>
+<pre>yum install freeside freeside-<i>interface</i> freeside-<i>backend</i> perl-Business-OnlinePayment-<i>processor</i></pre>
+</ul>
+<p>At this point all the required components should be installed and the freeside user account created. You can now complete the installation with <a href="#fsinstall">fsinstall</a>.</p>
+<h2><a id="apt" name="apt"></a>Installing using APT</h2>
+<ul>
+<li>First, find a repository containing all the required RPMs. If no such repository exists, you can <a href="#repository">create your own</a>.</li>
+<li>Next, add the repository to your /etc/apt.conf file.</li>
+<li>Finally, install the required components by issuing the command:</li>
+<pre>apt-get install freeside freeside-<i>interface</i> freeside-<i>backend</i> perl-Business-OnlinePayment-<i>processor</i></pre>
+</ul>
+<p>At this point all the required components should be installed and the freeside user account created. You can now complete the installation with <a href="#fsinstall">fsinstall</a>.</p>
+<h2><a id="fsinstall" name="fsinstall"></a>Finishing the installation with fsinstall</h2>RPM does little more than installing files and creating users. To allow automated installation and upgrading, well-structured RPMs may not interact with the user. Since part of the Freeside installation is interactive, at some future date a command line utility called <b>fsinstall</b> will be included in the RPM to help you complete the installation.
+		<p>For the moment, just work through the standard install, ignoring the steps which are done by the RPM, i.e. installing files and creating the freeside user. The RPM does not do any steps that require entry of a password, or which have to be done after a password is specified.</p>
+		<ul>
+			<li>You can skip straight to &quot;Allow the freeside user full access to the freeside database,&quot; but be aware that if there are errors in the RPM&nbsp;dependencies, then some of the prerequisites may not be installed. 
+			<li>Then &quot;Add the freeside database to your database engine:&quot;
+			<li>Apache configuration is reduced to editing your httpd.conf file as specified in the last bullet point. (This will be automated in a later Freeside RPM.) You'll also have to modify httpd.conf to implement web interface security.<li>All the final steps to create the first Freeside user, setup the database, populate the message catalog, and start freeside-queued must be done by hand.
+			<li>As with the usual install, you need to do initial administration after completing the install.
+		</ul>
+		<h2><a id="repository" name="repository"></a>Creating your own repository</h2>
+		<p>If you can't find an APT/yum repository for your operating system, you can create your own.
+
+		<ul>
+<li>Create the Freeside RPMs:
+<pre>wget freeside.tar.gz<br>tar zxvf freeside.tar.gz<br>cd freeside/contrib/rpm<br>rpmbuild -ba freeside.spec
+</pre>
+<li>Configure CPAN:
+<pre>cpan<br>install Bundle::CPAN
+</pre>
+<li>Install Ovid:
+<pre>cpan<br>install Ovid<br>quit<br>rpm -Uvh ovid.rpm
+</pre>
+<li>Use Ovid to create RPMs for all the Freeside dependencies you require:
+<pre>ovid Bundle::HTML::Mason</pre>
+<p>or:</p>
+<pre>ovid Bundle::Apache::ASP</pre>
+<li>Use Ovid to create RPMs for the main Freeside dependencies:
+<pre>cd freeside/contrib/rpm<br>cp Freeside.pm ~/.cpan/Bundle/<br>ovid Bundle::Freeside
+</pre>
+<li>Use Ovid to create RPMs for the main RT dependencies (if installing RT):
+<pre>cd freeside/contrib/rpm<br>cp RT.pm ~/.cpan/Bundle/<br>ovid Bundle::RT <i>(for optional RT installation)</i>
+</pre>
+<li>Fix up RPMs that did not build.
+<li>Fix up RPMs that have inadequate dependency information: perl-HTML-Mason-*.rpm
+<li>Copy all generated RPMs into your web server space:
+<pre>cd /usr/src/redhat/RPMs/i386<br>mkdir /var/www/html/fedora/3/<br>cp *.rpm /var/www/html/fedora/3</pre>
+<li>Download any programs needed to build the repository.  For newer, XML-based versions of yum, you'll need createrepo. If it's in a yum repository, this can be as simple as:<pre>yum install createrepo</pre>
+			
+			
+			
+<li>Create the repository:
+<pre>createrepo /var/www/html/fedora/3
+</pre>
+<li>Make sure the web server is started
+</ul>
+		At this point your web server is acting as a yum repository with a URL of http://localhost/fedora/3/ and you can proceed to <a href="#yum">install Freeside from the repository</a>.
+		<p>On distros using older versions of yum (e.g. FC2 and earlier), you'll need to use yum-arch instead of createrepo to generate the repository metadata. yum-arch should be installed as part of the yum RPM, so there's no need to install another RPM.</p>
+		<h1>Upgrading</h1>
+		<h2>Introduction</h2>
+		If you have an existing Freeside installation that was installed from the tarball, following the instructions for installing or upgrading from RPM&nbsp;<i><b>may</b></i> result in an operational system where the RPMs have overwritten most or all of the files installed from the tarball or CPAN.
+		<h2>Upgrading using RPM</h2>When there's a new version of Freeside available as RPM, just download the new RPMs and upgrade them:<pre>  rpm -Uvh --test freeside-1.5.7-1.noarch.rpm freeside-<i>interface</i>-1.5.7-1.noarch.rpm freeside-<i>backend</i>-1.5.7-1.noarch.rpm
+</pre>
+		<h2>Upgrading using a repository</h2>
+		
+		If you installed the RPM version of Freeside from a repository, and a new version is available on the repository, then you can install the new files on your system using the package manager:
+		<pre>yum update</pre>
+		<p>or:</p>
+		<pre>apt-get update</pre>
+		<p>To avoid unplanned upgrades, you may wish to mark the repository containing Freeside as disabled, or remove it from your yum or apt configuration files.</p>
+		<h2>Finalizing the upgrade using fsinstall</h2>
+		<p>This will not perform any database upgrades, so you should refer to the tarball upgrade documentation and do any database changes by hand. (A future version of <a href="#fsinstall">fsinstall</a> may be able to perform the database changes needed in an upgrade.)</p>
+	</body>
+</html>
