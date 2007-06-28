@@ -1,0 +1,12 @@
+diff -Naur freeside-1.5.7.orig/FS/FS/part_pkg/flat.pm freeside-1.5.7/FS/FS/part_pkg/flat.pm
+--- freeside-1.5.7.orig/FS/FS/part_pkg/flat.pm	2005-07-09 06:36:43.000000000 -0400
++++ freeside-1.5.7/FS/FS/part_pkg/flat.pm	2005-09-20 14:28:40.285111162 -0400
+@@ -58,7 +58,7 @@
+   my $next_date = ParseDate("epoch $next_bill");
+   my $err;
+   my $delta = DateCalc($now_date,$next_date,\$err, 0);
+-  my $days_remaining = Delta_Format($delta, 4, "%dh");
++  my $days_remaining = Delta_Format($delta, 'approx', 4, "%dh");
+ 
+   my $frequency = $self->freq;
+ 
