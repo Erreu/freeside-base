@@ -1,7 +1,9 @@
+%{!?_initrddir:%define _initrddir /etc/rc.d/init.d}
+
 Summary: Freeside ISP Billing System
 Name: freeside
 Version: 1.5.7
-Release: 2
+Release: 3
 License: GPL
 Group: Applications/Internet
 URL: http://www.sisd.com/freeside/
@@ -245,6 +247,15 @@ This package includes the MySQL database backend for %{name}.
 You should install only one %{name} database backend.
 Please note that this RPM does not create the database or database user; it only installs the required drivers.
 
+%package selfservice
+Summary: Self-service interface for %{name}
+Group: Applications/Internet
+Conflicts: %{name}
+
+%description selfservice
+This package installs the Perl modules and CGI scripts for the self-service interface for %{name}.
+For security reasons, it is set to conflict with %{name} so you cannot install the billing system and self-service interface on the same computer.
+
 %prep
 %setup
 %patch0 -p1
@@ -274,6 +285,11 @@ cd FS
 CFLAGS="$RPM_OPT_FLAGS" perl Makefile.PL PREFIX=$RPM_BUILD_ROOT%{_prefix}
 %{__make} OPTIMIZE="$RPM_OPT_FLAGS"
 cd ..
+
+cd fs_selfservice/FS-SelfService
+CFLAGS="$RPM_OPT_FLAGS" perl Makefile.PL PREFIX=$RPM_BUILD_ROOT%{_prefix}
+%{__make} OPTIMIZE="$RPM_OPT_FLAGS"
+cd ../..
 
 %install
 %{__rm} -rf %{buildroot}
@@ -313,9 +329,14 @@ touch docs
 %{__mkdir_p} $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig
 %{__install} %SOURCE5 $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig/%{name}
 
-#
+%{__mkdir_p} $RPM_BUILD_ROOT$FREESIDE_DOCUMENT_ROOT/selfservice
+%{__mkdir_p} $RPM_BUILD_ROOT$FREESIDE_DOCUMENT_ROOT/selfservice/cgi
+%{__mkdir_p} $RPM_BUILD_ROOT$FREESIDE_DOCUMENT_ROOT/selfservice/templates
+%{__install} fs_selfservice/FS-SelfService/cgi/* $RPM_BUILD_ROOT$FREESIDE_DOCUMENT_ROOT/selfservice/cgi
+%{__install} fs_selfservice/FS-SelfService/*.template $RPM_BUILD_ROOT$FREESIDE_DOCUMENT_ROOT/selfservice/templates
+
+# Install the main billing server Perl files
 cd FS
-#make install UNINST=1
 eval `perl '-V:installarchlib'`
 %{__mkdir_p} $RPM_BUILD_ROOT$installarchlib
 %makeinstall PREFIX=$RPM_BUILD_ROOT%{_prefix} UNINST=1
@@ -333,7 +354,37 @@ if [ "$(cat %{name}-%{version}-%{release}-filelist)X" = "X" ] ; then
 fi
 cd ..
 
+# Install the self-service interface Perl files
+cd fs_selfservice/FS-SelfService
+eval `perl '-V:installarchlib'`
+%{__mkdir_p} $RPM_BUILD_ROOT/tmp
+%{__mkdir_p} $RPM_BUILD_ROOT/tmp/$installarchlib
+%makeinstall PREFIX=$RPM_BUILD_ROOT/tmp%{_prefix} INSTALLSCRIPT=$RPM_BUILD_ROOT/tmp%{_prefix}/local/bin UNINST=1
+%{__rm} -f `find $RPM_BUILD_ROOT -type f -name perllocal.pod -o -name .packlist`
+
+[ -x %{_libdir}/rpm/brp-compress ] && (export RPM_BUILD_ROOT=$RPM_BUILD_ROOT/tmp; %{_libdir}/rpm/brp-compress)
+
+find $RPM_BUILD_ROOT/tmp%{_prefix} -type f -print | \
+        sed "s@^$RPM_BUILD_ROOT/tmp@@g" > %{name}-%{version}-%{release}-selfservice-filelist
+if [ "$(cat %{name}-%{version}-%{release}-selfservice-filelist)X" = "X" ] ; then
+    echo "ERROR: EMPTY FILE LIST"
+    exit 1
+fi
+# Got the file list, now remove the temporary installation and re-install
+%{__rm} -r $RPM_BUILD_ROOT/tmp
+%{__mkdir_p} $RPM_BUILD_ROOT%{_prefix}/local/bin
+%makeinstall PREFIX=$RPM_BUILD_ROOT%{_prefix} INSTALLSCRIPT=$RPM_BUILD_ROOT%{_prefix}/local/bin UNINST=1
+%{__rm} -f `find $RPM_BUILD_ROOT -type f -name perllocal.pod -o -name .packlist`
+
+[ -x %{_libdir}/rpm/brp-compress ] && %{_libdir}/rpm/brp-compress
+cd ../..
+
 %pre
+if ! %{__id} freeside &>/dev/null; then
+	/usr/sbin/useradd -r freeside
+fi
+
+%pre selfservice
 if ! %{__id} freeside &>/dev/null; then
 	/usr/sbin/useradd -r freeside
 fi
@@ -370,6 +421,14 @@ fi
 
 %files mysql
 
+%files selfservice -f fs_selfservice/FS-SelfService/%{name}-%{version}-%{release}-selfservice-filelist
+%defattr(-, freeside, freeside, 0644)
+%attr(0755,freeside,freeside) /var/www/freeside/selfservice/cgi
+%attr(0644,freeside,freeside) /var/www/freeside/selfservice/templates
+
 %changelog
+* Wed Oct 12 2005 Richard Siddall <richard.siddall@elirion.net> - 1.5.7
+- Added self-service package
+
 * Sun Feb 06 2005 Richard Siddall <richard.siddall@elirion.net> - 1.5.0pre6-1
 - Initial package
