@@ -271,6 +271,7 @@ For security reasons, it is set to conflict with %{name} so you cannot install t
 %{__cp} %SOURCE4 FS/bin
 #%{__rm} -r FS/FS/UI/Gtk.pm
 perl -pi -e 's|/usr/local/bin|%{buildroot}%{_bindir}|g' FS/Makefile.PL
+perl -ni -e 'print if !/\s+chown\s+/;' Makefile
 
 %build
 # Add freeside user and group if there isn't already such a user
@@ -282,12 +283,12 @@ touch htmlman
 %{__make} alldocs
 
 cd FS
-CFLAGS="$RPM_OPT_FLAGS" perl Makefile.PL PREFIX=$RPM_BUILD_ROOT%{_prefix}
+CFLAGS="$RPM_OPT_FLAGS" perl Makefile.PL PREFIX=$RPM_BUILD_ROOT%{_prefix} SITELIBEXP=$RPM_BUILD_ROOT%{perl_sitelib} SITEARCHEXP=$RPM_BUILD_ROOT%{perl_sitearch}
 %{__make} OPTIMIZE="$RPM_OPT_FLAGS"
 cd ..
 
 cd fs_selfservice/FS-SelfService
-CFLAGS="$RPM_OPT_FLAGS" perl Makefile.PL PREFIX=$RPM_BUILD_ROOT%{_prefix}
+CFLAGS="$RPM_OPT_FLAGS" perl Makefile.PL PREFIX=$RPM_BUILD_ROOT%{_prefix} SITELIBEXP=$RPM_BUILD_ROOT%{perl_sitelib} SITEARCHEXP=$RPM_BUILD_ROOT%{perl_sitearch}
 %{__make} OPTIMIZE="$RPM_OPT_FLAGS"
 cd ../..
 
@@ -298,9 +299,9 @@ FREESIDE_DOCUMENT_ROOT=/var/www/freeside
 %{__mkdir_p} $RPM_BUILD_ROOT$FREESIDE_DOCUMENT_ROOT/asp
 %{__mkdir_p} $RPM_BUILD_ROOT$FREESIDE_DOCUMENT_ROOT/mason
 
-touch install-perl-modules
+touch install-perl-modules perl-modules
 %{__make} create-config FREESIDE_CONF=$RPM_BUILD_ROOT/usr/local/etc/freeside
-%{__rm} install-perl-modules
+%{__rm} install-perl-modules perl-modules
 
 touch docs
 %{__perl} -pi -e "s|%%%%%%FREESIDE_DOCUMENT_ROOT%%%%%%|$FREESIDE_DOCUMENT_ROOT/asp|g" htetc/global.asa
@@ -339,7 +340,7 @@ touch docs
 cd FS
 eval `perl '-V:installarchlib'`
 %{__mkdir_p} $RPM_BUILD_ROOT$installarchlib
-%makeinstall PREFIX=$RPM_BUILD_ROOT%{_prefix} UNINST=1
+%makeinstall PREFIX=$RPM_BUILD_ROOT%{_prefix}
 %{__rm} -f `find $RPM_BUILD_ROOT -type f -name perllocal.pod -o -name .packlist`
 
 [ -x %{_libdir}/rpm/brp-compress ] && %{_libdir}/rpm/brp-compress
@@ -359,7 +360,7 @@ cd fs_selfservice/FS-SelfService
 eval `perl '-V:installarchlib'`
 %{__mkdir_p} $RPM_BUILD_ROOT/tmp
 %{__mkdir_p} $RPM_BUILD_ROOT/tmp/$installarchlib
-%makeinstall PREFIX=$RPM_BUILD_ROOT/tmp%{_prefix} INSTALLSCRIPT=$RPM_BUILD_ROOT/tmp%{_prefix}/local/bin UNINST=1
+%makeinstall PREFIX=$RPM_BUILD_ROOT/tmp%{_prefix} INSTALLSCRIPT=$RPM_BUILD_ROOT/tmp%{_prefix}/local/bin
 %{__rm} -f `find $RPM_BUILD_ROOT -type f -name perllocal.pod -o -name .packlist`
 
 [ -x %{_libdir}/rpm/brp-compress ] && (export RPM_BUILD_ROOT=$RPM_BUILD_ROOT/tmp; %{_libdir}/rpm/brp-compress)
@@ -373,7 +374,7 @@ fi
 # Got the file list, now remove the temporary installation and re-install
 %{__rm} -r $RPM_BUILD_ROOT/tmp
 %{__mkdir_p} $RPM_BUILD_ROOT%{_prefix}/local/bin
-%makeinstall PREFIX=$RPM_BUILD_ROOT%{_prefix} INSTALLSCRIPT=$RPM_BUILD_ROOT%{_prefix}/local/bin UNINST=1
+%makeinstall PREFIX=$RPM_BUILD_ROOT%{_prefix} INSTALLSCRIPT=$RPM_BUILD_ROOT%{_prefix}/local/bin
 %{__rm} -f `find $RPM_BUILD_ROOT -type f -name perllocal.pod -o -name .packlist`
 
 [ -x %{_libdir}/rpm/brp-compress ] && %{_libdir}/rpm/brp-compress
