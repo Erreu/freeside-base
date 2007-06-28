@@ -1,0 +1,4 @@
+See httemplates/docs/install-rpm.html
+
+This directory contains files that must be moved to your RPM SOURCES directory, along with the 1.5.7 tarball, before attempting a build of the Freeside RPMs.  You can leave freeside.spec here, or move it to the RPM SPECS directory.
+
