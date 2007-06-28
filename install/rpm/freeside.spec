@@ -3,7 +3,7 @@
 Summary: Freeside ISP Billing System
 Name: freeside
 Version: 1.5.7
-Release: 3
+Release: 4
 License: GPL
 Group: Applications/Internet
 URL: http://www.sisd.com/freeside/
@@ -24,6 +24,7 @@ Patch5: %{name}-%{version}.emailsubject.patch
 Patch6: %{name}-%{version}.nasport.patch
 Patch7: %{name}-%{version}.flat_prorate.patch
 Patch8: %{name}-%{version}.typo.patch
+Patch9: %{name}-%{version}.invfields.patch
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 BuildArch: noarch
 Requires: %{name}-frontend
@@ -267,6 +268,7 @@ For security reasons, it is set to conflict with %{name} so you cannot install t
 %patch6 -p1
 %patch7 -p1
 %patch8 -p1
+%patch9 -p1
 %{__cp} %SOURCE3 FS/bin
 %{__cp} %SOURCE4 FS/bin
 #%{__rm} -r FS/FS/UI/Gtk.pm
