@@ -1,0 +1,35 @@
+diff -Naur freeside-1.5.7.orig/FS/FS/cust_bill.pm freeside-1.5.7/FS/FS/cust_bill.pm
+--- freeside-1.5.7.orig/FS/FS/cust_bill.pm	2005-07-09 11:41:18.000000000 -0400
++++ freeside-1.5.7/FS/FS/cust_bill.pm	2006-01-06 17:52:12.563614655 -0500
+@@ -1269,6 +1269,11 @@
+ 	#    && $self->printed > 0
+ 	#  );
+ 
++  #and payment and invoicing info for notes
++  $FS::cust_bill::_template::payby = $cust_main->payby;
++  $FS::cust_bill::_template::payinfo = $cust_main->payinfo;
++  $FS::cust_bill::_template::invemails = join(', ', $cust_main->invoicing_list);
++
+   #and subroutine for the template
+   sub FS::cust_bill::_template::invoice_lines {
+     my $lines = shift || scalar(@buf);
+@@ -1376,6 +1381,9 @@
+     'returnaddress' => $returnaddress,
+     'quantity'     => 1,
+     'terms'        => $conf->config('invoice_default_terms') || 'Payable upon receipt',
++    'payby'        => _latex_escape($cust_main->payby),
++    'payinfo'      => _latex_escape($cust_main->payinfo),
++    'invemails'    => _latex_escape(join(', ', $cust_main->invoicing_list)),
+     #'notes'        => join("\n", $conf->config('invoice_latexnotes') ),
+     'conf_dir'     => "$FS::UID::conf_dir/conf.$FS::UID::datasrc",
+   );
+@@ -1775,6 +1783,9 @@
+     'cid'          => $cid,
+     'template'     => $template,
+ #    'conf_dir'     => "$FS::UID::conf_dir/conf.$FS::UID::datasrc",
++    'payby'        => encode_entities($cust_main->payby),
++    'payinfo'      => encode_entities($cust_main->payinfo),
++    'invemails'    => encode_entities(join(', ', $cust_main->invoicing_list)),
+   );
+ 
+   $invoice_data{'returnaddress'} =
