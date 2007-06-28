@@ -1,0 +1,34 @@
+diff -Naur freeside-1.5.7.orig/init.d/freeside-init freeside-1.5.7/init.d/freeside-init
+--- freeside-1.5.7.orig/init.d/freeside-init	2005-04-25 05:33:35.000000000 -0400
++++ freeside-1.5.7/init.d/freeside-init	2005-09-08 11:12:21.288590613 -0400
+@@ -2,17 +2,11 @@
+ #
+ # chkconfig: 345 86 16
+ # description: Freeside daemons
++# config: /etc/sysconfig/freeside
+ 
+-QUEUED_USER=%%%QUEUED_USER%%%
+-
+-FREESIDE_PATH="%%%FREESIDE_PATH%%%"
+-
+-SELFSERVICE_USER=%%%SELFSERVICE_USER%%%
+-SELFSERVICE_MACHINES="%%%SELFSERVICE_MACHINES%%%"
+-
+-#INSTALLSCRIPT/INSTALLSITEBIN from Makefile.PL
+-PATH="$PATH:/usr/local/bin"
+-export PATH
++if [ -f /etc/sysconfig/freeside ]; then
++        . /etc/sysconfig/freeside
++fi
+ 
+ case "$1" in
+   start)
+@@ -22,7 +16,7 @@
+         echo "done."
+ 
+         echo -n "Starting freeside-sqlradius-radacctd: "
+-        freeside-sqlradius-radacctd $QUEUED_USER
++        freeside-sqlradius-radacctd $RADACCTD_USER
+         echo "done."
+ 
+         for MACHINE in $SELFSERVICE_MACHINES; do
