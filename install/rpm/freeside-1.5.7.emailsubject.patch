@@ -1,0 +1,254 @@
+diff -Naur freeside-1.5.7.orig/FS/bin/freeside-expiration-alerter freeside-1.5.7/FS/bin/freeside-expiration-alerter
+--- freeside-1.5.7.orig/FS/bin/freeside-expiration-alerter	2003-04-21 16:53:57.000000000 -0400
++++ freeside-1.5.7/FS/bin/freeside-expiration-alerter	2005-08-29 19:11:41.220781694 -0400
+@@ -29,6 +29,7 @@
+ my $urgent_time = 15 * 24 * 60 * 60;
+ my $panic_time = 5 * 24 * 60 * 60;
+ my $window_time = 24 * 60 * 60;
++my $subject = "Unnotified Billing Arrangement Expirations";
+ 
+ &untaint_argv;	#what it sounds like  (eww)
+ 
+@@ -51,6 +52,8 @@
+   if $conf->exists('invoice_from');
+ $failure_recipient = $conf->config('invoice_from')
+   if $conf->exists('invoice_from');
++$subject = $conf->config('alerter_email-subject')
++  if $conf->exists('alerter-email_subject');
+ 
+ 
+ my(@customers)=qsearch('cust_main',{});
+@@ -61,13 +64,16 @@
+ 
+ # Prepare for sending email
+ 
++my $subject_template = new Text::Template (TYPE => 'STRING', SOURCE => $subject);
++my $mail_subject = $subject_template->fill_in(HASH => { ispname => $conf->config('company_name') });
++
+ $ENV{MAILADDRESS} = $mail_sender;
+ my $header = new Mail::Header ( [
+   "From: Account Processor",
+   "To: $failure_recipient",
+   "Sender: $mail_sender",
+   "Reply-To: $mail_sender",
+-  "Subject: Unnotified Billing Arrangement Expirations",
++  "Subject: $mail_subject",
+ ] );
+ 
+ my @alerter_template = $conf->config('alerter_template')
+diff -Naur freeside-1.5.7.orig/FS/FS/Conf.pm freeside-1.5.7/FS/FS/Conf.pm
+--- freeside-1.5.7.orig/FS/FS/Conf.pm	2005-06-30 09:20:33.000000000 -0400
++++ freeside-1.5.7/FS/FS/Conf.pm	2005-08-28 12:18:03.000000000 -0400
+@@ -300,6 +300,13 @@
+   },
+ 
+   {
++    'key'         => 'alerter_email-subject',
++    'section'     => 'billing',
++    'description' => 'Template for the subject lines of billing method expiration alerts.  See the <a href="../docs/billing.html#invoice_template">billing documentation</a> for details.',
++    'type'        => 'text',
++  },
++
++  {
+     'key'         => 'apacheroot',
+     'section'     => 'deprecated',
+     'description' => '<b>DEPRECATED</b>, add a <i>www_shellcommands</i> <a href="../browse/part_export.cgi">export</a> instead.  The directory containing Apache virtual hosts',
+@@ -674,6 +681,13 @@
+   },
+ 
+   {
++    'key'         => 'invoice_email-subject',
++    'section'     => 'billing',
++    'description' => 'Template for the e-mail subject of invoices.',
++    'type'        => 'text',
++  },
++
++  {
+     'key'         => 'payment_receipt_email',
+     'section'     => 'billing',
+     'description' => 'Template file for payment receipts.',
+@@ -681,6 +695,13 @@
+   },
+ 
+   {
++    'key'         => 'receipt_email-subject',
++    'section'     => 'billing',
++    'description' => 'Template for the e-mail subject line of payment receipts.',
++    'type'        => 'text',
++  },
++
++  {
+     'key'         => 'lpr',
+     'section'     => 'required',
+     'description' => 'Print command for paper invoices, for example `lpr -h\'',
+@@ -1209,6 +1230,13 @@
+   },
+ 
+   {
++    'key'         => 'decline_email-subject',
++    'section'     => 'billing',
++    'description' => 'Template for the subject line of credit card decline emails.',
++    'type'        => 'text',
++  },
++
++  {
+     'key'         => 'emaildecline',
+     'section'     => 'billing',
+     'description' => 'Enable emailing of credit card decline notices.',
+diff -Naur freeside-1.5.7.orig/FS/FS/cust_bill.pm freeside-1.5.7/FS/FS/cust_bill.pm
+--- freeside-1.5.7.orig/FS/FS/cust_bill.pm	2005-07-09 11:41:18.000000000 -0400
++++ freeside-1.5.7/FS/FS/cust_bill.pm	2005-08-29 17:23:32.000000000 -0400
+@@ -356,9 +356,23 @@
+ 
+   my $me = '[FS::cust_bill::generate_email]';
+ 
++  my $subject = $conf->config('invoice_email-subject');
++  $subject = 'Invoice' if !$subject;
++
++  my $subject_template = new Text::Template(TYPE => 'STRING', SOURCE => $subject);
++  my $templ_hash = {
++    ispname => $conf->config('company_name'),
++    invnum => $self->invnum,
++    date => $self->_date,
++    money_char => $conf->config('money_char') || '$',
++  };
++  foreach (qw/first last company address1 address2 city state zip country/) {
++    $$templ_hash{$_} = $self->cust_main->getfield($_);
++  }
++
+   my %return = (
+     'from'      => $args{'from'},
+-    'subject'   => (($args{'subject'}) ? $args{'subject'} : 'Invoice'),
++    'subject'   => (($args{'subject'}) ? $args{'subject'} : $subject_template->fill_in(HASH => $templ_hash)),
+   );
+ 
+   if (ref($args{'to'} eq 'ARRAY')) {
+diff -Naur freeside-1.5.7.orig/FS/FS/cust_main.pm freeside-1.5.7/FS/FS/cust_main.pm
+--- freeside-1.5.7.orig/FS/FS/cust_main.pm	2005-06-30 08:44:46.000000000 -0400
++++ freeside-1.5.7/FS/FS/cust_main.pm	2005-08-29 19:20:57.241357962 -0400
+@@ -2278,12 +2278,24 @@
+       $template->compile()
+         or return "($perror) can't compile template: $Text::Template::ERROR";
+ 
+-      my $templ_hash = { error => $transaction->error_message };
++      my $subject = $conf->config('decline_email-subject');
++      $subject = 'Your payment could not be processed' if !$subject;
++      my $subject_template = new Text::Template(TYPE => 'STRING', SOURCE => $subject);
++
++      my $templ_hash = {
++        error => $transaction->error_message,
++        ispname => $conf->config('company_name'),
++        money_char => $conf->config('money_char') || '$',
++        name => $self->name,
++      };
++      foreach (qw/first last company address1 address2 city state zip country/) {
++	$$templ_hash{$_} = $self->getfield($_);
++      }
+ 
+       my $error = send_email(
+         'from'    => $conf->config('invoice_from'),
+         'to'      => [ grep { $_ ne 'POST' } $self->invoicing_list ],
+-        'subject' => 'Your payment could not be processed',
++        'subject' => $subject_template->fill_in(HASH => $templ_hash),
+         'body'    => [ $template->fill_in(HASH => $templ_hash) ],
+       );
+ 
+diff -Naur freeside-1.5.7.orig/FS/FS/cust_pay.pm freeside-1.5.7/FS/FS/cust_pay.pm
+--- freeside-1.5.7.orig/FS/FS/cust_pay.pm	2005-06-08 20:18:35.000000000 -0400
++++ freeside-1.5.7/FS/FS/cust_pay.pm	2005-08-29 17:08:10.000000000 -0400
+@@ -185,6 +185,10 @@
+       return '';
+     };
+ 
++    my $subject = $conf->config('receipt_email-subject');
++    $subject = 'Payment receipt' if !$subject;
++    my $subject_template = new Text::Template(TYPE => 'STRING', SOURCE => $subject);
++
+     my @invoicing_list = grep { $_ !~ /^(POST|FAX)$/ } $cust_main->invoicing_list;
+ 
+     my $payby = $self->payby;
+@@ -193,11 +197,7 @@
+     $payinfo = $self->payinfo_masked if $payby eq 'CARD' || $payby eq 'CHEK';
+     $payby =~ s/^CHEK$/Electronic check/;
+ 
+-    my $error = send_email(
+-      'from'    => $conf->config('invoice_from'), #??? well as good as any
+-      'to'      => \@invoicing_list,
+-      'subject' => 'Payment receipt',
+-      'body'    => [ $receipt_template->fill_in( HASH => {
++    my $templ_hash = {
+                        'date'    => time2str("%a %B %o, %Y", $self->_date),
+                        'name'    => $cust_main->name,
+                        'paynum'  => $self->paynum,
+@@ -205,7 +205,18 @@
+                        'payby'   => ucfirst(lc($payby)),
+                        'payinfo' => $payinfo,
+                        'balance' => $cust_main->balance,
+-                   } ) ],
++                       'ispname' => $conf->config('company_name'),
++                       'money_char' => $conf->config('money_char') || '$',
++                   };
++    foreach (qw/first last company address1 address2 city state zip country/) {
++      $$templ_hash{$_} = $self->cust_main->getfield($_);
++    }
++
++    my $error = send_email(
++      'from'    => $conf->config('invoice_from'), #??? well as good as any
++      'to'      => \@invoicing_list,
++      'subject' => $subject_template->fill_in( HASH => $templ_hash ),
++      'body'    => [ $receipt_template->fill_in( HASH => $templ_hash ) ],
+     );
+     if ( $error ) {
+       warn "can't send payment receipt: $error";
+diff -Naur freeside-1.5.7.orig/FS/FS/cust_pkg.pm freeside-1.5.7/FS/FS/cust_pkg.pm
+--- freeside-1.5.7.orig/FS/FS/cust_pkg.pm	2005-03-21 17:13:36.000000000 -0500
++++ freeside-1.5.7/FS/FS/cust_pkg.pm	2005-08-29 17:29:38.747520156 -0400
+@@ -425,7 +425,7 @@
+   my $conf = new FS::Conf;
+   my @invoicing_list = grep { $_ !~ /^(POST|FAX)$/ } $self->cust_main->invoicing_list;
+   if ( !$options{'quiet'} && $conf->exists('emailcancel') && @invoicing_list ) {
+-    my $conf = new FS::Conf;
++#    my $conf = new FS::Conf;
+     my $error = send_email(
+       'from'    => $conf->config('invoice_from'),
+       'to'      => \@invoicing_list,
+diff -Naur freeside-1.5.7.orig/FS/FS/svc_acct.pm freeside-1.5.7/FS/FS/svc_acct.pm
+--- freeside-1.5.7.orig/FS/FS/svc_acct.pm	2005-06-30 09:20:33.000000000 -0400
++++ freeside-1.5.7/FS/FS/svc_acct.pm	2005-08-29 17:10:03.000000000 -0400
+@@ -304,19 +304,27 @@
+           'svcnum' => $self->svcnum,
+           'job'    => 'FS::svc_acct::send_email'
+         };
+-        my $error = $wqueue->insert(
+-          'to'       => $to,
+-          'from'     => $welcome_from,
+-          'subject'  => $welcome_subject,
+-          'mimetype' => $welcome_mimetype,
+-          'body'     => $welcome_template->fill_in( HASH => {
++        my $subject_template = new Text::Template(TYPE => 'STRING', SOURCE => $welcome_subject);
++        my $templ_hash = {
+                           'custnum'  => $self->custnum,
+                           'username' => $self->username,
+                           'password' => $self->_password,
+-                          'first'    => $cust_main->first,
+-                          'last'     => $cust_main->getfield('last'),
++#                          'first'    => $cust_main->first,
++#                          'last'     => $cust_main->getfield('last'),
+                           'pkg'      => $cust_pkg->part_pkg->pkg,
+-                        } ),
++                          'ispname'  => $conf->config('company_name'),
++                          'money_char' => $conf->config('money_char') || '$',
++                        };
++        foreach (qw/first last company address1 address2 city state zip country/) {
++          $$templ_hash{$_} = $cust_main->getfield($_);
++        }
++
++        my $error = $wqueue->insert(
++          'to'       => $to,
++          'from'     => $welcome_from,
++          'subject'  => $subject_template->fill_in( HASH => $templ_hash ),
++          'mimetype' => $welcome_mimetype,
++          'body'     => $welcome_template->fill_in( HASH => $templ_hash ),
+         );
+         if ( $error ) {
+           $dbh->rollback if $oldAutoCommit;
