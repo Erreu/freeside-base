@@ -1,0 +1,25 @@
+diff -Naur freeside-1.5.7.orig/FS/FS/CGI.pm freeside-1.5.7/FS/FS/CGI.pm
+--- freeside-1.5.7.orig/FS/FS/CGI.pm	2004-12-10 17:28:25.000000000 -0500
++++ freeside-1.5.7/FS/FS/CGI.pm	2005-07-26 22:41:07.000000000 -0400
+@@ -91,7 +91,8 @@
+       if ( $header =~ /^Content-Type$/ ) {
+         $HTML::Mason::Commands::r->content_type($value);
+       } else {
+-        $HTML::Mason::Commands::r->header_out( $header => $value );
++	# Modified for mod_perl 1.99+
++        $HTML::Mason::Commands::r->headers_out->{ $header } = $value;
+       }
+     } else {
+       die "http_header called in unknown environment";
+@@ -168,8 +169,9 @@
+ 
+ sub eidiot {
+   warn "eidiot depriciated";
+-  $HTML::Mason::Commands::r->send_http_header
+-    if defined $HTML::Mason::Commands::r;
++# Disabled for mod_perl 1.99+, should be an eval{}
++#  $HTML::Mason::Commands::r->send_http_header
++#    if defined $HTML::Mason::Commands::r;
+   idiot(@_);
+   &myexit();
+ }
