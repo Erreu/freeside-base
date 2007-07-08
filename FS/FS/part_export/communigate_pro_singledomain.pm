@@ -21,8 +21,8 @@ Real time export to a
 <a href="http://www.stalker.com/CommuniGatePro/">CommuniGate Pro</a>
 mail server.  This is an unusual export to CommuniGate Pro that forces all
 accounts into a single domain.  As CommuniGate Pro supports multiple domains,
-unless you have a specific reason for using this export, you probably want to
-use the communigate_pro export instead.  The
+unless you have a specific reason for using this export, you probably want
+to use the communigate_pro export instead.  The
 <a href="http://www.stalker.com/CGPerl/">CommuniGate Pro Perl Interface</a>
 must be installed as CGP::CLI.
 END
