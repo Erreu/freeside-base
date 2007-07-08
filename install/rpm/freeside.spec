@@ -2,7 +2,7 @@
 
 Summary: Freeside ISP Billing System
 Name: freeside
-Version: 1.7.2
+Version: 1.7.3
 Release: 1
 License: GPL
 Group: Applications/Internet
@@ -10,20 +10,9 @@ URL: http://www.sisd.com/freeside/
 Packager: Richard Siddall <richard.siddall@elirion.net>
 Vendor: Freeside
 Source: http://www.sisd.com/freeside/%{name}-%{version}.tar.gz
-#Source1: freeside-mason.conf
-Source2: Record.pm
-Source3: freeside-install
-Source4: freeside-import
-Source5: freeside.sysconfig
-Patch: %{name}-%{version}.rpm.patch
-#Patch1: %{name}-%{version}.dbd-pg.patch
-#Patch2: %{name}-%{version}.mod_perl2.patch
-#Patch3: %{name}-%{version}.redhat.patch
-#Patch4: %{name}-%{version}.build.patch
-#Patch5: %{name}-%{version}.emailsubject.patch
-#Patch6: %{name}-%{version}.nasport.patch
-#Patch7: %{name}-%{version}.flat_prorate.patch
-#Patch9: %{name}-%{version}.invfields.patch
+Source1: freeside-install
+Source2: freeside-import
+Source3: freeside.sysconfig
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 BuildArch: noarch
 Requires: %{name}-frontend
@@ -96,19 +85,8 @@ For security reasons, it is set to conflict with %{name} so you cannot install t
 
 %prep
 %setup
-%patch0 -p1
-#%patch1 -p1
-#%patch2 -p1
-#%patch3 -p1
-#%patch4 -p1
-#%patch5 -p1
-#%patch6 -p1
-#%patch7 -p1
-#%patch9 -p1
-%{__cp} %SOURCE2 FS/FS
-%{__cp} %SOURCE3 FS/bin
-%{__cp} %SOURCE4 FS/bin
-#%{__rm} -r FS/FS/UI/Gtk.pm
+%{__cp} %SOURCE1 FS/bin
+%{__cp} %SOURCE2 FS/bin
 perl -pi -e 's|/usr/local/bin|%{buildroot}%{_bindir}|g' FS/Makefile.PL
 perl -ni -e 'print if !/\s+chown\s+/;' Makefile
 
@@ -179,12 +157,8 @@ fi
 %{__mkdir_p} $RPM_BUILD_ROOT%{_datadir}/%{name}-%{version}
 %{__install} bin/* $RPM_BUILD_ROOT%{_datadir}/%{name}-%{version}
 
-#%{__mkdir_p} $RPM_BUILD_ROOT%{_bindir}
-#%{__install} %SOURCE3 $RPM_BUILD_ROOT%{_bindir}
-#%{__install} %SOURCE4 $RPM_BUILD_ROOT%{_bindir}
-
 %{__mkdir_p} $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig
-%{__install} %SOURCE5 $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig/%{name}
+%{__install} %SOURCE3 $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig/%{name}
 
 %{__mkdir_p} $RPM_BUILD_ROOT%{freeside_document_root}/selfservice
 %{__mkdir_p} $RPM_BUILD_ROOT%{freeside_document_root}/selfservice/cgi
@@ -257,10 +231,8 @@ fi
 
 %files mason -f %{name}-%{version}-%{release}-mason-filelist
 %defattr(-, freeside, freeside, 0755)
-#%attr(0755,freeside,freeside) %{freeside_document_root}
 %attr(-,freeside,freeside) %{freeside_conf}/handler.pl
 %attr(-,freeside,freeside) %{freeside_cache}/masondata
-#%attr(0644,root,root) /etc/httpd/conf.d/freeside-mason.conf
 %attr(0644,root,root) %config(noreplace) %{apache_conf}/%{name}-base%{apache_version}.conf
 
 %files postgresql
@@ -273,6 +245,10 @@ fi
 %attr(0644,freeside,freeside) %{freeside_document_root}/selfservice/templates
 
 %changelog
+* Sun Jul 8 2007 Richard Siddall <richard.siddall@elirion.net> - 1.7.3
+- Updated for upcoming Freeside 1.7.3
+- RT support is still missing
+
 * Fri Jun 29 2007 Richard Siddall <richard.siddall@elirion.net> - 1.7.2
 - Updated for Freeside 1.7.2
 - Removed support for Apache::ASP
