@@ -1,0 +1,227 @@
+#!/bin/sh
+# This is based on the Fedora Core 3 INSTALL file, modified using the information in the Freeside Wiki
+# It's intended to be a universal Freeside installation script, but it's nowhere near that yet.
+#
+
+# Primary domain - see the Wiki
+DOMAIN=
+# Package manager to use
+PACKAGER=
+# Main freeside user
+USER=
+# Name for database for this instance of freeside
+DBNAME=freeside
+
+# Parse the command line arguments
+#parse_cli_arguments()
+#{
+	while getopts "hd:n:p:u:" flag
+	do
+		case $flag in
+		d)
+			NEWVAL=`echo $OPTARG | tr '[A-Z]' '[a-z]'`
+			if [ "x$DOMAIN" -ne "x" ] ; then
+				echo STDERR "Domain already set to $DOMAIN.  Changing to $NEWVAL"
+			fi
+			DOMAIN=$NEWVAL;;
+		h)
+			usage;;
+		n)
+			# We don't lowercase the database name
+			if [ "x$DBNAME" -ne "x" ] ; then
+				echo STDERR "Database name already set to $DBNAME.  Changing to $OPTARG"
+			fi
+			DBNAME=$OPTARG;;
+		p)
+			NEWVAL=`echo $OPTARG | tr '[A-Z]' '[a-z]'`
+			if [ "x$PACKAGER" -ne "x" ] ; then
+				echo STDERR "Packager already set to $PACKAGER.  Changing to $NEWVAL"
+			fi
+			PACKAGER=$NEWVAL;;
+		u)
+			# We don't lowercase the user name
+			if [ "x$USER" -ne "x" ] ; then
+				echo STDERR "Main freeside web user already set to $USER.  Changing to $OPTARG"
+			fi
+			USER=$OPTARG;;
+		esac
+	done
+#}
+
+usage()
+{
+	echo "freeside-install is a utility to install the Freeside ISP billing system."
+	echo "Usage:	freeside-install -d <domain> -n <database name> -p <packager> -u <first web user>"
+	echo "where:"
+	echo "	domain is the required first domain, usually the ISP's main customer domain"
+	echo "	database name is the name of the database for this instance of Freeside - defaults to freeside"
+	echo "	packager is the package management tool you want to use: RPM, CPAN, etc."
+        exit 1
+}
+
+apologize()
+{
+	echo "Sorry, this version of freeside-install is non-functional.  Feel free to contribute fixes"
+	echo "See http://www.sisd.com/mediawiki/index.php/Freeside:1.7:Documentation:Installation for information on how to install Freeside"
+	exit 1
+}
+
+install_perl_module()
+{
+	# We should do something smarter than this, checking to see if the module was installed
+	# and falling back to another package manager (or two) if not
+	echo "$MODULE: $CPAN"
+	case $PACKAGER in
+	apt)
+		# apt-get install $CPAN;
+		;;
+	cpan)
+		# cpan install $CPAN;
+		;;
+	cpan2rpm)
+		# cpan2rpm $CPAN;
+		# rpm -Uvh /usr/src/redhat/RPMS/*/perl-$CPAN*.rpm
+		;;
+	rpm)
+		# Nothing to do; RPM should already be installed?
+		;;
+	yum)
+		# yum install perl-$CPAN;
+		;;
+	esac
+}
+
+install_all_perl_modules()
+{
+	while read MODULE CPAN
+	do
+		install_perl_module $MODULE $CPAN;
+	done <<EOF
+# Probably included in the distro
+libnet		Net::Cmd
+libwww-perl	Bundle::LWP
+URI
+HTML::Tagset
+HTML::Parser 
+HTML::Mason
+Text::Template
+DBI
+DBD::Pg
+MailTools	Mail::Internet
+MIME::Tools
+TimeDate	Date::Format
+Locale-Codes	Locale::Country
+DateTime 
+# Less common modules
+Chart	Chart::Base
+Cache::Cache
+NetAddr::IP
+String::Approx
+Locale::SubCountry
+Frontier::RPC2
+Term::ReadKey
+Date::Manip
+DateTime::Format::Strptime
+Text::CSV_XS 
+# Rare modules
+Business::CreditCard
+Net::Whois::Raw
+DBIx::DBSchema
+Tie::IxHash
+Crypt::PasswdMD5
+Time::Duration
+File::CounterFile
+IPC::Run3
+Net::SSH
+String::ShellQuote
+JSON
+HTML::Widgets::SelectLayers
+Color::Scheme
+Lingua::EN::NameParse
+Lingua::EN::Inflect 
+# Optional modules - we'll add them anyway
+Fax::Hylafax::Client
+Apache::DBI
+EOF
+}
+
+# Create the freeside user account and create the database in PostgreSQL
+add_freeside_user()
+{
+	/usr/sbin/useradd freeside
+	chsh freeside -s /bin/bash
+}
+
+start_pg()
+{
+	/sbin/chkconfig postgresql on
+	/etc/init.d/postgresql start
+}
+
+create_freeside_pg_user_and_db()
+{
+	echo "Creating Freeside database user for Pg"
+	su postgres -c "createuser -P -A -d freeside"
+
+	echo "Creating the $DBNAME database"
+	su freeside -c "createdb -E sql_ascii $DBNAME"
+}
+
+# Install Freeside's Perl modules, create the configuration, and create the first user
+install_freeside()
+{
+##	cd ../../..
+	make install-perl-modules
+	make create-config
+}
+
+add_freeside_system_users()
+{
+	echo "Creating Freeside system users"
+	for SYSUSER in fs_queue fs_daily fs_selfservice ; do
+		su freeside -c "freeside-adduser -g 1 $SYSUSER"
+	done
+}
+
+add_first_freeside_user()
+{
+	echo "Creating first Freeside application user"
+	su freeside -c "freeside-adduser -g 1 $USER"
+	su freeside -c "htpasswd -c /usr/local/etc/freeside/htpasswd $USER"
+}
+
+setup_freeside_database()
+{
+	echo "Setting up Freeside for $DOMAIN"
+	su freeside -c "freeside-setup -d $DOMAIN"
+}
+
+# Should check that we're root...
+
+#parse_cli_arguments;
+
+if [ "x$USER" = "x" ]; then
+        usage;
+fi
+
+if [ "x$DOMAIN" = "x" ]; then
+        usage;
+fi
+
+if [ "$PACKAGER" -ne "rpm" ]; then
+	install_all_perl_modules;
+	install_freeside;
+fi
+
+start_pg;
+
+create_freeside_pg_user_and_db;
+
+setup_freeside_database;
+
+add_freeside_system_users;
+
+add_first_freeside_user;
+
+exit 0;
+
