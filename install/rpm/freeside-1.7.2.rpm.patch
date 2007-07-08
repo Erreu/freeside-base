@@ -1,0 +1,14 @@
+diff -Naur freeside-1.7.2.orig/FS/FS/part_export/communigate_pro_singledomain.pm freeside-1.7.2/FS/FS/part_export/communigate_pro_singledomain.pm
+--- freeside-1.7.2.orig/FS/FS/part_export/communigate_pro_singledomain.pm	2006-05-21 14:40:09.000000000 -0400
++++ freeside-1.7.2/FS/FS/part_export/communigate_pro_singledomain.pm	2007-07-01 22:15:29.464445481 -0400
+@@ -21,8 +21,8 @@
+ <a href="http://www.stalker.com/CommuniGatePro/">CommuniGate Pro</a>
+ mail server.  This is an unusual export to CommuniGate Pro that forces all
+ accounts into a single domain.  As CommuniGate Pro supports multiple domains,
+-unless you have a specific reason for using this export, you probably want to
+-use the communigate_pro export instead.  The
++unless you have a specific reason for using this export, you probably want
++to use the communigate_pro export instead.  The
+ <a href="http://www.stalker.com/CGPerl/">CommuniGate Pro Perl Interface</a>
+ must be installed as CGP::CLI.
+ END
