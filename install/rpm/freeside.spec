@@ -93,7 +93,7 @@ perl -ni -e 'print if !/\s+chown\s+/;' Makefile
 %build
 
 # Add freeside user and group if there isn't already such a user
-%{__id} freeside 2>/dev/null >/dev/null || /usr/sbin/useradd -s /bin/sh -r freeside
+%{__id} freeside 2>/dev/null >/dev/null || /usr/sbin/useradd -s /bin/sh freeside
 # False laziness...
 %{__make} htmlman
 echo "Made HTML manuals"
@@ -206,19 +206,19 @@ cd ../..
 
 %pre
 if ! %{__id} freeside &>/dev/null; then
-	/usr/sbin/useradd -r freeside
+	/usr/sbin/useradd freeside
 fi
 
 %pre selfservice
 if ! %{__id} freeside &>/dev/null; then
-	/usr/sbin/useradd -r freeside
+	/usr/sbin/useradd freeside
 fi
 
 %clean
 %{__rm} -rf %{buildroot}
 
 %files -f FS/%{name}-%{version}-%{release}-filelist
-/etc/rc.d/init.d/freeside
+%attr(0711,root,root) %{_initrddir}/freeside
 %attr(0644,root,root) %config(noreplace) /etc/sysconfig/freeside
 %defattr(-,freeside,freeside,-)
 %doc README INSTALL CREDITS GPL
@@ -228,6 +228,8 @@ fi
 %attr(-,freeside,freeside) %config(noreplace) %{freeside_export}/export.*
 %attr(-,freeside,freeside) %config(noreplace) %{freeside_conf}/secrets
 %attr(-,freeside,freeside) %dir %{freeside_conf}
+%attr(-,freeside,freeside) %dir %{freeside_lock}
+%attr(-,freeside,freeside) %dir %{freeside_log}
 
 %files mason -f %{name}-%{version}-%{release}-mason-filelist
 %defattr(-, freeside, freeside, 0755)
