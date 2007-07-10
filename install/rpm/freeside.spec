@@ -28,6 +28,9 @@ Requires: tetex-latex
 %define	rt_enabled		0
 %define	apache_conf		/etc/httpd/conf.d
 %define	apache_version		2
+%define	fs_queue_user		fs_queue
+%define	fs_selfservice_user	fs_selfservice
+%define	fs_cron_user		fs_daily
 
 %description
 Freeside is a flexible ISP billing system written by Ivan Kohler
@@ -135,7 +138,13 @@ touch docs
 
 # Install the init script
 %{__mkdir_p} $RPM_BUILD_ROOT%{_initrddir}
-%{__install} init.d/freeside-init $RPM_BUILD_ROOT%{_initrddir}/freeside
+%{__install} init.d/freeside-init $RPM_BUILD_ROOT%{_initrddir}/%{name}
+#%{__make} install-init INSTALLGROUP=root INIT_FILE=$RPM_BUILD_ROOT%{_initrddir}/%{name}
+%{__perl} -pi -e "\
+	  s/%%%%%%QUEUED_USER%%%%%%/%{fs_queue_user}/g;\
+	  s/%%%%%%SELFSERVICE_USER%%%%%%/%{fs_selfservice_user}/g;\
+	  s/%%%%%%SELFSERVICE_MACHINES%%%%%%//g;\
+	" $RPM_BUILD_ROOT%{_initrddir}/%{name}
 
 # Install the HTTPD configuration snippet for HTML::Mason
 %{__mkdir_p} $RPM_BUILD_ROOT%{apache_conf}
@@ -218,8 +227,8 @@ fi
 %{__rm} -rf %{buildroot}
 
 %files -f FS/%{name}-%{version}-%{release}-filelist
-%attr(0711,root,root) %{_initrddir}/freeside
-%attr(0644,root,root) %config(noreplace) /etc/sysconfig/freeside
+%attr(0711,root,root) %{_initrddir}/%{name}
+%attr(0644,root,root) %config(noreplace) %{_sysconfdir}/sysconfig/%{name}
 %defattr(-,freeside,freeside,-)
 %doc README INSTALL CREDITS GPL
 %attr(-,freeside,freeside) %config(noreplace) %{freeside_conf}/conf.*
