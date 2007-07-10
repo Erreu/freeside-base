@@ -218,6 +218,11 @@ if ! %{__id} freeside &>/dev/null; then
 	/usr/sbin/useradd freeside
 fi
 
+%pre mason
+if ! %{__id} freeside &>/dev/null; then
+	/usr/sbin/useradd freeside
+fi
+
 %pre selfservice
 if ! %{__id} freeside &>/dev/null; then
 	/usr/sbin/useradd freeside
