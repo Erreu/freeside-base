@@ -153,6 +153,7 @@ touch docs
 %{__perl} -pi -e "s|%%%%%%MASON_HANDLER%%%%%%|%{freeside_conf}/handler.pl|g" $RPM_BUILD_ROOT%{apache_conf}/freeside-*.conf
 %{__perl} -pi -e "s|/usr/local/etc/freeside|%{freeside_conf}|g" $RPM_BUILD_ROOT%{apache_conf}/freeside-*.conf
 %{__perl} -pi -e 'print "Alias /%{name} %{freeside_document_root}\n\n" if /^<Directory/;' $RPM_BUILD_ROOT%{apache_conf}/freeside-*.conf
+%{__perl} -pi -e 'print "SSLRequireSSL\n" if /^AuthName/i;' $RPM_BUILD_ROOT%{apache_conf}/freeside-*.conf
 
 # Make a list of the Mason files before adding self-service, etc.
 find $RPM_BUILD_ROOT%{freeside_document_root} -type f -print | \
