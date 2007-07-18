@@ -8,7 +8,6 @@ use DBIx::DBSchema::Table;
 use DBIx::DBSchema::Column 0.06;
 use DBIx::DBSchema::ColGroup::Unique;
 use DBIx::DBSchema::ColGroup::Index;
-use FS::UID qw(datasrc);
 
 @ISA = qw(Exporter);
 @EXPORT_OK = qw( dbdef dbdef_dist reload_dbdef );
