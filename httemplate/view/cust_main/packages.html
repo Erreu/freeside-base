@@ -552,7 +552,7 @@ Current packages
 %  my($action, $label, $actionlabel, $cust_pkg) = @_;
 %  $action .= '&pkgnum='. $cust_pkg->pkgnum;
 %  $actionlabel .= ' package '. $cust_pkg->pkgnum;
-%  popup_link($action, $label, $actionlabel, 392);
+%  popup_link($action, $label, $actionlabel, 768);
 %}
 %
 %sub svc_popup_link {
@@ -564,6 +564,7 @@ Current packages
 %
 %sub popup_link {
 %  my($action, $label, $actionlabel, $width) = @_;
+%  $width ||= 540;
 %  qq!<A HREF="javascript:void(0);" onClick="overlib( OLiframeContent('$p$action', $width, 336, 'pkg_or_svc_action_popup' ), CAPTION, '$actionlabel', STICKY, AUTOSTATUSCAP, MIDX, 0, MIDY, 0, DRAGGABLE, CLOSECLICK ); return false;">$label</A>!;
 %}
 %
