@@ -1130,7 +1130,7 @@ httemplate/docs/config.html
   {
     'key'         => 'username-uppercase',
     'section'     => 'username',
-    'description' => 'Allow uppercase characters in usernames',
+    'description' => 'Allow uppercase characters in usernames.  Not recommended for use with FreeRADIUS with MySQL backend, which is case-insensitive by default.',
     'type'        => 'checkbox',
   },
 
