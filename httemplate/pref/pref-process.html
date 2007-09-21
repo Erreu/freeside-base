@@ -33,7 +33,7 @@
 %                   );
 %
 % foreach (@paramlist) {
-%   scalar($cgi->param($_)) =~ /^[,.\@\w]*$/ && next;
+%   scalar($cgi->param($_)) =~ /^[,.\-\@\w]*$/ && next;
 %   $error ||= "Illegal value for parameter $_";
 %   last;
 % }
