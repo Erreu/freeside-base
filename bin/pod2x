@@ -25,13 +25,11 @@ my $mw_username = 'ivan';
 chomp( my $mw_password = `cat .mw-password` );
 
 my $site_perl = "./FS";
-#my $html = "Freeside:1.7:Documentation:Developer";
-my $html = "Freeside:1.9:Documentation:Developer";
+my $html = "Freeside:1.7:Documentation:Developer";
 
 foreach my $dir (
   $html,
   map "$html/$_", qw( bin FS FS/UI FS/part_export FS/part_pkg
-                      FS/part_event FS/part_event/Condition FS/part_event/Action
                       FS/ClientAPI FS/Cron FS/Misc FS/Report FS/Report/Table
                       FS/TicketSystem FS/UI
                     )
