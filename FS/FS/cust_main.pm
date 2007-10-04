@@ -2454,6 +2454,8 @@ I<quiet> can be set true to surpress email decline notices.
 
 (moved from cust_bill) (probably should get realtime_{card,ach,lec} here too)
 
+=back
+
 =cut
 
 sub realtime_bop {
