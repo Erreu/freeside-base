@@ -32,6 +32,7 @@ foreach my $dir (
   map "$html/$_", qw( bin FS FS/UI FS/part_export FS/part_pkg
                       FS/ClientAPI FS/Cron FS/Misc FS/Report FS/Report/Table
                       FS/TicketSystem FS/UI
+                      FS/SelfService
                     )
 ) {
   -d $dir or mkdir $dir;
