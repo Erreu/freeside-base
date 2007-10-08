@@ -16,7 +16,7 @@
 
 <!-- mason kludge -->
 %
-%  eidiot($error);
+%  errorpage($error);
 %} else {
 %  print $cgi->redirect(popurl(3). "view/cust_main.cgi?$custnum".
 %                       "#cust_pkg". $cust_pkg[0]->pkgnum );
