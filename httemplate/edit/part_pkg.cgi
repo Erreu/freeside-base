@@ -159,23 +159,27 @@ Line-item revenue recognition
 
 </TD><TD VALIGN="top">
 
-%#Reseller information      # after 1.7.2
-%#<% ntable("#cccccc", 2) %>
-%#  <TR>
-%#    <TD ALIGN="right"><% 'Agent Types' %></TD>
-%#    <TD>
-%#      <% include( '/elements/select-table.html',
-%#                  'element_name' => 'agent_type',
-%#                  'table'        => 'agent_type',
-%#  		  'name_col'     => 'atype',
-%#  		  'value'        => \@agent_type,
-%#  		  'empty_label'  => '(none)',
-%#  		  'element_etc'  => 'multiple size="10"',
-%#                )
-%#      %>
-%#    </TD>
-%#  </TR>
-%#</TABLE>
+%if ( $cgi->param('clone') ) {
+  <INPUT TYPE="hidden" NAME="agent_type" VALUE="">
+%}else{
+Reseller information
+<% ntable("#cccccc", 2) %>
+  <TR>
+    <TD ALIGN="right"><% 'Agent Types' %></TD>
+    <TD>
+      <% include( '/elements/select-table.html',
+                  'element_name' => 'agent_type',
+                  'table'        => 'agent_type',
+  		  'name_col'     => 'atype',
+  		  'value'        => \@agent_type,
+  		  'empty_label'  => '(none)',
+  		  'element_etc'  => 'multiple size="10"',
+                )
+      %>
+    </TD>
+  </TR>
+</TABLE>
+%}
 </TD></TR></TABLE>
 %
 %
@@ -271,9 +275,7 @@ Line-item revenue recognition
 %#} else {
 %#  push @fixups, 'taxclass'; #hidden
 %#}
-%my @form_elements = ( 'classnum', 'taxclass' );
-%# copying non-existant elements is probably harmless, but after 1.7.2
-%#my @form_elements = ( 'classnum', 'taxclass', 'agent_type' );
+%my @form_elements = ( 'classnum', 'taxclass', 'agent_type' );
 %
 %my @form_radio = ();
 %if ( dbdef->table('pkg_svc')->column('primary_svc') ) {
