@@ -66,6 +66,11 @@ tie my %report_customers_lists, 'Tie::IxHash',
 $report_customers_lists{'by active trouble tickets'} = [ $fsurl. 'search/cust_main.cgi?browse=tickets', '' ]
   if $conf->config('ticket_system');
 
+$report_customers_lists{'advanced customer reports'} = [ $fsurl. 'search/report_cust_main.html', '' ]
+  if ( $curuser->access_right('List customers') &&
+       $curuser->access_right('List packages')
+     );
+
 tie my %report_customers_search, 'Tie::IxHash';
 $report_customers_search{'by ordering employee'} = [ $fsurl. 'search/cust_main-otaker.cgi' ]
   if $curuser->access_right('Configuration');
@@ -191,6 +196,7 @@ $report_menu{'Financial'}  = [ \%report_financial, 'Financial reports' ]
 
 tie my %tools_importing, 'Tie::IxHash',
   'Import customers from CSV file' => [ $fsurl.'misc/cust_main-import.cgi', '' ],
+  'Import payments from CSV file' => [ $fsurl.'misc/cust_pay-import.cgi', '' ],
   'Import customer notes from CSV file' => [ $fsurl.'misc/cust_main_note-import.html', '' ],
   'Import one-time charges from CSV file' => [ $fsurl.'misc/cust_main-import_charges.cgi', '' ],
   'Import Call Detail Records (CDRs) from CSV file' => [ $fsurl.'misc/cdr-import.html', '' ],
