@@ -89,7 +89,6 @@ For security reasons, it is set to conflict with %{name} so you cannot install t
 %setup
 %{__rm} bin/pod2x # Only useful to Ivan Kohler now
 %{__cp} install/rpm/freeside-install FS/bin
-%{__cp} install/rpm/freeside-import FS/bin
 perl -pi -e 's|/usr/local/bin|%{buildroot}%{_bindir}|g' FS/Makefile.PL
 perl -ni -e 'print if !/\s+chown\s+/;' Makefile
 
