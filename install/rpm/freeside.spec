@@ -1,18 +1,17 @@
 %{!?_initrddir:%define _initrddir /etc/rc.d/init.d}
+%{!?version:%define version 1.7}
+%{!?release:%define release 1}
 
 Summary: Freeside ISP Billing System
 Name: freeside
-Version: 1.7.3
-Release: 1
+Version: %{version}
+Release: %{release}
 License: GPL
 Group: Applications/Internet
 URL: http://www.sisd.com/freeside/
 Packager: Richard Siddall <richard.siddall@elirion.net>
 Vendor: Freeside
 Source: http://www.sisd.com/freeside/%{name}-%{version}.tar.gz
-Source1: freeside-install
-Source2: freeside-import
-Source3: freeside.sysconfig
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 BuildArch: noarch
 Requires: %{name}-frontend
@@ -88,8 +87,9 @@ For security reasons, it is set to conflict with %{name} so you cannot install t
 
 %prep
 %setup
-%{__cp} %SOURCE1 FS/bin
-%{__cp} %SOURCE2 FS/bin
+%{__rm} bin/pod2x # Only useful to Ivan Kohler now
+%{__cp} install/rpm/freeside-install FS/bin
+%{__cp} install/rpm/freeside-import FS/bin
 perl -pi -e 's|/usr/local/bin|%{buildroot}%{_bindir}|g' FS/Makefile.PL
 perl -ni -e 'print if !/\s+chown\s+/;' Makefile
 
@@ -98,8 +98,7 @@ perl -ni -e 'print if !/\s+chown\s+/;' Makefile
 # Add freeside user and group if there isn't already such a user
 %{__id} freeside 2>/dev/null >/dev/null || /usr/sbin/useradd -s /bin/sh freeside
 # False laziness...
-%{__make} htmlman
-echo "Made HTML manuals"
+# The htmlman target now makes wiki documentation.  Let's pretend we made it.
 touch htmlman
 %{__make} alldocs
 
@@ -168,7 +167,7 @@ fi
 %{__install} bin/* $RPM_BUILD_ROOT%{_datadir}/%{name}-%{version}
 
 %{__mkdir_p} $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig
-%{__install} %SOURCE3 $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig/%{name}
+%{__install} install/rpm/freeside.sysconfig $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig/%{name}
 
 %{__mkdir_p} $RPM_BUILD_ROOT%{freeside_document_root}/selfservice
 %{__mkdir_p} $RPM_BUILD_ROOT%{freeside_document_root}/selfservice/cgi
