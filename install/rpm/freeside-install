@@ -20,7 +20,7 @@ DBNAME=freeside
 		case $flag in
 		d)
 			NEWVAL=`echo $OPTARG | tr '[A-Z]' '[a-z]'`
-			if [ "x$DOMAIN" -ne "x" ] ; then
+			if [ "x$DOMAIN" != "x" -a "$DOMAIN" != "$NEWVAL" ] ; then
 				echo STDERR "Domain already set to $DOMAIN.  Changing to $NEWVAL"
 			fi
 			DOMAIN=$NEWVAL;;
@@ -28,19 +28,19 @@ DBNAME=freeside
 			usage;;
 		n)
 			# We don't lowercase the database name
-			if [ "x$DBNAME" -ne "x" ] ; then
+			if [ "x$DBNAME" != "x" -a "$DBNAME" != "$OPTARG" ] ; then
 				echo STDERR "Database name already set to $DBNAME.  Changing to $OPTARG"
 			fi
 			DBNAME=$OPTARG;;
 		p)
 			NEWVAL=`echo $OPTARG | tr '[A-Z]' '[a-z]'`
-			if [ "x$PACKAGER" -ne "x" ] ; then
+			if [ "x$PACKAGER" != "x" -a "$PACKAGER" != "$NEWVAL" ] ; then
 				echo STDERR "Packager already set to $PACKAGER.  Changing to $NEWVAL"
 			fi
 			PACKAGER=$NEWVAL;;
 		u)
 			# We don't lowercase the user name
-			if [ "x$USER" -ne "x" ] ; then
+			if [ "x$USER" != "x" -a "$USER" != "$OPTARG" ] ; then
 				echo STDERR "Main freeside web user already set to $USER.  Changing to $OPTARG"
 			fi
 			USER=$OPTARG;;
@@ -187,7 +187,11 @@ add_first_freeside_user()
 {
 	echo "Creating first Freeside application user"
 	su freeside -c "freeside-adduser -g 1 $USER"
-	su freeside -c "htpasswd -c /usr/local/etc/freeside/htpasswd $USER"
+	if [ $PACKAGER != "rpm" ]; then 
+		su freeside -c "htpasswd -c /usr/local/etc/freeside/htpasswd $USER"
+	else
+		su freeside -c "htpasswd -c /etc/freeside/htpasswd $USER"
+	fi
 }
 
 setup_freeside_database()
@@ -208,7 +212,7 @@ if [ "x$DOMAIN" = "x" ]; then
         usage;
 fi
 
-if [ "$PACKAGER" -ne "rpm" ]; then
+if [ "$PACKAGER" != "rpm" ]; then
 	install_all_perl_modules;
 	install_freeside;
 fi
@@ -221,7 +225,9 @@ setup_freeside_database;
 
 add_freeside_system_users;
 
-add_first_freeside_user;
+if [ "x$USER" != "x" ]; then
+	add_first_freeside_user;
+fi
 
 exit 0;
 
