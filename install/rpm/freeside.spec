@@ -25,7 +25,8 @@ Requires: tetex-latex
 %define freeside_lock		/var/lock/freeside
 %define freeside_log		/var/log/freeside
 %define	rt_enabled		0
-%define	apache_conf		/etc/httpd/conf.d
+%define apache_conffile		/etc/httpd/conf/httpd.conf
+%define	apache_confdir		/etc/httpd/conf.d
 %define	apache_version		2
 %define	fs_queue_user		fs_queue
 %define	fs_selfservice_user	fs_selfservice
@@ -147,13 +148,13 @@ touch docs
 	" $RPM_BUILD_ROOT%{_initrddir}/%{name}
 
 # Install the HTTPD configuration snippet for HTML::Mason
-%{__mkdir_p} $RPM_BUILD_ROOT%{apache_conf}
-%{__make} install-apache FREESIDE_DOCUMENT_ROOT=%{freeside_document_root} RT_ENABLED=%{rt_enabled} APACHE_CONF=$RPM_BUILD_ROOT%{apache_conf} APACHE_VERSION=%{apache_version} MASON_HANDLER=%{freeside_conf}/handler.pl
-%{__perl} -pi -e "s|%%%%%%FREESIDE_DOCUMENT_ROOT%%%%%%|%{freeside_document_root}|g" $RPM_BUILD_ROOT%{apache_conf}/freeside-*.conf
-%{__perl} -pi -e "s|%%%%%%MASON_HANDLER%%%%%%|%{freeside_conf}/handler.pl|g" $RPM_BUILD_ROOT%{apache_conf}/freeside-*.conf
-%{__perl} -pi -e "s|/usr/local/etc/freeside|%{freeside_conf}|g" $RPM_BUILD_ROOT%{apache_conf}/freeside-*.conf
-%{__perl} -pi -e 'print "Alias /%{name} %{freeside_document_root}\n\n" if /^<Directory/;' $RPM_BUILD_ROOT%{apache_conf}/freeside-*.conf
-%{__perl} -pi -e 'print "SSLRequireSSL\n" if /^AuthName/i;' $RPM_BUILD_ROOT%{apache_conf}/freeside-*.conf
+%{__mkdir_p} $RPM_BUILD_ROOT%{apache_confdir}
+%{__make} install-apache FREESIDE_DOCUMENT_ROOT=%{freeside_document_root} RT_ENABLED=%{rt_enabled} APACHE_CONF=$RPM_BUILD_ROOT%{apache_confdir} APACHE_VERSION=%{apache_version} MASON_HANDLER=%{freeside_conf}/handler.pl
+%{__perl} -pi -e "s|%%%%%%FREESIDE_DOCUMENT_ROOT%%%%%%|%{freeside_document_root}|g" $RPM_BUILD_ROOT%{apache_confdir}/freeside-*.conf
+%{__perl} -pi -e "s|%%%%%%MASON_HANDLER%%%%%%|%{freeside_conf}/handler.pl|g" $RPM_BUILD_ROOT%{apache_confdir}/freeside-*.conf
+%{__perl} -pi -e "s|/usr/local/etc/freeside|%{freeside_conf}|g" $RPM_BUILD_ROOT%{apache_confdir}/freeside-*.conf
+%{__perl} -pi -e 'print "Alias /%{name} %{freeside_document_root}\n\n" if /^<Directory/;' $RPM_BUILD_ROOT%{apache_confdir}/freeside-*.conf
+%{__perl} -pi -e 'print "SSLRequireSSL\n" if /^AuthName/i;' $RPM_BUILD_ROOT%{apache_confdir}/freeside-*.conf
 
 # Make a list of the Mason files before adding self-service, etc.
 find $RPM_BUILD_ROOT%{freeside_document_root} -type f -print | \
@@ -229,6 +230,10 @@ if ! %{__id} freeside &>/dev/null; then
 	/usr/sbin/useradd freeside
 fi
 
+%post mason
+# Make local httpd run with User/Group = freeside
+perl -p -i.fsbackup -e 's/^(User|Group) .*/$1 freeside/' %{apache_conffile}
+
 %clean
 %{__rm} -rf %{buildroot}
 
@@ -250,7 +255,7 @@ fi
 %defattr(-, freeside, freeside, 0755)
 %attr(-,freeside,freeside) %{freeside_conf}/handler.pl
 %attr(-,freeside,freeside) %{freeside_cache}/masondata
-%attr(0644,root,root) %config(noreplace) %{apache_conf}/%{name}-base%{apache_version}.conf
+%attr(0644,root,root) %config(noreplace) %{apache_confdir}/%{name}-base%{apache_version}.conf
 
 %files postgresql
 
