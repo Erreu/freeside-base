@@ -31,6 +31,8 @@ Requires: tetex-latex
 %define	fs_selfservice_user	fs_selfservice
 %define	fs_cron_user		fs_daily
 
+%define _rpmlibdir	/usr/lib/rpm
+
 %description
 Freeside is a flexible ISP billing system written by Ivan Kohler
 
@@ -181,7 +183,7 @@ eval `perl '-V:installarchlib'`
 %makeinstall PREFIX=$RPM_BUILD_ROOT%{_prefix}
 %{__rm} -f `find $RPM_BUILD_ROOT -type f -name perllocal.pod -o -name .packlist`
 
-[ -x %{_libdir}/rpm/brp-compress ] && %{_libdir}/rpm/brp-compress
+[ -x %{_rpmlibdir}/brp-compress ] && %{_rpmlibdir}/brp-compress
 
 find $RPM_BUILD_ROOT%{_prefix} -type f -print | \
 	grep -v '/etc/freeside/conf' | \
@@ -199,7 +201,7 @@ cd fs_selfservice/FS-SelfService
 %makeinstall PREFIX=$RPM_BUILD_ROOT%{_prefix}
 %{__rm} -f `find $RPM_BUILD_ROOT -type f -name perllocal.pod -o -name .packlist`
 
-[ -x %{_libdir}/rpm/brp-compress ] && %{_libdir}/rpm/brp-compress
+[ -x %{_rpmlibdir}/brp-compress ] && %{_rpmlibdir}/brp-compress
 
 find $RPM_BUILD_ROOT%{_prefix} -type f -print | \
 	grep -v '/etc/freeside/conf' | \
