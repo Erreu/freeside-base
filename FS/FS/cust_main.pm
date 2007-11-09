@@ -2601,7 +2601,7 @@ sub realtime_bop {
     my $paycvv = exists($options{'paycvv'})
                    ? $options{'paycvv'}
                    : $self->paycvv;
-    $content{cvv2} = $self->paycvv
+    $content{cvv2} = $paycvv
       if length($paycvv);
 
     my $paystart_month = exists($options{'paystart_month'})
