@@ -22,7 +22,7 @@ use String::Approx qw(amatch);
 use Business::CreditCard 0.28;
 use Locale::Country;
 use Data::Dumper;
-use FS::UID qw( getotaker dbh );
+use FS::UID qw( getotaker dbh driver_name );
 use FS::Record qw( qsearchs qsearch dbdef );
 use FS::Misc qw( send_email generate_ps do_print );
 use FS::Msgcat qw(gettext);
@@ -5268,11 +5268,20 @@ sub agent_invoice_from {
 sub _agent_plandata {
   my( $self, $option ) = @_;
 
+  my $regexp = '';
+  if ( driver_name =~ /^Pg/i ) {
+    $regexp = '~';
+  } elsif ( driver_name =~ /^mysql/i ) {
+    $regexp = 'REGEXP';
+  } else {
+    die "don't know how to use regular expressions in ". driver_name. " databases";
+  }
+
   my $part_bill_event = qsearchs( 'part_bill_event',
     {
       'payby'     => $self->payby,
       'plan'      => 'send_agent',
-      'plandata'  => { 'op'    => '~',
+      'plandata'  => { 'op'    => $regexp,
                        'value' => "(^|\n)agentnum ".
                                    '([0-9]*, )*'.
                                   $self->agentnum.
