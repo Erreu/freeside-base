@@ -17,6 +17,7 @@ BuildArch: noarch
 Requires: %{name}-frontend
 Requires: %{name}-backend
 Requires: tetex-latex
+Requires: perl-Fax-Hylafax-Client
 
 %define freeside_document_root	/var/www/freeside
 %define freeside_cache		/var/cache/subsys/freeside
@@ -42,6 +43,7 @@ Summary: HTML::Mason interface for %{name}
 Group: Applications/Internet
 Prefix: /var/www/freeside
 Requires: mod_ssl
+Requires: perl-Apache-DBI
 %%include freeside-mason.deps.inc
 Conflicts: %{name}-apacheasp
 Provides: %{name}-frontend
@@ -230,9 +232,18 @@ if ! %{__id} freeside &>/dev/null; then
 	/usr/sbin/useradd freeside
 fi
 
+%post
+if [ -x /sbin/chkconfig ]; then
+	/sbin/chkconfig --add freeside
+fi
+#if [ $1 -eq 2 -a -x /usr/bin/freeside-upgrade ]; then
+#fi
+
 %post mason
 # Make local httpd run with User/Group = freeside
-perl -p -i.fsbackup -e 's/^(User|Group) .*/$1 freeside/' %{apache_conffile}
+if [ -f %{apache_conffile} ]; then
+	perl -p -i.fsbackup -e 's/^(User|Group) .*/$1 freeside/' %{apache_conffile}
+fi
 
 %clean
 %{__rm} -rf %{buildroot}
