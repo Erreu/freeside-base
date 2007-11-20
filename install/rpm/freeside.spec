@@ -175,8 +175,10 @@ fi
 
 %{__mkdir_p} $RPM_BUILD_ROOT%{freeside_document_root}/selfservice
 %{__mkdir_p} $RPM_BUILD_ROOT%{freeside_document_root}/selfservice/cgi
+%{__mkdir_p} $RPM_BUILD_ROOT%{freeside_document_root}/selfservice/php
 %{__mkdir_p} $RPM_BUILD_ROOT%{freeside_document_root}/selfservice/templates
 %{__install} fs_selfservice/FS-SelfService/cgi/* $RPM_BUILD_ROOT%{freeside_document_root}/selfservice/cgi
+%{__install} fs_selfservice/php/* $RPM_BUILD_ROOT%{freeside_document_root}/selfservice/php
 %{__install} fs_selfservice/FS-SelfService/*.template $RPM_BUILD_ROOT%{freeside_document_root}/selfservice/templates
 
 # Install the main billing server Perl files
@@ -275,6 +277,7 @@ fi
 %files selfservice -f fs_selfservice/FS-SelfService/%{name}-%{version}-%{release}-selfservice-filelist
 %defattr(-, freeside, freeside, 0644)
 %attr(0755,freeside,freeside) %{freeside_document_root}/selfservice/cgi
+%attr(0755,freeside,freeside) %{freeside_document_root}/selfservice/php
 %attr(0644,freeside,freeside) %{freeside_document_root}/selfservice/templates
 
 %changelog
