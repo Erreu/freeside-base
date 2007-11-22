@@ -123,8 +123,9 @@
 <!-- agent -->
 
 <% include('/elements/tr-select-agent.html', $cust_main->agentnum,
-              'label'       => "<B>${r}Agent</B>",
-              'empty_label' => 'Select agent',
+              'label'         => "<B>${r}Agent</B>",
+              'empty_label'   => 'Select agent',
+              'disable_empty' => ( $cust_main->agentnum ? 1 : 0 ),
            )
 %>
 
