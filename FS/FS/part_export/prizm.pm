@@ -141,7 +141,8 @@ sub _export_insert {
   $err_or_som = $self->prizm_command('NetworkIfService', 'addProvisionedElement',
                                       $networkid,
                                       $svc->mac_addr,
-                                      $name . " " . $svc->description,
+                                      substr($name . " " . $svc->description,
+                                             0, 50),
                                       $location,
                                       $contact,
                                       sprintf("%032X", $svc->authkey),
@@ -164,7 +165,7 @@ sub _export_insert {
                   $svc->latitude,
                   $svc->longitude,
                   $svc->altitude,
-                  $name,
+                  $name . " " . $svc->description,
                   $location,
                   $contact,
                   );
