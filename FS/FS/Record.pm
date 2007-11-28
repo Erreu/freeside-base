@@ -213,6 +213,7 @@ The preferred usage is to pass a hash reference of named parameters:
                            #these are optional...
                            'select'    => '*',
                            'extra_sql' => 'AND field ',
+                           'order_by'  => 'ORDER BY something',
                            #'cache_obj' => '', #optional
                            'addl_from' => 'LEFT JOIN othtable USING ( field )',
                          }
@@ -235,13 +236,14 @@ fine in the common case where there are only two parameters:
 =cut
 
 sub qsearch {
-  my($stable, $record, $select, $extra_sql, $cache, $addl_from );
+  my($stable, $record, $select, $extra_sql, $order_by, $cache, $addl_from );
   if ( ref($_[0]) ) { #hashref for now, eventually maybe accept a list too
     my $opt = shift;
     $stable    = $opt->{'table'}     or die "table name is required";
     $record    = $opt->{'hashref'}   || {};
     $select    = $opt->{'select'}    || '*';
     $extra_sql = $opt->{'extra_sql'} || '';
+    $order_by  = $opt->{'order_by'}  || '';
     $cache     = $opt->{'cache_obj'} || '';
     $addl_from = $opt->{'addl_from'} || '';
   } else {
@@ -362,6 +364,7 @@ sub qsearch {
   }
 
   $statement .= " $extra_sql" if defined($extra_sql);
+  $statement .= " $order_by"  if defined($order_by);
 
   warn "[debug]$me $statement\n" if $DEBUG > 1;
   my $sth = $dbh->prepare($statement)
