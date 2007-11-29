@@ -604,7 +604,7 @@ sub tables_hashref {
         #'cust_balance', @money_type,            '', '',
         'paynum',       'int',     'NULL',  '', '', '',
       ],
-      'primary_key' => 'pendingpaynum',
+      'primary_key' => 'paypendingnum',
       'unique'      => [ [ 'payunique' ] ],
       'index'       => [ [ 'custnum' ], [ 'status' ], ],
     },
