@@ -2176,7 +2176,7 @@ sub print_html {
       && length(  $conf->config_orbase('invoice_htmlreturnaddress', $template) )
   ) {
     $invoice_data{'returnaddress'} =
-      join("\n", $conf->config('invoice_htmlreturnaddress', $template) );
+      join("\n", $conf->config_orbase('invoice_htmlreturnaddress', $template) );
   } else {
     $invoice_data{'returnaddress'} =
       join("\n", map { 
