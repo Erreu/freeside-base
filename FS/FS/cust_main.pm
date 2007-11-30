@@ -2481,6 +2481,12 @@ sub realtime_bop {
                   ? $options{'payinfo'}
                   : $self->payinfo;
 
+  my %method2payby = (
+    'CC'     => 'CARD',
+    'ECHECK' => 'CHEK',
+    'LEC'    => 'LECB',
+  );
+
   ###
   # select a gateway
   ###
@@ -2822,12 +2828,6 @@ sub realtime_bop {
   ###
 
   if ( $transaction->is_success() ) {
-
-    my %method2payby = (
-      'CC'     => 'CARD',
-      'ECHECK' => 'CHEK',
-      'LEC'    => 'LECB',
-    );
 
     my $paybatch = '';
     if ( $payment_gateway ) { # agent override
