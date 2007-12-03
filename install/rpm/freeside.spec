@@ -6,7 +6,7 @@ Summary: Freeside ISP Billing System
 Name: freeside
 Version: %{version}
 Release: %{release}
-License: GPL
+License: AGPL
 Group: Applications/Internet
 URL: http://www.sisd.com/freeside/
 Packager: Richard Siddall <richard.siddall@elirion.net>
@@ -254,7 +254,7 @@ fi
 %attr(0711,root,root) %{_initrddir}/%{name}
 %attr(0644,root,root) %config(noreplace) %{_sysconfdir}/sysconfig/%{name}
 %defattr(-,freeside,freeside,-)
-%doc README INSTALL CREDITS GPL
+%doc README INSTALL CREDITS AGPL
 %attr(-,freeside,freeside) %config(noreplace) %{freeside_conf}/conf.*
 %attr(-,freeside,freeside) %config(noreplace) %{freeside_cache}/counters.*
 %attr(-,freeside,freeside) %config(noreplace) %{freeside_cache}/cache.*
