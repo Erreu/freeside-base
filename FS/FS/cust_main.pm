@@ -5216,7 +5216,7 @@ sub notify {
   $notify_template->compile()
     or die "can't compile template: Text::Template::ERROR";
 
-  my $paydate = $customer->paydate;
+  my $paydate = $customer->paydate || '2037-12-31';
   $FS::notify_template::_template::first = $customer->first;
   $FS::notify_template::_template::last = $customer->last;
   $FS::notify_template::_template::company = $customer->company;
@@ -5291,7 +5291,7 @@ sub generate_letter {
   my %letter_data = map { $_ => $self->$_ } $self->fields;
   $letter_data{payinfo} = $self->mask_payinfo;
 
-  my $paydate = $self->paydate || '2037-12';
+  my $paydate = $self->paydate || '2037-12-31';
   my $payby = $self->payby;
   my ($payyear,$paymonth,$payday) = split (/-/,$paydate);
   my $expire_time = timelocal(0,0,0,$payday,--$paymonth,$payyear);
