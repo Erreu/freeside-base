@@ -432,6 +432,7 @@ sub tables_hashref {
         'amount',   @money_type, '', '', 
         'otaker',   'varchar', '', 32, '', '', 
         'reason',   'text', 'NULL', '', '', '', 
+        'reasonnum', 'int', 'NULL', '', '', '', 
         'closed',    'char', 'NULL', 1, '', '', 
       ],
       'primary_key' => 'crednum',
@@ -1790,7 +1791,7 @@ sub tables_hashref {
       'columns' => [
         'reasonnum',     'serial',  '', '', '', '', 
         'reason_type',   'int',  '', '', '', '', 
-        'reason',        'varchar', '', $char_d, '', '', 
+        'reason',        'text', '', '', '', '', 
         'disabled',      'char',    'NULL', 1, '', '', 
       ],
       'primary_key' => 'reasonnum',

@@ -214,9 +214,11 @@ sub insert {
 
         my $amount = sprintf( "%.2f", $part_pkg->base_recur / $part_pkg->freq );
         my $error =
-          $referring_cust_main->credit( $amount,
-                                        'Referral credit for '. $cust_main->name
-                                      );
+          $referring_cust_main->
+            credit( $amount,
+                    'Referral credit for '.$cust_main->name,
+                    'reason_type' => $conf->config('referral_credit_type')
+                  );
         if ( $error ) {
           $dbh->rollback if $oldAutoCommit;
           return "Error crediting customer ". $cust_main->referral_custnum.
@@ -492,9 +494,11 @@ sub cancel {
   # Add a credit for remaining service
   my $remaining_value = $self->calc_remain();
   if ( $remaining_value > 0 ) {
+    my $conf = new FS::Conf;
     my $error = $self->cust_main->credit(
       $remaining_value,
       'Credit for unused time on '. $self->part_pkg->pkg,
+      'reason_type' => $conf->config('cancel_credit_type'),
     );
     if ($error) {
       $dbh->rollback if $oldAutoCommit;

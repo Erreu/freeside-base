@@ -248,6 +248,8 @@ tie my %config_billing, 'Tie::IxHash',
   'View/Edit prepaid cards'            => [ $fsurl.'search/prepay_credit.html', 'View outstanding cards, generate new cards' ],
   'View/Edit call rates and regions'   => [ $fsurl.'browse/rate.cgi', 'Manage rate plans, regions and prefixes for VoIP and call billing' ],
   'View/Edit locales and tax rates'    => [ $fsurl.'browse/cust_main_county.cgi', 'Change tax rates, or break down a country into states, or a state into counties and assign different tax rates to each' ],
+  'View/Edit credit reason types'  => [ $fsurl.'browse/reason_type.html?class=R', 'Credit reason types define groups of reasons, for reporting and convenience purposes.' ],
+  'View/Edit credit reasons'       => [ $fsurl.'browse/reason.html?class=R', 'Credit reasons explain why a credit was issued.' ],
 ;
 
 tie my %config_dialup, 'Tie::IxHash',

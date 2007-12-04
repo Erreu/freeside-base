@@ -187,18 +187,28 @@
       </TD>
 
 % } elsif ( $type eq 'select' ) { 
+%   
+%   my $aref = $f->{'value'}{'values'};
+%   my $vkey = $f->{'value'}{'vcolumn'};
+%   my $ckey = $f->{'value'}{'ccolumn'};
+%
+%   if (scalar(@$aref) == 1) {
+
+      <TD BGCOLOR="#dddddd"><% @$aref[0]->$ckey %></TD>
+      <INPUT TYPE="hidden" NAME="<% $field %>" VALUE="<% @$aref[0]->$vkey %>">
+
+%   }else{
 
       <TD>
         <SELECT NAME="<% $field %>" 
-%     my $aref = $f->{'value'}{'values'};
-%     my $vkey = $f->{'value'}{'vcolumn'};
-%     my $ckey = $f->{'value'}{'ccolumn'};
 %     foreach my $v (@$aref) {
 	  <OPTION <% ($object->$field() eq $v->$vkey) ? 'SELECTED' : '' %>
 	    VALUE="<% $v->$vkey %>"><% $v->$ckey %></OPTION>
 %     }
 	</SELECT>
       </TD>
+
+%   }
 
 % } else { 
 
