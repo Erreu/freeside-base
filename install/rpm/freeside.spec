@@ -167,8 +167,8 @@ if [ "$(cat %{name}-%{version}-%{release}-mason-filelist)X" = "X" ] ; then
 fi
 
 # Install all the miscellaneous binaries into /usr/share or similar
-%{__mkdir_p} $RPM_BUILD_ROOT%{_datadir}/%{name}-%{version}
-%{__install} bin/* $RPM_BUILD_ROOT%{_datadir}/%{name}-%{version}
+%{__mkdir_p} $RPM_BUILD_ROOT%{_datadir}/%{name}-%{version}/bin
+%{__install} bin/* $RPM_BUILD_ROOT%{_datadir}/%{name}-%{version}/bin
 
 %{__mkdir_p} $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig
 %{__install} install/rpm/freeside.sysconfig $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig/%{name}
