@@ -112,7 +112,7 @@ cd FS
 CFLAGS="$RPM_OPT_FLAGS" perl Makefile.PL PREFIX=$RPM_BUILD_ROOT%{_prefix} SITELIBEXP=$RPM_BUILD_ROOT%{perl_sitelib} SITEARCHEXP=$RPM_BUILD_ROOT%{perl_sitearch}
 %{__make} OPTIMIZE="$RPM_OPT_FLAGS"
 cd ..
-%{__make} perl-modules FREESIDE_CACHE=%{freeside_cache} FREESIDE_CONF=%{freeside_conf} FREESIDE_EXPORT=%{freeside_export} FREESIDE_LOCK=%{freeside_lock} FREESIDE_LOG=%{freeside_log}
+%{__make} perl-modules VERSION='%{version}-%{release}' FREESIDE_CACHE=%{freeside_cache} FREESIDE_CONF=%{freeside_conf} FREESIDE_EXPORT=%{freeside_export} FREESIDE_LOCK=%{freeside_lock} FREESIDE_LOG=%{freeside_log}
 touch perl-modules
 
 cd fs_selfservice/FS-SelfService
