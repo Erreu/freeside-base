@@ -32,6 +32,7 @@ Requires: perl-Fax-Hylafax-Client
 %define	fs_queue_user		fs_queue
 %define	fs_selfservice_user	fs_selfservice
 %define	fs_cron_user		fs_daily
+%define	db_types		Pg mysql
 
 %define _rpmlibdir	/usr/lib/rpm
 
@@ -130,7 +131,12 @@ touch install-perl-modules perl-modules
 #%{__mkdir_p} $RPM_BUILD_ROOT%{freeside_export}
 %{__mkdir_p} $RPM_BUILD_ROOT%{freeside_lock}
 %{__mkdir_p} $RPM_BUILD_ROOT%{freeside_log}
-%{__make} create-config RT_ENABLED=%{rt_enabled} FREESIDE_CACHE=$RPM_BUILD_ROOT%{freeside_cache} FREESIDE_CONF=$RPM_BUILD_ROOT%{freeside_conf} FREESIDE_EXPORT=$RPM_BUILD_ROOT%{freeside_export} FREESIDE_LOCK=$RPM_BUILD_ROOT%{freeside_lock} FREESIDE_LOG=$RPM_BUILD_ROOT%{freeside_log}
+for DBTYPE in %{db_types}; do
+	%{__mkdir_p} $RPM_BUILD_ROOT/tmp
+	%{__make} create-config DB_TYPE=$DBTYPE RT_ENABLED=%{rt_enabled} FREESIDE_CACHE=$RPM_BUILD_ROOT%{freeside_cache} FREESIDE_CONF=$RPM_BUILD_ROOT/tmp FREESIDE_EXPORT=$RPM_BUILD_ROOT%{freeside_export} FREESIDE_LOCK=$RPM_BUILD_ROOT%{freeside_lock} FREESIDE_LOG=$RPM_BUILD_ROOT%{freeside_log}
+	%{__mv} $RPM_BUILD_ROOT/tmp/* $RPM_BUILD_ROOT%{freeside_conf}
+	/bin/rmdir $RPM_BUILD_ROOT/tmp
+done
 %{__rm} install-perl-modules perl-modules $RPM_BUILD_ROOT%{freeside_conf}/conf*/ticket_system
 
 touch docs
@@ -157,6 +163,23 @@ touch docs
 %{__perl} -pi -e "s|/usr/local/etc/freeside|%{freeside_conf}|g" $RPM_BUILD_ROOT%{apache_confdir}/freeside-*.conf
 %{__perl} -pi -e 'print "Alias /%{name} %{freeside_document_root}\n\n" if /^<Directory/;' $RPM_BUILD_ROOT%{apache_confdir}/freeside-*.conf
 %{__perl} -pi -e 'print "SSLRequireSSL\n" if /^AuthName/i;' $RPM_BUILD_ROOT%{apache_confdir}/freeside-*.conf
+
+# Make lists of the database-specific configuration files
+for DBTYPE in %{db_types}; do
+	echo "%%attr(600,freeside,freeside) %{freeside_conf}/secrets" > %{name}-%{version}-%{release}-$DBTYPE-filelist
+	for DIR in `echo -e "%{freeside_conf}\n%{freeside_cache}\n%{freeside_export}\n" | sort | uniq`; do
+		find $RPM_BUILD_ROOT$DIR -type f -print | \
+			grep ":$DBTYPE:" | \
+			sed "s@^$RPM_BUILD_ROOT@%%attr(640,freeside,freeside) %%config(noreplace) @g" >> %{name}-%{version}-%{release}-$DBTYPE-filelist
+		find $RPM_BUILD_ROOT$DIR -type d -print | \
+			grep ":$DBTYPE:" | \
+			sed "s@^$RPM_BUILD_ROOT@%%attr(711,freeside,freeside) %%dir @g" >> %{name}-%{version}-%{release}-$DBTYPE-filelist
+	done
+	if [ "$(cat %{name}-%{version}-%{release}-$DBTYPE-filelist)X" = "X" ] ; then
+		echo "ERROR: EMPTY FILE LIST"
+		exit 1
+	fi
+done
 
 # Make a list of the Mason files before adding self-service, etc.
 find $RPM_BUILD_ROOT%{freeside_document_root} -type f -print | \
@@ -229,6 +252,16 @@ if ! %{__id} freeside &>/dev/null; then
 	/usr/sbin/useradd freeside
 fi
 
+%pre postgresql
+if ! %{__id} freeside &>/dev/null; then
+	/usr/sbin/useradd freeside
+fi
+
+%pre mysql
+if ! %{__id} freeside &>/dev/null; then
+	/usr/sbin/useradd freeside
+fi
+
 %pre selfservice
 if ! %{__id} freeside &>/dev/null; then
 	/usr/sbin/useradd freeside
@@ -239,7 +272,18 @@ if [ -x /sbin/chkconfig ]; then
 	/sbin/chkconfig --add freeside
 fi
 #if [ $1 -eq 2 -a -x /usr/bin/freeside-upgrade ]; then
+#	/usr/bin/freeside-upgrade
 #fi
+
+%post postgresql
+if [ -f %{freeside_conf}/secrets ]; then
+	perl -p -i.fsbackup -e 's/^DBI:.*?:/DBI:Pg:/' %{freeside_conf}/secrets
+fi
+
+%post mysql
+if [ -f %{freeside_conf}/secrets ]; then
+	perl -p -i.fsbackup -e 's/^DBI:.*?:/DBI:mysql:/' %{freeside_conf}/secrets
+fi
 
 %post mason
 # Make local httpd run with User/Group = freeside
@@ -255,11 +299,6 @@ fi
 %attr(0644,root,root) %config(noreplace) %{_sysconfdir}/sysconfig/%{name}
 %defattr(-,freeside,freeside,-)
 %doc README INSTALL CREDITS AGPL
-%attr(-,freeside,freeside) %config(noreplace) %{freeside_conf}/conf.*
-%attr(-,freeside,freeside) %config(noreplace) %{freeside_cache}/counters.*
-%attr(-,freeside,freeside) %config(noreplace) %{freeside_cache}/cache.*
-%attr(-,freeside,freeside) %config(noreplace) %{freeside_export}/export.*
-%attr(-,freeside,freeside) %config(noreplace) %{freeside_conf}/secrets
 %attr(-,freeside,freeside) %dir %{freeside_conf}
 %attr(-,freeside,freeside) %dir %{freeside_lock}
 %attr(-,freeside,freeside) %dir %{freeside_log}
@@ -270,9 +309,9 @@ fi
 %attr(-,freeside,freeside) %{freeside_cache}/masondata
 %attr(0644,root,root) %config(noreplace) %{apache_confdir}/%{name}-base%{apache_version}.conf
 
-%files postgresql
+%files postgresql -f %{name}-%{version}-%{release}-Pg-filelist
 
-%files mysql
+%files mysql -f %{name}-%{version}-%{release}-mysql-filelist
 
 %files selfservice -f fs_selfservice/FS-SelfService/%{name}-%{version}-%{release}-selfservice-filelist
 %defattr(-, freeside, freeside, 0644)
