@@ -45,7 +45,6 @@ Group: Applications/Internet
 Prefix: /var/www/freeside
 Requires: mod_ssl
 Requires: perl-Apache-DBI
-%%include freeside-mason.deps.inc
 Conflicts: %{name}-apacheasp
 Provides: %{name}-frontend
 BuildArch: noarch
@@ -97,6 +96,21 @@ For security reasons, it is set to conflict with %{name} so you cannot install t
 %{__cp} install/rpm/freeside-install FS/bin
 perl -pi -e 's|/usr/local/bin|%{buildroot}%{_bindir}|g' FS/Makefile.PL
 perl -ni -e 'print if !/\s+chown\s+/;' Makefile
+
+# Override find-requires/find-provides to supplement Perl requires for HTML::Mason file handler.pl
+cat << \EOF > %{name}-req
+#!/bin/sh
+tee %{_tmppath}/filelist | %{_rpmlibdir}/rpmdeps --requires | sort -u
+grep handler.pl %{_tmppath}/filelist | xargs %{_rpmlibdir}/perldeps.pl --requires \
+| grep -v -E '^perl\((lib|strict|vars|RT)\)$' \
+| grep -v -E '^perl\(RT::' \
+| sort -u
+EOF
+
+%define __find_provides %{_rpmlibdir}/rpmdeps --provides
+%define __find_requires %{_builddir}/%{name}-%{version}/%{name}-req
+%{__chmod} +x %{__find_requires}
+%define _use_internal_dependency_generator 0
 
 %build
 
@@ -182,8 +196,9 @@ for DBTYPE in %{db_types}; do
 done
 
 # Make a list of the Mason files before adding self-service, etc.
+echo "%attr(-,freeside,freeside) %{freeside_conf}/handler.pl" > %{name}-%{version}-%{release}-mason-filelist
 find $RPM_BUILD_ROOT%{freeside_document_root} -type f -print | \
-        sed "s@^$RPM_BUILD_ROOT@@g" > %{name}-%{version}-%{release}-mason-filelist
+        sed "s@^$RPM_BUILD_ROOT@@g" >> %{name}-%{version}-%{release}-mason-filelist
 if [ "$(cat %{name}-%{version}-%{release}-mason-filelist)X" = "X" ] ; then
     echo "ERROR: EMPTY FILE LIST"
     exit 1
@@ -305,7 +320,6 @@ fi
 
 %files mason -f %{name}-%{version}-%{release}-mason-filelist
 %defattr(-, freeside, freeside, 0755)
-%attr(-,freeside,freeside) %{freeside_conf}/handler.pl
 %attr(-,freeside,freeside) %{freeside_cache}/masondata
 %attr(0644,root,root) %config(noreplace) %{apache_confdir}/%{name}-base%{apache_version}.conf
 
