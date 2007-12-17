@@ -287,7 +287,7 @@ sub queue {
 
 sub baseurl {
   #my $self = shift;
-  $external_url;
+  $external_url. '/';
 }
 
 1;
