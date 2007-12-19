@@ -37,9 +37,9 @@ var confirm_cancel = '<FORM METHOD="POST" ACTION="<% $p %>misc/cust_main-cancel.
 % if ( $curuser->access_right('Cancel customer')
 %        && $cust_main->ncancelled_pkgs
 %      ) {
-%
 
-  <A HREF="javascript:void(0);" onClick="overlib(confirm_cancel, CAPTION, 'Confirm cancellation', STICKY, AUTOSTATUSCAP, CLOSETEXT, '', MIDX, 0, MIDY, 0, DRAGGABLE, WIDTH, 576, HEIGHT, 128, TEXTSIZE, 3, BGCOLOR, '#ff0000', CGCOLOR, '#ff0000' ); return false; ">Cancel this customer</A> | 
+  <% cust_cancel_link($cust_main) %> | 
+
 % } 
 % if ( $conf->exists('deletecustomers')
 %        && $curuser->access_right('Delete customer')
@@ -169,3 +169,33 @@ my $cust_main = qsearchs({
 die "Customer not found!" unless $cust_main;
 
 </%init>
+<%once>
+
+
+sub cust_cancel_link { cust_popup_link( 'misc/cancel_cust.html',
+                                        'Cancel&nbsp;this&nbsp;customer',
+                                        'Confirm Cancellation',
+                                        '#ff0000',
+                                        @_,
+                                      );
+}
+
+#false laziness w/view/cust_main/packages.html
+
+sub cust_popup_link {
+  my($action, $label, $actionlabel, $color, $cust_main) = @_;
+  $action .= '?'. $cust_main->custnum;
+  popup_link($action, $label, $actionlabel, $color);
+}
+
+sub popup_link {
+  my($action, $label, $actionlabel, $color) = @_;
+  $color ||= '#333399';
+  qq!<A HREF="javascript:void(0);" onClick="overlib( OLiframeContent('$p$action', 540, 336, 'pkg_or_svc_action_popup' ), CAPTION, '$actionlabel', STICKY, AUTOSTATUSCAP, MIDX, 0, MIDY, 0, DRAGGABLE, CLOSECLICK, BGCOLOR, '$color', CGCOLOR, '$color', CLOSETEXT, '' ); return false;">$label</A>!;
+
+# CLOSETEXT, '', 
+#WIDTH, 576, HEIGHT, 128, TEXTSIZE, 3,
+#BGCOLOR, '#ff0000', CGCOLOR, '#ff0000'
+}
+
+</%once>
