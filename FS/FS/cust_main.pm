@@ -4500,6 +4500,65 @@ sub uncancel_sql { "
   )
 "; }
 
+=item balance_sql
+
+Returns an SQL fragment to retreive the balance.
+
+=cut
+
+sub balance_sql { "
+    COALESCE( ( SELECT SUM(charged) FROM cust_bill
+                  WHERE cust_bill.custnum   = cust_main.custnum ), 0)
+  - COALESCE( ( SELECT SUM(paid)    FROM cust_pay
+                  WHERE cust_pay.custnum    = cust_main.custnum ), 0)
+  - COALESCE( ( SELECT SUM(amount)  FROM cust_credit
+                  WHERE cust_credit.custnum = cust_main.custnum ), 0)
+  + COALESCE( ( SELECT SUM(refund)  FROM cust_refund
+                   WHERE cust_refund.custnum = cust_main.custnum ), 0)
+"; }
+
+=item balance_date_sql TIME
+
+Returns an SQL fragment to retreive the balance for this customer, only
+considering invoices with date earlier than TIME. (total_owed_date minus total_credited minus
+total_unapplied_payments).  TIME is specified as an SQL fragment or a numeric
+UNIX timestamp; see L<perlfunc/"time">).  Also see L<Time::Local> and
+L<Date::Parse> for conversion functions.
+
+=cut
+
+sub balance_date_sql {
+  my( $class, $time ) = @_;
+
+  my $owed_sql         = FS::cust_bill->owed_sql;
+  my $unapp_refund_sql = FS::cust_refund->unapplied_sql;
+  #my $unapp_credit_sql = FS::cust_credit->unapplied_sql;
+  my $unapp_credit_sql = FS::cust_credit->credited_sql;
+  my $unapp_pay_sql    = FS::cust_pay->unapplied_sql;
+
+  "
+      COALESCE( ( SELECT SUM($owed_sql) FROM cust_bill
+                    WHERE cust_bill.custnum   = cust_main.custnum
+                      AND cust_bill._date    <= $time             )
+                ,0
+              )
+    + COALESCE( ( SELECT SUM($unapp_refund_sql) FROM cust_refund
+                    WHERE cust_refund.custnum = cust_main.custnum )
+                ,0
+              )
+    - COALESCE( ( SELECT SUM($unapp_credit_sql) FROM cust_credit
+                    WHERE cust_credit.custnum = cust_main.custnum )
+                ,0
+              )
+    - COALESCE( ( SELECT SUM($unapp_pay_sql) FROM cust_pay
+                    WHERE cust_pay.custnum = cust_main.custnum )
+                ,0
+              )
+
+  ";
+
+}
+
 =item fuzzy_search FUZZY_HASHREF [ HASHREF, SELECT, EXTRA_SQL, CACHE_OBJ ]
 
 Performs a fuzzy (approximate) search and returns the matching FS::cust_main
