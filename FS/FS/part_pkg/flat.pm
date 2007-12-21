@@ -72,12 +72,16 @@ use FS::part_pkg;
                          'format' => \&FS::UI::bytecount::display_bytecount,
                          'parse' => \&FS::UI::bytecount::parse_bytecount,
                        },
+    'usage_rollover' => { 'name' => 'Allow usage from previous period to roll '.
+                                    ' over into current period',
+                          'type' => 'checkbox',
+                        },
   },
   'fieldorder' => [ 'setup_fee', 'recur_fee', 'unused_credit', 
                     'seconds', 'upbytes', 'downbytes', 'totalbytes',
                     'recharge_amount', 'recharge_seconds', 'recharge_upbytes',
                     'recharge_downbytes', 'recharge_totalbytes',
-                    'externalid' ],
+                    'usage_rollover', 'externalid' ],
   'weight' => 10,
 );
 
@@ -95,18 +99,24 @@ sub calc_setup {
 
 sub calc_recur {
   my($self, $cust_pkg) = @_;
-  $self->reset_usage($cust_pkg);
   $self->base_recur($cust_pkg);
 }
 
 sub base_recur {
   my($self, $cust_pkg) = @_;
-  $self->option('recur_fee');
+  $self->option('recur_fee', 1) || 0;
 }
 
 sub calc_remain {
-  my ($self, $cust_pkg) = @_;
-  my $time = time;  #should be able to pass this in for credit calculation
+  my ($self, $cust_pkg, %options) = @_;
+
+  my $time;
+  if ($options{'time'}) {
+    $time = $options{'time'};
+  } else {
+    $time = time;
+  }
+
   my $next_bill = $cust_pkg->getfield('bill') || 0;
   my $last_bill = $cust_pkg->last_bill || 0;
   return 0 if    ! $self->base_recur
@@ -144,7 +154,11 @@ sub reset_usage {
   my %values = map { $_, $self->option($_) } 
     grep { $self->option($_, 'hush') } 
     qw(seconds upbytes downbytes totalbytes);
-  $cust_pkg->set_usage(\%values);
+  if ($self->option('usage_rollover', 1)) {
+    $cust_pkg->recharge(\%values);
+  }else{
+    $cust_pkg->set_usage(\%values);
+  }
 }
 
 1;

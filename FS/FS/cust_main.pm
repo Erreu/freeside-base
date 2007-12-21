@@ -1983,6 +1983,13 @@ sub bill {
          ( $cust_pkg->getfield('bill') || 0 ) <= $time
     ) {
 
+      # XXX should this be a package event?  probably.  events are called
+      # at collection time at the moment, though...
+      if ( $part_pkg->can('reset_usage') ) {
+        warn "    resetting usage counters" if $DEBUG > 1;
+        $part_pkg->reset_usage($cust_pkg);
+      }
+
       warn "    bill recur\n" if $DEBUG > 1;
 
       # XXX shared with $recur_prog
