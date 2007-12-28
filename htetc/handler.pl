@@ -37,6 +37,8 @@ if ( %%%RT_ENABLED%%% ) {
 my %interp = (
   request_class        => 'HTML::Mason::Request::ApacheHandler',
   data_dir             => '%%%MASONDATA%%%',
+  error_mode           => 'output',
+  error_format         => 'html',
   ignore_warnings_expr => '.',
   comp_root            => [
                             [ 'freeside' => '%%%FREESIDE_DOCUMENT_ROOT%%%'    ],
@@ -346,6 +348,7 @@ sub handler
 #    if ( $@ ) {
 #	$RT::Logger->crit($@);
 #    }
+    warn $@ if $@;
 
     undef %session;
 
