@@ -8,15 +8,18 @@
                                     'Service',
                                     'Account',
                                     'UID',
+                                    'Last Login',
                                     FS::UI::Web::cust_header(),
                                   ],
                  'fields'      => [ 'svcnum',
                                     'svc',
                                     'email',
                                     'uid',
+                                    'last_login_text',
                                     \&FS::UI::Web::cust_fields,
                                   ],
                  'links'       => [ $link,
+                                    $link,
                                     $link,
                                     $link,
                                     $link,
@@ -24,8 +27,9 @@
                                           FS::UI::Web::cust_header()
                                     ),
                                   ],
-                 'align' => 'rlll'. FS::UI::Web::cust_aligns(),
+                 'align' => 'rlllr'. FS::UI::Web::cust_aligns(),
                  'color' => [ 
+                              '',
                               '',
                               '',
                               '',
@@ -33,6 +37,7 @@
                               FS::UI::Web::cust_colors(),
                             ],
                  'style' => [ 
+                              '',
                               '',
                               '',
                               '',
@@ -71,7 +76,7 @@ if ( $cgi->param('magic') =~ /^(all|unlinked)$/ ) {
     $sortby = "LOWER($sortby)"
       if $sortby eq 'username';
     push @extra_sql, "$sortby IS NOT NULL"
-      if $sortby eq 'uid';
+      if ($sortby eq 'uid' or $sortby eq 'last_login');
     $orderby = "ORDER BY $sortby";
   }
 
