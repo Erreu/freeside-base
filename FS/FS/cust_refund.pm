@@ -307,6 +307,36 @@ sub unapplied {
 
 =back
 
+=head1 CLASS METHODS
+
+=over 4
+
+=item unapplied_sql
+
+Returns an SQL fragment to retreive the unapplied amount.
+
+=cut 
+
+sub unapplied_sql {
+  #my $class = shift;
+
+  "refund
+    - COALESCE( 
+                ( SELECT SUM(amount) FROM cust_credit_refund
+                    WHERE cust_refund.refundnum = cust_credit_refund.refundnum )
+                ,0
+              )
+    - COALESCE(
+                ( SELECT SUM(amount) FROM cust_pay_refund
+                    WHERE cust_refund.refundnum = cust_pay_refund.refundnum )
+                ,0
+              )
+  ";
+
+}
+
+=back
+
 =head1 BUGS
 
 Delete and replace methods.
