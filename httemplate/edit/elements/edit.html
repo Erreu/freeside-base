@@ -173,8 +173,8 @@ Example:
 %   if ( $f->{'layer_values_callback'} && ! $f->{'m2name_table'} ) {
 %     $layer_values = &{ $f->{'layer_values_callback'} }( $cgi, $object );
 %   }
-%   warn "layer values: ". Dumper($layer_values)
-%     if $opt{'debug'};
+%   #warn "layer values: ". Dumper($layer_values)
+%   #  if $opt{'debug'};
 %
 %   my %include_common = (
 %
@@ -257,8 +257,8 @@ Example:
 %         $layer_values =
 %           &{ $f->{'layer_values_callback'} }( $cgi, $name_obj, \%switches );
 %       }
-%       warn "layer values: ". Dumper($layer_values)
-%         if $opt{'debug'};
+%       #warn "layer values: ". Dumper($layer_values)
+%       #  if $opt{'debug'};
 %
 %       my @existing = &{ $include_sub }(
 %         'label'        => $ex_label,
