@@ -1,4 +1,4 @@
-<% include("/elements/header.html",'Invoice Event Listing', menubar( 'Main Menu' => $p) ) %>
+<% include('/elements/header.html', 'Invoice Event Listing') %>
 
     Invoice events are actions taken on open invoices.<BR><BR>
 
@@ -102,9 +102,8 @@
 % } 
 % } 
 
+<% include('/elements/footer.html') %>
 
-</BODY>
-</HTML>
 <%init>
 
 die "access denied"
