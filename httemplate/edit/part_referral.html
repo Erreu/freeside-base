@@ -7,3 +7,10 @@
                 'html_table_bottom' => include('/elements/tr-select-agent.html'),
            )
 %>
+<%init>
+
+die "access denied"
+  unless $FS::CurrentUser::CurrentUser->access_right('Edit advertising sources')
+      || $FS::CurrentUser::CurrentUser->access_right('Edit global advertising sources');
+
+</%init>

@@ -43,12 +43,16 @@ Credit
 </FORM>
 </BODY>
 </HTML>
-
 <%once>
-my $conf = new FS::Conf;
-</%once>
 
+my $conf = new FS::Conf;
+
+</%once>
 <%init>
+
+die "access denied"
+  unless $FS::CurrentUser::CurrentUser->access_right('Post credit');
+
 my($custnum, $amount, $reason);
 if ( $cgi->param('error') ) {
   #$cust_credit = new FS::cust_credit ( {
@@ -71,4 +75,5 @@ my $_date = time;
 my $otaker = getotaker;
 
 my $p1 = popurl(1);
+
 </%init>
