@@ -54,7 +54,7 @@ function changed(what) {
 
 die "access denied"
   unless $FS::CurrentUser::CurrentUser->access_right('Apply payment') #;
-      || $FS::CurrentUser::CurrentUser->access_right('Post payment'): #remove after 1.7.3
+      || $FS::CurrentUser::CurrentUser->access_right('Post payment'); #remove after 1.7.3
 
 my($paynum, $amount, $invnum);
 if ( $cgi->param('error') ) {
