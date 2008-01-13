@@ -1,8 +1,5 @@
-<% include("/elements/header.html", 'Quick payment entry',
-            menubar(
-                     'Main Menu' => $p, #popurl(1),
-                   ),
-            ( $cgi->param('error') ? '' : 'onload="addRow()"' ),
+<% include('/elements/header.html', 'Quick payment entry', ''
+             ( $cgi->param('error') ? '' : 'onload="addRow()"' ),
           )
 %>
 
@@ -387,5 +384,11 @@
 
 </SCRIPT>
 
-</BODY>
-</HTML>
+<% include('/elements/footer.html') %>
+
+<%init>
+ 
+die "access denied"
+  unless $FS::CurrentUser::CurrentUser->access_right('Post payment batch');
+
+</%init>
