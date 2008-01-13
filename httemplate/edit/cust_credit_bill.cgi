@@ -56,7 +56,7 @@ function changed(what) {
 
 die "access denied"
   unless $FS::CurrentUser::CurrentUser->access_right('Apply credit') #;
-      || $FS::CurrentUser::CurrentUser->access_right('Post credit'): #remove after 1.7.3
+      || $FS::CurrentUser::CurrentUser->access_right('Post credit'); #remove after 1.7.3
 
 my($crednum, $amount, $invnum);
 if ( $cgi->param('error') ) {

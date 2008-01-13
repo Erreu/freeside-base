@@ -13,7 +13,7 @@
 
 die "access denied"
   unless $FS::CurrentUser::CurrentUser->access_right('Apply credit') #;
-      || $FS::CurrentUser::CurrentUser->access_right('Post credit'): #remove after 1.7.3
+      || $FS::CurrentUser::CurrentUser->access_right('Post credit'); #remove after 1.7.3
 
 $cgi->param('crednum') =~ /^(\d*)$/ or die "Illegal crednum!";
 my $crednum = $1;
