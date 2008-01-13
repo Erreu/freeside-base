@@ -94,6 +94,7 @@ assigned to users and/or groups.
   'Delete customer', #aka. deletecustomers #Enable customer deletions. Be very careful! Deleting a customer will remove all traces that this customer ever existed! It should probably only be used when auditing a legacy database. Normally, you cancel all of a customers' packages if they cancel service.
   'Add customer note', #NEW
   'Edit customer note', #NEW
+  'Bill customer now', #NEW
 
 ###
 # customer package rights
@@ -119,10 +120,13 @@ assigned to users and/or groups.
   'Edit usage', #NEW
   'Edit home dir', #NEW
   'Edit www config', #NEW
+  'Edit domain catchall', #NEW
+  'Edit domain nameservice', #NEW
   'View customer services', #NEW
   'Provision customer service',
   'Recharge customer service', #NEW
   'Unprovision customer service',
+  'Change customer service', #NEWNEW
 
   'View/link unlinked services', #not agent-virtualizable without more work
 
@@ -130,6 +134,7 @@ assigned to users and/or groups.
 # customer invoice/financial info rights
 ###
   'View invoices',
+  'Resend invoices', #NEWNEW
   'View customer tax exemptions', #yow
   'View customer batched payments', #NEW
 
@@ -138,6 +143,7 @@ assigned to users and/or groups.
 ###
   'Post payment',
   'Post payment batch',
+  'Apply payment', #NEWNEW
   'Unapply payment', #aka. unapplypayments Enable "unapplication" of unclosed payments.
   'Process payment',
   'Refund payment',
@@ -150,7 +156,7 @@ assigned to users and/or groups.
 # customer credit rights
 ###
   'Post credit',
-  #'Apply credit',
+  'Apply credit', #NEWNEW
   'Unapply credit', #aka unapplycredits Enable "unapplication" of unclosed credits.
   'Delete credit', #aka. deletecredits Enable deletion of unclosed credits. Be very careful! Only delete credits that were data-entry errors, not adjustments. Optionally specify one or more comma-separated email addresses to be notified when a credit is deleted.
   'Add on-the-fly credit reason', #NEW
