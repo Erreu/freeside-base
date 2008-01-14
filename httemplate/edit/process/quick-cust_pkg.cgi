@@ -1,7 +1,7 @@
 %if ($error) {
 %  errorpage($error);
 %} else {
-<% $cgi->redirect(popurl(3). "view/cust_main.cgi?$custnum#cust_pkg". $cust_pkg[0]->pkgnum );
+<% $cgi->redirect(popurl(3). "view/cust_main.cgi?$custnum#cust_pkg". $cust_pkg[0]->pkgnum ) %>
 %}
 <%init>
 
