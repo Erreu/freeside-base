@@ -64,8 +64,10 @@
 %>
 <%init>
 
+my $curuser = $FS::CurrentUser::CurrentUser;
+
 die "access denied"
-  unless $FS::CurrentUser::CurrentUser->access_right('Billing event reports');
+  unless $curuser->access_right('Billing event reports');
 
 my $title = $cgi->param('failed')
               ? 'Failed invoice events'
@@ -112,8 +114,6 @@ my $sql_query = {
 my $count_sql = "SELECT COUNT(*) FROM cust_bill_event $join $where";
 
 my $conf = new FS::Conf;
-
-my $failed = $cgi->param('failed');
 
 my $html_init = join("\n", map {
   ( my $action = $_ ) =~ s/_$//;
