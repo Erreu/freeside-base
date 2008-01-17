@@ -11,9 +11,6 @@
 %}
 <%init>
 
-die "access denied"
-  unless $FS::CurrentUser::CurrentUser->access_right('Configuration');
-
 my $dbh = dbh;
 my $conf = new FS::Conf;
 
@@ -69,6 +66,8 @@ my %pkg_svc = map { $_ => scalar($cgi->param("pkg_svc$_")) }
               map { $_->svcpart }
               qsearch('part_svc', {} );
 
+my $curuser = $FS::CurrentUser::CurrentUser;
+
 my $custnum = '';
 if ( $error ) {
 
@@ -80,11 +79,18 @@ if ( $error ) {
 
 } elsif ( $pkgpart ) {
 
+   die "access denied"
+     unless $curuser->access_right('Configuration')
+
   $error = $new->replace( $old,
                           pkg_svc     => \%pkg_svc,
                           primary_svc => scalar($cgi->param('pkg_svc_primary')),
                         );
 } else {
+
+  die "access denied"
+    unless $curuser->access_right('Configuration')
+        || ( $cgi->param('pkgnum') && $curuser->access_right('Customize customer package') );
 
   $error = $new->insert(  pkg_svc     => \%pkg_svc,
                           primary_svc => scalar($cgi->param('pkg_svc_primary')),
