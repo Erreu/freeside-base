@@ -80,7 +80,7 @@ if ( $error ) {
 } elsif ( $pkgpart ) {
 
    die "access denied"
-     unless $curuser->access_right('Configuration')
+     unless $curuser->access_right('Configuration');
 
   $error = $new->replace( $old,
                           pkg_svc     => \%pkg_svc,
