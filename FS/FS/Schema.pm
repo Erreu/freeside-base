@@ -437,7 +437,7 @@ sub tables_hashref {
       ],
       'primary_key' => 'crednum',
       'unique' => [],
-      'index' => [ ['custnum'] ],
+      'index' => [ ['custnum'], ['_date'] ],
     },
 
     'cust_credit_bill' => {
@@ -613,7 +613,6 @@ sub tables_hashref {
     'cust_pay' => {
       'columns' => [
         'paynum',   'serial',    '',   '', '', '',
-        #now cust_bill_pay #'invnum',   'int',    '',   '', '', '', 
         'custnum',  'int',    '',   '', '', '', 
         'paid',     @money_type, '', '', 
         '_date',    @date_type, '', '', 
@@ -792,7 +791,6 @@ sub tables_hashref {
     'cust_refund' => {
       'columns' => [
         'refundnum',    'serial',    '',   '', '', '', 
-        #now cust_credit_refund #'crednum',      'int',    '',   '', '', '',
         'custnum',  'int',    '',   '', '', '', 
         '_date',        @date_type, '', '', 
         'refund',       @money_type, '', '', 
@@ -808,7 +806,7 @@ sub tables_hashref {
       ],
       'primary_key' => 'refundnum',
       'unique' => [],
-      'index' => [],
+      'index' => [ ['custnum'], ['_date'] ],
     },
 
     'cust_credit_refund' => {
@@ -821,7 +819,7 @@ sub tables_hashref {
       ],
       'primary_key' => 'creditrefundnum',
       'unique' => [],
-      'index' => [ [ 'crednum', 'refundnum' ] ],
+      'index' => [ ['crednum'], ['refundnum'] ],
     },
 
 
