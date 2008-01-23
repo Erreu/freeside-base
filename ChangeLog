@@ -1,0 +1,1387 @@
+2007-12-26 14:52  jeff
+
+	* FS/FS/part_export/prizm.pm: conifgurable siteName and docs
+
+2007-12-25 23:51  ivan
+
+	* httemplate/edit/quick-charge.html: alas, XSSmas draws to a close
+
+2007-12-25 15:49  ivan
+
+	* httemplate/: browse/addr_block.cgi,
+	  browse/part_virtual_field.cgi, browse/router.cgi, edit/agent.cgi,
+	  edit/agent_payment_gateway.html, edit/agent_type.cgi,
+	  edit/cust_bill_pay.cgi, edit/cust_credit.cgi,
+	  edit/cust_credit_bill.cgi, edit/cust_main_note.cgi,
+	  edit/cust_pay.cgi, edit/cust_pkg.cgi, edit/cust_refund.cgi,
+	  edit/msgcat.cgi, edit/part_bill_event.cgi, edit/part_export.cgi,
+	  edit/part_pkg.cgi, edit/part_virtual_field.cgi,
+	  edit/payment_gateway.html, edit/reg_code.cgi, edit/router.cgi,
+	  edit/svc_acct.cgi, edit/svc_broadband.cgi, edit/svc_domain.cgi,
+	  edit/svc_forward.cgi, edit/elements/edit.html,
+	  elements/error.html, misc/batch-cust_pay.html,
+	  misc/cancel_cust.html, misc/cancel_pkg.html, misc/change_pkg.cgi,
+	  misc/recharge_svc.html, misc/process/meta-import.cgi,
+	  search/cust_bill_event.html: ho ho ho, merry XSSmas
+
+2007-12-23 13:59  jeff
+
+	* FS/FS/part_pkg/flat.pm, FS/FS/part_pkg/prorate.pm,
+	  FS/FS/part_pkg/subscription.pm,
+	  httemplate/misc/process/recharge_svc.html: add a reset feature to
+	  manual recharges (#1858)
+
+2007-12-21 14:27  jeff
+
+	* FS/FS/part_pkg/: flat_delayed.pm, prorate_delayed.pm,
+	  voip_cdr.pm: backport 1.9 enhancements for flat_delayed,
+	  prorate_delayed, and voip_cdr plans
+
+2007-12-21 13:38  jeff
+
+	* FS/FS/: cust_main.pm, part_pkg/flat.pm, part_pkg/prorate.pm,
+	  part_pkg/subscription.pm: backport flat, prorate, and
+	  subscription plans
+
+2007-12-20 11:23  jeff
+
+	* FS/FS/part_export/prizm.pm: increase siteName allowed length
+
+2007-12-19 14:31  jeff
+
+	* httemplate/: misc/cancel_cust.html, misc/cust_main-cancel.cgi,
+	  view/cust_main.cgi: backport reason selection for whole customer
+	  cancel (RT#2872)
+
+2007-12-19 13:05  jeff
+
+	* FS/FS/ConfDefaults.pm, FS/FS/UI/Web.pm,
+	  httemplate/search/cust_main.html,
+	  httemplate/search/report_cust_main.html: add options for balance
+	  over/under to advanced customer report
+
+2007-12-19 10:43  jeff
+
+	* FS/FS/cust_main.pm: backport balance_sql and balance_date_sql
+
+2007-12-18 17:55  jeff
+
+	* FS/FS/cust_credit.pm: underscoring the important
+
+2007-12-18 12:58  ivan
+
+	* FS/FS/cust_main.pm: legacy agent_custid field should be as
+	  searchable as actual custnum, right?	at least if it is a
+	  number...
+
+2007-12-18 12:42  ivan
+
+	* httemplate/edit/quick-charge.html: IE is case-sensitive when
+	  setting maxLength (and other attributes?).  hopefully that's all
+	  it is.
+
+2007-12-17 15:57  jeff
+
+	* httemplate/view/cust_main/quick-charge.html: cruft removal
+
+2007-12-17 14:57  jeff
+
+	* FS/FS/cust_credit.pm: stricter otaker rules
+
+2007-12-17 11:59  ivan
+
+	* FS/FS/TicketSystem/RT_Internal.pm: no, *that's* where it couldn't
+	  hurt anything.
+
+2007-12-17 11:52  ivan
+
+	* FS/FS/TicketSystem/RT_External.pm: i don't think it can hurt
+	  anything... (famous last words)
+
+2007-12-16 17:17  ivan
+
+	* httemplate/view/cust_main/contacts.html: fix the case where the
+	  customer doesn't actually have a ship address
+
+2007-12-16 16:59  ivan
+
+	* FS/FS/Conf.pm, FS/FS/cust_main.pm,
+	  httemplate/elements/header.html,
+	  httemplate/edit/cust_main/billing.html,
+	  httemplate/edit/cust_main/contact.html,
+	  httemplate/edit/cust_main.cgi,
+	  httemplate/view/cust_main/contacts.html,
+	  httemplate/search/cust_main.cgi: add cust_main-require_address2
+	  config, reimplement address2-search config ("Unit #" search in
+	  searchbar), visual indication of require_invoicing_list_email,
+	  closes: RT#2926
+
+2007-12-16 14:40  ivan
+
+	* httemplate/elements/errorpage.html: less is better
+
+2007-12-16 13:02  ivan
+
+	* httemplate/elements/header.html: more consistent naming:
+	  cust_main_ADV.cgi becomes cust_main.html
+
+2007-12-16 13:01  ivan
+
+	* httemplate/search/report_cust_main.html:
+	  httemplate/elements/header.html
+
+2007-12-16 12:48  ivan
+
+	* httemplate/search/: cust_main.html, cust_main_ADV.cgi: more
+	  consistent naming: cust_main_ADV.cgi becomes cust_main.html
+
+2007-12-14 17:45  ivan
+
+	* FS/FS/cust_bill.pm, httemplate/search/cust_bill.html: fix earlier
+	  drain bramage
+
+2007-12-14 17:37  ivan
+
+	* httemplate/search/cust_bill.html: where helps alot
+
+2007-12-14 17:23  ivan
+
+	* FS/FS/cust_bill.pm, httemplate/search/cust_bill.html: hopefully
+	  put reprinting issues to rest for ejourney, yow
+
+2007-12-13 19:23  rsiddall
+
+	* install/rpm/: freeside-mason.deps.inc, freeside.spec: Ugly hack
+	  to extend rpmbuild's auto-requires to process handler.pl.  This
+	  is loosely based on notes on the Fedora wiki.  The internal
+	  dependency generator is disabled and as far as possible the same
+	  code is used to generate provides and requires.  The list of
+	  files to be scanned for requires is saved by a supplemental
+	  script and if it contains handler.pl, that file is scanned for
+	  requires with the standard Perl dependencies checker.  References
+	  to RT are filtered out as RT is not enabled in this version of
+	  the .spec file.  This mod obsoletes the freeside-mason-deps.inc
+	  file and simplifies building the RPMs.
+
+2007-12-13 12:08  rsiddall
+
+	* install/rpm/freeside.spec: Now updates FS version to match RPM
+	  version and release.	This is displayed in the main billing
+	  screen.
+
+2007-12-13 11:52  rsiddall
+
+	* install/rpm/freeside.spec: Ugly hack to make MySQL work.  The
+	  configuration files and other DBI-specific files are moved to the
+	  -postgresql and -mysql files.  Attempts to replace
+	  /etc/freeside/secrets with a symlink didn't work sufficiently
+	  well, so the %post scripts update the DBI line in that file.
+
+2007-12-12 16:17  jeff
+
+	* bin/reset-cust_credit-otaker: cust_credit reason/otaker tool
+
+2007-12-12 13:18  jeff
+
+	* FS/FS/part_export/www_shellcommands.pm: add suspend/unsuspend to
+	  www_shellcommands export (#1227)
+
+2007-12-12 01:03  ivan
+
+	* FS/bin/: freeside-history-requeue: adding this quick script
+
+2007-12-12 01:03  ivan
+
+	* FS/bin/freeside-history-requeue: file freeside-history-requeue
+	  was added on branch FREESIDE_1_7_BRANCH on 2007-12-12 09:03:45
+	  +0000
+
+2007-12-11 21:58  jeff
+
+	* FS/FS/Setup.pm, FS/FS/svc_acct.pm, FS/FS/ClientAPI/MyAccount.pm,
+	  FS/FS/ClientAPI/Signup.pm,
+	  fs_selfservice/FS-SelfService/SelfService.pm,
+	  fs_selfservice/FS-SelfService/cgi/selfservice.cgi,
+	  fs_selfservice/FS-SelfService/cgi/svc_acct.html,
+	  httemplate/edit/svc_acct.cgi: self-service can select domain on
+	  provision (#2801)
+
+2007-12-11 21:42  jeff
+
+	* FS/: FS/cust_credit.pm, FS/h_cust_credit.pm,
+	  bin/freeside-disable-reasons, bin/freeside-upgrade: cust_credit
+	  reason improvement, bugfix, and tool
+
+2007-12-07 18:23  rsiddall
+
+	* install/rpm/freeside.spec: Moved the misc. binaries to
+	  /usr/share/freeside-<n>/bin
+
+2007-12-06 17:08  ivan
+
+	* FS/FS/cust_credit.pm: doh!   is not an object.  let's call it ,
+	  mmkay
+
+2007-12-06 17:04  ivan
+
+	* FS/FS/cust_credit.pm: some old databases may have 'hanging'
+	  cust_credit records; we don't want to abort the upgrade because
+	  of that, just warn
+
+2007-12-06 12:49  jeff
+
+	* httemplate/edit/part_pkg.cgi: agent setting during package edit
+	  cleanup
+
+2007-12-06 08:51  jeff
+
+	* httemplate/view/svc_acct.cgi: support display of negative time
+
+2007-12-05 14:05  ivan
+
+	* Makefile: when installing selfservice, create freeside homedir if
+	  it doesn't exist
+
+2007-12-05 12:50  ivan
+
+	* httemplate/elements/tr-select-reason.html: doh, order_by does
+	  have to include ORDER BY!
+
+2007-12-05 12:47  ivan
+
+	* httemplate/elements/tr-select-reason.html: show types in reason
+	  selection, order by type and reason
+
+2007-12-05 07:10  jeff
+
+	* FS/FS/ConfDefaults.pm: add in status and company fields
+
+2007-12-04 20:57  jeff
+
+	* httemplate/edit/process/part_pkg.cgi: wtf?
+
+2007-12-04 16:52  ivan
+
+	* httemplate/search/elements/search.html: i hope this allows IE to
+	  download excel over https?
+
+2007-12-04 10:35  jeff
+
+	* httemplate/search/cust_pkg.cgi: add suspend/cancel reason to
+	  advanced package report (#2779)
+
+2007-12-04 10:27  jeff
+
+	* FS/FS/cust_main.pm: ensure a valid date is onhand (fixes #2800)
+
+2007-12-04 10:19  jeff
+
+	* FS/FS/AccessRight.pm, FS/FS/Conf.pm, FS/FS/Schema.pm,
+	  FS/FS/Setup.pm, FS/FS/Upgrade.pm, FS/FS/cust_credit.pm,
+	  FS/FS/cust_main.pm, FS/FS/cust_pkg.pm, FS/FS/reason.pm,
+	  FS/FS/reason_type.pm, FS/FS/ClientAPI/MyAccount.pm,
+	  FS/FS/ClientAPI/Signup.pm, FS/FS/part_pkg/flat_comission.pm,
+	  FS/FS/part_pkg/flat_comission_cust.pm,
+	  FS/FS/part_pkg/flat_comission_pkg.pm, FS/bin/freeside-upgrade,
+	  httemplate/browse/reason.html,
+	  httemplate/browse/reason_type.html,
+	  httemplate/edit/cust_credit.cgi, httemplate/edit/reason.html,
+	  httemplate/edit/reason_type.html,
+	  httemplate/edit/elements/edit.html,
+	  httemplate/edit/process/cust_credit.cgi,
+	  httemplate/elements/menu.html,
+	  httemplate/elements/tr-select-reason.html: change credit reasons
+	  from freetext to new reason/reason type system (#2777)
+
+2007-12-03 15:12  rsiddall
+
+	* install/rpm/freeside.spec: Updated file list and info for license
+	  change from GPL to AGPL
+
+2007-12-02 16:18  ivan
+
+	* htetc/freeside-rt.conf: would help if i got the closing tag right
+
+2007-12-02 16:13  ivan
+
+	* htetc/freeside-rt.conf: this should get the Chart stuff in RT
+	  statistic running, i hope
+
+2007-11-30 17:37  ivan
+
+	* FS/FS/part_pkg/prorate.pm: cleanup
+
+2007-11-30 17:34  ivan
+
+	* FS/FS/h_cust_svc.pm: add date_deleted method
+
+2007-11-30 17:34  ivan
+
+	* FS/FS/cust_svc.pm: add date_inserted method and reorganize things
+	  slightly
+
+2007-11-30 17:33  ivan
+
+	* FS/FS/h_Common.pm: this doesn't actually have anything to do with
+	  cancellation persay, since its generic now
+
+2007-11-30 17:32  ivan
+
+	* FS/FS/Record.pm: add h_date method too
+
+2007-11-30 17:30  ivan
+
+	* FS/FS/Record.pm: add h_search method, and reorganize mixed up
+	  methods and subroutines
+
+2007-11-30 17:29  ivan
+
+	* FS/FS/part_pkg/: bulk.pm: add bulk price plan
+
+2007-11-30 17:29  ivan
+
+	* FS/FS/part_pkg/bulk.pm: file bulk.pm was added on branch
+	  FREESIDE_1_7_BRANCH on 2007-12-01 01:29:04 +0000
+
+2007-11-30 13:07  ivan
+
+	* FS/FS/cust_bill.pm, httemplate/graph/money_time.cgi,
+	  httemplate/search/cust_bill.html: add net vs gross amounts to
+	  invoice report; make the "net sales" links on
+	  sales/credit/receipts report & graph clickable
+
+2007-11-30 12:55  ivan
+
+	* httemplate/graph/elements/monthly.html: UI: download full results
+	  links on separate lines, for consistency with search.html
+
+2007-11-30 10:13  ivan
+
+	* FS/FS/cust_bill.pm: fix bug specifying an HTML return address
+	  separately
+
+2007-11-29 19:24  ivan
+
+	* httemplate/misc/cust_main-import.cgi, FS/FS/cust_main.pm: add
+	  customer import format with company
+
+2007-11-29 17:24  ivan
+
+	* httemplate/browse/access_user.html: update inline documentation
+
+2007-11-29 17:16  ivan
+
+	* FS/FS/cust_main.pm: fix compilation error from patch just applied
+	  - method2payby is needed earlier
+
+2007-11-29 15:51  ivan
+
+	* httemplate/edit/: REAL_cust_pkg.cgi, process/REAL_cust_pkg.cgi:
+	  fix dates going all wacky on errors, when you're asked to confirm
+	  a date move into the past
+
+2007-11-28 19:38  ivan
+
+	* FS/FS/cust_pay_pending.pm: double doh, remove cruft checking
+	  nonexistent column and fix the statustext check
+
+2007-11-28 19:05  ivan
+
+	* FS/FS/Schema.pm: doh, fix primary key name in new table
+
+2007-11-28 18:54  ivan
+
+	* FS/FS/cust_pay_pending.pm, FS/t/cust_pay_pending.t,
+	  FS/FS/Schema.pm, FS/FS/cust_main.pm, FS/FS/cust_pay.pm, FS/FS.pm,
+	  FS/MANIFEST, httemplate/misc/payment.cgi,
+	  httemplate/misc/process/payment.cgi: even more reliable
+	  multiple-payment/double-click/concurrent-payment-form protection
+
+2007-11-28 18:54  ivan
+
+	* FS/FS/cust_pay_pending.pm: file cust_pay_pending.pm was added on
+	  branch FREESIDE_1_7_BRANCH on 2007-11-29 02:55:07 +0000
+
+2007-11-28 18:54  ivan
+
+	* FS/t/cust_pay_pending.t: file cust_pay_pending.t was added on
+	  branch FREESIDE_1_7_BRANCH on 2007-11-29 02:55:09 +0000
+
+2007-11-28 12:18  jeff
+
+	* httemplate/edit/: part_pkg.cgi, process/part_pkg.cgi: better
+	  select multiple, discourage creation of packages no agent can
+	  sell
+
+2007-11-28 10:49  jeff
+
+	* FS/FS/ConfDefaults.pm, FS/FS/UI/Web.pm,
+	  httemplate/search/cust_main_ADV.cgi,
+	  httemplate/search/report_cust_main.html: advanced customer report
+	  rearrangement
+
+2007-11-28 10:41  jeff
+
+	* FS/FS/Record.pm: backport the order_by option to qsearch from
+	  1.9x
+
+2007-11-27 17:30  ivan
+
+	* README: license clarification for self-service code
+
+2007-11-27 15:47  ivan
+
+	* httemplate/search/cust_bill.html: fix small side-effect of
+	  mysql-compat change eliminating DISTINCT ON: map changing values
+	  of @where array
+
+2007-11-27 14:30  jeff
+
+	* FS/FS/part_export/prizm.pm: name management tweaking
+
+2007-11-27 11:34  jeff
+
+	* FS/FS/part_export/prizm.pm: slop correction
+
+2007-11-26 19:02  jeff
+
+	* FS/FS/part_export/prizm.pm: attach SM's to default network,
+	  improved unsuspend & delete, option for BAM only or EMS
+
+2007-11-26 18:51  jeff
+
+	* FS/FS/ClientAPI/MyAccount.pm: prevent BILL, DCRD, and DCHK
+	  customers from circumventing a suspension via selfservice (2768)
+
+2007-11-25 18:19  ivan
+
+	* httemplate/search/elements/search.html: add a "printable copy"
+	  link to searches to get full results as printable HTML without
+	  other cruft, closes: #1885
+
+2007-11-25 18:18  ivan
+
+	* httemplate/elements/header-popup.html: add our stylesheet to
+	  popup/print headers
+
+2007-11-23 12:25  ivan
+
+	* httemplate/edit/part_pkg.cgi: fix stickiness of primary radio
+	  buttons on errors, closes: RT#1035
+
+2007-11-21 17:03  ivan
+
+	* httemplate/edit/cust_main.cgi: usability: don't offer 'Select
+	  agent' choice if the dropdown already has a value
+
+2007-11-20 09:18  ivan
+
+	* AGPL: file AGPL was added on branch FREESIDE_1_7_BRANCH on
+	  2007-11-20 17:18:57 +0000
+
+2007-11-20 09:18  ivan
+
+	* AGPL, GPL: it finally happened
+
+2007-11-20 07:59  rsiddall
+
+	* install/rpm/freeside.spec: Self-service RPM now contains PHP and
+	  XMLRPC components.
+
+2007-11-14 15:10  ivan
+
+	* FS/FS/TicketSystem/RT_External.pm,
+	  httemplate/view/cust_main/tickets.html: add link to resolved
+	  tickets too
+
+2007-11-13 11:39  rsiddall
+
+	* install/rpm/freeside.spec: Added two optional modules to the
+	  Requires lists: Apache::DBI and Fax::Hylafax::Client Added a
+	  %post script to chkconfig the freeside service, but not start it.
+	  Modified the Mason %post script to check the httpd config file
+	  is in the expected place.
+
+2007-11-09 10:59  ivan
+
+	* FS/FS/: Conf.pm, cust_main.pm: add
+	  business-onlinepayment-email_customer flag
+
+2007-11-09 09:42  ivan
+
+	* FS/FS/cust_main.pm: mysql fix for regexen, 1.7-style
+
+2007-11-08 19:26  ivan
+
+	* httemplate/search/report_receivables.html: better visual
+	  indication of disabled "days" field on IE
+
+2007-11-08 19:12  ivan
+
+	* httemplate/search/: report_receivables.cgi,
+	  report_receivables.html: add option for listing customers without
+	  a balance (closes: RT#2752) and fix bug in total row (closes:
+	  RT#2736)
+
+2007-11-08 16:44  jeff
+
+	* FS/FS/cust_main.pm: correct realtime_bop cvv handling
+
+2007-11-07 20:21  ivan
+
+	* FS/FS/: Conf.pm, ClientAPI/MyAccount.pm: add
+	  selfservice-session_timeout config
+
+2007-11-07 19:04  rsiddall
+
+	* install/rpm/freeside.spec: Added %post scriptlet to change
+	  User/Group in the local Apache instance configuration file to
+	  freeside.  (Code from Debian install script.)
+
+2007-11-07 18:15  rsiddall
+
+	* install/rpm/freeside.spec: Fix for bug that prevented RPMs
+	  building on x86_64: wrong path to brp-compress.
+
+2007-11-07 18:10  ivan
+
+	* FS/FS/cust_main.pm: prevent warning: "Use of uninitialized value
+	  in concatenation (.) or string at
+	  /usr/local/share/perl/5.8.8/FS/cust_main.pm line 1668."
+
+2007-11-07 15:02  rsiddall
+
+	* install/rpm/freeside-install: Fixed up the tests to work on
+	  CentOS 4.  Not sure if this is portable.
+
+2007-11-07 14:38  rsiddall
+
+	* install/rpm/freeside.sysconfig: Changed initial values to match
+	  Makefile.  This may eliminate the need to change this file in
+	  many installations.
+
+2007-11-06 13:43  rsiddall
+
+	* install/rpm/freeside.spec: Quick update to avoid installing
+	  freeside-import.
+
+2007-11-06 13:34  rsiddall
+
+	* install/rpm/freeside-import: Removing the text file import script
+	  for now.
+
+2007-11-06 13:25  rsiddall
+
+	* install/rpm/freeside.spec: Changes to make it easier to build
+	  daily CVS builds.  Also successfully builds RPMs without putting
+	  some of the RedHat-style and RPM files in the SOURCES directory.
+
+2007-11-06 13:23  rsiddall
+
+	* install/rpm/freeside.sysconfig: First version of a RedHat-style
+	  system configuration file for Freeside.  This would live in
+	  /etc/sysconfig and include some of the values that are currently
+	  hard-coded in Makefile.
+
+2007-11-06 13:21  rsiddall
+
+	* install/rpm/freeside-import: Initial version of freeside-import.
+	  Needs to be updated to use the Freeside schema file and have a
+	  more useful syntax for modifications and deletions.
+
+2007-11-05 17:59  ivan
+
+	* bin/customer-faker: keep our own list of states; remove some
+	  states that Data::Faker and Locale::SubCountry disagree on
+
+2007-11-04 21:42  ivan
+
+	* fs_selfservice/FS-SelfService/SelfService.pm: doc: amount param
+	  to process_payment.  just a bit important.
+
+2007-11-04 21:27  ivan
+
+	* FS/FS/ClientAPI/MyAccount.pm,
+	  fs_selfservice/FS-SelfService/SelfService.pm: add
+	  process_payment_order_pkg method
+
+2007-11-04 10:22  jeff
+
+	* httemplate/search/cust_main_ADV.cgi: comma is a bad delimiter
+	  choice according to ut_text()
+
+2007-11-04 10:04  jeff
+
+	* httemplate/elements/menu.html: not quite yet
+
+2007-11-03 10:38  ivan
+
+	* httemplate/elements/menu.html: move menu option for adv. customer
+	  reports to second level, same as advanced invoice & package
+	  reports
+
+2007-11-02 17:55  jeff
+
+	* httemplate/search/report_cust_main.html: new customer
+	  report/flattened package report (ticket 1428)
+
+2007-11-02 17:52  jeff
+
+	* httemplate/: elements/menu.html, search/cust_main_ADV.cgi: new
+	  customer report/flattened package report (ticket 1428)
+
+2007-10-29 05:03  ivan
+
+	* httemplate/search/report_receivables.cgi: famous last mysql bug
+
+2007-10-29 04:34  ivan
+
+	* httemplate/edit/rate.cgi: yup, mysql-ing me harder
+
+2007-10-29 04:18  ivan
+
+	* FS/bin/freeside-setup: forgotton freeside-setup bits of mysql
+	  locking workaround
+
+2007-10-29 03:30  ivan
+
+	* FS/FS/cust_bill.pm, FS/FS/h_Common.pm, httemplate/edit/rate.cgi,
+	  httemplate/search/cust_bill.html,
+	  httemplate/search/report_tax.cgi: mysql has no DISTINCT ON
+	  either, sigh
+
+2007-10-28 18:08  ivan
+
+	* httemplate/view/cust_pay.html: still have link back to the
+	  customer on printable receipt... should hide it from print at
+	  some point though
+
+2007-10-28 05:51  ivan
+
+	* FS/: FS/Schema.pm, FS/Setup.pm, FS/svc_acct.pm,
+	  bin/freeside-upgrade: finish mysql locking workaround
+
+2007-10-27 20:55  ivan
+
+	* FS/FS/Record.pm, FS/FS/cust_svc.pm,
+	  FS/FS/part_export/sqlradius.pm, htetc/handler.pl,
+	  httemplate/search/report_receivables.cgi: mysql me harder
+
+2007-10-26 21:46  ivan
+
+	* httemplate/view/cust_pay.html: file cust_pay.html was added on
+	  branch FREESIDE_1_7_BRANCH on 2007-10-27 04:46:21 +0000
+
+2007-10-26 21:46  ivan
+
+	* httemplate/view/cust_pay.html, FS/FS/cust_main.pm,
+	  FS/FS/cust_pay.pm, httemplate/misc/process/payment.cgi,
+	  httemplate/search/cust_pay.cgi,
+	  httemplate/view/cust_main/payment_history.html: simple payment
+	  receipts in web interface, sorry arnie, RT#2738
+
+2007-10-25 12:01  ivan
+
+	* FS/FS/TicketSystem/RT_External.pm, FS/FS/Schema.pm, Makefile:
+	  mysql, yes, mysql.
+
+2007-10-14 16:14  ivan
+
+	* conf/invoice_html: this aligns better.  i wonder how 1.9 loads up
+	  config from here, though?
+
+2007-10-14 16:10  ivan
+
+	* FS/FS/cust_bill.pm: escape \dollar in invoice_latexnotes
+
+2007-10-13 18:51  ivan
+
+	* fs_selfservice/php/freeside.login_example.php: file
+	  freeside.login_example.php was added on branch
+	  FREESIDE_1_7_BRANCH on 2007-10-14 01:51:14 +0000
+
+2007-10-13 18:51  ivan
+
+	* fs_selfservice/php/freeside_signup_example.php: file
+	  freeside_signup_example.php was added on branch
+	  FREESIDE_1_7_BRANCH on 2007-10-14 01:51:14 +0000
+
+2007-10-13 18:51  ivan
+
+	* fs_selfservice/php/: freeside.class.php,
+	  freeside.login_example.php, freeside_signup_example.php: adding
+	  php examples
+
+2007-10-13 18:51  ivan
+
+	* fs_selfservice/php/freeside.class.php: file freeside.class.php
+	  was added on branch FREESIDE_1_7_BRANCH on 2007-10-14 01:51:13
+	  +0000
+
+2007-10-13 10:19  jeff
+
+	* httemplate/edit/: part_pkg.cgi, process/part_pkg.cgi: correct
+	  agent_defaultpkg handling
+
+2007-10-12 10:50  ivan
+
+	* FS/FS/Schema.pm: backport new schema stuff from 1.9, as running
+	  this with new DBIx::DBSchema results in disappearing indices
+
+2007-10-08 21:58  ivan
+
+	* FS/FS/Conf.pm: fix documenation links to point into wiki where
+	  they belong
+
+2007-10-08 13:59  jeff
+
+	* httemplate/edit/: part_pkg.cgi, process/part_pkg.cgi: agent
+	  selection on package add/edit (1151)
+
+2007-10-08 12:04  jeff
+
+	* htetc/handler.pl, httemplate/edit/rate_region.cgi,
+	  httemplate/edit/reg_code.cgi,
+	  httemplate/edit/process/cust_svc.cgi,
+	  httemplate/edit/process/domain_record.cgi,
+	  httemplate/edit/process/quick-cust_pkg.cgi,
+	  httemplate/edit/process/reg_code.cgi,
+	  httemplate/elements/errorpage.html,
+	  httemplate/elements/tr-select-part_referral.html,
+	  httemplate/misc/bill.cgi, httemplate/misc/cancel-unaudited.cgi,
+	  httemplate/misc/cust_main-cancel.cgi,
+	  httemplate/misc/delete-agent_payment_gateway.cgi,
+	  httemplate/misc/delete-cust_credit.cgi,
+	  httemplate/misc/delete-cust_pay.cgi,
+	  httemplate/misc/delete-cust_refund.cgi,
+	  httemplate/misc/delete-domain_record.cgi,
+	  httemplate/misc/delete-part_export.cgi, httemplate/misc/dump.cgi,
+	  httemplate/misc/inventory_item-import.html,
+	  httemplate/misc/unapply-cust_credit.cgi,
+	  httemplate/misc/unapply-cust_pay.cgi,
+	  httemplate/misc/unprovision.cgi, httemplate/misc/unsusp_pkg.cgi,
+	  httemplate/misc/unvoid-cust_pay_void.cgi,
+	  httemplate/misc/upload-batch.cgi,
+	  httemplate/misc/void-cust_pay.cgi,
+	  httemplate/misc/process/cdr-import.html,
+	  httemplate/misc/process/cust_main-import.cgi,
+	  httemplate/misc/process/cust_main-import_charges.cgi,
+	  httemplate/misc/process/inventory_item-import.html,
+	  httemplate/misc/process/link.cgi,
+	  httemplate/misc/process/payment.cgi,
+	  httemplate/search/cust_main.cgi, httemplate/search/cust_svc.html,
+	  httemplate/search/inventory_item.html,
+	  httemplate/search/reg_code.html, httemplate/search/sql.html,
+	  httemplate/search/svc_acct.cgi,
+	  httemplate/search/svc_broadband.cgi: Remove remaining calls to
+	  idiot/eidiot.  Should fix 1479
+
+2007-10-05 12:45  ivan
+
+	* httemplate/elements/tr-input-beginning_ending.html: fix date
+	  selection on advanced invoice report, or future places where date
+	  selection component is included multiple times
+
+2007-10-03 20:22  ivan
+
+	* fs_selfservice/FS-SelfService/SelfService.pm: improve layout of
+	  self-service documentation
+
+2007-10-03 19:52  ivan
+
+	* bin/pod2x: wikify individual files
+
+2007-10-03 19:22  ivan
+
+	* bin/pod2x: fix FS::SelfService::XMLRPC pod generation
+
+2007-10-03 19:15  ivan
+
+	* FS/FS/cust_main.pm: add missing =back
+
+2007-10-03 19:07  ivan
+
+	* bin/pod2x: bah!  THIS should fix munging of non-internal links, i
+	  hope
+
+2007-10-03 19:06  jeff
+
+	* FS/FS/UI/bytecount.pm, FS/FS/part_pkg/flat.pm,
+	  FS/FS/part_pkg/prorate.pm, FS/FS/part_pkg/subscription.pm,
+	  httemplate/edit/process/part_pkg.cgi: support part_pkg option
+	  input validation, check bytecounts and allow commas (closes 1863)
+
+2007-10-03 18:56  ivan
+
+	* bin/pod2x: this *should* fix munging of non-internal links, i
+	  hope
+
+2007-10-03 18:50  ivan
+
+	* bin/pod2x: 1.7 doc uploader goes in 1.7 location
+
+2007-10-03 18:49  ivan
+
+	* Makefile, bin/pod2x: wiki documentation convertor now
+
+2007-10-03 18:47  ivan
+
+	* FS/FS.pm: add missing CLI utilities to FS.pm too
+
+2007-10-03 18:45  ivan
+
+	* FS/bin/freeside-sqlradius-seconds: fixing wrong POD NAME doc
+
+2007-10-03 18:29  ivan
+
+	* FS/t/cust_tax_exempt.pm: wtf!
+
+2007-10-03 18:15  ivan
+
+	* FS/: FS.pm: update top-level FS manpage
+
+2007-10-02 08:31  jeff
+
+	* FS/FS/cust_bill_event.pm, FS/FS/UI/Web.pm,
+	  httemplate/search/cust_bill_event.cgi: fix up re-email these
+	  events
+
+2007-09-29 17:25  ivan
+
+	* httemplate/edit/REAL_cust_pkg.cgi: fix argument stickiness on
+	  date editing errors (especially because resetting them pops up
+	  the error confirmation)
+
+2007-09-27 14:25  jeff
+
+	* httemplate/edit/svc_acct.cgi: hide fixed passwords
+
+2007-09-23 16:17  ivan
+
+	* httemplate/edit/svc_www.cgi: i think this is a bug; should not
+	  show the svc_www.usersvc selector unless it is non-fixed or
+	  non-blank, NOT non-fixed or blank
+
+2007-09-22 15:45  ivan
+
+	* fs_selfservice/FS-SelfService/cgi/myaccount_menu.html: fix
+	  menubar border in example self-service template
+
+2007-09-22 12:40  ivan
+
+	* httemplate/view/svc_acct.cgi: UI
+
+2007-09-22 11:27  ivan
+
+	* httemplate/view/svc_acct.cgi: add a list of any hosts associated
+	  with accounts
+
+2007-09-20 17:42  ivan
+
+	* httemplate/pref/pref-process.html: backport fix from HEAD
+	  allowing - in preference email addresses
+
+2007-09-18 17:12  ivan
+
+	* FS/FS/cust_bill.pm, httemplate/search/cust_bill.html: fix at
+	  least one small problem with reprint/email/fax functionality: now
+	  should understand the "most recent invoice per customer" and
+	  invoice # min/max options
+
+2007-09-18 14:41  ivan
+
+	* httemplate/search/svc_broadband.cgi: and parens help alot, doh
+
+2007-09-18 14:37  ivan
+
+	* httemplate/search/svc_broadband.cgi: fix svc_broadband search by
+	  svcpart (links from browse/part_svc, in particular
+
+2007-09-13 20:45  ivan
+
+	* httemplate/edit/process/quick-charge.cgi: Fix 'Can't use an
+	  undefined value as an ARRAY reference at
+	  /usr/local/share/perl/5.8.8/FS/cust_main.pm line 4383.' error
+
+2007-09-13 20:31  ivan
+
+	* rt/html/Elements/TicketList: fix visual glitch on "RT at a
+	  glance" / Ticketing main
+
+2007-09-13 19:14  ivan
+
+	* rt/html/Ticket/Elements/ShowTransactionAttachments: turn off
+	  Text::Quoted usage, it segfaults and its optional
+
+2007-09-13 15:25  ivan
+
+	* httemplate/browse/part_svc.cgi: random indentation fix
+
+2007-09-13 15:24  ivan
+
+	* CREDITS: too little, too late attempt at spam reduction
+
+2007-09-13 15:05  ivan
+
+	* httemplate/search/cust_main.cgi: fix status color on customer
+	  list
+
+2007-09-13 13:16  ivan
+
+	* httemplate/misc/cust_main-import.cgi: add better inline docs
+	  explaining fields on customer CSV import
+
+2007-09-12 13:40  ivan
+
+	* FS/FS/TicketSystem/RT_External.pm: don't want a fatal error when
+	  we can't fetch the name for a queue...
+
+2007-09-11 21:23  ivan
+
+	* FS/FS/cust_bill_event.pm: prevent (less than) and (greater than)
+	  in statustext message (or anything else weird) from causing them
+	  not to get inserted
+
+2007-09-10 18:33  ivan
+
+	* FS/FS/: Conf.pm, cust_main.pm: add cust_main-require_phone and
+	  cust_main-require_invoicing_list_email options
+
+2007-09-06 20:45  ivan
+
+	* FS/FS/cust_pkg.pm: default cancellation subject so the emails
+	  work even when people don't set one in config
+
+2007-09-06 20:36  ivan
+
+	* FS/FS/part_export/sqlradius.pm: tweak debugging
+
+2007-08-23 01:23  ivan
+
+	* FS/FS/: Conf.pm, part_export/sqlradius.pm: fix bug where user
+	  could log in to RADIUS with uppercase usernameand avoid bandwidth
+	  acconting (mysql is case-insensitive?  wtf!  thanks a fucking lot
+	  for nothing, grr!)
+
+2007-08-21 16:52  jeff
+
+	* FS/bin/freeside-upgrade: agent_custid bugfix (1746) (backport)
+
+2007-08-16 11:23  jeff
+
+	* FS/FS/svc_acct.pm: correct labels in service definition edit for
+	  svc_acct (#1745) (backport)
+
+2007-08-15 17:00  ivan
+
+	* FS/FS/cust_main.pm: have generate_letter assume a default paydate
+	  of 2037-12 so it doesn't bomb out on empty paydates
+
+2007-08-15 16:46  ivan
+
+	* FS/bin/freeside-sqlradius-reset: add -n option to
+	  freeside-sqlradius-reset to supress deleting data
+
+2007-08-15 14:51  ivan
+
+	* httemplate/edit/cust_main.cgi: fix customer status color here too
+
+2007-08-14 20:26  ivan
+
+	* httemplate/browse/part_export.cgi: little more low-hanging fruit:
+	  table-grid the export listing
+
+2007-08-14 14:46  ivan
+
+	* httemplate/graph/cust_pkg.cgi: file cust_pkg.cgi was added on
+	  branch FREESIDE_1_7_BRANCH on 2007-08-14 21:47:24 +0000
+
+2007-08-14 14:46  ivan
+
+	* httemplate/graph/report_cust_pkg.html: file report_cust_pkg.html
+	  was added on branch FREESIDE_1_7_BRANCH on 2007-08-14 21:47:24
+	  +0000
+
+2007-08-14 14:46  ivan
+
+	* httemplate/graph/cust_pkg.cgi,
+	  httemplate/graph/report_cust_pkg.html,
+	  FS/FS/Report/Table/Monthly.pm, httemplate/elements/menu.html,
+	  httemplate/graph/cust_bill_pkg.cgi,
+	  httemplate/graph/money_time.cgi,
+	  httemplate/graph/elements/monthly.html,
+	  httemplate/browse/agent.cgi: add package churn report/graph
+
+2007-08-10 15:48  ivan
+
+	* FS/FS/part_pkg.pm: add 3 day, 4 month and 4.5 month (137 day)
+	  frequencies
+
+2007-08-10 00:01  ivan
+
+	* FS/FS/Schema.pm, FS/FS/cust_pkg.pm,
+	  httemplate/view/cust_main/packages.html: on changing packages,
+	  don't set setup date unless old package has one
+
+2007-08-08 12:18  ivan
+
+	* FS/FS/cust_pkg.pm: fix otaker regex
+
+2007-08-07 13:05  ivan
+
+	* FS/FS/cust_main.pm: more informative error msg
+
+2007-08-06 12:45  jeff
+
+	* fs_selfservice/FS-SelfService/SelfService/XMLRPC.pm:
+	  documentation improvements
+
+2007-08-06 01:51  jeff
+
+	* fs_selfservice/FS-SelfService/: MANIFEST, Makefile.PL,
+	  freeside-selfservice-xmlrpc-server, SelfService/XMLRPC.pm,
+	  cgi/xmlrpc.cgi: add selfservice xmlrpc facilities (#591)
+	  (backport)
+
+2007-08-06 01:46  jeff
+
+	* fs_selfservice/FS-SelfService/SelfService/XMLRPC.pm: file
+	  XMLRPC.pm was added on branch FREESIDE_1_7_BRANCH on 2007-08-06
+	  08:51:19 +0000
+
+2007-08-06 01:46  jeff
+
+	* fs_selfservice/FS-SelfService/cgi/xmlrpc.cgi: file xmlrpc.cgi was
+	  added on branch FREESIDE_1_7_BRANCH on 2007-08-06 08:51:19 +0000
+
+2007-08-06 01:46  jeff
+
+	* fs_selfservice/FS-SelfService/:
+	  freeside-selfservice-xmlrpc-server, SelfService/XMLRPC.pm,
+	  cgi/xmlrpc.cgi: add selfservice xmlrpc facilities (#591)
+
+2007-08-06 01:46  jeff
+
+	* fs_selfservice/FS-SelfService/freeside-selfservice-xmlrpc-server:
+	  file freeside-selfservice-xmlrpc-server was added on branch
+	  FREESIDE_1_7_BRANCH on 2007-08-06 08:51:18 +0000
+
+2007-08-05 10:32  jeff
+
+	* FS/FS/ClientAPI/MyAccount.pm: eeb! fix realtime recharge
+
+2007-08-02 16:44  ivan
+
+	* httemplate/view/cust_main/packages.html: increase package popup
+	  width
+
+2007-08-02 16:09  ivan
+
+	* httemplate/: edit/process/cust_pkg.cgi,
+	  elements/select-table.html, misc/change_pkg.cgi,
+	  view/cust_main/packages.html: fix slowness on change package and
+	  also make it into a popup
+
+2007-08-02 16:01  ivan
+
+	* httemplate/elements/select-cust-part_pkg.html: file
+	  select-cust-part_pkg.html was added on branch FREESIDE_1_7_BRANCH
+	  on 2007-08-02 23:01:02 +0000
+
+2007-08-02 16:01  ivan
+
+	* httemplate/elements/: select-cust-part_pkg.html: fix slowness on
+	  change package and also make it into a popup
+
+2007-08-02 15:55  ivan
+
+	* FS/FS/CGI.pm: fix status color on small_custview
+
+2007-08-02 13:18  ivan
+
+	* httemplate/elements/select-table.html: sync with HEAD 1.8
+
+2007-08-02 13:06  ivan
+
+	* httemplate/elements/select-table.html: backport select-table.html
+	  from HEAD
+
+2007-08-01 15:37  ivan
+
+	* FS/FS/Schema.pm: i guess svc_www.usersvc can be null...
+	  (backport)
+
+2007-08-01 15:21  ivan
+
+	* rt/lib/RTx/WebCronTool.pm: adding WebCronTool.pm to _1_7_BRANCH
+	  too
+
+2007-08-01 15:20  ivan
+
+	* rt/lib/RTx/WebCronTool.pm: commit these RT differences, seem to
+	  be mostly in autogen'ed stuff
+
+2007-08-01 15:20  ivan
+
+	* rt/lib/RTx/WebCronTool.pm: file WebCronTool.pm was added on
+	  branch FREESIDE_1_7_BRANCH on 2007-08-01 22:21:22 +0000
+
+2007-07-20 12:58  ivan
+
+	* bin/apache.export: apache export: don't bomb out when svc_www
+	  records aren't associated with an svc_acct, just leave those
+	  subsitution vars blank
+
+2007-07-18 14:13  ivan
+
+	* FS/FS/Schema.pm: Schema.pm doesn't need FS::UID datasrc anyway,
+	  wtf
+
+2007-07-17 20:23  jeff
+
+	* FS/FS/AccessRight.pm, httemplate/edit/svc_acct.cgi: svc_acct.dir
+	  should be editable with ACL (#1730)
+
+2007-07-14 10:42  rsiddall
+
+	* install/rpm/freeside.spec: The RPM requires mod_ssl, so modify
+	  the httpd conf file to require SSL.
+
+2007-07-13 17:44  ivan
+
+	* bin/find-overapplied: a payment, by any other name
+
+2007-07-13 16:58  ivan
+
+	* bin/: find-overapplied, strip-eps: adding quick find-overapplied
+	  script
+
+2007-07-13 16:58  ivan
+
+	* bin/find-overapplied: file find-overapplied was added on branch
+	  FREESIDE_1_7_BRANCH on 2007-07-13 23:59:39 +0000
+
+2007-07-13 16:52  ivan
+
+	* FS/FS/cust_bill.pm, FS/FS/cust_main.pm,
+	  FS/FS/ClientAPI/Signup.pm, FS/FS/Cron/bill.pm,
+	  FS/bin/freeside-prepaidd, httemplate/edit/process/cust_main.cgi,
+	  httemplate/misc/bill.cgi,
+	  httemplate/misc/process/recharge_svc.html: fix race condition
+	  where ->apply_payments_and_credits could double-apply in rare
+	  cases
+
+2007-07-12 14:41  ivan
+
+	* bin/apache.export: add debugging flag to apache export
+
+2007-07-11 04:10  ivan
+
+	* fs_selfservice/FS-SelfService/cgi/selfservice.cgi: show bad
+	  amount in error message
+
+2007-07-11 01:35  ivan
+
+	* FS/FS/cust_main.pm: finish adding payunique field
+
+2007-07-11 01:08  ivan
+
+	* FS/FS/cust_pay.pm, httemplate/misc/payment.cgi,
+	  httemplate/misc/process/payment.cgi: finish adding payunique
+	  field
+
+2007-07-10 21:23  jeff
+
+	* FS/FS/cust_main.pm: honor bop_realtime options for paystate,
+	  paytype, stateid, and stateid_state for CHEK transactions (#1718)
+
+2007-07-10 11:40  rsiddall
+
+	* install/rpm/freeside.spec: Added %post to mason RPM to create
+	  freeside user.
+
+2007-07-10 10:05  rsiddall
+
+	* install/rpm/freeside.spec: Fixed bug where placeholders in
+	  freeside-init were not replaced during build.
+
+2007-07-10 07:19  rsiddall
+
+	* install/rpm/freeside.spec: freeside users need home directories
+	  for SSH keys.  Lock and log directories were missing from RPM
+	  file list.
+
+2007-07-08 20:07  rsiddall
+
+	* install/rpm/freeside.spec: Fixes problem with packaging the
+	  self-service clientd
+
+2007-07-08 14:35  rsiddall
+
+	* install/rpm/INSTALL: Updated for include file for mason RPM
+	  dependencies
+
+2007-07-08 14:29  rsiddall
+
+	* install/rpm/freeside-1.7.2.rpm.patch: No longer needed for
+	  Freeside versions greater than 1.7.2
+
+2007-07-08 14:25  rsiddall
+
+	* install/rpm/rpm2Bundle: Utility for generating local Bundles from
+	  RPMs
+
+2007-07-08 14:23  rsiddall
+
+	* install/rpm/: freeside-mason.deps.inc, freeside.spec: Updated for
+	  upcoming Freeside 1.7.3
+
+2007-07-08 14:22  rsiddall
+
+	* FS/FS/part_export/communigate_pro_singledomain.pm: Work around
+	  for a bug in rpm's perldeps handling of here documents
+
+2007-07-07 20:41  rsiddall
+
+	* install/rpm/freeside-mason.deps.inc: Perl dependencies for the
+	  Freeside Mason files RPM
+
+2007-07-07 20:40  rsiddall
+
+	* install/rpm/freeside-1.7.2.rpm.patch: Patch to work around bug in
+	  rpm's handling of here documents, regenerated for Freeside 1.7.2
+
+2007-07-07 20:37  rsiddall
+
+	* install/rpm/freeside-install: Modified for Freeside 1.7.2
+
+2007-07-07 20:34  rsiddall
+
+	* install/rpm/freeside.spec: Updated for Freeside 1.7.2 without RT
+
+2007-07-06 16:55  jeff
+
+	* httemplate/edit/process/svc_acct.cgi: manually editing usage
+	  counters removes overlimit status (#1706)
+
+2007-07-06 01:08  ivan
+
+	* GPL, README: v3!
+
+2007-07-05 15:05  ivan
+
+	* FS/FS/Record.pm: fix for compatibility w/DBIx::DBSchema v0.33+
+	  (without requiring it)
+
+2007-07-01 17:15  ivan
+
+	* FS/FS/cust_pkg.pm: missing method name in docs
+
+2007-06-30 17:36  ivan
+
+	* httemplate/edit/agent.cgi: separate agent interface is
+	  deprecated...
+
+2007-06-29 14:06  ivan
+
+	* httemplate/: edit/svc_www.cgi, view/svc_www.cgi: add regular
+	  header/footer to svc_www view and edit
+
+2007-06-28 18:42  ivan
+
+	* FS/FS/cust_pay.pm: silly missing parenthesis
+
+2007-06-28 18:27  ivan
+
+	* bin/strip-eps: file strip-eps was added on branch
+	  FREESIDE_1_7_BRANCH on 2007-07-13 23:58:57 +0000
+
+2007-06-28 18:27  ivan
+
+	* bin/strip-eps: removing create-history-tables, freeside-upgrade
+	  does this anyway
+
+2007-06-28 18:23  ivan
+
+	* FS/FS/: Schema.pm, cust_pay.pm: add payunique field and dup
+	  checking
+
+2007-06-28 13:57  ivan
+
+	* bin/: bill-as-nextmonth, bill-as-nextmonth-BILL,
+	  bill-as-nextyear, bill-as-nextyear-BILL: add some quick scripts
+	  for cron jobs
+
+2007-06-28 13:57  ivan
+
+	* bin/bill-as-nextmonth: file bill-as-nextmonth was added on branch
+	  FREESIDE_1_7_BRANCH on 2007-06-28 20:57:46 +0000
+
+2007-06-28 13:57  ivan
+
+	* bin/bill-as-nextmonth-BILL: file bill-as-nextmonth-BILL was added
+	  on branch FREESIDE_1_7_BRANCH on 2007-06-28 20:57:46 +0000
+
+2007-06-28 13:57  ivan
+
+	* bin/bill-as-nextyear: file bill-as-nextyear was added on branch
+	  FREESIDE_1_7_BRANCH on 2007-06-28 20:57:46 +0000
+
+2007-06-28 13:57  ivan
+
+	* bin/bill-as-nextyear-BILL: file bill-as-nextyear-BILL was added
+	  on branch FREESIDE_1_7_BRANCH on 2007-06-28 20:57:46 +0000
+
+2007-06-27 19:38  rsiddall
+
+	* install/rpm/INSTALL: file INSTALL was added on branch
+	  FREESIDE_1_7_BRANCH on 2007-07-08 21:35:41 +0000
+
+2007-06-27 11:15  rsiddall
+
+	* install/rpm/freeside-install: file freeside-install was added on
+	  branch FREESIDE_1_7_BRANCH on 2007-07-08 03:37:03 +0000
+
+2007-06-27 11:13  rsiddall
+
+	* install/rpm/freeside.spec: file freeside.spec was added on branch
+	  FREESIDE_1_7_BRANCH on 2007-07-08 03:34:33 +0000
+
+2007-06-26 18:17  ivan
+
+	* rt/html/Callbacks/kStatistics/Elements/Tabs/Default: somehow
+	  missed commiting this on 1.7 branch
+
+2007-06-26 11:58  ivan
+
+	* httemplate/search/cust_pay.cgi: fix check# search
+
+2007-06-26 11:21  ivan
+
+	* fs_selfservice/FS-SelfService/cgi/selfservice.cgi: we need
+	  Number::Format 1.50, not just any version (backport)
+
+2007-06-26 09:55  jeff
+
+	* fs_selfservice/FS-SelfService/cgi/view_usage_details.html: add
+	  date range to page top
+
+2007-06-26 08:36  jeff
+
+	* FS/FS/AccessRight.pm, FS/FS/Schema.pm, FS/FS/cust_main.pm,
+	  FS/FS/cust_pkg.pm, FS/FS/Cron/bill.pm, FS/FS/Cron/notify.pm,
+	  httemplate/edit/REAL_cust_pkg.cgi,
+	  httemplate/edit/process/REAL_cust_pkg.cgi,
+	  httemplate/misc/cancel_pkg.html,
+	  httemplate/misc/process/cancel_pkg.html,
+	  httemplate/search/cust_pkg.cgi,
+	  httemplate/search/report_cust_pkg.html,
+	  httemplate/view/cust_main/packages.html: suspend later just like
+	  expire (#1487)
+
+2007-06-25 19:31  ivan
+
+	* fs_selfservice/FS-SelfService/cgi/view_usage_details.html: change
+	  "====" to <HR> in selfservice usage stuff.  welcome to this
+	  millenium! :)
+
