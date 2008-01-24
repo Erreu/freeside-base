@@ -57,24 +57,58 @@
 %     } else {
 %       $bgcolor = $bgcolor1;
 %     }
-%
 
+  <TR>
+  
+    <TD CLASS="grid" BGCOLOR="<% $bgcolor %>">
+      <A HREF=<%$href%>><% $ticket->{id} %></A>
+    </TD>
+  
+    <TD CLASS="grid" BGCOLOR="<% $bgcolor %>">
+      <A HREF=<%$href%>><% $ticket->{subject} %></A>
+    </TD>
+  
+    <TD CLASS="grid" BGCOLOR="<% $bgcolor %>">
+      <% $ticket->{status} %>
+    </TD>
+  
+    <TD CLASS="grid" BGCOLOR="<% $bgcolor %>">
+      <% $ticket->{queue} %>
+    </TD>
+  
+    <TD CLASS="grid" BGCOLOR="<% $bgcolor %>">
+      <% $ticket->{owner} %>
+    </TD>
+  
+    <TD ALIGN="right" CLASS="grid" BGCOLOR="<% $bgcolor %>">
+      <% $ticket->{content}
+           ? $ticket->{content}.' ('.$ticket->{priority}.')'
+           : $ticket->{priority}
+      %>
+    </TD>
+  
+  </TR>
 
-<TR>
-
-  <TD CLASS="grid" BGCOLOR="<% $bgcolor %>"><A HREF=<%$href%>><% $ticket->{id} %></A></TD>
-
-  <TD CLASS="grid" BGCOLOR="<% $bgcolor %>"><A HREF=<%$href%>><% $ticket->{subject} %></A></TD>
-
-  <TD ALIGN="right" CLASS="grid" BGCOLOR="<% $bgcolor %>"><% $ticket->{content} || $ticket->{priority} %></TD>
-
-  <TD CLASS="grid" BGCOLOR="<% $bgcolor %>"><% $ticket->{name} %></TD>
-
-  <TD CLASS="grid" BGCOLOR="<% $bgcolor %>"><% $ticket->{status} %></TD>
-
-</TR>
 % } 
-
 
 </TABLE>
 
+<%init>
+
+my( $cust_main ) = @_;
+my( @tickets )  = $cust_main->tickets;
+
+my $open_link = FS::TicketSystem->href_customer_tickets($cust_main->custnum);
+my $openlabel = join('/', FS::TicketSystem->statuses );
+
+my $res_link  = FS::TicketSystem->href_customer_tickets(
+                  $cust_main->custnum,
+                  { 'statuses' => [ 'resolved' ] }
+                );
+
+my $new_link = FS::TicketSystem->href_new_ticket(
+                 $cust_main,
+                 join(', ', $cust_main->invoicing_list_emailonly )
+               );
+
+</%init>
