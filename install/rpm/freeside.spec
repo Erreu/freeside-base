@@ -114,8 +114,6 @@ EOF
 
 %build
 
-# Add freeside user and group if there isn't already such a user
-%{__id} freeside 2>/dev/null >/dev/null || /usr/sbin/useradd -s /bin/sh freeside
 # False laziness...
 # The htmlman target now makes wiki documentation.  Let's pretend we made it.
 touch htmlman
