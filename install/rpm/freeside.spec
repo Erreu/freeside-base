@@ -95,6 +95,7 @@ For security reasons, it is set to conflict with %{name} so you cannot install t
 %{__rm} bin/pod2x # Only useful to Ivan Kohler now
 %{__cp} install/rpm/freeside-install FS/bin
 perl -pi -e 's|/usr/local/bin|%{buildroot}%{_bindir}|g' FS/Makefile.PL
+perl -pi -e 's|\s+-o\s+freeside\s+| |g' Makefile
 perl -ni -e 'print if !/\s+chown\s+/;' Makefile
 
 # Override find-requires/find-provides to supplement Perl requires for HTML::Mason file handler.pl
