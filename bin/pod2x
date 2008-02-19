@@ -57,7 +57,7 @@ foreach my $file (
 }
 
 my $mvs = WWW::Mediawiki::Client->new(
-            'host'           => 'www.sisd.com',
+            'host'           => 'www.freeside.biz',
             'wiki_path'      => 'mediawiki/index.php',
             'username'       => $mw_username,
             'password'       => $mw_password,
@@ -70,7 +70,7 @@ my @files;
 if ( @ARGV ) {
   @files = @ARGV;
 } else {
-  @files =
+  @files = (
     glob("$site_perl/*.pm"),
     glob("$site_perl/*/*.pm"),
     glob("$site_perl/*/*/*.pm"),
@@ -78,7 +78,7 @@ if ( @ARGV ) {
     glob("$site_perl/bin/*.pod"),
     glob("./fs_selfservice/FS-SelfService/*.pm"),
     glob("./fs_selfservice/FS-SelfService/*/*.pm"),
-  ;
+  ) ;
 }
 
 foreach my $file (@files) {
