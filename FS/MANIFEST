@@ -373,3 +373,5 @@ FS/cust_pkg_option.pm
 t/cust_pkg_option.t
 FS/cust_pay_pending.pm
 t/cust_pay_pending.t
+FS/part_pkg_taxclass.pm
+t/part_pkg_taxclass.t
