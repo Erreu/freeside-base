@@ -109,4 +109,3 @@ unless ( $error || $conf->exists('agent_defaultpkg') ) {
 }
 
 </%init>
-
