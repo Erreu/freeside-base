@@ -860,6 +860,16 @@ sub tables_hashref {
       'index' => [ [ 'promo_code' ], [ 'disabled' ] ],
     },
 
+    'part_pkg_taxclass' => {
+      'columns' => [
+        'taxclassnum',  'serial', '',       '', '', '',
+        'taxclass',     'varchar', '', $char_d, '', '', 
+      ],
+      'primary_key' => 'taxclassnum',
+      'unique'      => [ [ 'taxclass' ] ],
+      'index'       => [],
+    },
+
 #    'part_title' => {
 #      'columns' => [
 #        'titlenum',   'int',    '',   '',
