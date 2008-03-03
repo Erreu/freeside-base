@@ -1,4 +1,4 @@
-# $Id: pt_br.po,v 1.1.1.5 2006-10-17 08:50:11 ivan Exp $
+# $Id: pt_br.po,v 1.1.1.5.2.1 2008-03-03 23:07:47 ivan Exp $
 msgid ""
 msgstr ""
 "Project-Id-Version: RT 3.4.x\n"

@@ -1,9 +1,667 @@
 ------------------------------------------------------------------------
-r4386 | jesse | 2006-01-12 10:52:27 -0500 (Thu, 12 Jan 2006) | 1 line
+r6239 | jesse | 2006-10-19 21:18:39 -0400 (Thu, 19 Oct 2006) | 1 line
 Changed paths:
-   A /rt/tags/3.4.5 (from /rt/branches/3.4-RELEASE:4385)
+   A /rt/tags/3.4.6 (from /rt/branches/3.4-RELEASE:6238)
 
-Tagged as 3.4.5 by svn RelEng 1.0
+Tagged as 3.4.6 by svn RelEng 1.0
+------------------------------------------------------------------------
+r6238 | jesse | 2006-10-19 21:16:44 -0400 (Thu, 19 Oct 2006) | 3 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE
+   M /rt/branches/3.4-RELEASE/releng.cnf
+
+ r28958@pinglin:  jesse | 2006-10-19 21:16:43 -0400
+  * 3.4.6
+
+------------------------------------------------------------------------
+r6153 | jesse | 2006-10-04 03:42:12 -0400 (Wed, 04 Oct 2006) | 1 line
+Changed paths:
+   M /rt/branches/3.4-RELEASE
+   M /rt/branches/3.4-RELEASE/releng.cnf
+
+
+------------------------------------------------------------------------
+r6135 | ruz | 2006-09-30 17:38:39 -0400 (Sat, 30 Sep 2006) | 1 line
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/RT/Record.pm
+
+* there is code exists that call My::Class->_ClassAccessible
+------------------------------------------------------------------------
+r5943 | jesse | 2006-09-15 15:31:25 -0400 (Fri, 15 Sep 2006) | 5 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE
+   M /rt/branches/3.4-RELEASE/lib/RT/Interface/Email/Auth/MailFrom.pm
+
+ r27507@pinglin:  jesse | 2006-09-15 20:30:47 +0100
+ [mail gateway] Todd Chapman discovered a case where RT's mail gateway would default to the RT::SystemUser if no valid from header were found. This could allow a malicious user to create tickets or reply to tickets, but not to gain access to data.
+ 
+ 
+
+------------------------------------------------------------------------
+r5858 | ruz | 2006-09-04 18:09:30 -0400 (Mon, 04 Sep 2006) | 7 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/RT/Transaction_Overlay.pm
+
+::OldValue and ::NewValue
+* don't load object if {Old,New}Reference is false value
+** this is hitting some cache issues and could return "random" result
+   which brakes tickets' history.
+
+Thanks to Joshua Speicher.
+
+------------------------------------------------------------------------
+r5857 | ruz | 2006-09-04 15:30:28 -0400 (Mon, 04 Sep 2006) | 1 line
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/RT/Record.pm
+
+* redo search if we have deleted entries in collection
+------------------------------------------------------------------------
+r5856 | ruz | 2006-09-04 15:17:14 -0400 (Mon, 04 Sep 2006) | 3 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/RT/Interface/Web.pm
+
+* split function ProcessObjectCustomFieldUpdates into two
+* call RedoSearch on object's custom fields values collection
+  after {Add,Delete}CustomFieldValues operations
+------------------------------------------------------------------------
+r5850 | ruz | 2006-09-04 12:49:12 -0400 (Mon, 04 Sep 2006) | 1 line
+Changed paths:
+   M /rt/branches/3.4-RELEASE/html/Elements/EditCustomFieldSelect
+
+* drop uninit warning
+------------------------------------------------------------------------
+r5849 | ruz | 2006-09-04 12:32:29 -0400 (Mon, 04 Sep 2006) | 2 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE/html/Ticket/Elements/EditCustomFields
+
+* drop unused variable
+* init index($i) with 0 to avoid warnings
+------------------------------------------------------------------------
+r5829 | ruz | 2006-08-30 16:12:48 -0400 (Wed, 30 Aug 2006) | 1 line
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/RT/I18N.pm
+
+* typo
+------------------------------------------------------------------------
+r5822 | ruz | 2006-08-29 15:10:01 -0400 (Tue, 29 Aug 2006) | 8 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/RT/I18N.pm
+   A /rt/branches/3.4-RELEASE/lib/t/regression/06-mime_decoding.t
+
+* fix decoding of the MIME fields, this should fix:
+** problems with non-ascii names of attachments
+** problems with partly encoded fields with '=' chars
+   in not encoded parts, for example:
+
+X-MyHeader: key="plain"; key="=?encoded?="
+X-MyHeader: key="=?encoded?="; key="plain"
+
+------------------------------------------------------------------------
+r5821 | ruz | 2006-08-29 13:07:03 -0400 (Tue, 29 Aug 2006) | 2 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/RT/Action/SendEmail.pm
+
+* get rid of unint warnings
+* make a log message shorter to be more readable
+------------------------------------------------------------------------
+r5820 | ruz | 2006-08-29 13:03:36 -0400 (Tue, 29 Aug 2006) | 2 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE/html/Elements/CollectionAsTable/ParseFormat
+
+* default title to empty string as we compare it with 'NEWLINE' string
+  in several places, drops uninit warnings
+------------------------------------------------------------------------
+r5819 | ruz | 2006-08-29 12:59:30 -0400 (Tue, 29 Aug 2006) | 7 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/RT/Ticket_Overlay.pm
+
+* Code:
+  $cf->Load(...)
+  $field = $cf->id;
+  unless( $field =~ /^\d+$/ )...
+  may produce unint warning if field wasn't loaded,
+  use "unless( $cf->id )" instead as we do everywhere
+
+------------------------------------------------------------------------
+r5818 | ruz | 2006-08-27 12:34:52 -0400 (Sun, 27 Aug 2006) | 3 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE/html/Ticket/Elements/ShowBasics
+   M /rt/branches/3.4-RELEASE/html/Ticket/Elements/ShowDates
+
+* add additional classes to records in tables with ticket's properties
+** so it's possible to change visiual appearance of different fields
+   like dates, queue, priority status and other
+------------------------------------------------------------------------
+r5779 | ruz | 2006-08-16 18:58:46 -0400 (Wed, 16 Aug 2006) | 1 line
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/RT/CustomField_Overlay.pm
+
+* allow user to add zero CF values
+------------------------------------------------------------------------
+r5778 | ruz | 2006-08-16 18:56:58 -0400 (Wed, 16 Aug 2006) | 1 line
+Changed paths:
+   M /rt/branches/3.4-RELEASE/html/Elements/ShowCustomFields
+
+* display one value without html lists
+------------------------------------------------------------------------
+r5777 | ruz | 2006-08-16 18:55:37 -0400 (Wed, 16 Aug 2006) | 1 line
+Changed paths:
+   M /rt/branches/3.4-RELEASE/html/Ticket/Elements/ShowSummary
+
+* add LeftColumn and RightColumn callbacks to the summary element
+------------------------------------------------------------------------
+r5669 | ruz | 2006-07-28 12:06:56 -0400 (Fri, 28 Jul 2006) | 1 line
+Changed paths:
+   M /rt/branches/3.4-RELEASE/releng.cnf
+
+* bump 3.4.6rc1
+------------------------------------------------------------------------
+r5624 | jesse | 2006-07-20 13:48:07 -0400 (Thu, 20 Jul 2006) | 3 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE
+   M /rt/branches/3.4-RELEASE/html/Ticket/Elements/ShowHistory
+
+ r14229@pinglin:  jesse | 2006-07-20 10:47:51 -0700
+ * The new history ordering feature was backported backwards.
+
+------------------------------------------------------------------------
+r5616 | jesse | 2006-07-19 20:40:57 -0400 (Wed, 19 Jul 2006) | 3 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE
+   M /rt/branches/3.4-RELEASE/lib/RT/Group_Overlay.pm
+
+ r14217@pinglin:  jesse | 2006-07-19 17:39:08 -0700
+ * crit was being called on the wrong object. Thanks to Todd Chapman 
+
+------------------------------------------------------------------------
+r5570 | kevinr | 2006-07-13 16:21:31 -0400 (Thu, 13 Jul 2006) | 3 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE
+   M /rt/branches/3.4-RELEASE/lib/RT/Condition/Generic.pm
+
+ r14836@sad-girl-in-snow:  kevinr | 2006-07-13 16:17:43 -0400
+ * The RT::Condition::Generic docs were wrong... fixed.
+
+------------------------------------------------------------------------
+r5534 | ruz | 2006-07-06 11:19:46 -0400 (Thu, 06 Jul 2006) | 11 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE/bin/rt-crontool.in
+
+rt-crontool
+* add --transaction argument with two possible values: 'first' and 'last'
+* add --transaction-type argument to allow users select type of transactions
+** these transactions would be passed to scrips for processing, so users
+   can use conditions, actions and templates that check or use properties of
+   transaction
+
+* also some existant actions, conditions and templates require scrip or
+  scrip action objects to process normally, as we have no these objects
+  available we now pass void (not loaded) objects. This change would allow
+  users to use notify actions with crontool.
+------------------------------------------------------------------------
+r5522 | ruz | 2006-07-04 01:39:21 -0400 (Tue, 04 Jul 2006) | 1 line
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/RT.pm.in
+
+* we never should call exit from libs
+------------------------------------------------------------------------
+r5521 | ruz | 2006-07-04 01:38:03 -0400 (Tue, 04 Jul 2006) | 1 line
+Changed paths:
+   M /rt/branches/3.4-RELEASE/sbin/rt-setup-database.in
+
+* report error when couldn't create CF
+------------------------------------------------------------------------
+r5520 | ruz | 2006-07-04 01:36:46 -0400 (Tue, 04 Jul 2006) | 1 line
+Changed paths:
+   M /rt/branches/3.4-RELEASE/etc/RT_Config.pm.in
+
+* forgot to add option to config
+------------------------------------------------------------------------
+r5496 | ruz | 2006-06-30 16:09:08 -0400 (Fri, 30 Jun 2006) | 5 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE/html/Ticket/Elements/ShowHistory
+
+Changes:
+* new config option $OldestTransactionsFirst that allow
+  administrator to reverse order of transactions on
+  history page
+
+------------------------------------------------------------------------
+r5482 | ruz | 2006-06-28 17:25:18 -0400 (Wed, 28 Jun 2006) | 2 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/RT/Interface/Email.pm
+   M /rt/branches/3.4-RELEASE/lib/t/regression/06mailgateway.t
+
+* add tests for unsafe mailgate commands
+* fix bugs that were introduced during Email.pm refactoring
+------------------------------------------------------------------------
+r5480 | ruz | 2006-06-27 20:05:49 -0400 (Tue, 27 Jun 2006) | 1 line
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/RT/Record.pm
+
+* minor formatting
+------------------------------------------------------------------------
+r5476 | ruz | 2006-06-27 17:21:07 -0400 (Tue, 27 Jun 2006) | 2 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/RT/Link_Overlay.pm
+   M /rt/branches/3.4-RELEASE/lib/RT/Links_Overlay.pm
+   M /rt/branches/3.4-RELEASE/lib/RT/URI/base.pm
+   M /rt/branches/3.4-RELEASE/lib/RT/URI/fsck_com_rt.pm
+
+* nothing special, small changes I'd changed during
+  the hunt over a bug
+------------------------------------------------------------------------
+r5400 | ruz | 2006-06-16 20:40:24 -0400 (Fri, 16 Jun 2006) | 3 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/RT/Interface/Email.pm
+
+* not default mail plugins has been broken during last refactoring
+** move a code back into its scope
+** don't forget to store $_ in $Class when $_ matches ^RT::Interface::Email
+------------------------------------------------------------------------
+r5317 | ruz | 2006-05-30 16:13:02 -0400 (Tue, 30 May 2006) | 5 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/RT/Ticket_Overlay.pm
+
+* If current user changes owner from somebody else to nobody user,
+  the action fails with "You can only reassign tickets that you own
+  or that are unowned", but we must change owner if he has no right
+  to own tickets in dest queue. Do it with Force and with SystemUser
+  context.
+------------------------------------------------------------------------
+r5315 | ruz | 2006-05-28 07:19:20 -0400 (Sun, 28 May 2006) | 2 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE/html/Ticket/Elements/ShowRequestor
+
+* Use "Requestor.id = $requestor->id" search instead of search by email address
+  as latter is not indexed
+------------------------------------------------------------------------
+r5310 | ruz | 2006-05-26 20:39:49 -0400 (Fri, 26 May 2006) | 3 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/RT/URI.pm
+
+* when we could parse URI, for example object doesn't exist
+  fallback to RT::URI::base resolver, so $uri->IsLocal and
+  other methods wouldn't die but return undef
+------------------------------------------------------------------------
+r5268 | jesse | 2006-05-19 17:17:41 -0400 (Fri, 19 May 2006) | 3 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE
+   M /rt/branches/3.4-RELEASE/lib/RT/Interface/Email.pm
+
+ r13935@hualien:  jesse | 2006-05-19 17:17:27 -0400
+ * There were divergent copies of this code. The EmailParser code was more correct
+
+------------------------------------------------------------------------
+r5257 | ruz | 2006-05-18 21:53:40 -0400 (Thu, 18 May 2006) | 1 line
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/RT/Ticket_Overlay.pm
+
+* minor
+------------------------------------------------------------------------
+r5256 | ruz | 2006-05-18 21:45:58 -0400 (Thu, 18 May 2006) | 1 line
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/RT/Interface/Email.pm
+
+* allow to complete actions in mail plugins
+------------------------------------------------------------------------
+r5249 | ruz | 2006-05-18 12:17:47 -0400 (Thu, 18 May 2006) | 1 line
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/RT/Ticket_Overlay.pm
+
+* add bug comment
+------------------------------------------------------------------------
+r5238 | ruz | 2006-05-16 18:39:59 -0400 (Tue, 16 May 2006) | 2 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/RT/Ticket_Overlay.pm
+
+* really noisy warning
+  *NOTE* that option we use is not described in config
+------------------------------------------------------------------------
+r5218 | ruz | 2006-05-12 20:31:33 -0400 (Fri, 12 May 2006) | 1 line
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/RT/CustomField_Overlay.pm
+   M /rt/branches/3.4-RELEASE/lib/RT/Ticket_Overlay.pm
+   M /rt/branches/3.4-RELEASE/lib/RT/Tickets_Overlay.pm
+
+* get rid of "masks earlier declaration" warnings
+------------------------------------------------------------------------
+r5217 | ruz | 2006-05-12 17:02:54 -0400 (Fri, 12 May 2006) | 1 line
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/RT/Tickets_Overlay.pm
+   M /rt/branches/3.4-RELEASE/lib/t/regression/22search_tix_by_txn.t
+
+* use SetToMidnight( Timezone => 'server' ) to calc start and end of the day
+------------------------------------------------------------------------
+r5216 | ruz | 2006-05-12 16:54:41 -0400 (Fri, 12 May 2006) | 1 line
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/RT/Date.pm
+
+* add Timezone argument in SetToMidnight
+------------------------------------------------------------------------
+r5209 | ruz | 2006-05-11 18:31:58 -0400 (Thu, 11 May 2006) | 10 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE/html/Ticket/Display.html
+
+* user do next steps:
+    1) open ticket #1
+    2) click reply
+    3) upload attachment
+    4) open ticket #2 in another browser window
+    5) send reply to the ticket #1
+  RT looses uploaded attachment due to step 4) as RT tries
+  to add attchement to the ticket #2 and drops them from session.
+  As solution don't ProcessTicketMessage if there is attachments,
+  but only if there is real update message.
+------------------------------------------------------------------------
+r5208 | ruz | 2006-05-11 18:24:17 -0400 (Thu, 11 May 2006) | 3 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/RT/Interface/Email.pm
+
+* if ( not $xxx || $xxx->foo ) is equivalent to
+  if ( not ( $xxx || $xxx->foo ) ) due to perl5 rules
+  which is not expected behaviour
+------------------------------------------------------------------------
+r5207 | ruz | 2006-05-11 16:56:24 -0400 (Thu, 11 May 2006) | 1 line
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/RT/Transaction_Overlay.pm
+
+* more checks on attachments processing
+------------------------------------------------------------------------
+r5206 | ruz | 2006-05-11 16:48:53 -0400 (Thu, 11 May 2006) | 1 line
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/RT/Interface/Web.pm
+
+* return values checking and more logging on errors
+------------------------------------------------------------------------
+r5187 | jesse | 2006-05-09 00:48:10 -0400 (Tue, 09 May 2006) | 3 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE
+   M /rt/branches/3.4-RELEASE/lib/RT/Interface/Email.pm
+
+ r13332@hualien:  jesse | 2006-05-09 00:47:49 -0400
+ * Mismatched parens
+
+------------------------------------------------------------------------
+r5186 | jesse | 2006-05-08 22:56:20 -0400 (Mon, 08 May 2006) | 3 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE
+   M /rt/branches/3.4-RELEASE/html/REST/1.0/NoAuth/mail-gateway
+
+ r13330@hualien:  jesse | 2006-05-08 22:55:56 -0400
+  * Reed Loden caught a perltidy error that, somewhat terrifiyingly, was still a valid mason page
+
+------------------------------------------------------------------------
+r5185 | jesse | 2006-05-08 22:32:19 -0400 (Mon, 08 May 2006) | 4 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE
+   M /rt/branches/3.4-RELEASE/html/REST/1.0/NoAuth/mail-gateway
+   M /rt/branches/3.4-RELEASE/lib/RT/Interface/Email.pm
+
+ r13315@hualien:  jesse | 2006-05-08 22:31:30 -0400
+ * Mail gateway refactoring to make added functioanlity a bit easier. 
+   No (intentional) functional changes.
+
+------------------------------------------------------------------------
+r5184 | jesse | 2006-05-08 22:32:10 -0400 (Mon, 08 May 2006) | 3 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE
+   M /rt/branches/3.4-RELEASE/lib/RT/Interface/Email.pm
+
+ r13314@hualien:  jesse | 2006-05-08 12:14:26 -0400
+ * Minor reformatting
+
+------------------------------------------------------------------------
+r5183 | jesse | 2006-05-08 22:31:56 -0400 (Mon, 08 May 2006) | 3 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE
+   M /rt/branches/3.4-RELEASE/html/Admin/Groups/index.html
+
+ r13313@hualien:  jesse | 2006-05-08 12:01:55 -0400
+  * Finding disabled groups should actually find them, now
+
+------------------------------------------------------------------------
+r5118 | jesse | 2006-04-25 22:43:31 -0400 (Tue, 25 Apr 2006) | 5 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE
+   M /rt/branches/3.4-RELEASE/html/REST/1.0/search/ticket
+
+ r11882@hualien:  jesse | 2006-04-25 22:43:11 -0400
+ * Mark Eichin picked up that http://lists.fsck.com/pipermail/rt-devel/2004-August/006216.html had never been applied. 
+ 
+ rt ls -l broke because of it, if your RT server wasn't at / 
+
+------------------------------------------------------------------------
+r5116 | ruz | 2006-04-25 19:35:09 -0400 (Tue, 25 Apr 2006) | 1 line
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/t/regression/23-web_attachments.t
+
+* get queue ID from page
+------------------------------------------------------------------------
+r5115 | ruz | 2006-04-25 19:24:45 -0400 (Tue, 25 Apr 2006) | 1 line
+Changed paths:
+   M /rt/branches/3.4-RELEASE/html/Elements/SelectNewTicketQueue
+
+* (cond) && 'selected' outputs 0 if condition fails on my system 
+------------------------------------------------------------------------
+r5066 | ruz | 2006-04-24 20:21:32 -0400 (Mon, 24 Apr 2006) | 1 line
+Changed paths:
+   A /rt/branches/3.4-RELEASE/lib/t/regression/23-web_attachments.t
+
+* simple tests for Attachments manipulation from web interface
+------------------------------------------------------------------------
+r5065 | ruz | 2006-04-24 17:25:15 -0400 (Mon, 24 Apr 2006) | 1 line
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/RT/Attachment_Overlay.pm
+
+* convert only if $enc'oding contains something
+------------------------------------------------------------------------
+r5064 | ruz | 2006-04-24 16:42:43 -0400 (Mon, 24 Apr 2006) | 1 line
+Changed paths:
+   M /rt/branches/3.4-RELEASE/html/SelfService/Create.html
+   M /rt/branches/3.4-RELEASE/html/Ticket/Create.html
+
+* max subject is 200 character long
+------------------------------------------------------------------------
+r5060 | jesse | 2006-04-24 10:49:40 -0400 (Mon, 24 Apr 2006) | 10 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE
+   M /rt/branches/3.4-RELEASE/html/REST/1.0/Forms/ticket/default
+
+ r11842@hualien:  jesse | 2006-04-24 10:49:13 -0400
+ The following patch adds the useful LastUpdated field to the fields
+ returned through the REST interface.
+ David - who starts to wonder if his patches are actually read by someone :-)
+ --
+ David Schweikert        | phone: +41 44 632 7019
+ System manager ISG.EE   | walk:  ETH Zentrum, ETL F24.1
+ ETH Zurich, Switzerland | web:   http://people.ee.ethz.ch/dws
+ 
+
+------------------------------------------------------------------------
+r5047 | ruz | 2006-04-17 20:40:06 -0400 (Mon, 17 Apr 2006) | 1 line
+Changed paths:
+   M /rt/branches/3.4-RELEASE/html/Ticket/Elements/PreviewScrips
+
+* check and report error to the logs
+------------------------------------------------------------------------
+r4924 | jesse | 2006-03-30 21:07:23 -0500 (Thu, 30 Mar 2006) | 7 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE
+   M /rt/branches/3.4-RELEASE/config.layout
+
+ r10636@hualien:  jesse | 2006-03-31 11:06:57 +0900
+ RT-Ticket: 7398
+ RT-Status: resolved
+ RT-Update: correspond
+ 
+ * Added a "RH" RedHat layout option to config.layout  -- Paulo Matos
+
+------------------------------------------------------------------------
+r4847 | alexmv | 2006-03-28 15:50:07 -0500 (Tue, 28 Mar 2006) | 3 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE
+   M /rt/branches/3.4-RELEASE/lib/RT/Record.pm
+
+ r11918@zoq-fot-pik:  chmrr | 2006-03-28 15:49:56 -0500
+  * Backport TXN fixes from 3.7 and 3.5
+
+------------------------------------------------------------------------
+r4814 | jesse | 2006-03-23 22:40:37 -0500 (Thu, 23 Mar 2006) | 3 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE
+   M /rt/branches/3.4-RELEASE/lib/RT/Interface/Web/Handler.pm
+
+ r10436@hualien:  jesse | 2006-03-23 22:40:25 -0500
+ * It helps when there aren't typos
+
+------------------------------------------------------------------------
+r4799 | jesse | 2006-03-23 01:37:59 -0500 (Thu, 23 Mar 2006) | 3 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE
+   M /rt/branches/3.4-RELEASE/lib/RT/Interface/Web/Handler.pm
+
+ r30313@truegrounds:  jesse | 2006-03-23 01:36:27 -0500
+ * Better mp2 bulletproofing
+
+------------------------------------------------------------------------
+r4686 | jesse | 2006-03-04 17:47:46 -0500 (Sat, 04 Mar 2006) | 3 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE
+   M /rt/branches/3.4-RELEASE/html/REST/1.0/Forms/ticket/default
+
+ r22962@truegrounds:  jesse | 2006-01-25 05:18:09 -0800
+ * Updated mandatory fields for ticket creation forms
+
+------------------------------------------------------------------------
+r4498 | alexmv | 2006-02-04 18:34:51 -0500 (Sat, 04 Feb 2006) | 8 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE
+   M /rt/branches/3.4-RELEASE/html/Elements/QuickCreate
+
+ r8937@zoq-fot-pik:  chmrr | 2006-02-04 18:33:57 -0500
+ RT-Ticket: 7329
+ RT-Status: resolved
+ RT-Update: correspond
+ 
+  * Use SelectNewTicketQueue instead of SelectQueue
+ 
+
+------------------------------------------------------------------------
+r4497 | alexmv | 2006-02-04 18:34:45 -0500 (Sat, 04 Feb 2006) | 4 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE
+   M /rt/branches/3.4-RELEASE/bin/webmux.pl.in
+
+ r8936@zoq-fot-pik:  chmrr | 2006-02-04 18:24:38 -0500
+  * Only rmtree if we have something to rm; keeps rmtree from
+ complaining about 'Not root path(s) specified'
+
+------------------------------------------------------------------------
+r4448 | kevinr | 2006-01-30 19:25:47 -0500 (Mon, 30 Jan 2006) | 7 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE
+   M /rt/branches/3.4-RELEASE/lib/RT/I18N/de.po
+
+ r10537@SAD-GIRL-IN-SNOW:  kevinr | 2006-01-30 19:20:52 -0500
+ RT-Ticket: 7289
+ RT-Status: resolved
+ RT-Update: correspond
+ 
+ Updated German translation (thanks to Thorsten Brumm)
+
+------------------------------------------------------------------------
+r4445 | jesse | 2006-01-25 07:50:07 -0500 (Wed, 25 Jan 2006) | 3 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE
+   M /rt/branches/3.4-RELEASE/bin/rt.in
+
+ r22960@truegrounds:  jesse | 2006-01-25 13:47:07 +0100
+ * a couple added lines of docs to the cli
+
+------------------------------------------------------------------------
+r4444 | jesse | 2006-01-25 07:11:16 -0500 (Wed, 25 Jan 2006) | 12 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE
+   M /rt/branches/3.4-RELEASE/etc/schema.Oracle
+
+ r22958@truegrounds:  jesse | 2006-01-25 13:08:34 +0100
+ From: Joop van de Wege <JoopvandeWege@mococo.nl>
+ Message-Id: <20060125125248.1A97.JOOPVANDEWEGE@mococo.nl>
+ 
+ > There is atleast one problem that I have spotted and that is that
+ > schema.Oracle contains two empty lines in CREATE TABLE
+ > ObjectCustomFieldValues which don't belong there.
+ > That is the second set of errors you get. The first is an indication
+ > that an sequence with that name already exists in the schema of that
+ > Oracle users you're RT installing in.
+ 
+
+------------------------------------------------------------------------
+r4438 | jesse | 2006-01-24 07:49:37 -0500 (Tue, 24 Jan 2006) | 3 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE
+   M /rt/branches/3.4-RELEASE/sbin/rt-test-dependencies.in
+
+ r22894@truegrounds:  jesse | 2006-01-24 13:44:05 +0100
+ * Note that our SQLite dependency is 1.0
+
+------------------------------------------------------------------------
+r4406 | alexmv | 2006-01-19 00:19:31 -0500 (Thu, 19 Jan 2006) | 1 line
+Changed paths:
+   M /rt/branches/3.4-RELEASE
+
+
+------------------------------------------------------------------------
+r4405 | alexmv | 2006-01-19 00:19:24 -0500 (Thu, 19 Jan 2006) | 3 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE
+   M /rt/branches/3.4-RELEASE/etc/schema.mysql
+
+ r8697@zoq-fot-pik:  chmrr | 2006-01-19 00:18:21 -0500
+  * Drop the one index that is too long for mysql 5 (curse you, unicode!)
+
+------------------------------------------------------------------------
+r4399 | ruz | 2006-01-18 16:31:46 -0500 (Wed, 18 Jan 2006) | 5 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/RT/Template_Overlay.pm
+
+* CurrentUserHasQueueRight handles global templates natively
+  we don't need to check queue value
+* return error message from _ParseContent
+* check error status in Parser more accurate
+
+------------------------------------------------------------------------
+r4398 | ruz | 2006-01-18 16:28:41 -0500 (Wed, 18 Jan 2006) | 6 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE/lib/RT/Action/SendEmail.pm
+
+* handle SIGPIPE, could happen if sendmail closes pipe before
+  we output all message
+* handle SIGCHLD with default handler to get exit status from sendmail
+* handle errors in 'close', system errors or sendmail exit with error
+* only send warn on the error exit status
+
+------------------------------------------------------------------------
+r4397 | ruz | 2006-01-18 16:26:31 -0500 (Wed, 18 Jan 2006) | 2 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE/html/Elements/CollectionAsTable/ParseFormat
+
+* load and precompile only reqexp we need
+
+------------------------------------------------------------------------
+r4396 | ruz | 2006-01-18 16:15:46 -0500 (Wed, 18 Jan 2006) | 7 lines
+Changed paths:
+   M /rt/branches/3.4-RELEASE/html/Elements/Quicksearch
+   M /rt/branches/3.4-RELEASE/lib/RT/Tickets_Overlay.pm
+
+* in _EnumLimit load referenced object only if value
+  is defined and is not number, this could safe several
+  fetches from caches or in worst case from DB
+* use this advantage in Quicksearch element,
+  change in load time should be noticable on the systems
+  with many queues
+
 ------------------------------------------------------------------------
 r4385 | jesse | 2006-01-12 10:48:22 -0500 (Thu, 12 Jan 2006) | 3 lines
 Changed paths:

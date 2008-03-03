@@ -748,7 +748,7 @@ DBIx::SearchBuilder::Record
 
 sub _ClassAccessible {
     my $self = shift;
-    return $_TABLE_ATTR->{ref($self)};
+    return $_TABLE_ATTR->{ ref($self) || $self };
 }
 
 =head2 _Accessible COLUMN ATTRIBUTE
@@ -817,7 +817,10 @@ sub _EncodeLOB {
             elsif ($RT::DropLongAttachments) {
 
                 # drop the attachment on the floor
-                $RT::Logger->info( "$self: Dropped an attachment of size " . length($Body) . "\n" . "It started: " . substr( $Body, 0, 60 ) . "\n" );
+                $RT::Logger->info( "$self: Dropped an attachment of size "
+                                   . length($Body) . "\n"
+                                   . "It started: " . substr( $Body, 0, 60 ) . "\n"
+                                 );
                 return ("none", "Large attachment dropped" );
             }
         }
@@ -1459,7 +1462,7 @@ sub _NewTransaction {
 
     $self->_SetLastUpdated;
 
-    if ( defined $args{'TimeTaken'} ) {
+    if ( defined $args{'TimeTaken'} and $self->can('_UpdateTimeTaken')) {
         $self->_UpdateTimeTaken( $args{'TimeTaken'} );
     }
     if ( $RT::UseTransactionBatch and $transaction ) {
@@ -1634,10 +1637,11 @@ sub _AddCustomFieldValue {
                       );
                 }
             }
+            $values->RedoSearch if $i; # redo search if have deleted at least one value
         }
 
         my ( $old_value, $old_content );
-        if ( $old_value = $cf->ValuesForObject($self)->First ) {
+        if ( $old_value = $values->First ) {
             $old_content = $old_value->Content();
             return (1) if( $old_content eq $args{'Value'} && $old_value->LargeContent eq $args{'LargeContent'});;
         }

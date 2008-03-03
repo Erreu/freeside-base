@@ -366,7 +366,8 @@ sub AddValue {
         return (0, $self->loc('Permission Denied'));
     }
 
-    unless ($args{'Name'}) {
+    # allow zero value
+    if ( !defined $args{'Name'} || $args{'Name'} eq '' ) {
         return(0, $self->loc("Can't add a custom field value without a name"));
     }
 	my $newval = RT::CustomFieldValue->new($self->CurrentUser);
@@ -876,10 +877,10 @@ sub AddToObject {
     if ( $ObjectCF->Id ) {
         return ( 0, $self->loc("That is already the current value") );
     }
-    my ( $id, $msg ) =
+    my ( $oid, $msg ) =
       $ObjectCF->Create( ObjectId => $id, CustomField => $self->Id );
 
-    return ( $id, $msg );
+    return ( $oid, $msg );
 }
 
 
@@ -911,9 +912,10 @@ sub RemoveFromObject {
     unless ( $ObjectCF->Id ) {
         return ( 0, $self->loc("This custom field does not apply to that object") );
     }
-    my ( $id, $msg ) = $ObjectCF->Delete;
+    # XXX: Delete doesn't return anything
+    my ( $oid, $msg ) = $ObjectCF->Delete;
 
-    return ( $id, $msg );
+    return ( $oid, $msg );
 }
 
 # {{{ AddValueForObject

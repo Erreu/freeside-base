@@ -149,7 +149,13 @@ sub Create {
  
     my $id = $self->SUPER::Create(%params);
     $self->Load($id);
-    $self->_Attach( $args{'MIMEObj'} ) if defined $args{'MIMEObj'};
+    if ( defined $args{'MIMEObj'} ) {
+        my ($id, $msg) = $self->_Attach( $args{'MIMEObj'} );
+        unless ( $id ) {
+            $RT::Logger->error("Couldn't add attachment: $msg");
+            return ( 0, $self->loc("Couldn't add attachment") );
+        }
+    }
 
 
     #Provide a way to turn off scrips if we need to
@@ -471,11 +477,11 @@ sub _Attach {
     }
 
     my $Attachment = new RT::Attachment( $self->CurrentUser );
-    $Attachment->Create(
+    my ($id, $msg) = $Attachment->Create(
         TransactionId => $self->Id,
         Attachment    => $MIMEObject
     );
-    return ( $Attachment, $self->loc("Attachment created") );
+    return ( $Attachment, $msg || $self->loc("Attachment created") );
 
 }
 
@@ -934,25 +940,29 @@ sub TicketObj {
 
 sub OldValue {
     my $self = shift;
-    if (my $type = $self->__Value('ReferenceType')) {
-	my $Object = $type->new($self->CurrentUser);
-	$Object->Load($self->__Value('OldReference'));
-	return $Object->Content;
+    if ( my $type = $self->__Value('ReferenceType')
+         and my $id = $self->__Value('OldReference') )
+    {
+        my $Object = $type->new($self->CurrentUser);
+        $Object->Load( $id );
+        return $Object->Content;
     }
     else {
-	return $self->__Value('OldValue');
+        return $self->__Value('OldValue');
     }
 }
 
 sub NewValue {
     my $self = shift;
-    if (my $type = $self->__Value('ReferenceType')) {
-	my $Object = $type->new($self->CurrentUser);
-	$Object->Load($self->__Value('NewReference'));
-	return $Object->Content;
+    if ( my $type = $self->__Value('ReferenceType')
+         and my $id = $self->__Value('NewReference') )
+    {
+        my $Object = $type->new($self->CurrentUser);
+        $Object->Load( $id );
+        return $Object->Content;
     }
     else {
-	return $self->__Value('NewValue');
+        return $self->__Value('NewValue');
     }
 }
 

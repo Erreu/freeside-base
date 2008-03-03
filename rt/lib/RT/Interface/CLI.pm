@@ -55,7 +55,7 @@ BEGIN {
     use vars qw ($VERSION  @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
     
     # set the version for version checking
-    $VERSION = do { my @r = (q$Revision: 1.1.1.3 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r }; # must be all one line, for MakeMaker
+    $VERSION = do { my @r = (q$Revision: 1.1.1.3.4.1 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r }; # must be all one line, for MakeMaker
     
     @ISA         = qw(Exporter);
     
