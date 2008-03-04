@@ -2217,6 +2217,7 @@ sub print_html {
                        s/\\\\\*/<br>/g;
                        s/\\dollar ?/\$/g;
                        s/\\#/#/g;
+                       s/~/&nbsp;/g;
                        $_;
                      } 
                      $conf->config_orbase('invoice_latexnotes', $template)
