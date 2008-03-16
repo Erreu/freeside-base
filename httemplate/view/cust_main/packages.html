@@ -8,7 +8,14 @@
 %      ) {
 %
 
-  <% popup_link('edit/quick-charge.html?custnum='. $cust_main->custnum, 'One-time charge', 'One-time charge', 545) %>
+  <% include('/elements/popup_link.html',
+     { 
+       'action'      => $p. 'edit/quick-charge.html?custnum='. $cust_main->custnum,
+       'label'       => 'One-time charge',
+       'actionlabel' => 'One-time charge',
+       'width'       => 545,
+     })
+  %>
   <BR>
 % } 
 % if ( $curuser->access_right('Bulk change customer packages') ) { 
@@ -407,9 +414,6 @@ sub pkg_status_row_colspan {
 
 }
 
-</%init>
-<%once>
-
 #subroutines
 
 sub get_packages {
@@ -489,75 +493,68 @@ sub pkg_datestr {
   $strip;
 }
 
- sub pkg_change_link    { pkg_popup_link('misc/change_pkg.cgi?dummy=value',
-                                           'Change&nbsp;package',
-                                           'Change',
-                                           @_
-                                        );
-                        }
+sub pkg_change_link { include( '/elements/popup_link-cust_pkg.html',
+                               { 'action'      => $p. 'misc/change_pkg.cgi?dummy=value',
+                                 'label'       => 'Change&nbsp;package',
+                                 'actionlabel' => 'Change',
+                                 'cust_pkg'    => shift,
+                               }
+                             )
+                     }
 
-sub pkg_suspend_link   { pkg_popup_link( 'misc/cancel_pkg.html?method=suspend',
-                                         'Suspend&nbsp;now',
-                                         'Suspend',
-                                         @_
-                                       );
-                       }
+sub pkg_suspend_link { include( '/elements/popup_link-cust_pkg.html',
+                                { 'action'      => $p. 'misc/cancel_pkg.html?method=suspend',
+                                  'label'       => 'Suspend&nbsp;now',
+                                  'actionlabel' => 'Suspend',
+                                  'cust_pkg'    => shift,
+                                }
+                              )
+                     }
 
 sub pkg_unsuspend_link { pkg_link('misc/unsusp_pkg',    'Unsuspend',           @_ ); }
 sub pkg_expire_link    { pkg_link('misc/expire_pkg',    'Cancel&nbsp;later',   @_ ); }
 sub pkg_dates_link     { pkg_link('edit/REAL_cust_pkg', 'Edit&nbsp;dates',     @_ ); }
 
-sub pkg_cancel_link    { pkg_popup_link( 'misc/cancel_pkg.html?method=cancel',
-                                         'Cancel&nbsp;now',
-                                         'Cancel',
-                                         @_
-                                       );
-                       }
-sub pkg_adjourn_link   { pkg_popup_link( 'misc/cancel_pkg.html?method=adjourn',
-                                         'Suspend&nbsp;later',
-                                         'Adjourn',
-                                         @_
-                                       );
-                       }
+sub pkg_cancel_link { include( '/elements/popup_link-cust_pkg.html',
+                               { 'action'      => $p. 'misc/cancel_pkg.html?method=cancel',
+                                 'label'       => 'Cancel&nbsp;now',
+                                 'actionlabel' => 'Cancel',
+                                 'cust_pkg'    => shift,
+                               }
+                             )
+                    }
 
-sub pkg_expire_link    { pkg_popup_link( 'misc/cancel_pkg.html?method=expire',
-                                         'Cancel&nbsp;later',
-                                         'Expire', #"Cancel package $num later"
-                                         @_
-                                       );
-                       }
+sub pkg_adjourn_link { include( '/elements/popup_link-cust_pkg.html',
+                                { 'action'      => $p. 'misc/cancel_pkg.html?method=adjourn',
+                                  'label'       => 'Suspend&nbsp;later',
+                                  'actionlabel' => 'Adjourn',
+                                  'cust_pkg'    => shift,
+                                }
+                              )
+                     }
 
-sub svc_recharge_link  { svc_popup_link( 'misc/recharge_svc.html',
-                                         'Recharge',
-                                         'Recharge',
-                                         @_
-                                       );
-                       }
+sub pkg_expire_link { include( '/elements/popup_link-cust_pkg.html',
+                               { 'action'      => $p. 'misc/cancel_pkg.html?method=expire',
+                                 'label'       => 'Cancel&nbsp;later',
+                                 'actionlabel' => 'Expire',
+                                 'cust_pkg'    => shift,
+                               }
+                             )
+                    }
+
+sub svc_recharge_link { include( '/elements/popup_link-cust_svc.html',
+                                 { 'action'      => $p. 'misc/recharge_svc.html',
+                                   'label'       => 'Recharge',
+                                   'actionlabel' => 'Recharge',
+                                   'cust_svc'    => shift,
+                                 }
+                               )
+                      }
 
 sub pkg_link {
   my($action, $label, $cust_pkg) = @_;
   return '' unless $cust_pkg;
   qq!<a href="$p$action.cgi?!. $cust_pkg->pkgnum. qq!">$label</a>!;
-}
-
-sub pkg_popup_link {
-  my($action, $label, $actionlabel, $cust_pkg) = @_;
-  $action .= '&pkgnum='. $cust_pkg->pkgnum;
-  $actionlabel .= ' package '. $cust_pkg->pkgnum;
-  popup_link($action, $label, $actionlabel, 768);
-}
-
-sub svc_popup_link {
-  my($action, $label, $actionlabel, $cust_svc) = @_;
-  $action .= '?svcnum='. $cust_svc->svcnum;
-  $actionlabel .= ' service '. $cust_svc->svcnum;
-  popup_link($action, $label, $actionlabel, 392);
-}
-
-sub popup_link {
-  my($action, $label, $actionlabel, $width) = @_;
-  $width ||= 540;
-  qq!<A HREF="javascript:void(0);" onClick="overlib( OLiframeContent('$p$action', $width, 336, 'pkg_or_svc_action_popup' ), CAPTION, '$actionlabel', STICKY, AUTOSTATUSCAP, MIDX, 0, MIDY, 0, DRAGGABLE, CLOSECLICK ); return false;">$label</A>!;
 }
 
 sub pkg_customize_link {
@@ -570,4 +567,4 @@ sub pkg_customize_link {
     qq!">Customize</A>!;
 }
 
-</%once>
+</%init>
