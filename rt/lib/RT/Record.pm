@@ -1211,8 +1211,37 @@ sub DependsOn {
 
 # }}}
 
+# {{{ Customers
 
+=head2 Customers
 
+  This returns an RT::Links object which references all the customers that this object is a member of.
+
+=cut
+
+sub Customers {
+    my( $self, %opt ) = @_;
+    my $Debug = $opt{'Debug'};
+
+    unless ( $self->{'Customers'} ) {
+
+      $self->{'Customers'} = $self->MemberOf->Clone;
+
+      $self->{'Customers'}->Limit(
+                                   FIELD    => 'Target',
+                                   OPERATOR => 'STARTSWITH',
+                                   VALUE    => 'freeside://freeside/cust_main/',
+                                 );
+    }
+
+    warn "->Customers method called on $self; returning ".
+         ref($self->{'Customers'}). ' object'
+      if $Debug;
+
+    return $self->{'Customers'};
+}
+
+# }}}
 
 # {{{ sub _Links 
 
