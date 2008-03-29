@@ -1,10 +1,5 @@
 %if ($error) {
-<<<<<<< quick-cust_pkg.cgi
-%  $cgi->param('error', $error);
-<% $cgi->redirect(popurl(3). 'misc/order_pkg.html?'. $cgi->query_string ) %>
-=======
 %  errorpage($error);
->>>>>>> 1.9.2.3
 %} else {
 <% $cgi->redirect(popurl(3). "view/cust_main.cgi?$custnum#cust_pkg". $cust_pkg[0]->pkgnum ) %>
 %}
