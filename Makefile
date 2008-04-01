@@ -55,6 +55,8 @@ INIT_INSTALL = /usr/sbin/update-rc.d freeside defaults 21 20
 
 #deb, suse
 HTTPD_RESTART = /etc/init.d/apache restart
+#deb w/apache2
+#HTTPD_RESTART = /etc/init.d/apache2 restart
 #redhat, fedora, mandrake
 #HTTPD_RESTART = /etc/init.d/httpd restart
 #freebsd
@@ -64,9 +66,11 @@ HTTPD_RESTART = /etc/init.d/apache restart
 #apache
 #HTTPD_RESTART = /usr/local/apache/bin/apachectl stop; sleep 10; /usr/local/apache/bin/apachectl startssl
 
-#(an include directory, not a file - "Include /etc/apache/conf.d" in httpd.conf)
-#deb (3.1+), 
+#(an include directory, not a file, "Include /etc/apache/conf.d" in httpd.conf)
+#deb (3.1+), apache1
 APACHE_CONF = /etc/apache/conf.d
+#deb (3.1+), apache2
+#APACHE_CONF = /etc/apache2/conf.d
 
 FREESIDE_RESTART = ${INIT_FILE} restart
 
@@ -111,8 +115,8 @@ RT_PATH = /opt/rt3
 FREESIDE_PATH = `pwd`
 PERL_INC_DEV_KLUDGE = /usr/local/share/perl/5.8.8/
 
-VERSION=1.7.2
-TAG=freeside_1_7_2
+VERSION=1.7.3rc1
+TAG=freeside_1_7_3rc1
 
 help:
 	@echo "supported targets:"
