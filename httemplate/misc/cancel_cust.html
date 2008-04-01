@@ -14,7 +14,7 @@
 
 <% ntable("#cccccc", 2) %>
 
-<% include('/elements/tr-select-reason.html', 'reasonnum', 'C', '', '', '', 'document.cust_cancel_popup.submit',
+<% include('/elements/tr-select-reason.html', 'reasonnum', 'C', '', '', '', "document.getElementById('confirm_cancel_cust_button')",
           )
 %>
 
@@ -22,7 +22,7 @@
 
 <BR>
 <P ALIGN="CENTER">
-<INPUT TYPE="submit" NAME="submit" VALUE="Cancel customer" disabled='true'> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<INPUT TYPE="BUTTON" VALUE="Don't cancel" onClick="parent.cClick();"> 
+<INPUT TYPE="submit" NAME="submit" ID="confirm_cancel_cust_button" VALUE="Cancel customer" DISABLED> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<INPUT TYPE="BUTTON" VALUE="Don't cancel" onClick="parent.cClick();"> 
 
 </FORM>
 </BODY>

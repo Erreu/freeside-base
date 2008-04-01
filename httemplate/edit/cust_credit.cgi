@@ -4,7 +4,7 @@
 
 <FORM NAME="credit_popup" ACTION="<% $p1 %>process/cust_credit.cgi" METHOD=POST>
 <INPUT TYPE="hidden" NAME="crednum" VALUE="">
-<INPUT TYPE="hidden" NAME="custnum" VALUE="<% $custnum %>">
+<INPUT TYPE="hidden" NAME="custnum" VALUE="<% $custnum |h %>">
 <INPUT TYPE="hidden" NAME="paybatch" VALUE="">
 <INPUT TYPE="hidden" NAME="_date" VALUE="<% $_date %>">
 <INPUT TYPE="hidden" NAME="credited" VALUE="">
@@ -20,14 +20,14 @@ Credit
 
   <TR>
     <TD ALIGN="right">Amount</TD>
-    <TD BGCOLOR="#ffffff">$<INPUT TYPE="text" NAME="amount" VALUE="<% $amount %>" SIZE=8 MAXLENGTH=8></TD>
+    <TD BGCOLOR="#ffffff">$<INPUT TYPE="text" NAME="amount" VALUE="<% $amount |h%>" SIZE=8 MAXLENGTH=8></TD>
   </TR>
 
 %
 %#print qq! <INPUT TYPE="checkbox" NAME="refund" VALUE="$refund">Also post refund!;
 %
 
-<% include('/elements/tr-select-reason.html', 'reasonnum', 'R', '', '', '', 'document.credit_popup.submit',) %>
+<% include('/elements/tr-select-reason.html', 'reasonnum', 'R', '', '', '', "document.getElementById('confirm_credit_button')") %>
 
   <TR>
     <TD ALIGN="right">Auto-apply<BR>to invoices</TD>
@@ -38,7 +38,7 @@ Credit
 
 <BR>
 
-<CENTER><INPUT TYPE="submit" VALUE="Enter credit"></CENTER>
+<CENTER><INPUT TYPE="submit" ID="confirm_credit_button" VALUE="Enter credit" DISABLED></CENTER>
 
 </FORM>
 </BODY>
@@ -53,27 +53,10 @@ my $conf = new FS::Conf;
 die "access denied"
   unless $FS::CurrentUser::CurrentUser->access_right('Post credit');
 
-my($custnum, $amount, $reason);
-if ( $cgi->param('error') ) {
-  #$cust_credit = new FS::cust_credit ( {
-  #  map { $_, scalar($cgi->param($_)) } fields('cust_credit')
-  #} );
-  $custnum = $cgi->param('custnum');
-  $amount = $cgi->param('amount');
-  #$refund = $cgi->param('refund');
-  $reason = $cgi->param('reason');
-} else {
-  my($query) = $cgi->keywords;
-  $query =~ /^(\d+)$/;
-  $custnum = $1;
-  $amount = '';
-  #$refund = 'yes';
-  $reason = '';
-}
-my $_date = time;
-
-my $otaker = getotaker;
-
-my $p1 = popurl(1);
+my $custnum = $cgi->param('custnum');
+my $amount  = $cgi->param('amount');
+my $_date   = time;
+my $otaker  = getotaker;
+my $p1      = popurl(1);
 
 </%init>

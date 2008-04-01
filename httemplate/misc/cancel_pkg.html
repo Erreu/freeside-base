@@ -39,12 +39,12 @@
 %}
 %
 
-<% include('/elements/tr-select-reason.html', 'reasonnum', $class, $reasonnum, '', '', 'document.sc_popup.submit' ) %>
+<% include('/elements/tr-select-reason.html', 'reasonnum', $class, $reasonnum, '', '', "document.getElementById('confirm_cancel_pkg_button')" ) %>
 
 </TABLE>
 
 <BR>
-<INPUT TYPE="submit" NAME="submit" VALUE="<% $submit %>" disabled='true'>
+<INPUT TYPE="submit" NAME="submit" VALUE="<% $submit %>" ID="confirm_cancel_pkg_button" VALUE="<% $submit %>" DISABLED>
 
 </FORM>
 </BODY>
