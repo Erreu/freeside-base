@@ -1,3 +1,265 @@
+2008-04-14 11:42  ivan
+
+	* Makefile: rc3
+
+2008-04-10 15:00  ivan
+
+	* rt/lib/RT/Ticket_Overlay.pm: use non-ACL'ed _AddLink instead of
+	  AddLink so that the auto-association stuff works when creating a
+	  ticket
+
+2008-04-09 14:44  ivan
+
+	* httemplate/docs/AGPL.html: file AGPL.html was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-04-09 21:44:28 +0000
+
+2008-04-09 14:44  ivan
+
+	* httemplate/docs/: AGPL.html: oops, adding explicit AGPL.html
+
+2008-04-08 20:33  ivan
+
+	* FS/FS/part_pkg/sqlradacct_hour.pm: fix hourly cap for SQL overage
+	  charges
+
+2008-04-07 22:53  ivan
+
+	* install/rpm/freeside.spec: Updated for 1.7.3rc2
+
+2008-04-07 22:52  ivan
+
+	* Makefile: rc2
+
+2008-04-07 22:49  ivan
+
+	* debian/prerm: file prerm was added on branch FREESIDE_1_7_BRANCH
+	  on 2008-04-08 05:49:21 +0000
+
+2008-04-07 22:49  ivan
+
+	* debian/templates: file templates was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-04-08 05:49:21 +0000
+
+2008-04-07 22:49  ivan
+
+	* debian/cron.d: file cron.d was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-04-08 05:49:20 +0000
+
+2008-04-07 22:49  ivan
+
+	* debian/dbconfig-common.install: file dbconfig-common.install was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-04-08 05:49:20 +0000
+
+2008-04-07 22:49  ivan
+
+	* debian/dbconfig-common.upgrade: file dbconfig-common.upgrade was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-04-08 05:49:20 +0000
+
+2008-04-07 22:49  ivan
+
+	* debian/freeside-webui.links: file freeside-webui.links was added
+	  on branch FREESIDE_1_7_BRANCH on 2008-04-08 05:49:21 +0000
+
+2008-04-07 22:49  ivan
+
+	* debian/freeside.apache-alias.conf: file
+	  freeside.apache-alias.conf was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-04-08 05:49:21 +0000
+
+2008-04-07 22:49  ivan
+
+	* debian/freeside.default: file freeside.default was added on
+	  branch FREESIDE_1_7_BRANCH on 2008-04-08 05:49:21 +0000
+
+2008-04-07 22:49  ivan
+
+	* debian/freeside.docs: file freeside.docs was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-04-08 05:49:21 +0000
+
+2008-04-07 22:49  ivan
+
+	* debian/init.d.lsb.ex: file init.d.lsb.ex was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-04-08 05:49:21 +0000
+
+2008-04-07 22:49  ivan
+
+	* debian/postinst: file postinst was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-04-08 05:49:21 +0000
+
+2008-04-07 22:49  ivan
+
+	* debian/postrm: file postrm was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-04-08 05:49:21 +0000
+
+2008-04-07 22:49  ivan
+
+	* debian/preinst: file preinst was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-04-08 05:49:21 +0000
+
+2008-04-07 22:49  ivan
+
+	* debian/: TODO, compat, config, cron.d, dbconfig-common.install,
+	  dbconfig-common.upgrade, freeside-webui.links,
+	  freeside.apache-alias.conf, freeside.default, freeside.docs,
+	  init.d.lsb.ex, postinst, postrm, preinst, prerm, templates,
+	  README.Debian, changelog, conffiles.ex, control, copyright,
+	  cron.d.ex, dirs, docs, ex.doc-base.package, freeside-doc.docs,
+	  freeside-doc.files, init.d.ex, manpage.1.ex, manpage.sgml.ex,
+	  menu.ex, postinst.ex, postrm.ex, preinst.ex, prerm.ex, rules,
+	  watch.ex: debian packages!
+
+2008-04-07 22:49  ivan
+
+	* debian/TODO: file TODO was added on branch FREESIDE_1_7_BRANCH on
+	  2008-04-08 05:49:19 +0000
+
+2008-04-07 22:49  ivan
+
+	* debian/compat: file compat was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-04-08 05:49:20 +0000
+
+2008-04-07 22:49  ivan
+
+	* debian/config: file config was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-04-08 05:49:20 +0000
+
+2008-04-05 00:00  ivan
+
+	* FS/bin/freeside-prepaidd: configurable logfile location for
+	  freeside-prepaidd
+
+2008-04-04 12:47  ivan
+
+	* httemplate/elements/header.html: sync with HEAD
+
+2008-04-03 15:47  rsiddall
+
+	* httemplate/elements/header.html: Missing comma in argument list
+	  causes Mason compilation error.
+
+2008-04-02 10:28  ivan
+
+	* Makefile: substitute FREESIDE_CONF in apache conf files
+
+2008-04-02 10:26  ivan
+
+	* htetc/: freeside-base1.99.conf, freeside-base1.conf,
+	  freeside-base2.conf: template AuthUserFile htpasswd to be in
+	  FREESIDE_CONF dir instead of hardcoded location
+
+2008-04-02 09:57  rsiddall
+
+	* Makefile: Quick fix to update the release version number in the
+	  RPM spec file.  This leaves the spec file unusable for CVS
+	  builds.
+
+2008-04-02 08:38  ivan
+
+	* init.d/freeside-init: tiny init file nit that helps with deb
+	  packaging (and probably rpm too) - source /etc/default/freeside
+	  if it exists
+
+2008-04-01 21:32  ivan
+
+	* httemplate/docs/credits.html: slight browser adjustments and DONE
+
+2008-04-01 21:20  ivan
+
+	* httemplate/elements/header.html: new header about: box
+
+2008-04-01 21:19  ivan
+
+	* httemplate/docs/about.html: adding about.html on 1.7
+
+2008-04-01 21:19  ivan
+
+	* httemplate/docs/about.html: file about.html was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-04-02 04:19:37 +0000
+
+2008-04-01 21:19  ivan
+
+	* httemplate/docs/about.html: slightly taller
+
+2008-04-01 21:09  ivan
+
+	* httemplate/docs/: credits.html, license.html: fckeditor is unused
+	  in 1.7
+
+2008-04-01 21:07  ivan
+
+	* httemplate/docs/: credits.html, license.html: updated credits and
+	  license
+
+2008-04-01 21:05  ivan
+
+	* httemplate/docs/about.html: adding about.html splash
+
+2008-04-01 20:48  ivan
+
+	* httemplate/elements/popup_link_onclick.html: remove excessive
+	  iframe borders, add "scrolling" and "nofalse" options
+
+2008-04-01 17:23  ivan
+
+	* httemplate/elements/init_overlib.html: sync with HEAD
+
+2008-04-01 17:22  ivan
+
+	* FS/FS/cust_pay.pm: don't do (as much) useless work on upgrade
+
+2008-04-01 16:56  ivan
+
+	* httemplate/elements/iframecontentmws.js: fix hasty safari iframe
+	  fix
+
+2008-04-01 16:30  ivan
+
+	* httemplate/docs/: credits.html, license.html: adding license and
+	  credits in app itself
+
+2008-04-01 16:30  ivan
+
+	* httemplate/docs/credits.html: file credits.html was added on
+	  branch FREESIDE_1_7_BRANCH on 2008-04-01 23:30:09 +0000
+
+2008-04-01 16:30  ivan
+
+	* httemplate/docs/license.html: file license.html was added on
+	  branch FREESIDE_1_7_BRANCH on 2008-04-01 23:30:09 +0000
+
+2008-04-01 16:24  ivan
+
+	* TODO: remove TODO
+
+2008-04-01 16:24  ivan
+
+	* SCHEMA_CHANGE: remove SCHEMA_CHANGE
+
+2008-04-01 16:20  ivan
+
+	* README: welcome to the new world
+
+2008-04-01 16:15  ivan
+
+	* install/README: [no log message]
+
+2008-04-01 16:15  ivan
+
+	* INSTALL: clean up top level files
+
+2008-04-01 16:08  ivan
+
+	* INSTALL, CREDITS: clean up some of the top-level files
+
+2008-04-01 15:34  ivan
+
+	* ChangeLog: current 1.7 ChangeLog
+
+2008-04-01 08:55  rsiddall
+
+	* httemplate/elements/init_overlib.html: Missing % causes closing
+	  brace to be omitted from Perl compilation.
+
 2008-04-01 02:40  ivan
 
 	* Makefile: last of the silly version numbers
@@ -18584,10 +18846,10 @@
 
 	* FS/MANIFEST, FS/FS/part_export.pm,
 	  FS/FS/part_export/infostreet.pm, FS/FS/part_export/sqlradius.pm,
-	  fs_selfadmin/fs_mailadmin_server, httemplate/index.html,
-	  httemplate/edit/part_export.cgi: Checkin of disparate changes
-	  from working on the road: - generic SQL query - move exports out
-	  to their own files - small cleanup of selfadmin server
+	  httemplate/index.html, httemplate/edit/part_export.cgi: Checkin
+	  of disparate changes from working on the road: - generic SQL
+	  query - move exports out to their own files - small cleanup of
+	  selfadmin server
 
 2002-03-29 09:27  ivan
 
@@ -20308,8 +20570,7 @@
 
 	* FS/FS.pm, FS/MANIFEST, FS/FS/Conf.pm, FS/FS/ConfItem.pm,
 	  FS/FS/svc_acct.pm, FS/FS/svc_domain.pm, FS/t/ConfItem.t,
-	  fs_webdemo/registerd.Pg, httemplate/index.html,
-	  httemplate/config/config-process.cgi,
+	  httemplate/index.html, httemplate/config/config-process.cgi,
 	  httemplate/config/config-view.cgi,
 	  httemplate/search/svc_acct.cgi: preliminary web config editor
 
@@ -20353,23 +20614,6 @@
 	  httemplate/edit/process/cust_main.cgi,
 	  httemplate/edit/process/part_pkg.cgi: setup and recurring fee tax
 	  exempt flags, UI to edit rework part_pkg editing UI some more
-
-2001-10-18 08:49  jeff
-
-	* fs_selfadmin/FS-MailAdminServer/cgi/mailadmin.cgi: tyop ... or
-	  something
-
-2001-10-18 08:30  jeff
-
-	* fs_selfadmin/README: rudimentary self-admin instructions
-
-2001-10-18 08:04  jeff
-
-	* fs_selfadmin/: fs_mailadmin_server,
-	  FS-MailAdminServer/MailAdminClient.pm,
-	  FS-MailAdminServer/fs_mailadmind,
-	  FS-MailAdminServer/cgi/mailadmin.cgi: preliminary self
-	  administration
 
 2001-10-15 07:58  ivan
 
@@ -20483,10 +20727,6 @@
 2001-09-30 13:30  ivan
 
 	* FS/FS/svc_acct.pm: username-uppercase config file
-
-2001-09-30 00:55  ivan
-
-	* fs_webdemo/registerd.Pg: purge message
 
 2001-09-27 14:49  ivan
 
@@ -21431,30 +21671,6 @@
 	* bin/svc_acct.import:
 	  http://www.sisd.com/freeside/list-archive/msg01915.html
 
-2001-04-25 19:28  ivan
-
-	* fs_webdemo/registerd.Pg: argh
-
-2001-04-25 19:23  ivan
-
-	* fs_webdemo/registerd.Pg: arfuckingargh
-
-2001-04-25 19:21  ivan
-
-	* fs_webdemo/registerd.Pg: ARG
-
-2001-04-25 19:20  ivan
-
-	* fs_webdemo/registerd.Pg: arg
-
-2001-04-25 19:18  ivan
-
-	* fs_webdemo/registerd.Pg: argh
-
-2001-04-25 17:17  ivan
-
-	* fs_webdemo/: registerd.Pg: sigh
-
 2001-04-23 12:50  ivan
 
 	* FS/FS/cust_credit.pm: the real
@@ -21472,10 +21688,6 @@
 
 	* FS/FS/cust_credit.pm: webdemo bugfix
 
-2001-04-23 09:25  ivan
-
-	* fs_webdemo/registerd.Pg: working registerd.Pg
-
 2001-04-23 08:37  ivan
 
 	* FS/MANIFEST: 1.3.1 sigh
@@ -21487,8 +21699,7 @@
 
 2001-04-23 05:40  ivan
 
-	* FS/FS.pm, fs_webdemo/registerd.Pg: documentation and webdemo
-	  updates
+	* FS/FS.pm: documentation and webdemo updates
 
 2001-04-23 02:00  ivan
 
@@ -21537,11 +21748,6 @@
 2001-04-15 03:33  ivan
 
 	* CREDITS, TODO: better docs for the worst bit, finally
-
-2001-04-15 00:25  ivan
-
-	* fs_sesmon/FS-SessionClient/cgi/: login.cgi, logout.cgi: oops,
-	  extraneous code causing problems, thanks to Mack for bugreport
 
 2001-04-09 16:05  ivan
 
@@ -21608,8 +21814,8 @@
 2001-02-03 06:03  ivan
 
 	* FS/FS/Record.pm, FS/FS/UID.pm, FS/FS/cust_main.pm,
-	  bin/generate-prepay, fs_sesmon/fs_session_server: time-based
-	  prepaid cards, session monitor.  woop!
+	  bin/generate-prepay: time-based prepaid cards, session monitor.
+	  woop!
 
 2001-01-30 23:21  ivan
 
@@ -21635,16 +21841,6 @@
 
 	* TODO: ancient stuff out of my inbox
 
-2000-12-10 13:16  ivan
-
-	* fs_sesmon/FS-SessionClient/fs_sessiond: fix uninitialized value
-	  errors
-
-2000-12-08 18:53  ivan
-
-	* fs_sesmon/FS-SessionClient/cgi/login.cgi: layout nicely thanks to
-	  matt peterson <matt@peterson.org>
-
 2000-12-08 14:22  ivan
 
 	* FS/FS/session.pm: session callbacks
@@ -21653,27 +21849,10 @@
 
 	* FS/FS/Record.pm: DESTROY sub
 
-2000-12-03 13:45  ivan
-
-	* fs_sesmon/FS-SessionClient/MANIFEST: tyop
-
-2000-12-03 13:13  ivan
-
-	* fs_sesmon/FS-SessionClient/cgi/: login.cgi, logout.cgi: oops,
-	  forgot the web apps
-
 2000-12-03 12:25  ivan
 
 	* TODO, FS/FS/Record.pm, FS/FS/nas.pm, FS/FS/port.pm,
-	  FS/FS/session.pm, fs_sesmon/fs_session_server,
-	  fs_sesmon/FS-SessionClient/MANIFEST,
-	  fs_sesmon/FS-SessionClient/Makefile.PL,
-	  fs_sesmon/FS-SessionClient/SessionClient.pm,
-	  fs_sesmon/FS-SessionClient/fs_sessiond,
-	  fs_sesmon/FS-SessionClient/test.pl,
-	  fs_sesmon/FS-SessionClient/bin/freeside-login,
-	  fs_sesmon/FS-SessionClient/bin/freeside-logout: session monitor
-	  updates
+	  FS/FS/session.pm: session monitor updates
 
 2000-12-03 07:14  ivan
 
@@ -21699,11 +21878,8 @@
 
 2000-11-07 07:00  ivan
 
-	* FS/MANIFEST, FS/FS/Record.pm, FS/FS/nas.pm, FS/FS/session.pm,
-	  fs_sesmon/fs_session_server, fs_sesmon/FS-SessionClient/MANIFEST,
-	  fs_sesmon/FS-SessionClient/Makefile.PL,
-	  fs_sesmon/FS-SessionClient/SessionClient.pm,
-	  fs_sesmon/FS-SessionClient/bin/freeside-login: session monitor
+	* FS/: MANIFEST, FS/Record.pm, FS/nas.pm, FS/session.pm: session
+	  monitor
 
 2000-10-27 13:18  ivan
 
@@ -21712,14 +21888,7 @@
 
 2000-10-27 13:15  ivan
 
-	* TODO, FS/FS/Record.pm, eg/table_template.pm,
-	  fs_sesmon/fs_session_server, fs_sesmon/FS-SessionClient/Changes,
-	  fs_sesmon/FS-SessionClient/MANIFEST,
-	  fs_sesmon/FS-SessionClient/MANIFEST.SKIP,
-	  fs_sesmon/FS-SessionClient/Makefile.PL,
-	  fs_sesmon/FS-SessionClient/SessionClient.pm,
-	  fs_sesmon/FS-SessionClient/fs_sessiond,
-	  fs_sesmon/FS-SessionClient/test.pl: session monitor
+	* TODO, FS/FS/Record.pm, eg/table_template.pm: session monitor
 
 2000-10-15 05:58  ivan
 
@@ -21902,70 +22071,15 @@
 	* FS/FS/CGI.pm: use Apache::exit instead of exit in &eidiot -
 	  Registry wasn't overriding exit in modules
 
-2000-03-03 10:22  ivan
-
-	* fs_webdemo/register.cgi: changes from 1.2.3 release, fixes from
-	  webdemo
-
 2000-03-03 10:21  ivan
 
 	* FS/FS/Record.pm: changes backported from 1.2.3 release, bugfix
 	  from web demo
 
-2000-03-03 04:27  ivan
-
-	* fs_webdemo/registerd: silly typo
-
-2000-03-02 22:36  ivan
-
-	* fs_webdemo/registerd: [no log message]
-
-2000-03-02 22:28  ivan
-
-	* fs_webdemo/registerd: kludge but effective
-
-2000-03-02 22:10  ivan
-
-	* fs_webdemo/registerd: [no log message]
-
-2000-03-02 22:03  ivan
-
-	* fs_webdemo/registerd: [no log message]
-
-2000-03-02 21:47  ivan
-
-	* fs_webdemo/registerd: [no log message]
-
-2000-03-02 21:32  ivan
-
-	* fs_webdemo/register.cgi: fix silly syntax errors
-
-2000-03-02 21:29  ivan
-
-	* fs_webdemo/: register.cgi, registerd: first pass at separate
-	  registerd process
-
-2000-03-01 00:22  ivan
-
-	* fs_webdemo/: register.html: [no log message]
-
-2000-03-01 00:19  ivan
-
-	* fs_webdemo/register.html: x
-
-2000-03-01 00:15  ivan
-
-	* fs_webdemo/: register.cgi, register.html, registerd: queuing
-	  webdemo registration
-
 2000-03-01 00:13  ivan
 
 	* FS/: MANIFEST, FS/svc_domain.pm, FS/svc_www.pm: compilation
 	  bugfixes
-
-2000-02-24 03:08  ivan
-
-	* fs_webdemo/register.cgi: initial checkin
 
 2000-02-02 21:16  ivan
 
@@ -22369,10 +22483,6 @@
 1998-06-03 00:22  ivan
 
 	* bin/dbdef-create: Initial revision
-
-1998-04-16 13:34  ivan
-
-	* fs_radlog/fs_radlogd: Initial import into CVS
 
 1998-03-22 23:46  ivan
 
