@@ -698,7 +698,7 @@ sub Create {
       #first find any requestors with emails but *without* customer targets
       my @NoCust_Requestors =
         grep { $_->EmailAddress && ! $_->Customers->Count }
-             @{ $self->Requestors->UserMembersObj->ItemsArrayRef };
+             @{ $self->_Requestors->UserMembersObj->ItemsArrayRef };
 
       for my $Requestor (@NoCust_Requestors) {
 
@@ -726,7 +726,7 @@ sub Create {
   
       my @Requestors =
         grep { $_->Customers->Count }
-             @{ $self->Requestors->UserMembersObj->ItemsArrayRef };
+             @{ $self->_Requestors->UserMembersObj->ItemsArrayRef };
   
       foreach my $Requestor ( @Requestors ) {
         foreach my $cust_link ( @{ $Requestor->Customers->ItemsArrayRef } ) {
@@ -1782,6 +1782,25 @@ sub Requestors {
 
 # }}}
 
+# {{{ sub _Requestors
+
+=head2 _Requestors
+
+Private non-ACLed variant of Reqeustors so that we can look them up for the
+purposes of customer auto-association during create.
+
+=cut
+
+sub _Requestors {
+    my $self = shift:
+
+    my $group = RT::Group->new($RT::SystemUser);
+    $group->LoadTicketRoleGroup(Type => 'Requestor', Ticket => $self->Id);
+    return ($group);
+}
+
+% }}}
+
 # {{{ sub Cc
 
 =head2 Cc
@@ -2504,7 +2523,13 @@ sub _Links {
 
     unless ( $self->{"$field$type"} ) {
         $self->{"$field$type"} = new RT::Links( $self->CurrentUser );
-        if ( $self->CurrentUserHasRight('ShowTicket') ) {
+
+        #not sure what this ACL was supposed to do... but returning the
+        # bare (unlimited) RT::Links certainly seems wrong, it causes the
+        # $Ticket->Customers method during creation to return results for every
+        # ticket...
+        #if ( $self->CurrentUserHasRight('ShowTicket') ) {
+
             # Maybe this ticket is a merged ticket
             my $Tickets = new RT::Tickets( $self->CurrentUser );
             # at least to myself
@@ -2521,7 +2546,7 @@ sub _Links {
             $self->{"$field$type"}->Limit( FIELD => 'Type',
                                            VALUE => $type )
               if ($type);
-        }
+        #}
     }
     return ( $self->{"$field$type"} );
 }
