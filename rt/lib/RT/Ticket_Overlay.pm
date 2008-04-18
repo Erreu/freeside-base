@@ -1799,7 +1799,7 @@ sub _Requestors {
     return ($group);
 }
 
-% }}}
+# }}}
 
 # {{{ sub Cc
 
