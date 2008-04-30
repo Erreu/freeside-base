@@ -1,3 +1,15 @@
+freeside (ERSION-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- Ivan Kohler <ivan-debian@420.am>  Wed, 30 Apr 2008 16:22:33 -0700
+
+freeside (1.7.3~rc3-1) unstable; urgency=low
+
+  * New "upstream" (RC) release.
+
+ -- Ivan Kohler <ivan-debian@420.am>  Mon, 21 Apr 2008 09:32:35 -0700
+
 freeside (1.7.3~rc2-1) unstable; urgency=low
 
   * Initial release

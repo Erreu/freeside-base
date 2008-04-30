@@ -1,6 +1,59 @@
+2008-04-30 16:19  ivan
+
+	* Makefile: last minute release target update.	not particularly
+	  dangerous, nobody uses it but me
+
+2008-04-24 16:15  ivan
+
+	* FS/MANIFEST: reverting MANIFEST changes that should not have been
+	  committed in the first place...
+
+2008-04-18 19:42  ivan
+
+	* install/rpm/freeside.spec: Updated for 1.7.3rc3
+
+2008-04-18 14:27  ivan
+
+	* rt/lib/RT/Ticket_Overlay.pm: blah.  last silly typo hopefully.
+	  wish this was easier to test.
+
+2008-04-18 14:25  ivan
+
+	* rt/lib/RT/Ticket_Overlay.pm: silly semicolon
+
+2008-04-18 14:19  ivan
+
+	* rt/lib/RT/: Ticket_Overlay.pm, URI/freeside.pm: hopefully,
+	  finally fix ticket auto-association not getting along with RT
+	  ACLs
+
+2008-04-18 09:27  jeff
+
+	* httemplate/: browse/addr_block.cgi, browse/router.cgi,
+	  edit/process/addr_block/allocate.cgi: backout browse changes
+	  until 1.7.4
+
+2008-04-17 20:29  jeff
+
+	* FS/t/addr_block.t, FS/t/router.t,
+	  httemplate/browse/addr_block.cgi, httemplate/browse/router.cgi,
+	  httemplate/edit/allocate.html, FS/MANIFEST,
+	  httemplate/edit/process/addr_block/add.cgi,
+	  httemplate/edit/process/addr_block/allocate.cgi,
+	  httemplate/edit/process/addr_block/deallocate.cgi,
+	  httemplate/edit/process/addr_block/split.cgi: drag address and
+	  router even farther into the century
+
+2008-04-16 11:32  jeff
+
+	* FS/FS/cust_pkg.pm, FS/FS/cust_pkg_reason.pm,
+	  httemplate/view/cust_main/packages.html: show user who created
+	  (cancel/suspend) reason and possibly fix a lingering spurious
+	  usergroup bug
+
 2008-04-14 11:42  ivan
 
-	* Makefile: rc3
+	* Makefile, ChangeLog: rc3
 
 2008-04-10 15:00  ivan
 
