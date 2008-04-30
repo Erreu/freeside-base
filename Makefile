@@ -120,6 +120,8 @@ PERL_INC_DEV_KLUDGE = /usr/local/share/perl/5.8.8/
 VERSION=1.7.3rc3
 TAG=freeside_1_7_3rc3
 
+DEBVERSION = `echo $VERSION | perl -pe 's/(\d)([a-z])/\1~\2/'`-1
+
 help:
 	@echo "supported targets:"
 	@echo "                   create-database create-config"
@@ -349,12 +351,19 @@ clean:
 #these are probably only useful if you're me...
 
 #release: upload-docs
+.PHONY: release
 release:
-	cd /home/ivan/freeside
+	# Update the changelog
+	./CVS2CL
+	cvs commit -m "Updated for ${VERSION}" ChangeLog
 
 	# Update the RPM specfile
 	perl -p -i -e "s/\d+[^\}]+/${VERSION}/ if /%define\s+version\s+(\d+[^\}]+)\}/;" ${RPM_SPECFILE}
 	cvs commit -m "Updated for ${VERSION}" ${RPM_SPECFILE}
+
+	# Update the Debian changelog
+	dch -v ${DEBVERSION} -p "New upstream release"
+	cvs commit -m "Updated for ${VERSION}" debian/changelog
 
 	#cvs tag ${TAG}
 	cvs tag -F ${TAG}
@@ -365,6 +374,19 @@ release:
 
 	scp freeside-${VERSION}.tar.gz ivan@420.am:/var/www/www.sisd.com/freeside/
 	mv freeside-${VERSION} freeside-${VERSION}.tar.gz ..
+
+	#these things failing should not make release target fail, so: "|| true"
+
+	#kick off vmware update
+	#./BUILD_VMWARE_APPLIANCE ${$TAG} || true
+
+	#kick off deb package update
+
+	#kick off rpm package update too?
+
+	#update web demo?
+
+	#update web demo self-service?
 
 update-webdemo:
 	ssh ivan@420.am '( cd freeside; cvs update -d -P )'
