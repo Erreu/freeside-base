@@ -117,10 +117,10 @@ RT_PATH = /opt/rt3
 FREESIDE_PATH = `pwd`
 PERL_INC_DEV_KLUDGE = /usr/local/share/perl/5.8.8/
 
-VERSION=1.7.3rc3
-TAG=freeside_1_7_3rc3
+VERSION=1.7.3
+TAG=freeside_1_7_3
 
-DEBVERSION = `echo $VERSION | perl -pe 's/(\d)([a-z])/\1~\2/'`-1
+DEBVERSION = `echo ${VERSION} | perl -pe 's/(\d)([a-z])/\1~\2/'`-1
 
 help:
 	@echo "supported targets:"
