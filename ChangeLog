@@ -1,3 +1,16 @@
+2008-04-30 16:26  ivan
+
+	* Makefile: 1.7.3
+
+2008-04-30 16:25  ivan
+
+	* debian/changelog: reverting bad change
+
+2008-04-30 16:22  ivan
+
+	* ChangeLog, install/rpm/freeside.spec, debian/changelog: Updated
+	  for 1.7.3
+
 2008-04-30 16:19  ivan
 
 	* Makefile: last minute release target update.	not particularly
