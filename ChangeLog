@@ -1,3 +1,19 @@
+2008-04-30 16:42  ivan
+
+	* Makefile: not here
+
+2008-04-30 16:36  ivan
+
+	* Makefile: that explains the bs with ChangeLog
+
+2008-04-30 16:34  ivan
+
+	* debian/changelog: reverting one last time.  this should do it
+
+2008-04-30 16:33  ivan
+
+	* ChangeLog: Updated for 1.7.3
+
 2008-04-30 16:29  ivan
 
 	* Makefile: last last-minute fix for last-minute change
