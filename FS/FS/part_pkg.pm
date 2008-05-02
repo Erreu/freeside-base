@@ -773,6 +773,68 @@ sub calc_cancel { 0; }
 
 =back
 
+sub _upgrade_data { # class method
+  my($class, %opts) = @_;
+
+  warn "[FS::part_pkg] upgrading $class\n" if $DEBUG;
+
+  my @part_pkg = qsearch({
+    'table'     => 'part_pkg',
+    'extra_sql' => "WHERE ". join(' OR ',
+                     ( map "($_ IS NOT NULL AND $_ != '' )",
+                           qw( plandata setup recur ) ),
+                     'plan IS NULL', "plan = '' ",
+                   ),
+  });
+
+  foreach my $part_pkg (@part_pkg) {
+
+    unless ( $part_pkg->plan ) {
+
+      $part_pkg->plan('flat');
+
+      if ( $part_pkg->setup =~ /^\s*([\d\.]+)\s*$/ ) {
+
+        my $opt = new FS::part_pkg_option {
+          'pkgpart'     => $part_pkg->pkgpart,
+          'optionname'  => 'setup_fee',
+          'optionvalue' => $1,
+        };
+        my $error = $opt->insert;
+        die $error if $error;
+
+        $part_pkg->setup('');
+
+      } else {
+        die "Can't parse part_pkg.setup for fee; convert pkgnum ".
+            $part_pkg->pkgnum. " manually: ". $part_pkg->setup. "\n";
+      }
+
+      if ( $part_pkg->recur =~ /^\s*([\d\.]+)\s*$/ ) {
+
+        my $opt = new FS::part_pkg_option {
+          'pkgpart'     => $part_pkg->pkgpart,
+          'optionname'  => 'recur_fee',
+          'optionvalue' => $1,
+        };
+        my $error = $opt->insert;
+        die $error if $error;
+
+        $part_pkg->recur('');
+
+      } else {
+        die "Can't parse part_pkg.setup for fee; convert pkgnum ".
+            $part_pkg->pkgnum. " manually: ". $part_pkg->setup. "\n";
+      }
+
+    }
+
+    $part_pkg->replace; #this should take care of plandata, right?
+
+  }
+
+}
+
 =head1 SUBROUTINES
 
 =over 4
