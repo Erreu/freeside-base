@@ -773,6 +773,12 @@ sub calc_cancel { 0; }
 
 =back
 
+=cut
+
+# _upgrade_data
+#
+# Used by FS::Upgrade to migrate to a new database.
+
 sub _upgrade_data { # class method
   my($class, %opts) = @_;
 
