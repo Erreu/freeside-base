@@ -13,24 +13,6 @@ function areyousure(href, message) {
 }
 </SCRIPT>
 
-<SCRIPT TYPE="text/javascript">
-%
-%my $ban = '';
-%if ( $cust_main->payby =~ /^(CARD|DCRD|CHEK|DCHK)$/ ) {
-%  $ban = '<BR><P ALIGN="center">'.
-%         '<INPUT TYPE="checkbox" NAME="ban" VALUE="1"> Ban this customer\\\'s ';
-%  if ( $cust_main->payby =~ /^(CARD|DCRD)$/ ) {
-%    $ban .= 'credit card';
-%  } elsif (  $cust_main->payby =~ /^(CHEK|DCHK)$/ ) {
-%    $ban .= 'ACH account';
-%  }
-%}
-%
-
-
-var confirm_cancel = '<FORM METHOD="POST" ACTION="<% $p %>misc/cust_main-cancel.cgi"> <INPUT TYPE="hidden" NAME="custnum" VALUE="<% $custnum %>"> <BR><P ALIGN="center"><B>Permanently delete all services and cancel this customer?</B> <% $ban%><BR><P ALIGN="CENTER"> <INPUT TYPE="submit" VALUE="Cancel customer">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<INPUT TYPE="BUTTON" VALUE="Don\'t cancel" onClick="cClick()"> </FORM> ';
-
-</SCRIPT>
 % if ( $curuser->access_right('Cancel customer')
 %        && $cust_main->ncancelled_pkgs
 %      ) {
@@ -45,28 +27,23 @@ var confirm_cancel = '<FORM METHOD="POST" ACTION="<% $p %>misc/cust_main-cancel.
             )
   %> | 
 
-% } 
+% }
+
 % if ( $conf->exists('deletecustomers')
 %        && $curuser->access_right('Delete customer')
 %      ) {
-%
-
   <A HREF="<% $p %>misc/delete-customer.cgi?<% $custnum%>">Delete this customer</A> | 
 % } 
-% unless ( $conf->exists('disable_customer_referrals') ) { 
 
-  <A HREF="<% popurl(2) %>edit/cust_main.cgi?referral_custnum=<% $custnum %>">Refer a new customer</A> | 
-  <A HREF="<% popurl(2) %>search/cust_main.cgi?referral_custnum=<% $custnum %>">View this customer's referrals</A>
+% unless ( $conf->exists('disable_customer_referrals') ) { 
+  <A HREF="<% $p %>edit/cust_main.cgi?referral_custnum=<% $custnum %>">Refer a new customer</A> | 
+  <A HREF="<% $p %>search/cust_main.cgi?referral_custnum=<% $custnum %>">View this customer's referrals</A>
 % } 
 
-
-
 <BR><BR>
-%
+
 %my $signupurl = $conf->config('signupurl');
 %if ( $signupurl ) {
-%
-
   This customer's signup URL: <A HREF="<% $signupurl %>?ref=<% $custnum %>"><% $signupurl %>?ref=<% $custnum %></A><BR><BR>
 % } 
 
@@ -174,9 +151,9 @@ die "No customer specified (bad URL)!" unless $cgi->keywords;
 my($query) = $cgi->keywords; # needs parens with my, ->keywords returns array
 $query =~ /^(\d+)$/;
 my $custnum = $1;
-my $cust_main = qsearchs({
+my $cust_main = qsearchs( {
   'table'     => 'cust_main',
-  'hashref'   => {'custnum'=>$custnum},
+  'hashref'   => { 'custnum' => $custnum },
   'extra_sql' => ' AND '. $curuser->agentnums_sql,
 });
 die "Customer not found!" unless $cust_main;

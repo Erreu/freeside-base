@@ -14,7 +14,7 @@
 
 <% ntable("#cccccc", 2) %>
 
-<% include('/elements/tr-select-reason.html', 'reasonnum', 'C', '', '', '', "document.getElementById('confirm_cancel_cust_button')",
+<% include('/elements/tr-select-reason.html', 'reasonnum', 'C', $reasonnum, '', '', "document.getElementById('confirm_cancel_cust_button')",
           )
 %>
 
@@ -30,24 +30,19 @@
 
 <%init>
 
-my($custnum, $reasonnum, $submit, $cust_main, $curuser, $class); 
+$cgi->param('custnum') =~ /^(\d+)$/ or die 'illegal custnum';
+my $custnum = $1;
+
+my $reasonnum = '';
 if ( $cgi->param('error') ) {
-  $custnum        = $cgi->param('custnum');
-  $reasonnum     = $cgi->param('reasonnum');
-} else {
-  my( $query ) = $cgi->keywords;
-  if ( $query =~ /^(\d+)$/ ) {
-    $custnum  = $1;
-  } else {
-    die "illegal query ". $cgi->keywords;
-  }
+  $reasonnum = $cgi->param('reasonnum');
 }
 
-$curuser = $FS::CurrentUser::CurrentUser;
+my $curuser = $FS::CurrentUser::CurrentUser;
 
 die "access denied" unless $curuser->access_right('Cancel customer');
 
-$cust_main = qsearchs( {
+my $cust_main = qsearchs( {
   'table'     => 'cust_main',
   'hashref'   => { 'custnum' => $custnum },
   'extra_sql' => ' AND '. $FS::CurrentUser::CurrentUser->agentnums_sql,
