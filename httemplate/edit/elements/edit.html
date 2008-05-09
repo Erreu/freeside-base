@@ -199,6 +199,10 @@ Example:
 %     'html_between'  => $f->{'html_between'},
 %   );
 %
+%   #select-table
+%   $include_common{$_} = $f->{$_}
+%     foreach grep exists($f->{$_}), qw( table name_col );
+%
 %   my $layer_prefix_on = '';
 %
 %   my $include_sub = sub {
