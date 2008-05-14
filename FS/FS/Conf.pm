@@ -2254,6 +2254,13 @@ worry that config_items is freeside-specific and icky.
                      ],
   },
 
+  {
+    'key'         => 'disable_previous_balance',
+    'section'     => 'billing',
+    'description' => 'Disable inclusion of previous balance, payment, and credit lines on invoices',
+    'type'        => 'checkbox',
+  },
+
 );
 
 1;

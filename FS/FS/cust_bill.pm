@@ -1496,18 +1496,20 @@ sub print_text {
   @buf = ();
 
   #previous balance
-  foreach ( @pr_cust_bill ) {
-    push @buf, [
-      "Previous Balance, Invoice #". $_->invnum. 
-                 " (". time2str("%x",$_->_date). ")",
-      $money_char. sprintf("%10.2f",$_->owed)
-    ];
-  }
-  if (@pr_cust_bill) {
-    push @buf,['','-----------'];
-    push @buf,[ 'Total Previous Balance',
-                $money_char. sprintf("%10.2f",$pr_total ) ];
-    push @buf,['',''];
+  unless ($conf->exists('disable_previous_balance')) {
+    foreach ( @pr_cust_bill ) {
+      push @buf, [
+        "Previous Balance, Invoice #". $_->invnum. 
+                   " (". time2str("%x",$_->_date). ")",
+        $money_char. sprintf("%10.2f",$_->owed)
+      ];
+    }
+    if (@pr_cust_bill) {
+      push @buf,['','-----------'];
+      push @buf,[ 'Total Previous Balance',
+                  $money_char. sprintf("%10.2f",$pr_total ) ];
+      push @buf,['',''];
+    }
   }
 
   #new charges
@@ -1566,53 +1568,57 @@ sub print_text {
   }
 
   push @buf,['','-----------'];
-  push @buf,['Total New Charges',
+  push @buf,[ ( $conf->exists('disable_previous_balance')
+                ? 'Total Charges'
+                : 'Total New Charges'),
              $money_char. sprintf("%10.2f",$self->charged) ];
   push @buf,['',''];
 
-  push @buf,['','-----------'];
-  push @buf,['Total Charges',
-             $money_char. sprintf("%10.2f",$self->charged + $pr_total) ];
-  push @buf,['',''];
+  unless ($conf->exists('disable_previous_balance')) {
+    push @buf,['','-----------'];
+    push @buf,['Total Charges',
+               $money_char. sprintf("%10.2f",$self->charged + $pr_total) ];
+    push @buf,['',''];
 
-  #credits
-  foreach ( $self->cust_credited ) {
+    #credits
+    foreach ( $self->cust_credited ) {
 
-    #something more elaborate if $_->amount ne $_->cust_credit->credited ?
+      #something more elaborate if $_->amount ne $_->cust_credit->credited ?
 
-    my $reason = substr($_->cust_credit->reason,0,32);
-    $reason .= '...' if length($reason) < length($_->cust_credit->reason);
-    $reason = " ($reason) " if $reason;
-    push @buf,[
-      "Credit #". $_->crednum. " (". time2str("%x",$_->cust_credit->_date) .")".
-        $reason,
-      $money_char. sprintf("%10.2f",$_->amount)
-    ];
+      my $reason = substr($_->cust_credit->reason,0,32);
+      $reason .= '...' if length($reason) < length($_->cust_credit->reason);
+      $reason = " ($reason) " if $reason;
+      push @buf,[
+        "Credit #". $_->crednum. " (". time2str("%x",$_->cust_credit->_date) .")".
+          $reason,
+        $money_char. sprintf("%10.2f",$_->amount)
+      ];
+    }
+    #foreach ( @cr_cust_credit ) {
+    #  push @buf,[
+    #    "Credit #". $_->crednum. " (" . time2str("%x",$_->_date) .")",
+    #    $money_char. sprintf("%10.2f",$_->credited)
+    #  ];
+    #}
+
+    #get & print payments
+    foreach ( $self->cust_bill_pay ) {
+
+      #something more elaborate if $_->amount ne ->cust_pay->paid ?
+
+      push @buf,[
+        "Payment received ". time2str("%x",$_->cust_pay->_date ),
+        $money_char. sprintf("%10.2f",$_->amount )
+      ];
+    }
+
+    #balance due
+    my $balance_due_msg = $self->balance_due_msg;
+
+    push @buf,['','-----------'];
+    push @buf,[$balance_due_msg, $money_char. 
+      sprintf("%10.2f", $balance_due ) ];
   }
-  #foreach ( @cr_cust_credit ) {
-  #  push @buf,[
-  #    "Credit #". $_->crednum. " (" . time2str("%x",$_->_date) .")",
-  #    $money_char. sprintf("%10.2f",$_->credited)
-  #  ];
-  #}
-
-  #get & print payments
-  foreach ( $self->cust_bill_pay ) {
-
-    #something more elaborate if $_->amount ne ->cust_pay->paid ?
-
-    push @buf,[
-      "Payment received ". time2str("%x",$_->cust_pay->_date ),
-      $money_char. sprintf("%10.2f",$_->amount )
-    ];
-  }
-
-  #balance due
-  my $balance_due_msg = $self->balance_due_msg;
-
-  push @buf,['','-----------'];
-  push @buf,[$balance_due_msg, $money_char. 
-    sprintf("%10.2f", $balance_due ) ];
 
   #create the template
   $template ||= $self->_agent_template;
@@ -1943,7 +1949,7 @@ sub print_latex {
     $invoice_data{'detail_items'} = \@detail_items;
     $invoice_data{'total_items'} = \@total_items;
   
-    foreach my $line_item ( $self->_items ) {
+    foreach my $line_item ( $self->_items($conf->exists('disable_previous_balance') ? qw( _items_pkg ) : () ) ) {
       my $detail = {
         ext_description => [],
       };
@@ -1983,36 +1989,45 @@ sub print_latex {
       my $total = {};
       $total->{'total_item'} = '\textbf{Total}';
       $total->{'total_amount'} =
-        '\textbf{\dollar '. sprintf('%.2f', $self->charged + $pr_total ). '}';
+        '\textbf{\dollar '.
+        sprintf( '%.2f',
+                 $self->charged + ( $conf->exists('disable_previous_balance')
+                                    ? 0
+                                    : $pr_total
+                                  )
+               ).
+      '}';
       push @total_items, $total;
     }
   
-    #foreach my $thing ( sort { $a->_date <=> $b->_date } $self->_items_credits, $self->_items_payments
+    unless ($conf->exists('disable_previous_balance')) {
+      #foreach my $thing ( sort { $a->_date <=> $b->_date } $self->_items_credits, $self->_items_payments
   
-    # credits
-    foreach my $credit ( $self->_items_credits ) {
-      my $total;
-      $total->{'total_item'} = _latex_escape($credit->{'description'});
-      #$credittotal
-      $total->{'total_amount'} = '-\dollar '. $credit->{'amount'};
-      push @total_items, $total;
-    }
+      # credits
+      foreach my $credit ( $self->_items_credits ) {
+        my $total;
+        $total->{'total_item'} = _latex_escape($credit->{'description'});
+        #$credittotal
+        $total->{'total_amount'} = '-\dollar '. $credit->{'amount'};
+        push @total_items, $total;
+      }
   
-    # payments
-    foreach my $payment ( $self->_items_payments ) {
-      my $total = {};
-      $total->{'total_item'} = _latex_escape($payment->{'description'});
-      #$paymenttotal
-      $total->{'total_amount'} = '-\dollar '. $payment->{'amount'};
-      push @total_items, $total;
-    }
+      # payments
+      foreach my $payment ( $self->_items_payments ) {
+        my $total = {};
+        $total->{'total_item'} = _latex_escape($payment->{'description'});
+        #$paymenttotal
+        $total->{'total_amount'} = '-\dollar '. $payment->{'amount'};
+        push @total_items, $total;
+      }
   
-    { 
-      my $total;
-      $total->{'total_item'} = '\textbf{'. $self->balance_due_msg. '}';
-      $total->{'total_amount'} =
-        '\textbf{\dollar '. sprintf('%.2f', $self->owed + $pr_total ). '}';
-      push @total_items, $total;
+      { 
+        my $total;
+        $total->{'total_item'} = '\textbf{'. $self->balance_due_msg. '}';
+        $total->{'total_amount'} =
+          '\textbf{\dollar '. sprintf('%.2f', $self->owed + $pr_total ). '}';
+        push @total_items, $total;
+      }
     }
 
   } else {
@@ -2251,7 +2266,7 @@ sub print_html {
 
   my $money_char = $conf->config('money_char') || '$';
 
-  foreach my $line_item ( $self->_items ) {
+  foreach my $line_item ( $self->_items($conf->exists('disable_previous_balance') ? qw( _items_pkg ) : () ) ) {
     my $detail = {
       ext_description => [],
     };
@@ -2291,36 +2306,45 @@ sub print_html {
     my $total = {};
     $total->{'total_item'} = '<b>Total</b>';
     $total->{'total_amount'} =
-      "<b>$money_char".  sprintf('%.2f', $self->charged + $pr_total ). '</b>';
+      "<b>$money_char".
+      sprintf( '%.2f',
+               $self->charged + ( $conf->exists('disable_previous_balance')
+                                  ? 0
+                                  : $pr_total
+                                )
+             ).
+      '</b>';
     push @{$invoice_data{'total_items'}}, $total;
   }
 
-  #foreach my $thing ( sort { $a->_date <=> $b->_date } $self->_items_credits, $self->_items_payments
+  unless ($conf->exists('disable_previous_balance')) {
+    #foreach my $thing ( sort { $a->_date <=> $b->_date } $self->_items_credits, $self->_items_payments
 
-  # credits
-  foreach my $credit ( $self->_items_credits ) {
-    my $total;
-    $total->{'total_item'} = encode_entities($credit->{'description'});
-    #$credittotal
-    $total->{'total_amount'} = "-$money_char". $credit->{'amount'};
-    push @{$invoice_data{'total_items'}}, $total;
-  }
+    # credits
+    foreach my $credit ( $self->_items_credits ) {
+      my $total;
+      $total->{'total_item'} = encode_entities($credit->{'description'});
+      #$credittotal
+      $total->{'total_amount'} = "-$money_char". $credit->{'amount'};
+      push @{$invoice_data{'total_items'}}, $total;
+    }
 
-  # payments
-  foreach my $payment ( $self->_items_payments ) {
-    my $total = {};
-    $total->{'total_item'} = encode_entities($payment->{'description'});
-    #$paymenttotal
-    $total->{'total_amount'} = "-$money_char". $payment->{'amount'};
-    push @{$invoice_data{'total_items'}}, $total;
-  }
+    # payments
+    foreach my $payment ( $self->_items_payments ) {
+      my $total = {};
+      $total->{'total_item'} = encode_entities($payment->{'description'});
+      #$paymenttotal
+      $total->{'total_amount'} = "-$money_char". $payment->{'amount'};
+      push @{$invoice_data{'total_items'}}, $total;
+    }
 
-  { 
-    my $total;
-    $total->{'total_item'} = '<b>'. $self->balance_due_msg. '</b>';
-    $total->{'total_amount'} =
-      "<b>$money_char".  sprintf('%.2f', $self->owed + $pr_total ). '</b>';
-    push @{$invoice_data{'total_items'}}, $total;
+    { 
+      my $total;
+      $total->{'total_item'} = '<b>'. $self->balance_due_msg. '</b>';
+      $total->{'total_amount'} =
+        "<b>$money_char".  sprintf('%.2f', $self->owed + $pr_total ). '</b>';
+      push @{$invoice_data{'total_items'}}, $total;
+    }
   }
 
   $html_template->fill_in( HASH => \%invoice_data);
