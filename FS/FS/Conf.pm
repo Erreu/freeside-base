@@ -2261,6 +2261,20 @@ worry that config_items is freeside-specific and icky.
     'type'        => 'checkbox',
   },
 
+  {
+    'key'         => 'disable_acl_changes',
+    'section'     => '',
+    'description' => 'Disable all ACL changes, for demos.',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'disable_acl_changes',
+    'section'     => '',
+    'description' => 'Disable all ACL changes, for demos.',
+    'type'        => 'checkbox',
+  },
+
 );
 
 1;
