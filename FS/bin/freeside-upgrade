@@ -9,7 +9,7 @@ use FS::UID qw(adminsuidsetup checkeuid datasrc );  #getsecrets);
 use FS::CurrentUser;
 use FS::Schema qw( dbdef dbdef_dist reload_dbdef );
 use FS::Misc::prune qw(prune_applications);
-use FS::Upgrade qw( upgrade );
+use FS::Upgrade qw( upgrade upgrade_sqlradius );
 
 die "Not running uid freeside!" unless checkeuid();
 
