@@ -417,6 +417,7 @@ sub tables_hashref {
         'detailnum', 'serial', '', '', '', '', 
         'pkgnum',  'int', '', '', '', '', 
         'invnum',  'int', '', '', '', '', 
+        'format',  'char', 'NULL', 1, '', '',
         'detail',  'varchar', '', $char_d, '', '', 
       ],
       'primary_key' => 'detailnum',
@@ -1773,6 +1774,31 @@ sub tables_hashref {
       'primary_key' => 'rightnum',
       'unique' => [ [ 'righttype', 'rightobjnum', 'rightname' ] ],
       'index'  => [],
+    },
+
+    'report' => {
+      'columns' => [
+        'reportnum', 'serial',   '',      '', '', '',
+        'usernum',   'int',      '',      '', '', '',
+        'public',    'char', 'NULL',       1, '', '', 
+        'menu',      'char', 'NULL',       1, '', '', 
+        'name',      'varchar',  '', $char_d, '', '',
+      ],
+      'primary_key' => 'reportnum',
+      'unique' => [],
+      'index'  => [ [ 'usernum' ] ],
+    },
+
+    'report_option' => {
+      'columns' => [
+        'optionnum',   'serial',     '',      '', '', '', 
+        'reportnum',      'int',     '',      '', '', '', 
+        'optionname', 'varchar',     '', $char_d, '', '', 
+        'optionvalue',   'text', 'NULL',      '', '', '', 
+      ],
+      'primary_key' => 'optionnum',
+      'unique'      => [],
+      'index'       => [ [ 'reportnum' ], [ 'optionname' ] ],
     },
 
     'svc_phone' => {

@@ -1949,7 +1949,8 @@ sub print_latex {
     $invoice_data{'detail_items'} = \@detail_items;
     $invoice_data{'total_items'} = \@total_items;
   
-    foreach my $line_item ( $self->_items($conf->exists('disable_previous_balance') ? qw( _items_pkg ) : () ) ) {
+    my %options = ( 'format' => 'latex', 'escape_function' => \&_latex_escape );
+    foreach my $line_item ( ($conf->exists('disable_previous_balance') ? qw() : $self->_items_previous(%options)), $self->_items_pkg(%options) ) {
       my $detail = {
         ext_description => [],
       };
@@ -1957,9 +1958,7 @@ sub print_latex {
       $detail->{'quantity'} = 1;
       $detail->{'description'} = _latex_escape($line_item->{'description'});
       if ( exists $line_item->{'ext_description'} ) {
-        @{$detail->{'ext_description'}} = map {
-          _latex_escape($_);
-        } @{$line_item->{'ext_description'}};
+        @{$detail->{'ext_description'}} = @{$line_item->{'ext_description'}};
       }
       $detail->{'amount'} = $line_item->{'amount'};
       $detail->{'product_code'} = $line_item->{'pkgpart'} || 'N/A';
@@ -2266,16 +2265,15 @@ sub print_html {
 
   my $money_char = $conf->config('money_char') || '$';
 
-  foreach my $line_item ( $self->_items($conf->exists('disable_previous_balance') ? qw( _items_pkg ) : () ) ) {
+  my %options = ( 'format' => 'html', 'escape_function' => \&encode_entities );
+  foreach my $line_item ( ($conf->exists('disable_previous_balance') ? qw() : $self->_items_previous(%options)), $self->_items_pkg(%options) ) {
     my $detail = {
       ext_description => [],
     };
     $detail->{'ref'} = $line_item->{'pkgnum'};
     $detail->{'description'} = encode_entities($line_item->{'description'});
     if ( exists $line_item->{'ext_description'} ) {
-      @{$detail->{'ext_description'}} = map {
-        encode_entities($_);
-      } @{$line_item->{'ext_description'}};
+      @{$detail->{'ext_description'}} = @{$line_item->{'ext_description'}};
     }
     $detail->{'amount'} = $money_char. $line_item->{'amount'};
     $detail->{'product_code'} = $line_item->{'pkgpart'} || 'N/A';
@@ -2439,6 +2437,9 @@ sub _items_tax {
 sub _items_cust_bill_pkg {
   my $self = shift;
   my $cust_bill_pkg = shift;
+  my %opt = @_;
+  my $format = $opt{format} || '';
+  my $escape_function = $opt{escape_function} || sub { shift };
 
   my @b = ();
   foreach my $cust_bill_pkg ( @$cust_bill_pkg ) {
@@ -2453,7 +2454,10 @@ sub _items_cust_bill_pkg {
         my $description = $desc;
         $description .= ' Setup' if $cust_bill_pkg->recur != 0;
         my @d = $cust_pkg->h_labels_short($self->_date);
-        push @d, $cust_bill_pkg->details if $cust_bill_pkg->recur == 0;
+        push @d, $cust_bill_pkg->details( 'format'          => $format,
+                                          'escape_function' => $escape_function,
+                                        )
+          if $cust_bill_pkg->recur == 0;
         push @b, {
           description     => $description,
           #pkgpart         => $part_pkg->pkgpart,
@@ -2480,7 +2484,8 @@ sub _items_cust_bill_pkg {
             [ $cust_pkg->h_labels_short( $self->_date ),
                                          #$cust_bill_pkg->edate,
                                          #$cust_bill_pkg->sdate),
-              $cust_bill_pkg->details,
+              $cust_bill_pkg->details( 'format'          => $format,
+                                       'escape_function' => $escape_function),
             ],
         };
       }

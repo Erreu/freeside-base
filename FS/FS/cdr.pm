@@ -408,6 +408,14 @@ my %export_formats = (
     sub { shift->rated_price ? 'Y' : 'N' }, #RATED
     '', #OTHER_INFO
   ],
+  'voxlinesystems' => [
+    sub { time2str('%D', shift->calldate_unix ) },   #DATE
+    sub { time2str('%T', shift->calldate_unix ) },   #TIME
+    'userfield',                                     #USER
+    'dst',                                           #NUMBER_DIALED
+    sub { sprintf('%.2fm', shift->billsec / 60 ) },  #DURATION
+    sub { sprintf('%.3f', shift->upstream_price ) }, #PRICE
+  ],
 );
 
 sub downstream_csv {
@@ -440,9 +448,22 @@ sub downstream_csv {
 
 =over 4
 
-=item batch_import
+=item import_formats
+
+Returns an ordered list of key value pairs containing import format names
+as keys (for use with batch_import) and "pretty" format names as values.
 
 =cut
+
+sub import_formats {
+  (
+    'asterisk'       => 'Asterisk',
+    'taqua'          => 'Taqua',
+    'unitel'         => 'Unitel/RSLCOM',
+    'voxlinesystems' => 'VoxLineSystems',  #XXX? get the actual vendor name
+    'simple'         => 'Simple',
+  );
+}
 
 my($tmp_mday, $tmp_mon, $tmp_year);
 
@@ -450,7 +471,9 @@ sub _cdr_date_parser_maker {
   my $field = shift;
   return sub {
     my( $cdr, $date ) = @_;
-    $cdr->$field( _cdr_date_parse($date) );
+    #$cdr->$field( _cdr_date_parse($date) );
+    eval { $cdr->$field( _cdr_date_parse($date) ); };
+    die "error parsing date for $field from $date: $@\n" if $@;
   };
 }
 
@@ -460,12 +483,17 @@ sub _cdr_date_parse {
   return '' unless length($date); #that's okay, it becomes NULL
 
   #$date =~ /^\s*(\d{4})[\-\/]\(\d{1,2})[\-\/](\d{1,2})\s+(\d{1,2}):(\d{1,2}):(\d{1,2})\s*$/
-  $date =~ /^\s*(\d{4})\D(\d{1,2})\D(\d{1,2})\s+(\d{1,2})\D(\d{1,2})\D(\d{1,2})\s*$/
+  $date =~ /^\s*(\d{4})\D(\d{1,2})\D(\d{1,2})\s+(\d{1,2})\D(\d{1,2})\D(\d{1,2})(\D|$)/
     or die "unparsable date: $date"; #maybe we shouldn't die...
   my($year, $mon, $day, $hour, $min, $sec) = ( $1, $2, $3, $4, $5, $6 );
 
+  return '' if $year == 1900 && $mon == 1 && $day == 1
+            && $hour == 0    && $min == 0 && $sec == 0;
+
   timelocal($sec, $min, $hour, $day, $mon-1, $year);
 }
+
+#taqua  #2007-10-31 08:57:24.113000000
 
 #http://www.the-asterisk-book.com/unstable/funktionen-cdr.html
 my %amaflags = (
@@ -499,6 +527,130 @@ my %import_formats = (
     'uniqueid',
     'userfield',
   ],
+  'taqua' => [ #some of these are kind arbitrary...
+
+    sub { my($cdr, $field) = @_; },       #XXX interesting RecordType
+             # easy to fix: Can't find cdr.cdrtypenum 1 in cdr_type.cdrtypenum
+
+    sub { my($cdr, $field) = @_; },             #all10#RecordVersion
+    sub { my($cdr, $field) = @_; },       #OrigShelfNumber
+    sub { my($cdr, $field) = @_; },       #OrigCardNumber
+    sub { my($cdr, $field) = @_; },       #OrigCircuit
+    sub { my($cdr, $field) = @_; },       #OrigCircuitType
+    'uniqueid',                           #SequenceNumber
+    'accountcode',                        #SessionNumber
+    'src',                                #CallingPartyNumber
+    'dst',                                #CalledPartyNumber
+    _cdr_date_parser_maker('startdate'),  #CallArrivalTime
+    _cdr_date_parser_maker('enddate'),    #CallCompletionTime
+
+    #Disposition
+    #sub { my($cdr, $d ) = @_; $cdr->disposition( $disposition{$d}): },
+    'disposition',
+                                          #  -1 => '',
+                                          #   0 => '',
+                                          # 100 => '',
+                                          # 101 => '',
+                                          # 102 => '',
+                                          # 103 => '',
+                                          # 104 => '',
+                                          # 105 => '',
+                                          # 201 => '',
+                                          # 203 => '',
+
+    _cdr_date_parser_maker('answerdate'), #DispositionTime
+    sub { my($cdr, $field) = @_; },       #TCAP
+    sub { my($cdr, $field) = @_; },       #OutboundCarrierConnectTime
+    sub { my($cdr, $field) = @_; },       #OutboundCarrierDisconnectTime
+
+    #TermTrunkGroup
+    #it appears channels are actually part of trunk groups, but this data
+    #is interesting and we need a source and destination place to put it
+    'dstchannel',                         #TermTrunkGroup
+
+
+    sub { my($cdr, $field) = @_; },       #TermShelfNumber
+    sub { my($cdr, $field) = @_; },       #TermCardNumber
+    sub { my($cdr, $field) = @_; },       #TermCircuit
+    sub { my($cdr, $field) = @_; },       #TermCircuitType
+    sub { my($cdr, $field) = @_; },       #OutboundCarrierId
+    'charged_party',                      #BillingNumber
+    sub { my($cdr, $field) = @_; },       #SubscriberNumber
+    'lastapp',                            #ServiceName
+    sub { my($cdr, $field) = @_; },       #some weirdness #ChargeTime
+    'lastdata',                           #ServiceInformation
+    sub { my($cdr, $field) = @_; },       #FacilityInfo
+    sub { my($cdr, $field) = @_; },             #all 1900-01-01 0#CallTraceTime
+    sub { my($cdr, $field) = @_; },             #all-1#UniqueIndicator
+    sub { my($cdr, $field) = @_; },             #all-1#PresentationIndicator
+    sub { my($cdr, $field) = @_; },             #empty#Pin
+    sub { my($cdr, $field) = @_; },       #CallType
+    sub { my($cdr, $field) = @_; },           #Balt/empty #OrigRateCenter
+    sub { my($cdr, $field) = @_; },           #Balt/empty #TermRateCenter
+
+    #OrigTrunkGroup
+    #it appears channels are actually part of trunk groups, but this data
+    #is interesting and we need a source and destination place to put it
+    'channel',                            #OrigTrunkGroup
+
+    'userfield',                                #empty#UserDefined
+    sub { my($cdr, $field) = @_; },             #empty#PseudoDestinationNumber
+    sub { my($cdr, $field) = @_; },             #all-1#PseudoCarrierCode
+    sub { my($cdr, $field) = @_; },             #empty#PseudoANI
+    sub { my($cdr, $field) = @_; },             #all-1#PseudoFacilityInfo
+    sub { my($cdr, $field) = @_; },       #OrigDialedDigits
+    sub { my($cdr, $field) = @_; },             #all-1#OrigOutboundCarrier
+    sub { my($cdr, $field) = @_; },       #IncomingCarrierID
+    'dcontext',                           #JurisdictionInfo
+    sub { my($cdr, $field) = @_; },       #OrigDestDigits
+    sub { my($cdr, $field) = @_; },       #huh?#InsertTime
+    sub { my($cdr, $field) = @_; },       #key
+    sub { my($cdr, $field) = @_; },             #empty#AMALineNumber
+    sub { my($cdr, $field) = @_; },             #empty#AMAslpID
+    sub { my($cdr, $field) = @_; },             #empty#AMADigitsDialedWC
+    sub { my($cdr, $field) = @_; },       #OpxOffHook
+    sub { my($cdr, $field) = @_; },       #OpxOnHook
+
+        #acctid - primary key
+  #AUTO #calldate - Call timestamp (SQL timestamp)
+#clid - Caller*ID with text
+        #XXX src - Caller*ID number / Source number
+        #XXX dst - Destination extension
+        #dcontext - Destination context
+        #channel - Channel used
+        #dstchannel - Destination channel if appropriate
+        #lastapp - Last application if appropriate
+        #lastdata - Last application data
+        #startdate - Start of call (UNIX-style integer timestamp)
+        #answerdate - Answer time of call (UNIX-style integer timestamp)
+        #enddate - End time of call (UNIX-style integer timestamp)
+  #HACK#duration - Total time in system, in seconds
+  #HACK#XXX billsec - Total time call is up, in seconds
+        #disposition - What happened to the call: ANSWERED, NO ANSWER, BUSY
+#INT amaflags - What flags to use: BILL, IGNORE etc, specified on a per channel basis like accountcode.
+        #accountcode - CDR account number to use: account
+
+        #uniqueid - Unique channel identifier (Unitel/RSLCOM Event ID)
+        #userfield - CDR user-defined field
+
+        #X cdrtypenum - CDR type - see FS::cdr_type (Usage = 1, S&E = 7, OC&C = 8)
+        #XXX charged_party - Service number to be billed
+#upstream_currency - Wholesale currency from upstream
+#X upstream_price - Wholesale price from upstream
+#upstream_rateplanid - Upstream rate plan ID
+#rated_price - Rated (or re-rated) price
+#distance - km (need units field?)
+#islocal - Local - 1, Non Local = 0
+#calltypenum - Type of call - see FS::cdr_calltype
+#X description - Description (cdr_type 7&8 only) (used for cust_bill_pkg.itemdesc)
+#quantity - Number of items (cdr_type 7&8 only)
+#carrierid - Upstream Carrier ID (see FS::cdr_carrier)
+#upstream_rateid - Upstream Rate ID
+
+        #svcnum - Link to customer service (see FS::cust_svc)
+        #freesidestatus - NULL, done (or something)
+
+  ],
   'unitel' => [
     'uniqueid',
     #'cdr_type',
@@ -523,6 +675,50 @@ my %import_formats = (
     'quantity',
     'carrierid',
     'upstream_rateid',
+  ],
+  'voxlinesystems' => [ #XXX get the actual vendor name
+    'disposition',                        #Status
+    'startdate',                          #Start (what do you know, a timestamp!
+    sub { my($cdr, $field) = @_; },       #Start date
+    sub { my($cdr, $field) = @_; },       #Start time
+    'enddate',                            #End (also a timestamp!)
+    sub { my($cdr, $field) = @_; },       #End date
+    sub { my($cdr, $field) = @_; },       #End time
+    'accountcode',                        #Calling customer XXX map to agent_custid??
+    sub { my($cdr, $field) = @_; },       #Calling type
+    sub { shift->src('30000'); }, #XXX FAKE XXX 'src',                                #Calling number
+    'userfield',                          #Calling name #?
+    sub { my($cdr, $field) = @_; },       #Called type
+    'dst',                                #Called number
+    sub { my($cdr, $field) = @_; },       #Destination customer
+    sub { my($cdr, $field) = @_; },       #Destination type
+    sub { my($cdr, $field) = @_; },       #Destination Number
+    sub { my($cdr, $field) = @_; },       #Inbound calling type
+    sub { my($cdr, $field) = @_; },       #Inbound calling number
+    sub { my($cdr, $field) = @_; },       #Inbound called type
+    sub { my($cdr, $field) = @_; },       #Inbound called number
+    sub { my($cdr, $field) = @_; },       #Inbound destination type
+    sub { my($cdr, $field) = @_; },       #Inbound destination number
+    sub { my($cdr, $field) = @_; },       #Outbound calling type
+    sub { my($cdr, $field) = @_; },       #Outbound calling number
+    sub { my($cdr, $field) = @_; },       #Outbound called type
+    sub { my($cdr, $field) = @_; },       #Outbound called number
+    sub { my($cdr, $field) = @_; },       #Outbound destination type
+    sub { my($cdr, $field) = @_; },       #Outbound destination number
+    sub { my($cdr, $field) = @_; },       #Internal calling type
+    sub { my($cdr, $field) = @_; },       #Internal calling number
+    sub { my($cdr, $field) = @_; },       #Internal called type
+    sub { my($cdr, $field) = @_; },       #Internal called number
+    sub { my($cdr, $field) = @_; },       #Internal destination type
+    sub { my($cdr, $field) = @_; },       #Internal destination number
+    'duration',                           #Total seconds
+    sub { my($cdr, $field) = @_; },       #Ring seconds
+    'billsec',                            #Billable seconds
+    'upstream_price',                     #Cost
+    sub { my($cdr, $field) = @_; },       #Billing customer
+    sub { my($cdr, $field) = @_; },       #Billing customer name
+    sub { my($cdr, $field) = @_; },       #Billing type
+    sub { my($cdr, $field) = @_; },       #Billing reference
   ],
   'simple' => [
 
@@ -561,6 +757,26 @@ my %import_formats = (
   ],
 );
 
+my %import_header = (
+  'simple'         => 1,
+  'taqua'          => 1,
+  'voxlinesystems' => 2, #XXX vendor name
+);
+
+=item batch_import HASHREF
+
+Imports CDR records.  Available options are:
+
+=over 4
+
+=item filehandle
+
+=item format
+
+=back
+
+=cut
+
 sub batch_import {
   my $param = shift;
 
@@ -588,18 +804,13 @@ sub batch_import {
   local $FS::UID::AutoCommit = 0;
   my $dbh = dbh;
 
-  if ( $format eq 'simple' ) { # and other formats with a header too?
+  my $header_lines =
+    exists($import_header{$format}) ? $import_header{$format} : 0;
 
-  }
-
-  my $body = 0;
   my $line;
   while ( defined($line=<$fh>) ) {
 
-    #skip header...
-    if ( ! $body++ && $format eq 'simple' && $line =~ /^[\w\, ]+$/ ) {
-      next;
-    }
+    next if $header_lines-- > 0; #&& $line =~ /^[\w, "]+$/ 
 
     $csv->parse($line) or do {
       $dbh->rollback if $oldAutoCommit;
@@ -635,6 +846,15 @@ sub batch_import {
       my $sub = shift @later;
       my $data = shift @later;
       &{$sub}($cdr, $data);  # $cdr->&{$sub}($data); 
+    }
+
+    if ( $format eq 'taqua' ) {
+      if ( $cdr->enddate && $cdr->startdate  ) { #a bit more?
+        $cdr->duration( $cdr->enddate - $cdr->startdate  );
+      }
+      if ( $cdr->enddate && $cdr->answerdate ) { #a bit more?
+        $cdr->billsec(  $cdr->enddate - $cdr->answerdate );
+      } 
     }
 
     my $error = $cdr->insert;
