@@ -124,7 +124,9 @@ sub handler
       use HTML::Widgets::SelectLayers 0.07;
       use Locale::Country;
       use FS;
-      use FS::UID qw(cgisuidsetup dbh getotaker datasrc driver_name);
+      use FS::UID qw( adminsuidsetup cgisuidsetup getotaker
+                      dbh datasrc driver_name
+                    );
       use FS::Record qw(qsearch qsearchs fields dbdef str2time_sql);
       use FS::Conf;
       use FS::CGI qw(header menubar popurl rooturl table itable ntable idiot
