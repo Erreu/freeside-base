@@ -1,0 +1,23 @@
+<% $link %><% $pre %>Invoice #<% $invnum %>
+(Balance $ <% $cust_bill->owed %>)<% $post %><% $link ? '</A>' : '' %><% $events %>
+<%init>
+
+my( $cust_bill, %opt ) = @_;
+
+my $curuser = $FS::CurrentUser::CurrentUser;
+
+my($pre, $post) = ('', '');
+if ( $cust_bill->owed > 0 ) {
+  $pre = '<B><FONT SIZE="+1" COLOR="#FF0000">Open ';
+  $post = '</FONT></B>';
+}
+
+my $invnum = $cust_bill->invnum;
+
+my $link = $curuser->access_right('View invoices')
+             ? qq!<A HREF="${p}view/cust_bill.cgi?$invnum">!
+             : '';
+
+my $events = '';
+
+</%init>
