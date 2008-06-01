@@ -221,7 +221,8 @@ Modifying a refund?  Well, don't say I didn't warn you.
 =cut
 
 sub replace {
-   return "Can't (yet?) modify cust_refund records!";
+  my $self = shift;
+  $self->SUPER::replace(@_);
 }
 
 =item check
