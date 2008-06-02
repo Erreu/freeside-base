@@ -1810,6 +1810,7 @@ sub print_latex {
     'terms'        => $conf->config('invoice_default_terms') || 'Payable upon receipt',
     #'notes'        => join("\n", $conf->config('invoice_latexnotes') ),
     'conf_dir'     => "$FS::UID::conf_dir/conf.$FS::UID::datasrc",
+    'balance'      => $balance_due,
   );
 
   my $countrydefault = $conf->config('countrydefault') || 'US';
@@ -1827,6 +1828,28 @@ sub print_latex {
     );
   warn "invoice notes: ". $invoice_data{'notes'}. "\n"
     if $DEBUG;
+
+  #do variable substitution in coupon
+  foreach my $include (qw( coupon )) {
+
+    my @inc_src = $conf->config_orbase("invoice_latex$include", $template);
+
+    my $inc_tt = new Text::Template (
+      TYPE       => 'ARRAY',
+      SOURCE     => [ map "$_\n", @inc_src ],
+      DELIMITERS => [ '[@--', '--@]' ],
+    ) or die "Can't create new Text::Template object: $Text::Template::ERROR";
+
+    unless ( $inc_tt->compile() ) {
+      my $error = "Can't compile $include template: $Text::Template::ERROR\n";
+      warn $error. "Template:\n". join('', map "$_\n", @inc_src);
+      die $error;
+    }
+
+    $invoice_data{$include} = $inc_tt->fill_in( HASH => \%invoice_data );
+
+    $invoice_data{$include} =~ s/\n+$//
+  }
 
   $invoice_data{'footer'} =~ s/\n+$//;
   $invoice_data{'smallfooter'} =~ s/\n+$//;

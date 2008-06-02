@@ -698,6 +698,13 @@ worry that config_items is freeside-specific and icky.
   },
 
   {
+    'key'         => 'invoice_latexcoupon',
+    'section'     => 'billing',
+    'description' => 'Remittance coupon for LaTeX typeset PostScript invoices.',
+    'type'        => 'textarea',
+  },
+
+  {
     'key'         => 'invoice_latexreturnaddress',
     'section'     => 'billing',
     'description' => 'Return address for LaTeX typeset PostScript invoices.',
