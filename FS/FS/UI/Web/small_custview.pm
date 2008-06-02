@@ -1,9 +1,14 @@
 package FS::UI::Web::small_custview;
 
 use strict;
+use vars qw(@EXPORT_OK @ISA);
+use Exporter;
 use FS::Msgcat;
 use FS::Record qw(qsearchs);
 use FS::cust_main;
+
+@ISA = qw(Exporter);
+@EXPORT_OK = qw( small_custview );
 
 =item small_custview CUSTNUM || CUST_MAIN_OBJECT, COUNTRYDEFAULT, NOBALANCE_FLAG, URL
 
