@@ -107,3 +107,5 @@ sub small_custview {
   $html;
 }
 
+1;
+
