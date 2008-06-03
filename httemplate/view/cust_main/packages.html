@@ -78,7 +78,13 @@ Current packages
 <TR>
   <TD CLASS="grid" BGCOLOR="<% $bgcolor %>">
     <A NAME="cust_pkg<% $cust_pkg->pkgnum %>"><% $cust_pkg->pkgnum %></A>:
-    <% $part_pkg->pkg %> - <% $part_pkg->comment %><BR>
+    <% $part_pkg->pkg %> - <% $part_pkg->comment %>
+    <BR>
+
+%   if ( $cust_pkg->quantity > 1 ) {
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Quantity: <B><% $cust_pkg->quantity %></B><BR>
+%   }
+
     <FONT SIZE=-1>
 % unless ( $cust_pkg->get('cancel') ) { 
 % if ( $curuser->access_right('Change customer package') ) { 

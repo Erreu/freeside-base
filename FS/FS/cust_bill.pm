@@ -1802,6 +1802,7 @@ sub print_latex {
     'address2'     => _latex_escape($cust_main->address2),
     'city'         => _latex_escape($cust_main->city),
     'state'        => _latex_escape($cust_main->state),
+    #'quantity'     => 1,
     'zip'          => _latex_escape($cust_main->zip),
     'footer'       => join("\n", $conf->config_orbase('invoice_latexfooter', $template) ),
     'smallfooter'  => join("\n", $conf->config_orbase('invoice_latexsmallfooter', $template) ),
@@ -1886,7 +1887,9 @@ sub print_latex {
                     map _latex_escape($_), @{$line_item->{'ext_description'}}
                   );
           }
-          $invoice_data{'amount'} = $line_item->{'amount'};
+          $invoice_data{'amount'}       = $line_item->{'amount'};
+          $invoice_data{'unit_amount'}  = $line_item->{'unit_amount'};
+          $invoice_data{'quantity'}     = $line_item->{'quantity'};
           $invoice_data{'product_code'} = $line_item->{'pkgpart'} || 'N/A';
           push @filled_in,
             map { my $b=$_; $b =~ s/\$(\w+)/$invoice_data{$1}/eg; $b } @line_item;
@@ -1992,6 +1995,7 @@ sub print_latex {
         @{$detail->{'ext_description'}} = @{$line_item->{'ext_description'}};
       }
       $detail->{'amount'} = $line_item->{'amount'};
+      $detail->{'unit_amount'} = $line_item->{'unit_amount'};
       $detail->{'product_code'} = $line_item->{'pkgpart'} || 'N/A';
   
       push @detail_items, $detail;
@@ -2483,6 +2487,8 @@ sub _items_cust_bill_pkg {
           #pkgpart         => $part_pkg->pkgpart,
           pkgnum          => $cust_bill_pkg->pkgnum,
           amount          => sprintf("%.2f", $cust_bill_pkg->setup),
+          unit_amount     => sprintf("%.2f", $cust_bill_pkg->unitsetup),
+          quantity        => $cust_bill_pkg->quantity,
           ext_description => \@d,
         };
       }
@@ -2508,8 +2514,9 @@ sub _items_cust_bill_pkg {
           #pkgpart         => $part_pkg->pkgpart,
           pkgnum          => $cust_bill_pkg->pkgnum,
           amount          => sprintf("%.2f", $cust_bill_pkg->recur),
+          unit_amount     => sprintf("%.2f", $cust_bill_pkg->unitrecur),
+          quantity        => $cust_bill_pkg->quantity,
           ext_description => \@d,
-
         };
 
       }
