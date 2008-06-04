@@ -1814,6 +1814,7 @@ sub print_latex {
     'conf_dir'     => "$FS::UID::conf_dir/conf.$FS::UID::datasrc",
     'balance'      => $balance_due,
     'ship_enable'  => $conf->exists('invoice-ship_address'),
+    'unitprices'   => $conf->exists('invoice-unitprice'),
   );
 
   my $prefix = $cust_main->has_ship_address ? 'ship_' : '';
@@ -2194,6 +2195,7 @@ sub print_html {
     'cid'          => $cid,
     'template'     => $template,
     'ship_enable'  => $conf->exists('invoice-ship_address'),
+    'unitprices'   => $conf->exists('invoice-unitprice'),
 #    'conf_dir'     => "$FS::UID::conf_dir/conf.$FS::UID::datasrc",
   );
 

@@ -7,6 +7,7 @@ use Tie::IxHash;
 use FS::Conf;
 use FS::Record qw(qsearchs qsearch);
 use FS::part_pkg::flat;
+use FS::cdr;
 #use FS::rate;
 #use FS::rate_prefix;
 
@@ -78,6 +79,11 @@ tie my %rating_method, 'Tie::IxHash',
                            'type' => 'checkbox',
                          },
 
+    'output_format' => { 'name' => 'Simple output format',
+                         'type' => 'select',
+                         'select_options' => { FS::cdr::invoice_formats() },
+                       },
+
     #XXX also have option for an external db
 #    'cdr_location' => { 'name' => 'CDR database location'
 #                        'type' => 'select',
@@ -108,7 +114,7 @@ tie my %rating_method, 'Tie::IxHash',
                        default_prefix
                        disable_src
                        domestic_prefix international_prefix
-                       use_amaflags use_disposition
+                       use_amaflags use_disposition output_format
                      )
                   ],
   'weight' => 40,
@@ -134,6 +140,9 @@ sub calc_recur {
   my $charges = 0;
 
   my $downstream_cdr = '';
+
+  my $output_format = $self->option('output_format', 'Hush!')
+                      || 'voxlinesystems';
 
   foreach my $cust_svc (
     grep { $_->part_svc->svcdb eq 'svc_phone' } $cust_pkg->cust_svc
@@ -291,7 +300,7 @@ sub calc_recur {
         $charge = sprintf('%.3f', $cdr->upstream_price);
         $charges += $charge;
 
-        @call_details = ( $cdr->downstream_csv( 'format' => 'voxlinesystems' ));
+        @call_details = ($cdr->downstream_csv( 'format' => $output_format ));
 
       } else {
         die "don't know how to rate CDRs using method: ".
@@ -361,7 +370,10 @@ sub calc_recur {
             $call_details = join(' - ', @call_details );
           }
           warn "  adding details on charge to invoice: $call_details"
-            if $DEBUG;
+            if ( $DEBUG && !ref($call_details) );
+          warn "  adding details on charge to invoice: [ ".
+              join(', ', @{$call_details} ). " ]"
+            if ( $DEBUG && ref($call_details) );
           push @$details, $call_details; #\@call_details,
         }
 
@@ -378,7 +390,7 @@ sub calc_recur {
 
     } # $cdr
 
-    unshift @$details, [ 'C', "Date,Time,Name,Destination,Duration,Price" ]
+    unshift @$details, [ 'C', FS::cdr::invoice_header( $output_format) ]
       if (@$details && $self->option('rating_method') eq 'upstream_simple' );
 
   } # $cust_svc
