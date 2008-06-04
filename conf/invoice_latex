@@ -231,8 +231,8 @@ Terms: [@-- $terms --@]\\
 \makebox[2.0cm][l]{}&
 \makebox[2.0cm][l]{}&
 \makebox[2.0cm][l]{}&
-\makebox[2.0cm][l]{\textbf{[@-- !$unitprices ? '~~Unit Price' : '' --@]}}&
-\makebox[2.0cm]{\textbf{[@-- !$unitprices ? '~Quantity' : '' --@]}}&
+\makebox[2.0cm][l]{\textbf{[@-- $unitprices ? '~~Unit Price' : '' --@]}}&
+\makebox[2.0cm]{\textbf{[@-- $unitprices ? '~Quantity' : '' --@]}}&
 \makebox[2.0cm][r]{\textbf{Amount}} \\
 %
 \hline
@@ -245,8 +245,8 @@ Terms: [@-- $terms --@]\\
 \makebox[2.0cm][l]{}&
 \makebox[2.0cm][l]{}&
 \makebox[2.0cm][l]{}&
-\makebox[2.0cm][l]{\textbf{[@-- !$unitprices ? '~~Unit Price' : '' --@]}}&
-\makebox[2.0cm]{\textbf{[@-- !$unitprices ? '~Quantity' : '' --@]}}&
+\makebox[2.0cm][l]{\textbf{[@-- $unitprices ? '~~Unit Price' : '' --@]}}&
+\makebox[2.0cm]{\textbf{[@-- $unitprices ? '~Quantity' : '' --@]}}&
 \makebox[2.0cm][r]{\textbf{Amount}} \\
 \hline
 \endhead
