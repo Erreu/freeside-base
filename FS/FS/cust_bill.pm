@@ -1796,6 +1796,7 @@ sub print_latex {
     'date'         => time2str('%b %o, %Y', $self->_date),
     'today'        => time2str('%b %o, %Y', $today),
     'agent'        => _latex_escape($cust_main->agent->agent),
+    'agent_custid' => _latex_escape($cust_main->agent_custid),
     'payname'      => _latex_escape($cust_main->payname),
     'company'      => _latex_escape($cust_main->company),
     'address1'     => _latex_escape($cust_main->address1),
@@ -1812,7 +1813,14 @@ sub print_latex {
     #'notes'        => join("\n", $conf->config('invoice_latexnotes') ),
     'conf_dir'     => "$FS::UID::conf_dir/conf.$FS::UID::datasrc",
     'balance'      => $balance_due,
+    'ship_enable'  => $conf->exists('invoice-ship_address'),
   );
+
+  my $prefix = $cust_main->has_ship_address ? 'ship_' : '';
+  foreach ( qw( contact company address1 address2 city state zip country fax) ){
+    my $method = $prefix.$_;
+    $invoice_data{"ship_$_"} = _latex_escape($cust_main->$method);
+  }
 
   my $countrydefault = $conf->config('countrydefault') || 'US';
   if ( $cust_main->country eq $countrydefault ) {
@@ -2173,6 +2181,7 @@ sub print_html {
     'date'         => time2str('%b&nbsp;%o,&nbsp;%Y', $self->_date),
     'today'        => time2str('%b %o, %Y', $today),
     'agent'        => encode_entities($cust_main->agent->agent),
+    'agent_custid' => encode_entities($cust_main->agent_custid),
     'payname'      => encode_entities($cust_main->payname),
     'company'      => encode_entities($cust_main->company),
     'address1'     => encode_entities($cust_main->address1),
@@ -2184,8 +2193,15 @@ sub print_html {
                       || 'Payable upon receipt',
     'cid'          => $cid,
     'template'     => $template,
+    'ship_enable'  => $conf->exists('invoice-ship_address'),
 #    'conf_dir'     => "$FS::UID::conf_dir/conf.$FS::UID::datasrc",
   );
+
+  my $prefix = $cust_main->has_ship_address ? 'ship_' : '';
+  foreach ( qw( contact company address1 address2 city state zip country fax) ){
+    my $method = $prefix.$_;
+    $invoice_data{"ship_$_"} = encode_entities($cust_main->$method);
+  }
 
   if (
          defined( $conf->config_orbase('invoice_htmlreturnaddress', $template) )
