@@ -1952,6 +1952,7 @@ sub bill {
     ###
 
     my $setup = 0;
+    my $unitsetup = 0;
     if ( ! $cust_pkg->setup &&
          (
            ( $conf->exists('disable_setup_suspended_pkgs') &&
@@ -1969,6 +1970,8 @@ sub bill {
         return "$@ running calc_setup for $cust_pkg\n";
       }
 
+      $unitsetup = $cust_pkg->part_pkg->unit_setup || $setup; #XXX uuh
+
       $cust_pkg->setfield('setup', $time) unless $cust_pkg->setup;
     }
 
@@ -1976,7 +1979,9 @@ sub bill {
     # bill recurring fee
     ### 
 
+    #XXX unit stuff here too
     my $recur = 0;
+    my $unitrecur = 0;
     my $sdate;
     if ( $part_pkg->getfield('freq') ne '0' &&
          ! $cust_pkg->getfield('susp') &&
@@ -2072,13 +2077,16 @@ sub bill {
         warn "    charges (setup=$setup, recur=$recur); adding line items\n"
           if $DEBUG > 1;
         my $cust_bill_pkg = new FS::cust_bill_pkg ({
-          'invnum'  => $invnum,
-          'pkgnum'  => $cust_pkg->pkgnum,
-          'setup'   => $setup,
-          'recur'   => $recur,
-          'sdate'   => $sdate,
-          'edate'   => $cust_pkg->bill,
-          'details' => \@details,
+          'invnum'    => $invnum,
+          'pkgnum'    => $cust_pkg->pkgnum,
+          'setup'     => $setup,
+          'unitsetup' => $unitsetup,
+          'recur'     => $recur,
+          'unitrecur' => $unitrecur,
+          'quantity'  => $cust_pkg->quantity,
+          'sdate'     => $sdate,
+          'edate'     => $cust_pkg->bill,
+          'details'   => \@details,
         });
         $error = $cust_bill_pkg->insert;
         if ( $error ) {
