@@ -311,6 +311,7 @@ sub tables_hashref {
   my @date_type  = ( 'int', 'NULL', ''     );
   my @perl_type = ( 'text', 'NULL', ''  ); 
   my @money_type = ( 'decimal',   '', '10,2' );
+  my @money_typen = ( 'decimal',   'NULL', '10,2' );
 
   my $username_len = 32; #usernamemax config file
 
