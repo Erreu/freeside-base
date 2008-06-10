@@ -1,9 +1,8 @@
 <% include('elements/ApplicationCommon.html',
-     'form_action' => 'process/cust_credit_bill.cgi',
-     'src_table'   => 'cust_credit',
-     'src_thing'   => 'credit',
-     'dst_table'   => 'cust_bill',
-     'dst_thing'   => 'invoice',
+     'error_redirect' => 'cust_credit_bill.cgi',
+     'src_table'      => 'cust_credit',
+     'src_thing'      => 'credit',
+     'link_table'     => 'cust_credit_bill',
    )
 %>
 <%init>
