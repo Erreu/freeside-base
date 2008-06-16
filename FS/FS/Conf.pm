@@ -2296,6 +2296,13 @@ worry that config_items is freeside-specific and icky.
     'type'        => 'checkbox',
   },
 
+  {
+    'key'         => 'cust_main-edit_agent_custid',
+    'section'     => 'UI',
+    'description' => 'Enable editing of the agent_custid field.',
+    'type'        => 'checkbox',
+  },
+
 );
 
 1;
