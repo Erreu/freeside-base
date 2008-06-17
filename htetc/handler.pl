@@ -102,8 +102,11 @@ sub handler
       use DateTime::Format::Strptime;
       use Lingua::EN::Inflect qw(PL);
       use Tie::IxHash;
+      use URI::URL;
       use URI::Escape;
       use HTML::Entities;
+      use HTML::TreeBuilder;
+      use HTML::FormatText;
       use JSON;
       use IO::Handle;
       use IO::File;
@@ -153,6 +156,8 @@ sub handler
       use FS::cust_pkg;
       use FS::cust_pkg_reason;
       use FS::cust_refund;
+      use FS::cust_credit_refund;
+      use FS::cust_pay_refund;
       use FS::cust_svc;
       use FS::nas;
       use FS::part_bill_event;

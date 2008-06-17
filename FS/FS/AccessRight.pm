@@ -95,6 +95,7 @@ assigned to users and/or groups.
   'Add customer note', #NEW
   'Edit customer note', #NEW
   'Bill customer now', #NEW
+  'Bulk send customer notices', #NEW
 
 ###
 # customer package rights
