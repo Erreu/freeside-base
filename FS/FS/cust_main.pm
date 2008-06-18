@@ -4419,13 +4419,13 @@ Returns a hex triplet color string for this customer's status.
 =cut
 
 use vars qw(%statuscolor);
-%statuscolor = (
+tie %statuscolor, 'Tie::IxHash',
   'prospect'  => '7e0079', #'000000', #black?  naw, purple
   'active'    => '00CC00', #green
   'inactive'  => '0000CC', #blue
   'suspended' => 'FF9900', #yellow
   'cancelled' => 'FF0000', #red
-);
+;
 
 sub statuscolor { shift->cust_statuscolor(@_); }
 
@@ -4439,6 +4439,20 @@ sub cust_statuscolor {
 =head1 CLASS METHODS
 
 =over 4
+
+=item statuses
+
+Class method that returns the list of possible status strings for customers
+(see L<the status method|/status>).  For example:
+
+  @statuses = FS::cust_main->statuses();
+
+=cut
+
+sub statuses {
+  #my $self = shift; #could be class...
+  keys %statuscolor;
+}
 
 =item prospect_sql
 
