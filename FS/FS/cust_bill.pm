@@ -1216,11 +1216,7 @@ sub print_csv {
     my $taxtotal = 0;
     $taxtotal += $_->{'amount'} foreach $self->_items_tax;
 
-    my $duedate = '';
-    if (    $conf->exists('invoice_default_terms') 
-         && $conf->config('invoice_default_terms')=~ /^\s*Net\s*(\d+)\s*$/ ) {
-      $duedate = time2str("%m/%d/%Y", $self->_date + ($1*86400) );
-    }
+    my $duedate = $self->balance_due_date;
 
     my( $previous_balance, @unused ) = $self->previous; #previous balance
 
@@ -1816,7 +1812,10 @@ sub print_latex {
     'terms'        => $conf->config('invoice_default_terms') || 'Payable upon receipt',
     #'notes'        => join("\n", $conf->config('invoice_latexnotes') ),
     'conf_dir'     => "$FS::UID::conf_dir/conf.$FS::UID::datasrc",
-    'balance'      => $balance_due,
+    'current_charges'  => sprintf('%.2f', $self->charged ),
+    'previous_balance' => sprintf("%.2f", $pr_total),
+    'balance'      => sprintf("%.2f", $balance_due),
+    'duedate'      => $self->balance_due_date,
     'ship_enable'  => $conf->exists('invoice-ship_address'),
     'unitprices'   => $conf->exists('invoice-unitprice'),
   );
@@ -2025,11 +2024,14 @@ sub print_latex {
     }
   
     if ( $taxtotal ) {
+      $invoice_data{'taxtotal'} = sprintf('%.2f', $taxtotal);
       my $total = {};
       $total->{'total_item'} = 'Sub-total';
       $total->{'total_amount'} =
         '\dollar '. sprintf('%.2f', $self->charged - $taxtotal );
       unshift @total_items, $total;
+    }else{
+      $invoice_data{'taxtotal'} = '0.00';
     }
   
     {
@@ -2051,22 +2053,26 @@ sub print_latex {
       #foreach my $thing ( sort { $a->_date <=> $b->_date } $self->_items_credits, $self->_items_payments
   
       # credits
+      my $credittotal = 0;
       foreach my $credit ( $self->_items_credits ) {
         my $total;
         $total->{'total_item'} = _latex_escape($credit->{'description'});
-        #$credittotal
+        $credittotal += $credit->{'amount'};
         $total->{'total_amount'} = '-\dollar '. $credit->{'amount'};
         push @total_items, $total;
       }
+      $invoice_data{'credittotal'} = sprintf('%.2f', $credittotal);
   
       # payments
+      my $paymenttotal = 0;
       foreach my $payment ( $self->_items_payments ) {
         my $total = {};
         $total->{'total_item'} = _latex_escape($payment->{'description'});
-        #$paymenttotal
+        $paymenttotal += $payment->{'amount'};
         $total->{'total_amount'} = '-\dollar '. $payment->{'amount'};
         push @total_items, $total;
       }
+      $invoice_data{'paymenttotal'} = sprintf('%.2f', $paymenttotal);
   
       { 
         my $total;
@@ -2400,6 +2406,16 @@ sub balance_due_msg {
     $msg .= ' - '. $conf->config('invoice_default_terms');
   }
   $msg;
+}
+
+sub balance_due_date {
+  my $self = shift;
+  my $duedate = '';
+  if (    $conf->exists('invoice_default_terms') 
+       && $conf->config('invoice_default_terms')=~ /^\s*Net\s*(\d+)\s*$/ ) {
+    $duedate = time2str("%m/%d/%Y", $self->_date + ($1*86400) );
+  }
+  $duedate;
 }
 
 =item invnum_date_pretty
