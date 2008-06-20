@@ -68,9 +68,9 @@ HTTPD_RESTART = /etc/init.d/apache2 restart
 
 #(an include directory, not a file, "Include /etc/apache/conf.d" in httpd.conf)
 #deb (3.1+), apache1
-APACHE_CONF = /etc/apache/conf.d
+#APACHE_CONF = /etc/apache/conf.d
 #deb (3.1+), apache2
-#APACHE_CONF = /etc/apache2/conf.d
+APACHE_CONF = /etc/apache2/conf.d
 
 FREESIDE_RESTART = ${INIT_FILE} restart
 
