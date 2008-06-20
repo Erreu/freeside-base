@@ -22,11 +22,11 @@ MASON_HANDLER = ${FREESIDE_CONF}/handler.pl
 MASONDATA = ${FREESIDE_CACHE}/masondata
 
 #mod_perl v1
-APACHE_VERSION = 1
+#APACHE_VERSION = 1
 #mod_perl v2 prereleases up to and including 1.999_21
 #APACHE_VERSON = 1.99
 #mod_perl v2 proper and prereleases 1.999_22 and after
-#APACHE_VERSION = 2
+APACHE_VERSION = 2
 
 #deb
 FREESIDE_DOCUMENT_ROOT = /var/www/freeside
@@ -54,9 +54,9 @@ INIT_INSTALL = /usr/sbin/update-rc.d freeside defaults 21 20
 #INIT_INSTALL = /usr/bin/true
 
 #deb, suse
-HTTPD_RESTART = /etc/init.d/apache restart
+#HTTPD_RESTART = /etc/init.d/apache restart
 #deb w/apache2
-#HTTPD_RESTART = /etc/init.d/apache2 restart
+HTTPD_RESTART = /etc/init.d/apache2 restart
 #redhat, fedora, mandrake
 #HTTPD_RESTART = /etc/init.d/httpd restart
 #freebsd
