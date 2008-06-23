@@ -1820,13 +1820,15 @@ sub print_latex {
     'unitprices'   => $conf->exists('invoice-unitprice'),
   );
 
+  my $countrydefault = $conf->config('countrydefault') || 'US';
   my $prefix = $cust_main->has_ship_address ? 'ship_' : '';
   foreach ( qw( contact company address1 address2 city state zip country fax) ){
     my $method = $prefix.$_;
     $invoice_data{"ship_$_"} = _latex_escape($cust_main->$method);
   }
+  $invoice_data{'ship_country'} = ''
+    if ( $invoice_data{'ship_country'} eq $countrydefault );
 
-  my $countrydefault = $conf->config('countrydefault') || 'US';
   if ( $cust_main->country eq $countrydefault ) {
     $invoice_data{'country'} = '';
   } else {
