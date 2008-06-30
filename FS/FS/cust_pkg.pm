@@ -1873,6 +1873,26 @@ sub order {
   '';
 }
 
+=item insert_reason
+
+Associates this package with a (suspension or cancellation) reason (see
+L<FS::cust_pkg_reason>, possibly inserting a new reason on the fly (see
+L<FS::reason>).
+
+Available options are:
+
+=over 4
+
+=item reason - can be set to a cancellation reason (see L<FS:reason>), either a reasonnum of an existing reason, or passing a hashref will create a new reason.  The hashref should have the following keys: typenum - Reason type (see L<FS::reason_type>, reason - Text of the new reason.
+
+=item date
+
+=back
+
+If there is an error, returns the error, otherwise returns false.
+
+=cut
+
 =item bulk_change PKGPARTS_ARYREF, REMOVE_PKGNUMS_ARYREF [ RETURN_CUST_PKG_ARRAYREF ]
 
 PKGPARTS is a list of pkgparts specifying the the billing item definitions (see
@@ -1936,15 +1956,39 @@ sub insert_reason {
 
   my $otaker = $FS::CurrentUser::CurrentUser->username;
 
+  my $reasonnum;
+  if ( $options{'reason'} =~ /^(\d+)$/ ) {
+
+    $reasonnum = $1;
+
+  } elsif ( ref($options{'reason'}) ) {
+
+    return 'Enter a new reason (or select an existing one)'
+      unless $options{'reason'}->{'reason'} !~ /^\s*$/;
+
+    my $reason = new FS::reason({
+      'reason_type' => $options{'reason'}->{'typenum'},
+      'reason'      => $options{'reason'}->{'reason'},
+    });
+    my $error = $reason->insert;
+    return $error if $error;
+
+    $reasonnum = $reason->reasonnum;
+
+  } else {
+    return "Unparsable reason: ". $options{'reason'};
+  }
+
   my $cust_pkg_reason =
     new FS::cust_pkg_reason({ 'pkgnum'    => $self->pkgnum,
-                              'reasonnum' => $options{'reason'}, 
+                              'reasonnum' => $reasonnum, 
 		              'otaker'    => $otaker,
 		              'date'      => $options{'date'}
 			                       ? $options{'date'}
 					       : time,
 	                    });
-  return $cust_pkg_reason->insert;
+
+  $cust_pkg_reason->insert;
 }
 
 =item set_usage USAGE_VALUE_HASHREF 
