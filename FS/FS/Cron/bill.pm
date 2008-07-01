@@ -87,7 +87,12 @@ END
     foreach my $cust_pkg (
       grep { $_->expire && $_->expire <= $^T } $cust_main->ncancelled_pkgs
     ) {
-      my $error = $cust_pkg->cancel;
+      my $cpr = $cust_pkg->last_cust_pkg_reason('expire');
+      my $error = $cust_pkg->cancel($cpr ? ( 'reason' => $cpr->reasonnum,
+                                             'reason_otaker' => $cpr->otaker
+                                           )
+                                         : ()
+                                   );
       warn "Error cancelling expired pkg ". $cust_pkg->pkgnum.
            " for custnum $custnum: $error"
         if $error;
@@ -101,7 +106,13 @@ END
            }
            $cust_main->ncancelled_pkgs
     ) {
-      my $error = $cust_pkg->suspend;
+      my $cpr = $cust_pkg->last_cust_pkg_reason('adjourn')
+        if ($cust_pkg->adjourn && $cust_pkg->adjourn < $^T);
+      my $error = $cust_pkg->suspend($cpr ? ( 'reason' => $cpr->reasonnum,
+                                              'reason_otaker' => $cpr->otaker
+                                            )
+                                          : ()
+                                    );
       warn "Error suspending package ". $cust_pkg->pkgnum.
            " for custnum $custnum: $error"
         if $error;
