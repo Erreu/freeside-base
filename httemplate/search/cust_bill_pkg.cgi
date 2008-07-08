@@ -126,6 +126,11 @@ if ( $cgi->param('out') ) {
   $where .= ' AND taxclass = '. dbh->quote( $cgi->param('taxclass') )
     if $cgi->param('taxclass');
 
+  if ( $cgi->param('taxclassNULL') ) {
+    my $same_sql = $r->sql_taxclass_sameregion;
+    push @where, $same_sql if $same_sql;
+  }
+
 }
 
 $where .= ' AND pkgnum != 0' if $cgi->param('nottax');
