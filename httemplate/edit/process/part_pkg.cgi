@@ -48,10 +48,10 @@ foreach ($cgi->param('agent_type')) {
   push @agents, $1 if $1;
 }
 $error = "At least one agent type must be specified."
-  unless( scalar(@agents) ||
-          $cgi->param('clone') && $cgi->param('clone') =~ /^\d+$/ ||
-          !$pkgpart && $conf->exists('agent-defaultpkg')
-        );
+  unless scalar(@agents)
+         || ( $cgi->param('clone') && $cgi->param('clone') =~ /^\d+$/ )
+         || ( !$cgi->param('pkgpart') && $conf->exists('agent-defaultpkg') )
+         || $cgi->param('disabled');
 
 my $new = new FS::part_pkg ( {
   map {
