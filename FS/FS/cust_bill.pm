@@ -2537,8 +2537,9 @@ sub _items_cust_bill_pkg {
 
         my $description = $desc;
         unless ( $conf->exists('disable_line_item_date_ranges') ) {
-          $desc .= " (" . time2str("%x", $cust_bill_pkg->sdate).
-                   " - ". time2str("%x", $cust_bill_pkg->edate). ")";
+          warn "improving description";
+          $description .= " (" . time2str("%x", $cust_bill_pkg->sdate).
+                          " - ". time2str("%x", $cust_bill_pkg->edate). ")";
         }
 
         #at least until cust_bill_pkg has "past" ranges in addition to
