@@ -283,8 +283,6 @@ suspend is normally updated by the suspend and unsuspend methods.
 cancel is normally updated by the cancel method (and also the order subroutine
 in some cases).
 
-Calls 
-
 =cut
 
 sub replace {
@@ -319,11 +317,12 @@ sub replace {
 
   foreach my $method ( qw(adjourn expire) ) {  # How many reasons?
     if ($options{'reason'} && $new->$method && $old->$method ne $new->$method) {
-      my $error = $new->insert_reason( 'reason' => $options{'reason'},
-                                       'date'   => $new->$method,
-                                       'action' => $method,
-                                       'reason_otaker' => $options{'reason_otaker'},
-                                     );
+      my $error = $new->insert_reason(
+        'reason'        => $options{'reason'},
+        'date'          => $new->$method,
+        'action'        => $method,
+        'reason_otaker' => $options{'reason_otaker'},
+      );
       if ( $error ) {
         dbh->rollback if $oldAutoCommit;
         return "Error inserting cust_pkg_reason: $error";
