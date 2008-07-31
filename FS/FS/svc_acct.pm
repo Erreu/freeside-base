@@ -2122,8 +2122,9 @@ sub ldap_password {
   } elsif ( $self->_password =~ /^\$1\$(.*)$/ && length($1) == 31 ) { #passwdMD5
     return '{MD5}'. $1;
   } elsif ( $self->_password =~ /^\$2a?\$(.*)$/ ) { #Blowfish
-    die "Blowfish encryption not supported in this context, svcnum ".
-        $self->svcnum. "\n";
+    warn "Blowfish encryption not supported in this context, svcnum ".
+         $self->svcnum. "\n";
+    return '{CRYPT}*'; #unsupported, should not auth
   } elsif ( $self->_password =~ /^(\w{48})$/ ) { #LDAP SSHA
     return '{SSHA}'. $1;
   } elsif ( $self->_password =~ /^(\w{64})$/ ) { #LDAP NS-MTA-MD5
