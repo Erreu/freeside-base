@@ -1,7 +1,9 @@
 package FS::cdr::simple;
 
-use vars qw(@ISA %info);
-use FS::cdr;
+use strict;
+use vars qw( @ISA %info $tmp_mon $tmp_mday $tmp_year );
+use Time::Local;
+use FS::cdr qw(_cdr_min_parser_maker);
 
 @ISA = qw(FS::cdr);
 
@@ -37,11 +39,12 @@ use FS::cdr;
     'dst',
 
     # Duration
-    sub { my($cdr, $min) = @_;
-          my $sec = sprintf('%.0f', $min * 60 );
-          $cdr->billsec(  $sec );
-          $cdr->duration( $sec );
-        },
+    _cdr_min_parser_maker, #( [qw( billsec duration)] ),
+    #sub { my($cdr, $min) = @_;
+    #      my $sec = sprintf('%.0f', $min * 60 );
+    #      $cdr->billsec(  $sec );
+    #      $cdr->duration( $sec );
+    #    },
 
   ],
 );
