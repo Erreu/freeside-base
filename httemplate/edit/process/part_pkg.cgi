@@ -100,7 +100,9 @@ if ( $error ) {
   $pkgpart = $new->pkgpart;
 }
 
-unless ( $error || $conf->exists('agent_defaultpkg') ) {
+unless ( $error
+         || ( !$cgi->param('pkgpart') && $conf->exists('agent_defaultpkg') )
+       ) {
   my $error = $new->process_m2m(
     'link_table'   => 'type_pkgs',
     'target_table' => 'agent_type',
