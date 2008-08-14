@@ -1,0 +1,53 @@
+<% include('/elements/header-minimal.html', 'File Upload') %>
+% if ($error) {
+Error: <% $error %>
+% }else{
+File Upload Successful <% join(',', @filenames) %>;
+% }
+<% include('/elements/footer.html') %>
+<%init>
+
+die "access denied"
+  unless $FS::CurrentUser::CurrentUser->access_right('Import'); #?
+
+my @filenames = ();
+my $error = '';     # could be extended to the access control
+
+$cgi->param('upload_fields') =~ /^([,\w]+)$/
+  or $error = "invalid upload_fields";
+my $fields = $1;
+
+my $dir = $FS::UID::cache_dir. "/cache.". $FS::UID::datasrc;
+
+foreach my $field (split /,/, $fields) {
+  next if $error;
+
+  my $fh = $cgi->upload($field)
+    or $error = "No valid file was provided.";
+
+  my $suffix = '';
+  if ( $cgi->param($field) =~ /(\.\w+)$/i ) {
+    $suffix = lc($1);
+  }
+
+  my $sh = new File::Temp( TEMPLATE => 'upload.XXXXXXXX',
+                           SUFFIX   => $suffix,
+                           DIR      => $dir,
+                           UNLINK   => 0,
+                         )
+    or $error ||= "can't open temporary file to store upload: $!\n";
+
+  unless ($error) {
+    while(<$fh>) {
+      print $sh $_;
+    }
+    $sh->filename =~ m!.*/([.\w]+)$!;
+    push @filenames,  "$field:$1";
+    close $sh
+  }
+
+}
+
+$error = "No files" unless scalar(@filenames);
+
+</%init>

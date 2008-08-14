@@ -1,0 +1,74 @@
+<SCRIPT TYPE="text/javascript">
+
+  function doUpload(form, callback) {
+    var name = 'form' + Math.floor(Math.random() * 99999); // perlize?
+    var d = document.createElement('DIV');
+    d.innerHTML = '<iframe style="display:none" src="about:blank" ' +
+                           'id="'   + name + '" ' +
+                           'name="' + name + '" ' +
+                           'onload="uploadComplete(\'' + name + '\')">' +
+                  '</iframe>';
+    document.body.appendChild(d);
+
+    var i = document.getElementById(name);
+    if (callback && typeof(callback) == 'function') {
+      i.onComplete = callback;
+    }
+
+    form.setAttribute('target', name);
+    return true;
+  }
+
+  function uploadComplete(id) {
+    var i = document.getElementById(id);
+    if (i.contentDocument) {
+      var d = i.contentDocument;
+    } else if (i.contentWindow) {
+      var d = i.contentWindow.document;
+    } else {
+      var d = window.frames[id].document;
+    }
+    if (d.location.href == "about:blank") {
+      return;
+    }
+
+    document.getElementById('r').innerHTML = d.body.innerHTML;
+    if (typeof(i.onComplete) == 'function') {
+      var p;
+      if (p = d.body.innerHTML.indexOf("File Upload Successful ") >= 0) {
+        var v = d.body.innerHTML.substr(p+24);
+        var u = document.getElementById('uploaded_files');
+        v = v.substr(0, v.indexOf(';'));
+        u.value = v;
+        i.onComplete(true, '');
+      }else{
+        i.onComplete(false, d.body.innerHTML);
+      }
+    }
+  }
+
+</SCRIPT>
+
+<INPUT TYPE="hidden" NAME="uploaded_files" ID="uploaded_files" VALUE="" />
+
+<INPUT TYPE="hidden" NAME="upload_fields" VALUE="<% join(',', @field) %>" />
+
+% foreach (@field) {
+    <TR>
+      <TH><% shift @label %></TH>
+      <TD><INPUT TYPE="file" NAME="<% $_ %>" /></TD>
+    </TR>
+% }
+
+<DIV STYLE="display:<% $param{debug} ? 'visible' : 'none' %>">
+  Debugging: <PRE ID="r"></PRE>
+</DIV>
+
+<%init>
+
+my %param = @_;
+
+my @label = ref($param{'label'}) ? @{$param{'label'}} : ($param{'label'});
+my @field = ref($param{'field'}) ? @{$param{'field'}} : ($param{'field'});
+
+</%init>

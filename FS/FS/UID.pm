@@ -3,7 +3,7 @@ package FS::UID;
 use strict;
 use vars qw(
   @ISA @EXPORT_OK $cgi $dbh $freeside_uid $user 
-  $conf_dir $secrets $datasrc $db_user $db_pass %callback @callback
+  $conf_dir $cache_dir $secrets $datasrc $db_user $db_pass %callback @callback
   $driver_name $AutoCommit
 );
 use subs qw(
@@ -22,6 +22,7 @@ use FS::CurrentUser;
 $freeside_uid = scalar(getpwnam('freeside'));
 
 $conf_dir = "%%%FREESIDE_CONF%%%/";
+$cache_dir = "%%%FREESIDE_CACHE%%%";
 
 $AutoCommit = 1; #ours, not DBI
 
