@@ -5714,8 +5714,8 @@ sub batch_import {
           $columns[0] = $part_referral->refnum;
         }
 
-        #$cust_main{$field} = shift @$columns; 
-        $cust_main{$field} = shift @columns; 
+        my $value = shift @columns;
+        $cust_main{$field} = $value if length($value);
       }
     }
 
