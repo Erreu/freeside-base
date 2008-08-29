@@ -185,7 +185,7 @@ Line-item revenue recognition
 
   <TR>
     <TD>
-      <INPUT TYPE="text" NAME="pkg_svc<% $svcpart %>" SIZE=4 MAXLENGTH=3 VALUE="<% $quan %>">
+      <INPUT TYPE="text" NAME="pkg_svc<% $svcpart %>" SIZE=7 MAXLENGTH=6 VALUE="<% $quan %>">
     </TD>
    
     <TD>
