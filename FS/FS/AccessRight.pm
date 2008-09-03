@@ -160,6 +160,8 @@ assigned to users and/or groups.
   'Apply credit', #NEWNEW
   'Unapply credit', #aka unapplycredits Enable "unapplication" of unclosed credits.
   'Delete credit', #aka. deletecredits Enable deletion of unclosed credits. Be very careful! Only delete credits that were data-entry errors, not adjustments. Optionally specify one or more comma-separated email addresses to be notified when a credit is deleted.
+  'Post refund',
+#  'Process refund',
   'Add on-the-fly credit reason', #NEW
 
 ###
