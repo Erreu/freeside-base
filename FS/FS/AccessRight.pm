@@ -114,6 +114,8 @@ assigned to users and/or groups.
   'Cancel customer package later',
   'Add on-the-fly cancel reason', #NEW
   'Add on-the-fly suspend reason', #NEW
+  'Edit customer package invoice details', #NEW
+  'Edit customer package comments', #NEW
 
 ###
 # customer service rights

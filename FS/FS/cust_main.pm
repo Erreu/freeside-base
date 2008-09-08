@@ -2089,6 +2089,9 @@ sub bill {
 
         warn "    charges (setup=$setup, recur=$recur); adding line items\n"
           if $DEBUG > 1;
+
+        push @details, map { $_->detail } $cust_pkg->cust_pkg_detail('I');
+
         my $cust_bill_pkg = new FS::cust_bill_pkg ({
           'invnum'    => $invnum,
           'pkgnum'    => $cust_pkg->pkgnum,

@@ -378,3 +378,5 @@ t/cust_pay_pending.t
 FS/part_pkg_taxclass.pm
 t/part_pkg_taxclass.t
 FS/Yori.pm
+FS/cust_pkg_detail.pm
+t/cust_pkg_detail.t

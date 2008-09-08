@@ -53,8 +53,20 @@ Email Address
  
  </TABLE>
  <BR>
- 
- 
+
+
+Development
+<% ntable("#cccccc",2) %>
+
+  <TR>
+    <TH>Show internal package numbers: </TH>
+    <TD><INPUT TYPE="checkbox" NAME="show_pkgnum" VALUE="1" <% $curuser->option('show_pkgnum') ? 'CHECKED' : '' %>></TD>
+  </TR>
+
+</TABLE>
+<BR>
+
+
 % foreach my $prop (qw( height width availHeight availWidth colorDepth )) {
   <INPUT TYPE="hidden" NAME="<% $prop %>" VALUE="">
   <SCRIPT TYPE="text/javascript">
@@ -67,11 +79,13 @@ Email Address
 <% include('/elements/footer.html') %>
 <%init>
 
+my $curuser = $FS::CurrentUser::CurrentUser;
+
 # XSS via your own preferences?  seems unlikely, but nice try anyway...
-( $FS::CurrentUser::CurrentUser->option('menu_position') || 'left' )
+( $curuser->option('menu_position') || 'left' )
   =~ /^(\w+)$/ or die "illegal menu_position";
 my $menu_position = $1;
-( $FS::CurrentUser::CurrentUser->option('email_address') )
+( $curuser->option('email_address') )
   =~ /^([,\w\@.]*)$/ or die "illegal email_address";  #too late
 my $email_address = $1;
 
