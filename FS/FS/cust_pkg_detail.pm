@@ -2,7 +2,7 @@ package FS::cust_pkg_detail;
 
 use strict;
 use vars qw( @ISA );
-use FS::Record qw( qsearch qsearchs );
+use FS::Record; # qw( qsearch qsearchs );
 
 @ISA = qw(FS::Record);
 
@@ -27,8 +27,9 @@ FS::cust_pkg_detail - Object methods for cust_pkg_detail records
 
 =head1 DESCRIPTION
 
-An FS::cust_pkg_detail object represents an example.  FS::cust_pkg_detail inherits from
-FS::Record.  The following fields are currently supported:
+An FS::cust_pkg_detail object represents additional customer package details.
+FS::cust_pkg_detail inherits from FS::Record.  The following fields are
+currently supported:
 
 =over 4
 
@@ -38,7 +39,7 @@ primary key
 
 =item pkgnum
 
-pkgnum
+pkgnum (see L<FS::cust_pkg>)
 
 =item detail
 
@@ -46,12 +47,11 @@ detail
 
 =item detailtype
 
-detailtype
+"I" for Invoice details or "C" for comments
 
 =item weight
 
-weight
-
+Optional display weight
 
 =back
 
@@ -61,7 +61,7 @@ weight
 
 =item new HASHREF
 
-Creates a new example.  To add the example to the database, see L<"insert">.
+Creates a new record.  To add the record to the database, see L<"insert">.
 
 Note that this stores the hash reference, not a distinct copy of the hash it
 points to.  You can ask the object for a copy with the I<hash> method.
@@ -100,7 +100,7 @@ returns the error, otherwise returns false.
 
 =item check
 
-Checks all fields to make sure this is a valid example.  If there is
+Checks all fields to make sure this is a valid record.  If there is
 an error, returns the error, otherwise returns false.  Called by the insert
 and replace methods.
 
@@ -114,12 +114,14 @@ sub check {
 
   my $error = 
     $self->ut_numbern('pkgdetailnum')
-    || $self->ut_number('pkgnum')
+    || $self->ut_foreign_key('pkgnum', 'cust_pkg', 'pkgnum')
     || $self->ut_text('detail')
-    || $self->ut_('detailtype')
-    || $self->ut_number('weight')
+    || $self->ut_enum('detailtype', [ 'I', 'C' ] )
+    || $self->ut_numbern('weight')
   ;
   return $error if $error;
+
+  $self->weight(0) unless $self->weight;
 
   $self->SUPER::check;
 }
@@ -128,11 +130,9 @@ sub check {
 
 =head1 BUGS
 
-The author forgot to customize this manpage.
-
 =head1 SEE ALSO
 
-L<FS::Record>, schema.html from the base documentation.
+L<FS::cust_pkg>, L<FS::Record>, schema.html from the base documentation.
 
 =cut
 
