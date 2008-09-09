@@ -815,7 +815,7 @@ sub tables_hashref {
       ],
       'primary_key' => 'num',
       'unique' => [],
-      'index' => [],
+      'index' => [ [ 'pkgnum' ], [ 'reasonnum' ], ['action'], ],
     },
 
     'cust_refund' => {
