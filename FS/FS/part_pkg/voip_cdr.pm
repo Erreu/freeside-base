@@ -27,6 +27,11 @@ tie my %rating_method, 'Tie::IxHash',
 #                'Asterisk (or other?) CDR table',
 #;
 
+tie my %temporalities, 'Tie::IxHash',
+  'upcoming'  => "Upcoming (future)",
+  'preceding' => "Preceding (past)",
+;
+
 %info = (
   'name' => 'VoIP rating by plan of CDR records in an internal (or external) SQL table',
   'fields' => {
@@ -36,6 +41,13 @@ tie my %rating_method, 'Tie::IxHash',
     'recur_flat'     => { 'name' => 'Base recurring fee for this package',
                           'default' => 0,
                         },
+
+    #probably useful for other usage-charging price plans
+    'recur_temporality' => { 'name' => 'Charge recurring fee for period',
+                             'type' => 'select',
+                             'select_options' => \%temporalities,
+                           },
+
     'unused_credit' => { 'name' => 'Credit the customer for the unused portion'.
                                    ' of service at cancellation',
                          'type' => 'checkbox',
@@ -109,7 +121,7 @@ tie my %rating_method, 'Tie::IxHash',
 
   },
   'fieldorder' => [qw(
-                       setup_fee recur_flat unused_credit
+                       setup_fee recur_flat recur_temporality unused_credit
                        rating_method ratenum 
                        default_prefix
                        disable_src
@@ -129,7 +141,11 @@ sub calc_setup {
 sub calc_recur {
   my($self, $cust_pkg, $sdate, $details, $param ) = @_;
 
-  my $last_bill = $cust_pkg->last_bill;
+  #my $last_bill = $cust_pkg->last_bill;
+  my $last_bill = $cust_pkg->get('last_bill'); #->last_bill falls back to setup
+
+  return 0
+    if $self->option('recur_temporality') eq 'preceding' && $last_bill == 0;
 
   my $ratenum = $cust_pkg->part_pkg->option('ratenum');
 
