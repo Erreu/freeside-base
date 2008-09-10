@@ -913,6 +913,28 @@ sub fax_invoice {
 
 }
 
+=item ftp_invoice [ TEMPLATENAME ] 
+
+Sends this invoice data via FTP.
+
+TEMPLATENAME is unused?
+
+=cut
+
+sub ftp_invoice {
+  my $self = shift;
+  my $template = scalar(@_) ? shift : '';
+
+  $self->send_csv(
+    'protocol'   => 'ftp',
+    'server'     => $conf->config('cust_bill-ftpserver'),
+    'username'   => $conf->config('cust_bill-ftpusername'),
+    'password'   => $conf->config('cust_bill-ftppassword'),
+    'dir'        => $conf->config('cust_bill-ftpdir'),
+    'format'     => $conf->config('cust_bill-ftpformat'),
+  );
+}
+
 =item send_if_newest [ TEMPLATENAME [ , AGENTNUM [ , INVOICE_FROM ] ] ]
 
 Like B<send>, but only sends the invoice if it is the newest open invoice for
@@ -2670,6 +2692,14 @@ sub process_refax {
   process_re_X('fax', @_);
 }
 
+=item reftp
+
+=cut
+
+sub process_reftp {
+  process_re_X('ftp', @_);
+}
+
 use Storable qw(thaw);
 use Data::Dumper;
 use MIME::Base64;
@@ -2712,6 +2742,8 @@ sub re_X {
     'order_by'  => $orderby,
     'debug' => 1,
   } );
+
+  $method .= '_invoice' unless $method eq 'email' || $method eq 'print';
 
   warn " $me re_X $method: ". scalar(@cust_bill). " invoices found\n"
     if $DEBUG;
