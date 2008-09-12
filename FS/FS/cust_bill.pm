@@ -935,6 +935,24 @@ sub ftp_invoice {
   );
 }
 
+=item spool_invoice [ TEMPLATENAME ] 
+
+Spools this invoice data (see L<FS::spool_csv>)
+
+TEMPLATENAME is unused?
+
+=cut
+
+sub spool_invoice {
+  my $self = shift;
+  my $template = scalar(@_) ? shift : '';
+
+  $self->spool_csv(
+    'format'       => $conf->config('cust_bill-spoolformat'),
+    'agent_spools' => $conf->exists('cust_bill-spoolagent'),
+  );
+}
+
 =item send_if_newest [ TEMPLATENAME [ , AGENTNUM [ , INVOICE_FROM ] ] ]
 
 Like B<send>, but only sends the invoice if it is the newest open invoice for
@@ -2668,7 +2686,7 @@ sub _items_payments {
 
 =over 4
 
-=item reprint
+=item process_reprint
 
 =cut
 
@@ -2676,7 +2694,7 @@ sub process_reprint {
   process_re_X('print', @_);
 }
 
-=item reemail
+=item process_reemail
 
 =cut
 
@@ -2684,7 +2702,7 @@ sub process_reemail {
   process_re_X('email', @_);
 }
 
-=item refax
+=item process_refax
 
 =cut
 
@@ -2692,12 +2710,20 @@ sub process_refax {
   process_re_X('fax', @_);
 }
 
-=item reftp
+=item process_reftp
 
 =cut
 
 sub process_reftp {
   process_re_X('ftp', @_);
+}
+
+=item respool
+
+=cut
+
+sub process_respool {
+  process_re_X('spool', @_);
 }
 
 use Storable qw(thaw);
