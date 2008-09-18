@@ -200,6 +200,14 @@ sub dbdef_dist {
                                                      ],
                                       });
 
+    $h_indices{"h_${table}_srckey2"} = DBIx::DBSchema::Index->new({
+                                         'name'    => "h_${table}_srckey2",
+                                         'unique'  => 0,
+                                         'columns' => [ 'history_date',
+                                                        $tableobj->primary_key,
+                                                      ],
+                                       });
+
     my $h_tableobj = DBIx::DBSchema::Table->new( {
       'name'          => "h_$table",
       'primary_key'   => 'historynum',
@@ -496,6 +504,7 @@ sub tables_hashref {
         'stateid_state',  'varchar', 'NULL', $char_d, '', '', 
         'birthdate' ,@date_type, '', '', 
         'signupdate',@date_type, '', '', 
+        'dundate',   @date_type, '', '', 
         'company',  'varchar', 'NULL', $char_d, '', '', 
         'address1', 'varchar', '',     $char_d, '', '', 
         'address2', 'varchar', 'NULL', $char_d, '', '', 
