@@ -392,6 +392,9 @@ Current packages
 %             if ( $curuser->access_right('Suspend customer package later') ) { 
                 (&nbsp;<% pkg_adjourn_link($cust_pkg) %>&nbsp;)
 %             } 
+%             if ( $curuser->access_right('Delay suspension events') ) { 
+                (&nbsp;<% pkg_delay_link($cust_pkg) %>&nbsp;)
+%             } 
 %             if ( $curuser->access_right('Cancel customer package immediately') ) { 
                 (&nbsp;<% pkg_cancel_link($cust_pkg) %>&nbsp;)
 %             } 
@@ -651,6 +654,15 @@ sub pkg_suspend_link { include( '/elements/popup_link-cust_pkg.html',
                                 { 'action'      => $p. 'misc/cancel_pkg.html?method=suspend',
                                   'label'       => 'Suspend&nbsp;now',
                                   'actionlabel' => 'Suspend',
+                                  'cust_pkg'    => shift,
+                                }
+                              )
+                     }
+
+sub pkg_delay_link   { include( '/elements/popup_link-cust_pkg.html',
+                                { 'action'      => $p. 'misc/delay_susp_pkg.html',
+                                  'label'       => 'Delay&nbsp;suspend',
+                                  'actionlabel' => 'Delay suspend for',
                                   'cust_pkg'    => shift,
                                 }
                               )

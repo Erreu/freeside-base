@@ -227,6 +227,8 @@ Card Verification Value, "CVV2" (also known as CVC2 or CID), the 3 or 4 digit nu
 
 =item spool_cdr - Enable individual CDR spooling, empty or `Y'
 
+=item dundate - a suggestion to events (see L<FS::part_bill_event">) to delay until this unix timestamp
+
 =back
 
 =head1 METHODS

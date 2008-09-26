@@ -4,6 +4,8 @@ use strict;
 use vars qw( @ISA $DEBUG @EXPORT_OK );
 use FS::Record qw( dbh qsearch qsearchs );
 use FS::Conf;
+use FS::cust_main;
+use FS::cust_bill;
 
 @ISA = qw( FS::Record );
 @EXPORT_OK = qw( due_events );
@@ -234,6 +236,9 @@ sub due_events {
   sort {    $a->seconds   <=> $b->seconds
          || $a->weight    <=> $b->weight
 	 || $a->eventpart <=> $b->eventpart }
+    grep { ref($record) ne 'FS::cust_bill' || $_->eventcode !~ /honor_dundate/
+           || $event_time > $record->cust_main->dundate
+         }
     grep { $_->seconds <= ( $interval )
            && ! qsearch( 'cust_bill_event', {
 	                   'invnum' => $record->get($record->dbdef_table->primary_key),
