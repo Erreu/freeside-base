@@ -475,6 +475,22 @@ sub check {
   '';
 }
 
+=item pkg_comment
+
+Returns an (internal) string representing this package.  Currently,
+"pkgpart: pkg - comment", is returned.  "pkg - comment" may be returned in the
+future, omitting pkgpart.
+
+=cut
+
+sub pkg_comment {
+  my $self = shift;
+
+  #$self->pkg. ' - '. $self->comment;
+  #$self->pkg. ' ('. $self->comment. ')';
+  $self->pkgpart. ': '. $self->pkg. ' - '. $self->comment;
+}
+
 =item pkg_class
 
 Returns the package class, as an FS::pkg_class object, or the empty string
