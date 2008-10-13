@@ -2394,6 +2394,13 @@ worry that config_items is freeside-specific and icky.
     'type'        => 'text',
   },
 
+  {
+    'key'         => 'email_report-subject',
+    'section'     => '',
+    'description' => 'Subject for reports emailed by freeside-fetch.  Defaults to "Freeside report".',
+    'type'        => 'text',
+  },
+
 );
 
 1;
