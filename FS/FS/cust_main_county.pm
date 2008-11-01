@@ -4,7 +4,7 @@ use strict;
 use vars qw( @ISA @EXPORT_OK $conf
              @cust_main_county %cust_main_county $countyflag );
 use Exporter;
-use FS::Record qw( qsearch );
+use FS::Record qw( qsearch dbh );
 
 @ISA = qw( FS::Record );
 @EXPORT_OK = qw( regionselector );
