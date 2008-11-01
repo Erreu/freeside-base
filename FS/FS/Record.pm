@@ -379,17 +379,22 @@ sub qsearch {
     my $value = $record->{$field};
     #done above in 1.7# $value = $value->{'value'} if ref($value);
     my $type = dbdef->table($table)->column($field)->type;
+
+    my $TYPE = SQL_VARCHAR;
     if ( $type =~ /(int|(big)?serial)/i && $value =~ /^\d+(\.\d+)?$/ ) {
-      $sth->bind_param($bind++, $value, { TYPE => SQL_INTEGER } );
+      $TYPE = SQL_INTEGER;
+
+    #DBD::Pg 1.49: Cannot bind ... unknown sql_type 6 with SQL_FLOAT
     } elsif (    ( $type =~ /(numeric)/i     && $value =~ /^[+-]?\d+(\.\d+)?$/)
               || ( $type =~ /(real|float4)/i
                      && $value =~ /[-+]?\d*\.?\d+([eE][-+]?\d+)?/
                  )
             ) {
-      $sth->bind_param($bind++, $value, { TYPE => SQL_FLOAT } );
-    } else {
-      $sth->bind_param($bind++, $value, { TYPE => SQL_VARCHAR } );
+      $TYPE = SQL_DECIMAL;
     }
+
+    $sth->bind_param($bind++, $value, { TYPE => $TYPE } );
+
   }
 
 #  $sth->execute( map $record->{$_},
