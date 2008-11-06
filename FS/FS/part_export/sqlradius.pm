@@ -49,7 +49,7 @@ END
 
 $notes2 = <<'END';
 An existing RADIUS database will be updated in realtime, but you can use
-<a href="../docs/man/bin/freeside-sqlradius-reset">freeside-sqlradius-reset</a>
+<a href="http://www.freeside.biz/mediawiki/index.php/Freeside:1.7:Documentation:Developer/bin/freeside-sqlradius-reset">freeside-sqlradius-reset</a>
 to delete the entire RADIUS database and repopulate the tables from the
 Freeside database.  See the
 <a href="http://search.cpan.org/dist/DBI/DBI.pm#connect">DBI documentation</a>
@@ -611,7 +611,7 @@ sub usage_sessions {
                );
 
   my @param = ();
-  my @where = '';
+  my @where = ();
 
   if ( $svc_acct ) {
     my $username = $self->export_username($svc_acct);
