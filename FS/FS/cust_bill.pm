@@ -1845,6 +1845,7 @@ sub print_latex {
     'state'        => _latex_escape($cust_main->state),
     #'quantity'     => 1,
     'zip'          => _latex_escape($cust_main->zip),
+    'fax'          => _latex_escape($cust_main->fax),
     'footer'       => join("\n", $conf->config_orbase('invoice_latexfooter', $template) ),
     'smallfooter'  => join("\n", $conf->config_orbase('invoice_latexsmallfooter', $template) ),
     'returnaddress' => $returnaddress,
@@ -2242,6 +2243,7 @@ sub print_html {
     'city'         => encode_entities($cust_main->city),
     'state'        => encode_entities($cust_main->state),
     'zip'          => encode_entities($cust_main->zip),
+    'fax'          => encode_entities($cust_main->fax),
     'terms'        => $conf->config('invoice_default_terms')
                       || 'Payable upon receipt',
     'cid'          => $cid,
