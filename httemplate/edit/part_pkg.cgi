@@ -21,7 +21,7 @@ Package information
   <TR>
     <TD ALIGN="right">Package (customer-visible)</TD>
     <TD>
-      <INPUT TYPE="text" NAME="pkg" SIZE=32 VALUE="<% $part_pkg->pkg %>">
+      <INPUT TYPE="text" NAME="pkg" SIZE=32 MAXLENGTH=60 VALUE="<% $part_pkg->pkg %>">
     </TD>
   </TR>
   <TR>
