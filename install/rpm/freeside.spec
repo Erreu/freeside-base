@@ -1,35 +1,45 @@
 %{!?_initrddir:%define _initrddir /etc/rc.d/init.d}
 %{!?version:%define version 1.7.3}
-%{!?release:%define release 3}
+%{!?release:%define release 4}
 
 Summary: Freeside ISP Billing System
 Name: freeside
 Version: %{version}
 Release: %{release}
-License: AGPL
+License: AGPLv3
 Group: Applications/Internet
 URL: http://www.sisd.com/freeside/
-Packager: Richard Siddall <richard.siddall@elirion.net>
 Vendor: Freeside
 Source: http://www.sisd.com/freeside/%{name}-%{version}.tar.gz
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 BuildArch: noarch
 Requires: %{name}-frontend
 Requires: %{name}-backend
+%if "%{_vendor}" != "suse"
 Requires: tetex-latex
+%else
+Requires: te_latex
+%endif
 Requires: perl-Fax-Hylafax-Client
 
+%if "%{_vendor}" != "suse"
+%define apache_conffile		/etc/httpd/conf/httpd.conf
+%define	apache_confdir		/etc/httpd/conf.d
+%define	apache_version		2
 %define freeside_document_root	/var/www/freeside
-%define freeside_cache		/var/cache/subsys/freeside
+%else
+%define apache_conffile		/etc/apache2/uid.conf
+%define	apache_confdir		/etc/apache2/conf.d
+%define	apache_version		2
+%define freeside_document_root	/srv/www/freeside
+%endif
+%define freeside_cache		/etc/freeside
 %define freeside_conf		/etc/freeside
 %define freeside_export		/etc/freeside
 %define freeside_lock		/var/lock/freeside
 %define freeside_log		/var/log/freeside
-%define freeside_socket         /etc/freeside
+%define freeside_socket		/etc/freeside
 %define	rt_enabled		0
-%define apache_conffile		/etc/httpd/conf/httpd.conf
-%define	apache_confdir		/etc/httpd/conf.d
-%define	apache_version		2
 %define	fs_queue_user		fs_queue
 %define	fs_selfservice_user	fs_selfservice
 %define	fs_cron_user		fs_daily
@@ -44,10 +54,12 @@ Freeside is a flexible ISP billing system written by Ivan Kohler
 Summary: HTML::Mason interface for %{name}
 Group: Applications/Internet
 Prefix: %{freeside_document_root}
+%if "%{_vendor}" != "suse"
 Requires: mod_ssl
+%endif
 Requires: perl-Apache-DBI
 Conflicts: %{name}-apacheasp
-Provides: %{name}-frontend
+Provides: %{name}-frontend = %{version}
 BuildArch: noarch
 
 %description mason
@@ -61,7 +73,7 @@ Requires: perl-DBI
 Requires: perl-DBD-Pg >= 1.32
 Requires: %{name}
 Conflicts: %{name}-mysql
-Provides: %{name}-backend
+Provides: %{name}-backend = %{version}
 
 %description postgresql
 This package includes the PostgreSQL database backend for %{name}.
@@ -75,7 +87,7 @@ Requires: perl-DBI
 Requires: perl-DBD-MySQL
 Requires: %{name}
 Conflicts: %{name}-postgresql
-Provides: %{name}-backend
+Provides: %{name}-backend = %{version}
 
 %description mysql
 This package includes the MySQL database backend for %{name}.
@@ -123,10 +135,10 @@ This package installs the sample PHP scripts for the self-service interface for 
 For security reasons, it is set to conflict with %{name} as you should not install the billing system and self-service interface on the same computer.
 
 %prep
-%setup
+%setup -q
 %{__rm} bin/pod2x # Only useful to Ivan Kohler now
 %{__cp} install/rpm/freeside-install FS/bin
-perl -pi -e 's|/usr/local/bin|%{buildroot}%{_bindir}|g' FS/Makefile.PL
+perl -pi -e 's|/usr/local/bin|%{_bindir}|g' FS/Makefile.PL
 perl -pi -e 's|\s+-o\s+freeside\s+| |g' Makefile
 perl -ni -e 'print if !/\s+chown\s+/;' Makefile
 
@@ -137,6 +149,12 @@ perl -pi -e 's|/usr/local/freeside|%{freeside_socket}|g' fs_selfservice/FS-SelfS
 perl -pi -e 's|socket\s*=\s*"/usr/local/freeside|socket = "%{freeside_socket}|g' fs_selfservice/FS-SelfService/freeside-selfservice-*
 perl -pi -e 's|log_file\s*=\s*"/usr/local/freeside|log_file = "%{freeside_log}|g' fs_selfservice/FS-SelfService/freeside-selfservice-*
 perl -pi -e 's|lock_file\s*=\s*"/usr/local/freeside|lock_file = "%{freeside_lock}|g' fs_selfservice/FS-SelfService/freeside-selfservice-*
+
+# Fix-ups for SuSE
+%if "%{_vendor}" == "suse"
+perl -pi -e 's|htpasswd|/usr/sbin/htpasswd2|g if /system/;' FS/FS/access_user.pm
+perl -pi -e 'print "Order deny,allow\nAllow from all\n" if /<Files/i;' htetc/freeside*.conf
+%endif
 
 # Override find-requires/find-provides to supplement Perl requires for HTML::Mason file handler.pl
 cat << \EOF > %{name}-req
@@ -162,14 +180,22 @@ touch htmlman
 
 #perl -pi -e 's|%%%%%%VERSION%%%%%%|%{version}|g' FS/bin/*
 cd FS
-CFLAGS="$RPM_OPT_FLAGS" perl Makefile.PL PREFIX=$RPM_BUILD_ROOT%{_prefix} SITELIBEXP=$RPM_BUILD_ROOT%{perl_sitelib} SITEARCHEXP=$RPM_BUILD_ROOT%{perl_sitearch}
+if [ "%{_vendor}" = "suse" ]; then
+	CFLAGS="$RPM_OPT_FLAGS" perl Makefile.PL
+else
+	CFLAGS="$RPM_OPT_FLAGS" perl Makefile.PL PREFIX=$RPM_BUILD_ROOT%{_prefix} SITELIBEXP=$RPM_BUILD_ROOT%{perl_sitelib} SITEARCHEXP=$RPM_BUILD_ROOT%{perl_sitearch} INSTALLSCRIPT=$RPM_BUILD_ROOT%{_bindir}
+fi
 %{__make} OPTIMIZE="$RPM_OPT_FLAGS"
 cd ..
 %{__make} perl-modules VERSION='%{version}-%{release}' FREESIDE_CACHE=%{freeside_cache} FREESIDE_CONF=%{freeside_conf} FREESIDE_EXPORT=%{freeside_export} FREESIDE_LOCK=%{freeside_lock} FREESIDE_LOG=%{freeside_log}
 touch perl-modules
 
 cd fs_selfservice/FS-SelfService
-CFLAGS="$RPM_OPT_FLAGS" perl Makefile.PL PREFIX=$RPM_BUILD_ROOT%{_prefix} SITELIBEXP=$RPM_BUILD_ROOT%{perl_sitelib} SITEARCHEXP=$RPM_BUILD_ROOT%{perl_sitearch} INSTALLSCRIPT=$RPM_BUILD_ROOT%{_sbindir}
+if [ "%{_vendor}" = "suse" ]; then
+	CFLAGS="$RPM_OPT_FLAGS" perl Makefile.PL
+else
+	CFLAGS="$RPM_OPT_FLAGS" perl Makefile.PL PREFIX=$RPM_BUILD_ROOT%{_prefix} SITELIBEXP=$RPM_BUILD_ROOT%{perl_sitelib} SITEARCHEXP=$RPM_BUILD_ROOT%{perl_sitearch} INSTALLSCRIPT=$RPM_BUILD_ROOT%{_sbindir}
+fi
 %{__make} OPTIMIZE="$RPM_OPT_FLAGS"
 cd ../..
 
@@ -238,10 +264,10 @@ done
 # Make a list of the Mason files before adding self-service, etc.
 echo "%attr(-,freeside,freeside) %{freeside_conf}/handler.pl" > %{name}-%{version}-%{release}-mason-filelist
 find $RPM_BUILD_ROOT%{freeside_document_root} -type f -print | \
-        sed "s@^$RPM_BUILD_ROOT@@g" >> %{name}-%{version}-%{release}-mason-filelist
+	sed "s@^$RPM_BUILD_ROOT@@g" >> %{name}-%{version}-%{release}-mason-filelist
 if [ "$(cat %{name}-%{version}-%{release}-mason-filelist)X" = "X" ] ; then
-    echo "ERROR: EMPTY FILE LIST"
-    exit 1
+	echo "ERROR: EMPTY FILE LIST"
+	exit 1
 fi
 
 # Install all the miscellaneous binaries into /usr/share or similar
@@ -271,17 +297,17 @@ eval `perl '-V:installarchlib'`
 find $RPM_BUILD_ROOT%{_prefix} -type f -print | \
 	grep -v '/etc/freeside/conf' | \
 	grep -v '/etc/freeside/secrets' | \
-        sed "s@^$RPM_BUILD_ROOT@@g" > %{name}-%{version}-%{release}-filelist
+	sed "s@^$RPM_BUILD_ROOT@@g" > %{name}-%{version}-%{release}-filelist
 if [ "$(cat %{name}-%{version}-%{release}-filelist)X" = "X" ] ; then
-    echo "ERROR: EMPTY FILE LIST"
-    exit 1
+	echo "ERROR: EMPTY FILE LIST"
+	exit 1
 fi
 cd ..
 
 # Install the self-service interface Perl files
 cd fs_selfservice/FS-SelfService
 %{__mkdir_p} $RPM_BUILD_ROOT%{_prefix}/local/bin
-%makeinstall PREFIX=$RPM_BUILD_ROOT%{_prefix}
+%makeinstall
 %{__rm} -f `find $RPM_BUILD_ROOT -type f -name perllocal.pod -o -name .packlist`
 
 [ -x %{_rpmlibdir}/brp-compress ] && %{_rpmlibdir}/brp-compress
@@ -289,11 +315,11 @@ cd fs_selfservice/FS-SelfService
 find $RPM_BUILD_ROOT%{_prefix} -type f -print | \
 	grep -v '/etc/freeside/conf' | \
 	grep -v '/etc/freeside/secrets' | \
-        sed "s@^$RPM_BUILD_ROOT@@g" > %{name}-%{version}-%{release}-temp-filelist
+	sed "s@^$RPM_BUILD_ROOT@@g" > %{name}-%{version}-%{release}-temp-filelist
 cat ../../FS/%{name}-%{version}-%{release}-filelist %{name}-%{version}-%{release}-temp-filelist | sort | uniq -u >  %{name}-%{version}-%{release}-selfservice-core-filelist
 if [ "$(cat %{name}-%{version}-%{release}-selfservice-core-filelist)X" = "X" ] ; then
-    echo "ERROR: EMPTY FILE LIST"
-    exit 1
+	echo "ERROR: EMPTY FILE LIST"
+	exit 1
 fi
 cd ../..
 
@@ -386,6 +412,9 @@ fi
 %attr(0755,freeside,freeside) %{freeside_document_root}/selfservice/php
 
 %changelog
+* Tue Nov 11 2008 Richard Siddall <richard.siddall@elirion.net> - 1.7.3-4
+- Cleaning up after running rpmlint
+
 * Mon Aug 25 2008 Richard Siddall <richard.siddall@elirion.net> - 1.7.3-3
 - More revisions for self-service interface
 
