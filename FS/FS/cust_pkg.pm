@@ -486,6 +486,7 @@ sub cancel {
   if ($options{'reason'}) {
     $error = $self->insert_reason( 'reason' => $options{'reason'},
                                    'action' => $date ? 'expire' : 'cancel',
+                                   'date'   => $date,
                                    'reason_otaker' => $options{'reason_otaker'},
                                  );
     if ( $error ) {
@@ -663,6 +664,7 @@ sub suspend {
   if ($options{'reason'}) {
     $error = $self->insert_reason( 'reason' => $options{'reason'},
                                    'action' => $date ? 'adjourn' : 'suspend',
+                                   'date'   => $date,
                                    'reason_otaker' => $options{'reason_otaker'},
                                  );
     if ( $error ) {
