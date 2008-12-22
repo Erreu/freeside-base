@@ -2271,7 +2271,7 @@ sub print_html {
                        s/~/&nbsp;/g;
                        s/\\\\\*?\s*$/<BR>/;
                        s/\\hyphenation\{[\w\s\-]+\}//;
-                       s/\\([&])/\1/g;
+                       s/\\([&])/$1/g;
                        $_;
                      }
                      $conf->config_orbase( 'invoice_latexreturnaddress',
