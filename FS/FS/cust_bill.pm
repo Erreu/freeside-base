@@ -1930,7 +1930,7 @@ sub print_latex {
                 !~ /^%%EndDetail\s*$/                            ) {
           push @line_item, $line_item_line;
         }
-        foreach my $line_item ( $self->_items ) {
+        foreach my $line_item ( $self->_items ) { #( 'format'=>'latex' ) ) {
         #foreach my $line_item ( $self->_items_pkg ) {
           $invoice_data{'ref'} = $line_item->{'pkgnum'};
           $invoice_data{'description'} =
@@ -2548,6 +2548,8 @@ sub _items_cust_bill_pkg {
     my $cust_pkg = $cust_bill_pkg->cust_pkg;
 
     my $desc = $cust_bill_pkg->desc;
+    $desc = substr($desc, 0, 50). '...'
+      if $format eq 'latex' && length($desc) > 50;
 
     my %details_opt = ( 'format'          => $format,
                         'escape_function' => $escape_function,
