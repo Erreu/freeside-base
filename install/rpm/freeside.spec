@@ -1,6 +1,6 @@
 %{!?_initrddir:%define _initrddir /etc/rc.d/init.d}
 %{!?version:%define version 1.7.3}
-%{!?release:%define release 4}
+%{!?release:%define release 5}
 
 Summary: Freeside ISP Billing System
 Name: freeside
@@ -27,12 +27,15 @@ Requires: perl-Fax-Hylafax-Client
 %define	apache_confdir		/etc/httpd/conf.d
 %define	apache_version		2
 %define freeside_document_root	/var/www/freeside
+%define freeside_selfservice_document_root	/var/www/freeside-selfservice
 %else
 %define apache_conffile		/etc/apache2/uid.conf
 %define	apache_confdir		/etc/apache2/conf.d
 %define	apache_version		2
 %define freeside_document_root	/srv/www/freeside
+%define freeside_selfservice_document_root	/srv/www/freeside-selfservice
 %endif
+# Can change this back to /var/cache/subsys/freeside when cache relocation is fixed and released
 %define freeside_cache		/etc/freeside
 %define freeside_conf		/etc/freeside
 %define freeside_export		/etc/freeside
@@ -46,6 +49,7 @@ Requires: perl-Fax-Hylafax-Client
 %define	db_types		Pg mysql
 
 %define _rpmlibdir	/usr/lib/rpm
+%define rpmfiles	install/rpm
 
 %description
 Freeside is a flexible ISP billing system written by Ivan Kohler
@@ -97,7 +101,9 @@ Please note that this RPM does not create the database or database user; it only
 %package selfservice
 Summary: Self-service interface for %{name}
 Group: Applications/Internet
+%if "%{_vendor}" != "suse"
 Conflicts: %{name}
+%endif
 Requires: %{name}-selfservice-cgi
 
 %description selfservice
@@ -107,7 +113,9 @@ For security reasons, it is set to conflict with %{name} as you should not insta
 %package selfservice-core
 Summary: Core Perl libraries for the self-service interface for %{name}
 Group: Applications/Internet
+%if "%{_vendor}" != "suse"
 Conflicts: %{name}
+%endif
 
 %description selfservice-core
 This package installs the Perl modules and client daemon for the self-service interface for %{name}.  It does not install the CGI interface and can be used with a different front-end.
@@ -116,9 +124,11 @@ For security reasons, it is set to conflict with %{name} as you should not insta
 %package selfservice-cgi
 Summary: CGI scripts for the self-service interface for %{name}
 Group: Applications/Internet
+%if "%{_vendor}" != "suse"
 Conflicts: %{name}
+%endif
 Requires: %{name}-selfservice-core
-Prefix: %{freeside_document_root}/selfservice
+Prefix: %{freeside_selfservice_document_root}
 
 %description selfservice-cgi
 This package installs the CGI scripts for the self-service interface for %{name}.  The scripts use some core libraries packaged in a separate RPM.
@@ -127,8 +137,10 @@ For security reasons, it is set to conflict with %{name} as you should not insta
 %package selfservice-php
 Summary: Sample PHP files for the self-service interface for %{name}
 Group: Applications/Internet
+%if "%{_vendor}" != "suse"
 Conflicts: %{name}
-Prefix: %{freeside_document_root}/selfservice
+%endif
+Prefix: %{freeside_selfservice_document_root}
 
 %description selfservice-php
 This package installs the sample PHP scripts for the self-service interface for %{name}.
@@ -137,9 +149,9 @@ For security reasons, it is set to conflict with %{name} as you should not insta
 %prep
 %setup -q
 %{__rm} bin/pod2x # Only useful to Ivan Kohler now
-%{__cp} install/rpm/freeside-install FS/bin
 perl -pi -e 's|/usr/local/bin|%{_bindir}|g' FS/Makefile.PL
-perl -pi -e 's|\s+-o\s+freeside\s+| |g' Makefile
+# RPM handles changing file ownership, so Makefile shouldn't
+perl -pi -e 's/\s+-o\s+(freeside|root)(\s+-g\s+\$\{\w+\})?\s+/ /g' Makefile
 perl -ni -e 'print if !/\s+chown\s+/;' Makefile
 
 # Fix-ups for self-service.  Should merge this into Makefile
@@ -154,6 +166,7 @@ perl -pi -e 's|lock_file\s*=\s*"/usr/local/freeside|lock_file = "%{freeside_lock
 %if "%{_vendor}" == "suse"
 perl -pi -e 's|htpasswd|/usr/sbin/htpasswd2|g if /system/;' FS/FS/access_user.pm
 perl -pi -e 'print "Order deny,allow\nAllow from all\n" if /<Files/i;' htetc/freeside*.conf
+perl -pi -e 's|3\.29||g if /^\s+use\s+CGI/;' htetc/handler.pl
 %endif
 
 # Override find-requires/find-provides to supplement Perl requires for HTML::Mason file handler.pl
@@ -187,7 +200,7 @@ else
 fi
 %{__make} OPTIMIZE="$RPM_OPT_FLAGS"
 cd ..
-%{__make} perl-modules VERSION='%{version}-%{release}' FREESIDE_CACHE=%{freeside_cache} FREESIDE_CONF=%{freeside_conf} FREESIDE_EXPORT=%{freeside_export} FREESIDE_LOCK=%{freeside_lock} FREESIDE_LOG=%{freeside_log}
+%{__make} perl-modules VERSION='%{version}-%{release}' RT_ENABLED=%{rt_enabled} FREESIDE_CACHE=%{freeside_cache} FREESIDE_CONF=%{freeside_conf} FREESIDE_EXPORT=%{freeside_export} FREESIDE_LOCK=%{freeside_lock} FREESIDE_LOG=%{freeside_log}
 touch perl-modules
 
 cd fs_selfservice/FS-SelfService
@@ -226,21 +239,14 @@ touch docs
 
 # Install the init script
 %{__mkdir_p} $RPM_BUILD_ROOT%{_initrddir}
-%{__install} init.d/freeside-init $RPM_BUILD_ROOT%{_initrddir}/%{name}
-#%{__make} install-init INSTALLGROUP=root INIT_FILE=$RPM_BUILD_ROOT%{_initrddir}/%{name}
+%{__make} install-init INSTALLGROUP=root INIT_FILE=$RPM_BUILD_ROOT%{_initrddir}/%{name} QUEUED_USER=%{fs_queue_user} SELFSERVICE_USER=%{fs_selfservice_user} SELFSERVICE_MACHINES= INIT_INSTALL= 
 %{__perl} -pi -e "\
-	  s/%%%%%%QUEUED_USER%%%%%%/%{fs_queue_user}/g;\
-	  s/%%%%%%SELFSERVICE_USER%%%%%%/%{fs_selfservice_user}/g;\
-	  s/%%%%%%SELFSERVICE_MACHINES%%%%%%//g;\
 	  s|/etc/default|/etc/sysconfig|g;\
 	" $RPM_BUILD_ROOT%{_initrddir}/%{name}
 
 # Install the HTTPD configuration snippet for HTML::Mason
 %{__mkdir_p} $RPM_BUILD_ROOT%{apache_confdir}
-%{__make} install-apache FREESIDE_DOCUMENT_ROOT=%{freeside_document_root} RT_ENABLED=%{rt_enabled} APACHE_CONF=$RPM_BUILD_ROOT%{apache_confdir} APACHE_VERSION=%{apache_version} MASON_HANDLER=%{freeside_conf}/handler.pl
-%{__perl} -pi -e "s|%%%%%%FREESIDE_DOCUMENT_ROOT%%%%%%|%{freeside_document_root}|g" $RPM_BUILD_ROOT%{apache_confdir}/freeside-*.conf
-%{__perl} -pi -e "s|%%%%%%MASON_HANDLER%%%%%%|%{freeside_conf}/handler.pl|g" $RPM_BUILD_ROOT%{apache_confdir}/freeside-*.conf
-%{__perl} -pi -e "s|/usr/local/etc/freeside|%{freeside_conf}|g" $RPM_BUILD_ROOT%{apache_confdir}/freeside-*.conf
+%{__make} install-apache FREESIDE_DOCUMENT_ROOT=%{freeside_document_root} RT_ENABLED=%{rt_enabled} APACHE_CONF=$RPM_BUILD_ROOT%{apache_confdir} APACHE_VERSION=%{apache_version} FREESIDE_CONF=%{freeside_conf} MASON_HANDLER=%{freeside_conf}/handler.pl
 %{__perl} -pi -e 'print "Alias /%{name} %{freeside_document_root}\n\n" if /^<Directory/;' $RPM_BUILD_ROOT%{apache_confdir}/freeside-*.conf
 %{__perl} -pi -e 'print "SSLRequireSSL\n" if /^AuthName/i;' $RPM_BUILD_ROOT%{apache_confdir}/freeside-*.conf
 
@@ -275,15 +281,15 @@ fi
 %{__install} bin/* $RPM_BUILD_ROOT%{_datadir}/%{name}-%{version}/bin
 
 %{__mkdir_p} $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig
-%{__install} install/rpm/freeside.sysconfig $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig/%{name}
+%{__install} %{rpmfiles}/freeside.sysconfig $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig/%{name}
 
-%{__mkdir_p} $RPM_BUILD_ROOT%{freeside_document_root}/selfservice
-%{__mkdir_p} $RPM_BUILD_ROOT%{freeside_document_root}/selfservice/cgi
-%{__mkdir_p} $RPM_BUILD_ROOT%{freeside_document_root}/selfservice/php
-%{__mkdir_p} $RPM_BUILD_ROOT%{freeside_document_root}/selfservice/templates
-%{__install} fs_selfservice/FS-SelfService/cgi/* $RPM_BUILD_ROOT%{freeside_document_root}/selfservice/cgi
-%{__install} fs_selfservice/php/* $RPM_BUILD_ROOT%{freeside_document_root}/selfservice/php
-%{__install} fs_selfservice/FS-SelfService/*.template $RPM_BUILD_ROOT%{freeside_document_root}/selfservice/templates
+%{__mkdir_p} $RPM_BUILD_ROOT%{freeside_selfservice_document_root}
+%{__mkdir_p} $RPM_BUILD_ROOT%{freeside_selfservice_document_root}/cgi
+%{__mkdir_p} $RPM_BUILD_ROOT%{freeside_selfservice_document_root}/php
+%{__mkdir_p} $RPM_BUILD_ROOT%{freeside_selfservice_document_root}/templates
+%{__install} fs_selfservice/FS-SelfService/cgi/* $RPM_BUILD_ROOT%{freeside_selfservice_document_root}/cgi
+%{__install} fs_selfservice/php/* $RPM_BUILD_ROOT%{freeside_selfservice_document_root}/php
+%{__install} fs_selfservice/FS-SelfService/*.template $RPM_BUILD_ROOT%{freeside_selfservice_document_root}/templates
 
 # Install the main billing server Perl files
 cd FS
@@ -316,12 +322,16 @@ find $RPM_BUILD_ROOT%{_prefix} -type f -print | \
 	grep -v '/etc/freeside/conf' | \
 	grep -v '/etc/freeside/secrets' | \
 	sed "s@^$RPM_BUILD_ROOT@@g" > %{name}-%{version}-%{release}-temp-filelist
-cat ../../FS/%{name}-%{version}-%{release}-filelist %{name}-%{version}-%{release}-temp-filelist | sort | uniq -u >  %{name}-%{version}-%{release}-selfservice-core-filelist
+cat ../../FS/%{name}-%{version}-%{release}-filelist %{name}-%{version}-%{release}-temp-filelist | sort | uniq -u > %{name}-%{version}-%{release}-selfservice-core-filelist
 if [ "$(cat %{name}-%{version}-%{release}-selfservice-core-filelist)X" = "X" ] ; then
 	echo "ERROR: EMPTY FILE LIST"
 	exit 1
 fi
 cd ../..
+
+# Install the Apache configuration file for self-service
+%{__install} %{rpmfiles}/freeside-selfservice.conf $RPM_BUILD_ROOT%{apache_confdir}/%{name}-selfservice.conf
+%{__perl} -pi -e "s|%%%%%%FREESIDE_SELFSERVICE_DOCUMENT_ROOT%%%%%%|%{freeside_selfservice_document_root}|g" $RPM_BUILD_ROOT%{apache_confdir}/%{name}-selfservice.conf
 
 %pre
 if ! %{__id} freeside &>/dev/null; then
@@ -369,8 +379,21 @@ fi
 %post mason
 # Make local httpd run with User/Group = freeside
 if [ -f %{apache_conffile} ]; then
+%if "%{_vendor}" != "suse"
 	perl -p -i.fsbackup -e 's/^(User|Group) .*/$1 freeside/' %{apache_conffile}
+%else
+	perl -p -i.fsbackup -e 's/^(User) .*/$1 freeside/' %{apache_conffile}
+%endif
 fi
+# Fix up environment so pslatex will run
+%if "%{_vendor}" == "suse"
+if ! %{__grep} TEXINPUTS /etc/profile.local >/dev/null; then
+	echo "unset TEXINPUTS" >>/etc/profile.local
+fi
+if ! %{__grep} TEXINPUTS /etc/init.d/apache2 >/dev/null; then
+	perl -p -i.fsbackup -e 'print "unset TEXINPUTS\n\n" if /^httpd_conf\s*=\s*/;' /etc/init.d/apache2
+fi
+%endif
 
 %clean
 %{__rm} -rf %{buildroot}
@@ -395,6 +418,7 @@ fi
 
 %files selfservice
 %defattr(-, freeside, freeside, 0644)
+%attr(0644,root,root) %config(noreplace) %{apache_confdir}/%{name}-selfservice.conf
 
 %files selfservice-core -f fs_selfservice/FS-SelfService/%{name}-%{version}-%{release}-selfservice-core-filelist
 %defattr(-, freeside, freeside, 0644)
@@ -404,14 +428,17 @@ fi
 
 %files selfservice-cgi
 %defattr(-, freeside, freeside, 0644)
-%attr(0711,freeside,freeside) %{freeside_document_root}/selfservice/cgi
-%attr(0644,freeside,freeside) %{freeside_document_root}/selfservice/templates
+%attr(0711,freeside,freeside) %{freeside_selfservice_document_root}/cgi
+%attr(0644,freeside,freeside) %{freeside_selfservice_document_root}/templates
 
 %files selfservice-php
 %defattr(-, freeside, freeside, 0644)
-%attr(0755,freeside,freeside) %{freeside_document_root}/selfservice/php
+%attr(0755,freeside,freeside) %{freeside_selfservice_document_root}/php
 
 %changelog
+* Mon Dec 22 2008 Richard Siddall <richard.siddall@elirion.net> - 1.7.3-5
+- Modifications to make self-service work if you really insist on installing it on the same machine as Freeside
+
 * Tue Nov 11 2008 Richard Siddall <richard.siddall@elirion.net> - 1.7.3-4
 - Cleaning up after running rpmlint
 
