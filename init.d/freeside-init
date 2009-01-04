@@ -60,6 +60,7 @@ case "$1" in
           rm /var/run/freeside-selfservice-server.$SELFSERVICE_USER.pid
         fi
 
+        if [ -z "$SELFSERVICE_MACHINES" ]; then SELFSERVICE_MACHINES='localhost'; fi
         for MACHINE in $SELFSERVICE_MACHINES; do
           echo -n "Stopping freeside-selfservice-server to $MACHINE: "
           kill `cat /var/run/freeside-selfservice-server.$SELFSERVICE_USER.$MACHINE.pid`
