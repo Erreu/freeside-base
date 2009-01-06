@@ -641,6 +641,13 @@ worry that config_items is freeside-specific and icky.
   },
 
   {
+    'key'         => 'invoice_subject',
+    'section'     => 'billing',
+    'description' => 'Subject: header on email invoices.  Defaults to "Invoice".  The following substitutions are available: $name, $name_short, $invoice_number, and $invoice_date.',
+    'type'        => 'text',
+  },
+
+  {
     'key'         => 'invoice_template',
     'section'     => 'required',
     'description' => 'Required template file for invoices.  See the <a href="http://www.sisd.com/mediawiki/index.php/Freeside:1.7:Documentation:Administration#Plaintext_invoice_templates">billing documentation</a> for details.',

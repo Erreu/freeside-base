@@ -4379,6 +4379,35 @@ sub ship_name {
   }
 }
 
+=item name_short
+
+Returns a name string for this customer, either "Company" or "First Last".
+
+=cut
+
+sub name_short {
+  my $self = shift;
+  $self->company !~ /^\s*$/ ? $self->company : $self->contact_firstlast;
+}
+
+=item ship_name_short
+
+Returns a name string for this (service/shipping) contact, either "Company"
+or "First Last".
+
+=cut
+
+sub ship_name_short {
+  my $self = shift;
+  if ( $self->get('ship_last') ) { 
+    $self->ship_company !~ /^\s*$/
+      ? $self->ship_company
+      : $self->ship_contact_firstlast;
+  } else {
+    $self->name_company_or_firstlast;
+  }
+}
+
 =item contact
 
 Returns this customer's full (billing) contact name only, "Last, First"
@@ -4401,6 +4430,30 @@ sub ship_contact {
   $self->get('ship_last')
     ? $self->get('ship_last'). ', '. $self->ship_first
     : $self->contact;
+}
+
+=item contact_firstlast
+
+Returns this customers full (billing) contact name only, "First Last".
+
+=cut
+
+sub contact_firstlast {
+  my $self = shift;
+  $self->first. ' '. $self->get('last');
+}
+
+=item ship_contact_firstlast
+
+Returns this customer's full (shipping) contact name only, "First Last".
+
+=cut
+
+sub ship_contact_firstlast {
+  my $self = shift;
+  $self->get('ship_last')
+    ? $self->first. ' '. $self->get('ship_last')
+    : $self->contact_firstlast;
 }
 
 =item country_full

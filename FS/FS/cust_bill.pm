@@ -845,16 +845,36 @@ sub email {
   #better to notify this person than silence
   @invoicing_list = ($invoice_from) unless @invoicing_list;
 
+  my $subject = $self->email_subject($template);
+
   my $error = send_email(
     $self->generate_email(
       'from'       => $invoice_from,
       'to'         => [ grep { $_ !~ /^(POST|FAX)$/ } @invoicing_list ],
+      'subject'    => $subject,
       'template'   => $template,
     )
   );
   die "can't email invoice: $error\n" if $error;
   #die "$error\n" if $error;
 
+}
+
+sub email_subject {
+  my $self = shift;
+
+  #my $template = scalar(@_) ? shift : '';
+  #per-template?
+
+  my $subject = $conf->config('invoice_subject') || 'Invoice';
+
+  my $cust_main = $self->cust_main;
+  my $name = $cust_main->name;
+  my $name_short = $cust_main->name_short;
+  my $invoice_number = $self->invnum;
+  my $invoice_date = $self->_date_pretty;
+
+  eval qq("$subject");
 }
 
 =item lpr_data [ TEMPLATENAME ]
@@ -2472,7 +2492,18 @@ Returns a string with the invoice number and date, for example:
 
 sub invnum_date_pretty {
   my $self = shift;
-  'Invoice #'. $self->invnum. ' ('. time2str('%x', $self->_date). ')';
+  'Invoice #'. $self->invnum. ' ('. $self->_date_pretty. ')';
+}
+
+=item _date_pretty
+
+Returns a string with the date, for example: "3/20/2008"
+
+=cut
+
+sub _date_pretty {
+  my $self = shift;
+  time2str('%x', $self->_date);
 }
 
 sub _items {
