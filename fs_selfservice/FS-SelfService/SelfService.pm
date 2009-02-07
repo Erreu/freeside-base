@@ -453,10 +453,14 @@ Array reference of all states in the current default country.
 Hash reference of card types; keys are card types, values are the exact strings
 passed to the process_payment function
 
-=item paybatch
+=cut
 
-Unique transaction identifier (prevents multiple charges), passed to the
-process_payment function
+#this doesn't actually work yet
+#
+#=item paybatch
+#
+#Unique transaction identifier (prevents multiple charges), passed to the
+#process_payment function
 
 =back
 
@@ -522,10 +526,14 @@ Card expiration month
 
 Card expiration year
 
-=item paybatch
+=cut
 
-Unique transaction identifier, returned from the payment_info function.
-Prevents multiple charges.
+#this doesn't actually work yet
+#
+#=item paybatch
+#
+#Unique transaction identifier, returned from the payment_info function.
+#Prevents multiple charges.
 
 =back
 
