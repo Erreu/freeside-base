@@ -530,7 +530,7 @@ Prevents multiple charges.
 =back
 
 Returns a hash reference with a single key, B<error>, empty on success, or an
-error message on errors
+error message on errors.
 
 =item process_payment_order_pkg
 
@@ -564,6 +564,10 @@ Returns a hash reference containing customer package information.  The hash refe
 =item custnum
 
 Customer number
+
+=item error
+
+Empty on success, or an error message on errors.
 
 =item cust_pkg HASHREF
 
@@ -621,23 +625,17 @@ Primary key for this service
 
 =item svcpart
 
-Service definition (part_pkg)
+Service definition (see L<FS::part_svc>)
 
 =item pkgnum
 
-Customer package (cust_pkg)
+Customer package (see L<FS::cust_pkg>)
 
 =item overlimit
 
 Blank if the service is not over limit, or the date the service exceeded its usage limit (as a UNIX timestamp).
 
 =back
-
-=back
-
-=item error
-
-Empty on success, or an error message on errors.
 
 =back
 
@@ -678,6 +676,8 @@ mail alias).
 =back
 
 Account (svc_acct) services also have the following keys:
+
+=over 4
 
 =item username
 
@@ -722,6 +722,8 @@ Number of download bytes gained by recharge
 =item recharge_totalbytes
 
 Number of total bytes gained by recharge
+
+=back
 
 =back
 
@@ -1526,13 +1528,22 @@ Note: Resellers can also use the B<signup_info> and B<new_customer> functions
 with their active session, and the B<customer_info> and B<order_pkg> functions
 with their active session and an additional I<custnum> parameter.
 
+For the most part, development of the reseller web interface has been
+superceded by agent-virtualized access to the backend.
+
 =over 4
 
 =item agent_login
 
+Agent login
+
 =item agent_info
 
+Agent info
+
 =item agent_list_customers
+
+List agent's customers.
 
 =back
 
