@@ -1,8 +1,14 @@
-# BEGIN LICENSE BLOCK
+# BEGIN BPS TAGGED BLOCK {{{
 # 
-# Copyright (c) 1996-2003 Jesse Vincent <jesse@bestpractical.com>
+# COPYRIGHT:
+#  
+# This software is Copyright (c) 1996-2007 Best Practical Solutions, LLC 
+#                                          <jesse@bestpractical.com>
 # 
-# (Except where explictly superceded by other copyright notices)
+# (Except where explicitly superseded by other copyright notices)
+# 
+# 
+# LICENSE:
 # 
 # This work is made available to you under the terms of Version 2 of
 # the GNU General Public License. A copy of that license should have
@@ -14,19 +20,52 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 # General Public License for more details.
 # 
-# Unless otherwise specified, all modifications, corrections or
-# extensions to this work which alter its source code become the
-# property of Best Practical Solutions, LLC when submitted for
-# inclusion in the work.
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+# 02110-1301 or visit their web page on the internet at
+# http://www.gnu.org/copyleft/gpl.html.
 # 
 # 
-# END LICENSE BLOCK
+# CONTRIBUTION SUBMISSION POLICY:
+# 
+# (The following paragraph is not intended to limit the rights granted
+# to you to modify and distribute this software under the terms of
+# the GNU General Public License and is only of importance to you if
+# you choose to contribute your changes and enhancements to the
+# community by submitting them to Best Practical Solutions, LLC.)
+# 
+# By intentionally submitting any modifications, corrections or
+# derivatives to this work, or any other work intended for use with
+# Request Tracker, to Best Practical Solutions, LLC, you confirm that
+# you are the copyright holder for those contributions and you grant
+# Best Practical Solutions,  LLC a nonexclusive, worldwide, irrevocable,
+# royalty-free, perpetual, license to use, copy, create derivative
+# works based on those contributions, and sublicense and distribute
+# those contributions and any derivatives thereof.
+# 
+# END BPS TAGGED BLOCK }}}
+#
 package RT::Action::Notify;
 require RT::Action::SendEmail;
-
+use Mail::Address;
 use strict;
 use vars qw/@ISA/;
 @ISA = qw(RT::Action::SendEmail);
+
+
+=head2 Prepare
+
+Set up the relevant recipients, then call our parent.
+
+=cut
+
+
+sub Prepare {
+    my $self = shift;
+    $self->SetRecipients();
+    $self->SUPER::Prepare();
+}
 
 # {{{ sub SetRecipients
 
@@ -47,10 +86,18 @@ sub SetRecipients {
     my ( @To, @PseudoTo, @Cc, @Bcc );
 
 
-    if ($arg =~ /\bOtherRecipients\b/) {
-        if ($self->TransactionObj->Attachments->First) {
-            push (@Cc, $self->TransactionObj->Attachments->First->GetHeader('RT-Send-Cc'));
-            push (@Bcc, $self->TransactionObj->Attachments->First->GetHeader('RT-Send-Bcc'));
+    if ( $arg =~ /\bOtherRecipients\b/ ) {
+        if ( $self->TransactionObj->Attachments->First ) {
+            my @cc_addresses = Mail::Address->parse($self->TransactionObj->Attachments->First->GetHeader('RT-Send-Cc'));
+            foreach my $addr (@cc_addresses) {
+                  push @Cc, $addr->address;
+            }
+            my @bcc_addresses = Mail::Address->parse($self->TransactionObj->Attachments->First->GetHeader('RT-Send-Bcc'));
+
+            foreach my $addr (@bcc_addresses) {
+                  push @Bcc, $addr->address;
+            }
+
         }
     }
 
@@ -113,12 +160,12 @@ sub SetRecipients {
         @{ $self->{'Bcc'} } = @Bcc;
     }
     else {
-        @{ $self->{'To'} }  = grep ( !/^$creator$/, @To );
-        @{ $self->{'Cc'} }  = grep ( !/^$creator$/, @Cc );
-        @{ $self->{'Bcc'} } = grep ( !/^$creator$/, @Bcc );
+        @{ $self->{'To'} }  = grep ( lc $_ ne lc $creator, @To );
+        @{ $self->{'Cc'} }  = grep ( lc $_ ne lc $creator, @Cc );
+        @{ $self->{'Bcc'} } = grep ( lc $_ ne lc $creator, @Bcc );
     }
     @{ $self->{'PseudoTo'} } = @PseudoTo;
-    return (1);
+
 
 }
 

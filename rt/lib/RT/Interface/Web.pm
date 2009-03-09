@@ -1,8 +1,14 @@
-# BEGIN LICENSE BLOCK
+# BEGIN BPS TAGGED BLOCK {{{
 # 
-# Copyright (c) 1996-2003 Jesse Vincent <jesse@bestpractical.com>
+# COPYRIGHT:
+#  
+# This software is Copyright (c) 1996-2007 Best Practical Solutions, LLC 
+#                                          <jesse@bestpractical.com>
 # 
-# (Except where explictly superceded by other copyright notices)
+# (Except where explicitly superseded by other copyright notices)
+# 
+# 
+# LICENSE:
 # 
 # This work is made available to you under the terms of Version 2 of
 # the GNU General Public License. A copy of that license should have
@@ -14,13 +20,31 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 # General Public License for more details.
 # 
-# Unless otherwise specified, all modifications, corrections or
-# extensions to this work which alter its source code become the
-# property of Best Practical Solutions, LLC when submitted for
-# inclusion in the work.
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+# 02110-1301 or visit their web page on the internet at
+# http://www.gnu.org/copyleft/gpl.html.
 # 
 # 
-# END LICENSE BLOCK
+# CONTRIBUTION SUBMISSION POLICY:
+# 
+# (The following paragraph is not intended to limit the rights granted
+# to you to modify and distribute this software under the terms of
+# the GNU General Public License and is only of importance to you if
+# you choose to contribute your changes and enhancements to the
+# community by submitting them to Best Practical Solutions, LLC.)
+# 
+# By intentionally submitting any modifications, corrections or
+# derivatives to this work, or any other work intended for use with
+# Request Tracker, to Best Practical Solutions, LLC, you confirm that
+# you are the copyright holder for those contributions and you grant
+# Best Practical Solutions,  LLC a nonexclusive, worldwide, irrevocable,
+# royalty-free, perpetual, license to use, copy, create derivative
+# works based on those contributions, and sublicense and distribute
+# those contributions and any derivatives thereof.
+# 
+# END BPS TAGGED BLOCK }}}
 ## Portions Copyright 2000 Tobias Brox <tobix@fsck.com>
 
 ## This is a library of static subs to be used by the Mason web
@@ -40,76 +64,13 @@ use_ok(RT::Interface::Web);
 =cut
 
 
-package RT::Interface::Web;
 use strict;
+use warnings;
 
-
-
-
-
-# {{{ sub NewApacheHandler 
-
-=head2 NewApacheHandler
-
-  Takes extra options to pass to HTML::Mason::ApacheHandler->new
-  Returns a new Mason::ApacheHandler object
-
-=cut
-
-sub NewApacheHandler {
-    require HTML::Mason::ApacheHandler;
-    my $ah = new HTML::Mason::ApacheHandler( 
-    
-        comp_root                    => [
-            [ local    => $RT::MasonLocalComponentRoot ],
-            [ standard => $RT::MasonComponentRoot ]
-        ],
-        args_method => "CGI",
-        default_escape_flags => 'h',
-        allow_globals        => [qw(%session)],
-        data_dir => "$RT::MasonDataDir",
-        @_
-    );
-
-    $ah->interp->set_escape( h => \&RT::Interface::Web::EscapeUTF8 );
-    
-    return ($ah);
-}
-
-# }}}
-
-# {{{ sub NewCGIHandler 
-
-=head2 NewCGIHandler
-
-  Returns a new Mason::CGIHandler object
-
-=cut
-
-sub NewCGIHandler {
-    my %args = (
-        @_
-    );
-
-    my $handler = HTML::Mason::CGIHandler->new(
-        comp_root                    => [
-            [ local    => $RT::MasonLocalComponentRoot ],
-            [ standard => $RT::MasonComponentRoot ]
-        ],
-        data_dir => "$RT::MasonDataDir",
-        default_escape_flags => 'h',
-        allow_globals        => [qw(%session)]
-    );
-  
-
-    $handler->interp->set_escape( h => \&RT::Interface::Web::EscapeUTF8 );
-
-
-    return ($handler);
-
-}
-# }}}
-
+package RT::Interface::Web;
+use HTTP::Date;
+use RT::SavedSearches;
+use URI;
 
 # {{{ EscapeUTF8
 
@@ -121,6 +82,7 @@ does a css-busting but minimalist escaping of whatever html you're passing in.
 
 sub EscapeUTF8  {
         my  $ref = shift;
+        return unless defined $$ref;
         my $val = $$ref;
         use bytes;
         $val =~ s/&/&#38;/g;
@@ -133,13 +95,140 @@ sub EscapeUTF8  {
         $$ref = $val;
         Encode::_utf8_on($$ref);
 
+
+}
+
+# }}}
+
+# {{{ EscapeURI
+
+=head2 EscapeURI SCALARREF
+
+Escapes URI component according to RFC2396
+
+=cut
+
+use Encode qw();
+sub EscapeURI {
+    my $ref = shift;
+    $$ref = Encode::encode_utf8( $$ref );
+    $$ref =~ s/([^a-zA-Z0-9_.!~*'()-])/uc sprintf("%%%02X", ord($1))/eg;
+    Encode::_utf8_on( $$ref );
+}
+
+# }}}
+
+# {{{ WebCanonicalizeInfo
+
+=head2 WebCanonicalizeInfo();
+
+Different web servers set different environmental varibles. This
+function must return something suitable for REMOTE_USER. By default,
+just downcase $ENV{'REMOTE_USER'}
+
+=cut
+
+sub WebCanonicalizeInfo {
+    my $user;
+
+    if ( defined $ENV{'REMOTE_USER'} ) {
+        $user = lc ( $ENV{'REMOTE_USER'} ) if( length($ENV{'REMOTE_USER'}) );
+    }
+
+    return $user;
+}
+
+# }}}
+
+# {{{ WebExternalAutoInfo
+
+=head2 WebExternalAutoInfo($user);
+
+Returns a hash of user attributes, used when WebExternalAuto is set.
+
+=cut
+
+sub WebExternalAutoInfo {
+    my $user = shift;
+
+    my %user_info;
+
+    $user_info{'Privileged'} = 1;
+
+    if ($^O !~ /^(?:riscos|MacOS|MSWin32|dos|os2)$/) {
+        # Populate fields with information from Unix /etc/passwd
+
+        my ($comments, $realname) = (getpwnam($user))[5, 6];
+        $user_info{'Comments'} = $comments if defined $comments;
+        $user_info{'RealName'} = $realname if defined $realname;
+    }
+    elsif ($^O eq 'MSWin32' and eval 'use Net::AdminMisc; 1') {
+        # Populate fields with information from NT domain controller
+    }
+
+    # and return the wad of stuff
+    return {%user_info};
 }
 
 # }}}
 
 
+
+=head2 Redirect URL
+
+This routine ells the current user's browser to redirect to URL.  
+Additionally, it unties the user's currently active session, helping to avoid 
+A bug in Apache::Session 1.81 and earlier which clobbers sessions if we try to use 
+a cached DBI statement handle twice at the same time.
+
+=cut
+
+
+sub Redirect {
+    my $redir_to = shift;
+    untie $HTML::Mason::Commands::session;
+    my $uri = URI->new($redir_to);
+    my $server_uri = URI->new($RT::WebURL);
+
+    # If the user is coming in via a non-canonical
+    # hostname, don't redirect them to the canonical host,
+    # it will just upset them (and invalidate their credentials)
+    if ($uri->host  eq $server_uri->host && 
+        $uri->port eq $server_uri->port) {
+            $uri->host($ENV{'HTTP_HOST'});
+            $uri->port($ENV{'SERVER_PORT'});
+        }
+
+    $HTML::Mason::Commands::m->redirect($uri->canonical);
+    $HTML::Mason::Commands::m->abort;
+}
+
+
+=head2 StaticFileHeaders 
+
+Send the browser a few headers to try to get it to (somewhat agressively)
+cache RT's static Javascript and CSS files.
+
+This routine could really use _accurate_ heuristics. (XXX TODO)
+
+=cut
+
+sub StaticFileHeaders {
+    # make cache public
+    $HTML::Mason::Commands::r->headers_out->{'Cache-Control'} = 'max-age=259200, public';
+
+    # Expire things in a month.
+    $HTML::Mason::Commands::r->headers_out->{'Expires'} = HTTP::Date::time2str( time() + 2592000 );
+
+    # if we set 'Last-Modified' then browser request a comp using 'If-Modified-Since'
+    # request, but we don't handle it and generate full reply again
+    # Last modified at server start time
+    #$HTML::Mason::Commands::r->headers_out->{'Last-Modified'} = HTTP::Date::time2str($^T);
+
+}
+
+
 package HTML::Mason::Commands;
-use strict;
 use vars qw/$r $m %session/;
 
 
@@ -160,9 +249,12 @@ sub loc {
         UNIVERSAL::can($session{'CurrentUser'}, 'loc')){
         return($session{'CurrentUser'}->loc(@_));
     }
-    else  {
-        my $u = RT::CurrentUser->new($RT::SystemUser);
+    elsif ( my $u = eval { RT::CurrentUser->new($RT::SystemUser->Id) } ) {
         return ($u->loc(@_));
+    }
+    else {
+        # pathetic case -- SystemUser is gone.
+        return $_[0];
     }
 }
 
@@ -189,7 +281,7 @@ sub loc_fuzzy {
         return($session{'CurrentUser'}->loc_fuzzy($msg));
     }
     else  {
-        my $u = RT::CurrentUser->new($RT::SystemUser);
+        my $u = RT::CurrentUser->new($RT::SystemUser->Id);
         return ($u->loc_fuzzy($msg));
     }
 }
@@ -244,23 +336,30 @@ sub CreateTicket {
     my $starts = new RT::Date( $session{'CurrentUser'} );
     $starts->Set( Format => 'unknown', Value => $ARGS{'Starts'} );
 
-    my @Requestors = split ( /\s*,\s*/, $ARGS{'Requestors'} );
-    my @Cc         = split ( /\s*,\s*/, $ARGS{'Cc'} );
-    my @AdminCc    = split ( /\s*,\s*/, $ARGS{'AdminCc'} );
-
     my $MIMEObj = MakeMIMEEntity(
         Subject             => $ARGS{'Subject'},
         From                => $ARGS{'From'},
         Cc                  => $ARGS{'Cc'},
         Body                => $ARGS{'Content'},
+        Type                => $ARGS{'ContentType'},
     );
 
-    if ($ARGS{'Attachments'}) {
-        $MIMEObj->make_multipart;
-        $MIMEObj->add_part($_) foreach values %{$ARGS{'Attachments'}};
+    if ( $ARGS{'Attachments'} ) {
+        my $rv = $MIMEObj->make_multipart;
+        $RT::Logger->error("Couldn't make multipart message")
+            if !$rv || $rv !~ /^(?:DONE|ALREADY)$/;
+
+        foreach ( values %{$ARGS{'Attachments'}} ) {
+            unless ( $_ ) {
+                $RT::Logger->error("Couldn't add empty attachemnt");
+                next;
+            }
+            $MIMEObj->add_part($_);
+        }
     }
 
     my %create_args = (
+        Type            => $ARGS{'Type'} || 'ticket',
         Queue           => $ARGS{'Queue'},
         Owner           => $ARGS{'Owner'},
         InitialPriority => $ARGS{'InitialPriority'},
@@ -268,45 +367,106 @@ sub CreateTicket {
         TimeLeft        => $ARGS{'TimeLeft'},
         TimeEstimated        => $ARGS{'TimeEstimated'},
         TimeWorked      => $ARGS{'TimeWorked'},
-        Requestor       => \@Requestors,
-        Cc              => \@Cc,
-        AdminCc         => \@AdminCc,
         Subject         => $ARGS{'Subject'},
         Status          => $ARGS{'Status'},
         Due             => $due->ISO,
         Starts          => $starts->ISO,
         MIMEObj         => $MIMEObj
     );
-  foreach my $arg (%ARGS) {
-        if ($arg =~ /^CustomField-(\d+)(.*?)$/) {
-            next if ($arg =~ /-Magic$/);
-            $create_args{"CustomField-".$1} = $ARGS{"$arg"};
+
+    my @temp_squelch;
+    foreach my $type (qw(Requestors Cc AdminCc)) {
+        my @tmp = map { $_->format } grep { $_->address} Mail::Address->parse( $ARGS{ $type } );
+
+        $create_args{ $type } = [
+            grep $_, map {
+                my $user = RT::User->new( $RT::SystemUser );
+                $user->LoadOrCreateByEmail( $_ );
+                # convert to ids to avoid work later
+                $user->id;
+            } @tmp
+        ];
+        $RT::Logger->debug(
+            "$type got ".join(',',@{$create_args{ $type }}) );
+
+    }
+    # XXX: workaround for name conflict :(
+    $create_args{'Requestor'} = delete $create_args{'Requestors'};
+
+    foreach my $arg (keys %ARGS) {
+        next if $arg =~ /-(?:Magic|Category)$/;
+
+        if ($arg =~ /^Object-RT::Transaction--CustomField-/) {
+            $create_args{$arg} = $ARGS{$arg};
+        }
+        # Object-RT::Ticket--CustomField-3-Values
+        elsif ($arg =~ /^Object-RT::Ticket--CustomField-(\d+)(.*?)$/) {
+            my $cfid = $1;
+            my $cf = RT::CustomField->new( $session{'CurrentUser'});
+            $cf->Load($cfid);
+
+            if ( $cf->Type eq 'Freeform' && ! $cf->SingleValue) {
+                $ARGS{$arg} =~ s/\r\n/\n/g;
+                $ARGS{$arg} = [split('\n', $ARGS{$arg})];
+            }
+
+            if ( $cf->Type =~ /text/i) { # Catch both Text and Wikitext
+                $ARGS{$arg} =~ s/\r//g;
+            }
+
+            if ( $arg =~ /-Upload$/ ) {
+                $create_args{"CustomField-".$cfid} = _UploadedFile($arg);
+            }
+            else {
+                $create_args{"CustomField-".$cfid} = $ARGS{"$arg"};
+            }
         }
     }
+
+
+    # XXX TODO This code should be about six lines. and badly needs refactoring.
+ 
+    # {{{ turn new link lists into arrays, and pass in the proper arguments
+    my (@dependson, @dependedonby, @parents, @children, @refersto, @referredtoby);
+
+    foreach my $luri ( split ( / /, $ARGS{"new-DependsOn"} ) ) {
+        $luri =~ s/\s*$//;    # Strip trailing whitespace
+        push @dependson, $luri;
+    }
+    $create_args{'DependsOn'} = \@dependson;
+
+    foreach my $luri ( split ( / /, $ARGS{"DependsOn-new"} ) ) {
+        push @dependedonby, $luri;
+    }
+    $create_args{'DependedOnBy'} = \@dependedonby;
+
+    foreach my $luri ( split ( / /, $ARGS{"new-MemberOf"} ) ) {
+        $luri =~ s/\s*$//;    # Strip trailing whitespace
+        push @parents, $luri;
+    }
+    $create_args{'Parents'} = \@parents;
+
+    foreach my $luri ( split ( / /, $ARGS{"MemberOf-new"} ) ) {
+        push @children, $luri;
+    }
+    $create_args{'Children'} = \@children;
+
+    foreach my $luri ( split ( / /, $ARGS{"new-RefersTo"} ) ) {
+        $luri =~ s/\s*$//;    # Strip trailing whitespace
+        push @refersto, $luri;
+    }
+    $create_args{'RefersTo'} = \@refersto;
+
+    foreach my $luri ( split ( / /, $ARGS{"RefersTo-new"} ) ) {
+        push @referredtoby, $luri;
+    }
+    $create_args{'ReferredToBy'} = \@referredtoby;
+    # }}}
+  
+ 
     my ( $id, $Trans, $ErrMsg ) = $Ticket->Create(%create_args);
-    unless ( $id && $Trans ) {
+    unless ( $id ) {
         Abort($ErrMsg);
-    }
-    my @linktypes = qw( DependsOn MemberOf RefersTo );
-
-    foreach my $linktype (@linktypes) {
-        foreach my $luri ( split ( / /, $ARGS{"new-$linktype"} ) ) {
-            $luri =~ s/\s*$//;    # Strip trailing whitespace
-            my ( $val, $msg ) = $Ticket->AddLink(
-                Target => $luri,
-                Type   => $linktype
-            );
-            push ( @Actions, $msg ) unless ($val);
-        }
-
-        foreach my $luri ( split ( / /, $ARGS{"$linktype-new"} ) ) {
-            my ( $val, $msg ) = $Ticket->AddLink(
-                Base => $luri,
-                Type => $linktype
-            );
-
-            push ( @Actions, $msg ) unless ($val);
-        }
     }
 
     push ( @Actions, split("\n", $ErrMsg) );
@@ -365,7 +525,10 @@ sub ProcessUpdateMessage {
     );
 
     #Make the update content have no 'weird' newlines in it
-    if ( $args{ARGSRef}->{'UpdateContent'} ) {
+    if (   $args{ARGSRef}->{'UpdateTimeWorked'}
+        || $args{ARGSRef}->{'UpdateContent'}
+        || $args{ARGSRef}->{'UpdateAttachments'} )
+    {
 
         if (
             $args{ARGSRef}->{'UpdateSubject'} eq $args{'TicketObj'}->Subject() )
@@ -374,42 +537,76 @@ sub ProcessUpdateMessage {
         }
 
         my $Message = MakeMIMEEntity(
-            Subject             => $args{ARGSRef}->{'UpdateSubject'},
-            Body                => $args{ARGSRef}->{'UpdateContent'},
+            Subject => $args{ARGSRef}->{'UpdateSubject'},
+            Body    => $args{ARGSRef}->{'UpdateContent'},
+            Type    => $args{ARGSRef}->{'UpdateContentType'},
         );
 
-        if ($args{ARGSRef}->{'UpdateAttachments'}) {
-            $Message->make_multipart;
-            $Message->add_part($_) foreach values %{$args{ARGSRef}->{'UpdateAttachments'}};
-        }
-
-        ## TODO: Implement public comments
-        if ( $args{ARGSRef}->{'UpdateType'} =~ /^(private|public)$/ ) {
-            my ( $Transaction, $Description ) = $args{TicketObj}->Comment(
-                CcMessageTo  => $args{ARGSRef}->{'UpdateCc'},
-                BccMessageTo => $args{ARGSRef}->{'UpdateBcc'},
-                MIMEObj      => $Message,
-                TimeTaken    => $args{ARGSRef}->{'UpdateTimeWorked'}
-            );
-            push ( @{ $args{Actions} }, $Description );
-        }
-        elsif ( $args{ARGSRef}->{'UpdateType'} eq 'response' ) {
-            my ( $Transaction, $Description ) = $args{TicketObj}->Correspond(
-                CcMessageTo  => $args{ARGSRef}->{'UpdateCc'},
-                BccMessageTo => $args{ARGSRef}->{'UpdateBcc'},
-                MIMEObj      => $Message,
-                TimeTaken    => $args{ARGSRef}->{'UpdateTimeWorked'}
-            );
-            push ( @{ $args{Actions} }, $Description );
+        $Message->head->add( 'Message-ID' => 
+              "<rt-"
+              . $RT::VERSION . "-"
+              . $$ . "-"
+              . CORE::time() . "-"
+              . int(rand(2000)) . "."
+              . $args{'TicketObj'}->id . "-"
+              . "0" . "-"  # Scrip
+              . "0" . "@"  # Email sent
+              . $RT::Organization
+              . ">" );
+        my $old_txn = RT::Transaction->new( $session{'CurrentUser'} );
+        if ( $args{ARGSRef}->{'QuoteTransaction'} ) {
+            $old_txn->Load( $args{ARGSRef}->{'QuoteTransaction'} );
         }
         else {
-            push ( @{ $args{'Actions'} },
-                loc("Update type was neither correspondence nor comment.").
-                " ".
-                loc("Update not recorded.")
-            );
+            $old_txn = $args{TicketObj}->Transactions->First();
         }
+
+        if ( $old_txn->Message && $old_txn->Message->First ) {
+            my @in_reply_to = split(/\s+/m, $old_txn->Message->First->GetHeader('In-Reply-To') || '');  
+            my @references = split(/\s+/m, $old_txn->Message->First->GetHeader('References') || '' );  
+            my @msgid = split(/\s+/m,$old_txn->Message->First->GetHeader('Message-ID') || ''); 
+            my @rtmsgid = split(/\s+/m,$old_txn->Message->First->GetHeader('RT-Message-ID') || ''); 
+
+            $Message->head->replace( 'In-Reply-To', join (' ', @rtmsgid ? @rtmsgid : @msgid));
+            $Message->head->replace( 'References', join(' ', @references, @msgid, @rtmsgid));
+        }
+
+    if ( $args{ARGSRef}->{'UpdateAttachments'} ) {
+        $Message->make_multipart;
+        $Message->add_part($_)
+          foreach values %{ $args{ARGSRef}->{'UpdateAttachments'} };
     }
+
+    ## TODO: Implement public comments
+    if ( $args{ARGSRef}->{'UpdateType'} =~ /^(private|public)$/ ) {
+        my ( $Transaction, $Description, $Object ) = $args{TicketObj}->Comment(
+            CcMessageTo  => $args{ARGSRef}->{'UpdateCc'},
+            BccMessageTo => $args{ARGSRef}->{'UpdateBcc'},
+            MIMEObj      => $Message,
+            TimeTaken    => $args{ARGSRef}->{'UpdateTimeWorked'}
+        );
+        push( @{ $args{Actions} }, $Description );
+        $Object->UpdateCustomFields( ARGSRef => $args{ARGSRef} ) if $Object;
+    }
+    elsif ( $args{ARGSRef}->{'UpdateType'} eq 'response' ) {
+        my ( $Transaction, $Description, $Object ) =
+          $args{TicketObj}->Correspond(
+            CcMessageTo  => $args{ARGSRef}->{'UpdateCc'},
+            BccMessageTo => $args{ARGSRef}->{'UpdateBcc'},
+            MIMEObj      => $Message,
+            TimeTaken    => $args{ARGSRef}->{'UpdateTimeWorked'}
+          );
+        push( @{ $args{Actions} }, $Description );
+        $Object->UpdateCustomFields( ARGSRef => $args{ARGSRef} ) if $Object;
+    }
+    else {
+        push(
+            @{ $args{'Actions'} },
+            loc("Update type was neither correspondence nor comment.") . " "
+              . loc("Update not recorded.")
+        );
+    }
+}
 }
 
 # }}}
@@ -419,6 +616,8 @@ sub ProcessUpdateMessage {
 =head2 MakeMIMEEntity PARAMHASH
 
 Takes a paramhash Subject, Body and AttachmentFieldName.
+
+Also takes Form, Cc and Type as optional paramhash keys.
 
   Returns a MIME::Entity.
 
@@ -433,12 +632,14 @@ sub MakeMIMEEntity {
         Cc                  => undef,
         Body                => undef,
         AttachmentFieldName => undef,
-        map Encode::encode_utf8($_), @_,
+        Type                => undef,
+#        map Encode::encode_utf8($_), @_,
+        @_,
     );
 
     #Make the update content have no 'weird' newlines in it
 
-    $args{'Body'} =~ s/\r\n/\n/gs;
+    $args{'Body'} =~ s/\r\n/\n/gs if $args{'Body'};
     my $Message;
     {
         # MIME::Head is not happy in utf-8 domain.  This only happens
@@ -449,6 +650,8 @@ sub MakeMIMEEntity {
             Subject => $args{'Subject'} || "",
             From    => $args{'From'},
             Cc      => $args{'Cc'},
+            Type    => $args{'Type'} || 'text/plain',
+            'Charset:' => 'utf8',
             Data    => [ $args{'Body'} ]
         );
     }
@@ -463,7 +666,14 @@ sub MakeMIMEEntity {
 
     #foreach my $filehandle (@filenames) {
 
-    my ( $fh, $temp_file ) = tempfile();
+    my ( $fh, $temp_file );
+    for ( 1 .. 10 ) {
+        # on NFS and NTFS, it is possible that tempfile() conflicts
+        # with other processes, causing a race condition. we try to
+        # accommodate this by pausing and retrying.
+        last if ($fh, $temp_file) = eval { tempfile( UNLINK => 1) };
+        sleep 1;
+    }
 
     binmode $fh;    #thank you, windows
     my ($buffer);
@@ -481,7 +691,7 @@ sub MakeMIMEEntity {
 
     $Message->attach(
         Path     => $temp_file,
-        Filename => $filename,
+        Filename => Encode::decode_utf8($filename),
         Type     => $uploadinfo->{'Content-Type'},
     );
     close($fh);
@@ -594,13 +804,13 @@ sub ProcessSearchQuery {
 
     # }}}
     # {{{ Limit requestor email
+     if ( $args{ARGS}->{'ValueOfWatcherRole'} ne '' ) {
+         $session{'tickets'}->LimitWatcher(
+             TYPE     => $args{ARGS}->{'WatcherRole'},
+             VALUE    => $args{ARGS}->{'ValueOfWatcherRole'},
+             OPERATOR => $args{ARGS}->{'WatcherRoleOp'},
 
-    if ( $args{ARGS}->{'ValueOfRequestor'} ne '' ) {
-        my $alias = $session{'tickets'}->LimitRequestor(
-            VALUE    => $args{ARGS}->{'ValueOfRequestor'},
-            OPERATOR => $args{ARGS}->{'RequestorOp'},
         );
-
     }
 
     # }}}
@@ -745,19 +955,6 @@ sub ParseDateToISO {
 
 # }}}
 
-# {{{ sub Config 
-# TODO: This might eventually read the cookies, user configuration
-# information from the DB, queue configuration information from the
-# DB, etc.
-
-sub Config {
-    my $args = shift;
-    my $key  = shift;
-    return $args->{$key} || $RT::WebOptions{$key};
-}
-
-# }}}
-
 # {{{ sub ProcessACLChanges
 
 sub ProcessACLChanges {
@@ -780,17 +977,13 @@ sub ProcessACLChanges {
 
             my $obj;
 
-            if ($object_type eq 'RT::Queue') {
-                $obj = RT::Queue->new($session{'CurrentUser'});
-                $obj->Load($object_id);      
-            } elsif ($object_type eq 'RT::Group') {
-                $obj = RT::Group->new($session{'CurrentUser'});
-                $obj->Load($object_id);      
-
-            } elsif ($object_type eq 'RT::System') {
+             if ($object_type eq 'RT::System') {
                 $obj = $RT::System;
+            } elsif ($RT::ACE::OBJECT_TYPES{$object_type}) {
+                $obj = $object_type->new($session{'CurrentUser'});
+                $obj->Load($object_id);      
             } else {
-                push (@results, loc("System Error").
+                push (@results, loc("System Error"). ': '.
                                 loc("Rights could not be granted for [_1]", $object_type));
                 next;
             }
@@ -813,17 +1006,13 @@ sub ProcessACLChanges {
             next unless ($right);
             my $obj;
 
-            if ($object_type eq 'RT::Queue') {
-                $obj = RT::Queue->new($session{'CurrentUser'});
-                $obj->Load($object_id);      
-            } elsif ($object_type eq 'RT::Group') {
-                $obj = RT::Group->new($session{'CurrentUser'});
-                $obj->Load($object_id);      
-
-            } elsif ($object_type eq 'RT::System') {
+             if ($object_type eq 'RT::System') {
                 $obj = $RT::System;
+            } elsif ($RT::ACE::OBJECT_TYPES{$object_type}) {
+                $obj = $object_type->new($session{'CurrentUser'});
+                $obj->Load($object_id);      
             } else {
-                push (@results, loc("System Error").
+                push (@results, loc("System Error"). ': '.
                                 loc("Rights could not be revoked for [_1]", $object_type));
                 next;
             }
@@ -859,52 +1048,12 @@ sub UpdateRecordObject {
         @_
     );
 
-    my (@results);
+    my $Object = $args{'Object'};
+    my @results = $Object->Update(AttributesRef => $args{'AttributesRef'},
+                                  ARGSRef       => $args{'ARGSRef'},
+                  AttributePrefix => $args{'AttributePrefix'}
+                                  );
 
-    my $object     = $args{'Object'};
-    my $attributes = $args{'AttributesRef'};
-    my $ARGSRef    = $args{'ARGSRef'};
-    foreach my $attribute (@$attributes) {
-        my $value;
-        if ( defined $ARGSRef->{$attribute} ) {
-            $value = $ARGSRef->{$attribute};
-        }
-        elsif (
-              defined( $args{'AttributePrefix'} )
-              && defined(
-                  $ARGSRef->{ $args{'AttributePrefix'} . "-" . $attribute }
-              )
-          ) {
-            $value = $ARGSRef->{ $args{'AttributePrefix'} . "-" . $attribute };
-
-        } else {
-                next;
-        }
-
-            $value =~ s/\r\n/\n/gs;
-
-        if ($value ne $object->$attribute()){
-
-              my $method = "Set$attribute";
-              my ( $code, $msg ) = $object->$method($value);
-
-              push @results, loc($attribute) . ': ' . loc_fuzzy($msg);
-=for loc
-                                   "[_1] could not be set to [_2].",       # loc
-                                   "That is already the current value",    # loc
-                                   "No value sent to _Set!\n",             # loc
-                                   "Illegal value for [_1]",               # loc
-                                   "The new value has been set.",          # loc
-                                   "No column specified",                  # loc
-                                   "Immutable field",                      # loc
-                                   "Nonexistant field?",                   # loc
-                                   "Invalid data",                         # loc
-                                   "Couldn't find row",                    # loc
-                                   "Missing a primary key?: [_1]",         # loc
-                                   "Found Object",                         # loc
-=cut
-          };
-    }
     return (@results);
 }
 
@@ -953,6 +1102,17 @@ sub ProcessCustomFieldUpdates {
         my ( $err, $msg ) = $Object->DeleteValue($id);
         push ( @results, $msg );
     }
+
+    my $vals = $Object->Values();
+    while (my $cfv = $vals->Next()) {
+        if (my $so = $ARGSRef->{ 'CustomField-' . $Object->Id . '-SortOrder' . $cfv->Id }) {
+            if ($cfv->SortOrder != $so) {
+                my ( $err, $msg ) = $cfv->SetSortOrder($so);
+                push ( @results, $msg );
+            }
+        }
+    }
+
     return (@results);
 }
 
@@ -985,9 +1145,11 @@ sub ProcessTicketBasics {
       TimeEstimated
       TimeWorked
       TimeLeft
+      Type
       Status
       Queue
     );
+
 
     if ( $ARGSRef->{'Queue'} and ( $ARGSRef->{'Queue'} !~ /^(\d+)$/ ) ) {
         my $tempqueue = RT::Queue->new($RT::SystemUser);
@@ -997,6 +1159,11 @@ sub ProcessTicketBasics {
         }
     }
 
+
+   # Status isn't a field that can be set to a null value.
+   # RT core complains if you try
+    delete $ARGSRef->{'Status'} unless ($ARGSRef->{'Status'});
+    
     my @results = UpdateRecordObject(
         AttributesRef => \@attribs,
         Object        => $TicketObj,
@@ -1025,141 +1192,204 @@ sub ProcessTicketBasics {
 
 # }}}
 
-# {{{ Sub ProcessTicketCustomFieldUpdates
-
 sub ProcessTicketCustomFieldUpdates {
-    my %args = (
-        ARGSRef => undef,
-        @_
-    );
+    my %args = @_;
+    $args{'Object'} = delete $args{'TicketObj'};
+    my $ARGSRef = { %{ $args{'ARGSRef'} } };
 
-    my @results;
-
-    my $ARGSRef = $args{'ARGSRef'};
-
-    # Build up a list of tickets that we want to work with
-    my %tickets_to_mod;
+    # Build up a list of objects that we want to work with
     my %custom_fields_to_mod;
-    foreach my $arg ( keys %{$ARGSRef} ) {
-        if ( $arg =~ /^Ticket-(\d+)-CustomField-(\d+)-/ ) {
-
-            # For each of those tickets, find out what custom fields we want to work with.
-            $custom_fields_to_mod{$1}{$2} = 1;
+    foreach my $arg ( keys %$ARGSRef ) {
+        if ( $arg =~ /^Ticket-(\d+-.*)/) {
+            $ARGSRef->{"Object-RT::Ticket-$1"} = delete $ARGSRef->{$arg};
+        }
+        elsif ( $arg =~ /^CustomField-(\d+-.*)/) {
+            $ARGSRef->{"Object-RT::Ticket--$1"} = delete $ARGSRef->{$arg};
         }
     }
 
-    # For each of those tickets
-    foreach my $tick ( keys %custom_fields_to_mod ) {
-        my $Ticket = RT::Ticket->new( $session{'CurrentUser'} );
-        $Ticket->Load($tick);
-
-        # For each custom field  
-        foreach my $cf ( keys %{ $custom_fields_to_mod{$tick} } ) {
-
-	    my $CustomFieldObj = RT::CustomField->new($session{'CurrentUser'});
-	    $CustomFieldObj->LoadById($cf);
-
-            foreach my $arg ( keys %{$ARGSRef} ) {
-                # since http won't pass in a form element with a null value, we need
-                # to fake it
-                if ($arg =~ /^(.*?)-Values-Magic$/ ) {
-                    # We don't care about the magic, if there's really a values element;
-                    next if (exists $ARGSRef->{$1.'-Values'}) ;
-
-                    $arg = $1."-Values";
-                    $ARGSRef->{$1."-Values"} = undef;
-                
-                }
-                next unless ( $arg =~ /^Ticket-$tick-CustomField-$cf-/ );
-                my @values =
-                  ( ref( $ARGSRef->{$arg} ) eq 'ARRAY' ) 
-                  ? @{ $ARGSRef->{$arg} }
-                  : ( $ARGSRef->{$arg} );
-                if ( ( $arg =~ /-AddValue$/ ) || ( $arg =~ /-Value$/ ) ) {
-                    foreach my $value (@values) {
-                        next unless ($value);
-                        my ( $val, $msg ) = $Ticket->AddCustomFieldValue(
-                            Field => $cf,
-                            Value => $value
-                        );
-                        push ( @results, $msg );
-                    }
-                }
-                elsif ( $arg =~ /-DeleteValues$/ ) {
-                    foreach my $value (@values) {
-                        next unless ($value);
-                        my ( $val, $msg ) = $Ticket->DeleteCustomFieldValue(
-                            Field => $cf,
-                            Value => $value
-                        );
-                        push ( @results, $msg );
-                    }
-                }
-                elsif ( $arg =~ /-Values$/ and $CustomFieldObj->Type !~ /Entry/) {
-                    my $cf_values = $Ticket->CustomFieldValues($cf);
-
-                    my %values_hash;
-                    foreach my $value (@values) {
-                        next unless ($value);
-
-                        # build up a hash of values that the new set has
-                        $values_hash{$value} = 1;
-
-                        unless ( $cf_values->HasEntry($value) ) {
-                            my ( $val, $msg ) = $Ticket->AddCustomFieldValue(
-                                Field => $cf,
-                                Value => $value
-                            );
-                            push ( @results, $msg );
-                        }
-
-                    }
-                    while ( my $cf_value = $cf_values->Next ) {
-                        unless ( $values_hash{ $cf_value->Content } == 1 ) {
-                            my ( $val, $msg ) = $Ticket->DeleteCustomFieldValue(
-                                Field => $cf,
-                                Value => $cf_value->Content
-                            );
-                            push ( @results, $msg);
-
-                        }
-
-                    }
-                }
-                elsif ( $arg =~ /-Values$/ ) {
-                    my $cf_values = $Ticket->CustomFieldValues($cf);
-
-		    # keep everything up to the point of difference, delete the rest
-		    my $delete_flag;
-		    foreach my $old_cf (@{$cf_values->ItemsArrayRef}) {
-			if (!$delete_flag and @values and $old_cf->Content eq $values[0]) {
-			    shift @values;
-			    next;
-			}
-
-			$delete_flag ||= 1;
-			$old_cf->Delete;
-		    }
-
-		    # now add/replace extra things, if any
-		    foreach my $value (@values) {
-			my ( $val, $msg ) = $Ticket->AddCustomFieldValue(
-			    Field => $cf,
-			    Value => $value
-			);
-			push ( @results, $msg );
-		    }
-		}
-                else {
-                    push ( @results, "User asked for an unknown update type for custom field " . $cf->Name . " for ticket " . $Ticket->id );
-                }
-            }
-        }
-        return (@results);
-    }
+    return ProcessObjectCustomFieldUpdates(%args, ARGSRef => $ARGSRef);
 }
 
-# }}}
+sub ProcessObjectCustomFieldUpdates {
+    my %args = @_;
+    my $ARGSRef = $args{'ARGSRef'};
+    my @results;
+
+    # Build up a list of objects that we want to work with
+    my %custom_fields_to_mod;
+    foreach my $arg ( keys %$ARGSRef ) {
+        # format: Object-<object class>-<object id>-CustomField-<CF id>-<commands>
+        next unless $arg =~ /^Object-([\w:]+)-(\d*)-CustomField-(\d+)-(.*)$/;
+
+        # For each of those objects, find out what custom fields we want to work with.
+        $custom_fields_to_mod{ $1 }{ $2 || 0 }{ $3 }{ $4 } = $ARGSRef->{ $arg };
+    }
+
+    # For each of those objects
+    foreach my $class ( keys %custom_fields_to_mod ) {
+        foreach my $id ( keys %{$custom_fields_to_mod{$class}} ) {
+            my $Object = $args{'Object'};
+            $Object = $class->new( $session{'CurrentUser'} )
+                unless $Object && ref $Object eq $class;
+
+            $Object->Load( $id ) unless ($Object->id || 0) == $id;
+            unless ( $Object->id ) {
+                $RT::Logger->warning("Couldn't load object $class #$id");
+                next;
+            }
+
+            foreach my $cf ( keys %{ $custom_fields_to_mod{ $class }{ $id } } ) {
+                my $CustomFieldObj = RT::CustomField->new( $session{'CurrentUser'} );
+                $CustomFieldObj->LoadById( $cf );
+                unless ( $CustomFieldObj->id ) {
+                    $RT::Logger->warning("Couldn't load custom field #$id");
+                    next;
+                }
+                push @results, _ProcessObjectCustomFieldUpdates(
+                    Prefix      => "Object-$class-$id-CustomField-$cf-",
+                    Object      => $Object,
+                    CustomField => $CustomFieldObj,
+                    ARGS        => $custom_fields_to_mod{$class}{$id}{$cf},
+                );
+            }
+        }
+    }
+    return @results;
+}
+
+sub _ProcessObjectCustomFieldUpdates {
+    my %args = @_;
+    my $cf = $args{'CustomField'};
+    my $cf_type = $cf->Type;
+
+    my @results;
+    foreach my $arg ( keys %{ $args{'ARGS'} } ) {
+        
+        next if $arg =~ /Category$/;
+
+        # since http won't pass in a form element with a null value, we need
+        # to fake it
+        if ( $arg eq 'Values-Magic' ) {
+            # We don't care about the magic, if there's really a values element;
+            next if $args{'ARGS'}->{'Value'} || $args{'ARGS'}->{'Values'};
+
+            # "Empty" values does not mean anything for Image and Binary fields
+            next if $cf_type =~ /^(?:Image|Binary)$/;
+
+            $arg = 'Values';
+            $args{'ARGS'}->{'Values'} = undef;
+        }
+
+        my @values = ();
+        if ( ref $args{'ARGS'}->{ $arg } eq 'ARRAY' ) {
+            @values = @{ $args{'ARGS'}->{$arg} };
+        } elsif ( $cf_type =~ /text/i ) { # Both Text and Wikitext
+            @values = ($args{'ARGS'}->{$arg});
+        } elsif ( defined( $args{'ARGS'}->{ $arg } ) ) {
+            @values = split /\n/, $args{'ARGS'}->{ $arg };
+        }
+        
+        if ( ( $cf_type eq 'Freeform' && !$cf->SingleValue ) || $cf_type =~ /text/i ) {
+            s/\r//g foreach @values;
+        }
+        @values = grep defined && $_ ne '', @values;
+
+        if ( $arg eq 'AddValue' || $arg eq 'Value' ) {
+            foreach my $value (@values) {
+                my ( $val, $msg ) = $args{'Object'}->AddCustomFieldValue(
+                    Field => $cf->id,
+                    Value => $value
+                );
+                push ( @results, $msg );
+            }
+        }
+        elsif ( $arg eq 'Upload' ) {
+            my $value_hash = _UploadedFile( $args{'Prefix'} . $arg ) or next;
+            my ( $val, $msg ) = $args{'Object'}->AddCustomFieldValue(
+                %$value_hash,
+                Field => $cf,
+            );
+            push ( @results, $msg );
+        }
+        elsif ( $arg eq 'DeleteValues' ) {
+            foreach my $value ( @values ) {
+                my ( $val, $msg ) = $args{'Object'}->DeleteCustomFieldValue(
+                    Field => $cf,
+                    Value => $value,
+                );
+                push ( @results, $msg );
+            }
+        }
+        elsif ( $arg eq 'DeleteValueIds' ) {
+            foreach my $value ( @values ) {
+                my ( $val, $msg ) = $args{'Object'}->DeleteCustomFieldValue(
+                    Field   => $cf,
+                    ValueId => $value,
+                );
+                push ( @results, $msg );
+            }
+        }
+        elsif ( $arg eq 'Values' && !$cf->Repeated ) {
+            my $cf_values = $args{'Object'}->CustomFieldValues( $cf->id );
+
+            my %values_hash;
+            foreach my $value ( @values ) {
+                # build up a hash of values that the new set has
+                $values_hash{$value} = 1;
+                next if $cf_values->HasEntry( $value );
+
+                my ( $val, $msg ) = $args{'Object'}->AddCustomFieldValue(
+                    Field => $cf,
+                    Value => $value
+                );
+                push ( @results, $msg );
+            }
+
+            $cf_values->RedoSearch;
+            while ( my $cf_value = $cf_values->Next ) {
+                next if $values_hash{ $cf_value->Content };
+
+                my ( $val, $msg ) = $args{'Object'}->DeleteCustomFieldValue(
+                    Field => $cf,
+                    Value => $cf_value->Content
+                );
+                push ( @results, $msg);
+            }
+        }
+        elsif ( $arg eq 'Values' ) {
+            my $cf_values = $args{'Object'}->CustomFieldValues( $cf->id );
+
+            # keep everything up to the point of difference, delete the rest
+            my $delete_flag;
+            foreach my $old_cf (@{$cf_values->ItemsArrayRef}) {
+                if (!$delete_flag and @values and $old_cf->Content eq $values[0]) {
+                    shift @values;
+                    next;
+                }
+
+                $delete_flag ||= 1;
+                $old_cf->Delete;
+            }
+
+            # now add/replace extra things, if any
+            foreach my $value ( @values ) {
+                my ( $val, $msg ) = $args{'Object'}->AddCustomFieldValue(
+                    Field => $cf,
+                    Value => $value
+                );
+                push ( @results, $msg );
+            }
+        }
+        else {
+            push ( @results,
+                loc("User asked for an unknown update type for custom field [_1] for [_2] object #[_3]",
+                $cf->Name, ref $args{'Object'}, $args{'Object'}->id )
+            );
+        }
+    }
+    return @results;
+}
 
 # {{{ sub ProcessTicketWatchers
 
@@ -1180,27 +1410,30 @@ sub ProcessTicketWatchers {
     my $Ticket  = $args{'TicketObj'};
     my $ARGSRef = $args{'ARGSRef'};
 
-    # {{{ Munge watchers
+    # Munge watchers
 
     foreach my $key ( keys %$ARGSRef ) {
 
-        # {{{ Delete deletable watchers
-        if ( ( $key =~ /^Ticket-DelWatcher-Type-(.*)-Principal-(\d+)$/ )  ) {
-            my ( $code, $msg ) = 
-                $Ticket->DeleteWatcher(PrincipalId => $2,
-                                       Type => $1);
+        # Delete deletable watchers
+        if ( ( $key =~ /^Ticket-DeleteWatcher-Type-(.*)-Principal-(\d+)$/ ) )
+        {
+            my ( $code, $msg ) = $Ticket->DeleteWatcher(
+                PrincipalId => $2,
+                Type        => $1
+            );
             push @results, $msg;
         }
 
         # Delete watchers in the simple style demanded by the bulk manipulator
         elsif ( $key =~ /^Delete(Requestor|Cc|AdminCc)$/ ) {
-            my ( $code, $msg ) = $Ticket->DeleteWatcher( Type => $ARGSRef->{$key}, PrincipalId => $1 );
+            my ( $code, $msg ) = $Ticket->DeleteWatcher(
+                Email => $ARGSRef->{$key},
+                Type  => $1
+            );
             push @results, $msg;
         }
 
-        # }}}
-
-        # Add new wathchers by email address      
+        # Add new wathchers by email address
         elsif ( ( $ARGSRef->{$key} =~ /^(AdminCc|Cc|Requestor)$/ )
             and ( $key =~ /^WatcherTypeEmail(\d*)$/ ) )
         {
@@ -1223,18 +1456,21 @@ sub ProcessTicketWatchers {
         }
 
         # Add new  watchers by owner
-        elsif ( ( $ARGSRef->{$key} =~ /^(AdminCc|Cc|Requestor)$/ )
-            and ( $key =~ /^Ticket-AddWatcher-Principal-(\d*)$/ ) ) {
+        elsif ( $key =~ /^Ticket-AddWatcher-Principal-(\d*)$/ ) {
+            my $principal_id = $1;
+            my $form = $ARGSRef->{$key};
+            foreach my $value ( ref($form) ? @{$form} : ($form) ) {
+                next unless $value =~ /^(?:AdminCc|Cc|Requestor)$/i;
 
-            #They're in this order because otherwise $1 gets clobbered :/
-            my ( $code, $msg ) =
-              $Ticket->AddWatcher( Type => $ARGSRef->{$key}, PrincipalId => $1 );
-            push @results, $msg;
+                my ( $code, $msg ) = $Ticket->AddWatcher(
+                    Type        => $value,
+                    PrincipalId => $principal_id
+                );
+                push @results, $msg;
+            }
         }
+
     }
-
-    # }}}
-
     return (@results);
 }
 
@@ -1276,7 +1512,7 @@ sub ProcessTicketDates {
         my $DateObj = RT::Date->new( $session{'CurrentUser'} );
 
         #If it's something other than just whitespace
-        if ( $ARGSRef->{ $field . '_Date' } ne '' ) {
+        if ( $ARGSRef->{ $field . '_Date' } && ($ARGSRef->{ $field . '_Date' } ne '') ) {
             $DateObj->Set(
                 Format => 'unknown',
                 Value  => $ARGSRef->{ $field . '_Date' }
@@ -1314,48 +1550,9 @@ sub ProcessTicketLinks {
     my $Ticket  = $args{'TicketObj'};
     my $ARGSRef = $args{'ARGSRef'};
 
-    my (@results);
 
-    # Delete links that are gone gone gone.
-    foreach my $arg ( keys %$ARGSRef ) {
-        if ( $arg =~ /DeleteLink-(.*?)-(DependsOn|MemberOf|RefersTo)-(.*)$/ ) {
-            my $base   = $1;
-            my $type   = $2;
-            my $target = $3;
-
-            push @results,
-              "Trying to delete: Base: $base Target: $target  Type $type";
-            my ( $val, $msg ) = $Ticket->DeleteLink( Base   => $base,
-                                                     Type   => $type,
-                                                     Target => $target );
-
-            push @results, $msg;
-
-        }
-
-    }
-
-    my @linktypes = qw( DependsOn MemberOf RefersTo );
-
-    foreach my $linktype (@linktypes) {
-        if ( $ARGSRef->{ $Ticket->Id . "-$linktype" } ) {
-            for my $luri ( split ( / /, $ARGSRef->{ $Ticket->Id . "-$linktype" } ) ) {
-                $luri =~ s/\s*$//;    # Strip trailing whitespace
-                my ( $val, $msg ) = $Ticket->AddLink( Target => $luri,
-                                                      Type   => $linktype );
-                push @results, $msg;
-            }
-        }
-        if ( $ARGSRef->{ "$linktype-" . $Ticket->Id } ) {
-
-            for my $luri ( split ( / /, $ARGSRef->{ "$linktype-" . $Ticket->Id } ) ) {
-                my ( $val, $msg ) = $Ticket->AddLink( Base => $luri,
-                                                      Type => $linktype );
-
-                push @results, $msg;
-            }
-        } 
-    }
+    my (@results) = ProcessRecordLinks(RecordObj => $Ticket,
+                                       ARGSRef => $ARGSRef);
 
     #Merge if we need to
     if ( $ARGSRef->{ $Ticket->Id . "-MergeInto" } ) {
@@ -1368,6 +1565,119 @@ sub ProcessTicketLinks {
 }
 
 # }}}
+
+sub ProcessRecordLinks {
+    my %args = ( RecordObj => undef,
+                 ARGSRef   => undef,
+                 @_ );
+
+    my $Record  = $args{'RecordObj'};
+    my $ARGSRef = $args{'ARGSRef'};
+
+    my (@results);
+
+    # Delete links that are gone gone gone.
+    foreach my $arg ( keys %$ARGSRef ) {
+        if ( $arg =~ /DeleteLink-(.*?)-(DependsOn|MemberOf|RefersTo)-(.*)$/ ) {
+            my $base   = $1;
+            my $type   = $2;
+            my $target = $3;
+
+            push @results,
+              "Trying to delete: Base: $base Target: $target  Type $type";
+            my ( $val, $msg ) = $Record->DeleteLink( Base   => $base,
+                                                     Type   => $type,
+                                                     Target => $target );
+
+            push @results, $msg;
+
+        }
+
+    }
+
+    my @linktypes = qw( DependsOn MemberOf RefersTo );
+
+    foreach my $linktype (@linktypes) {
+        if ( $ARGSRef->{ $Record->Id . "-$linktype" } ) {
+            for my $luri ( split ( / /, $ARGSRef->{ $Record->Id . "-$linktype" } ) ) {
+                $luri =~ s/\s*$//;    # Strip trailing whitespace
+                my ( $val, $msg ) = $Record->AddLink( Target => $luri,
+                                                      Type   => $linktype );
+                push @results, $msg;
+            }
+        }
+        if ( $ARGSRef->{ "$linktype-" . $Record->Id } ) {
+
+            for my $luri ( split ( / /, $ARGSRef->{ "$linktype-" . $Record->Id } ) ) {
+                my ( $val, $msg ) = $Record->AddLink( Base => $luri,
+                                                      Type => $linktype );
+
+                push @results, $msg;
+            }
+        } 
+    }
+
+    return (@results);
+}
+
+
+=head2 _UploadedFile ( $arg );
+
+Takes a CGI parameter name; if a file is uploaded under that name,
+return a hash reference suitable for AddCustomFieldValue's use:
+C<( Value => $filename, LargeContent => $content, ContentType => $type )>.
+
+Returns C<undef> if no files were uploaded in the C<$arg> field.
+
+=cut
+
+sub _UploadedFile {
+    my $arg = shift;
+    my $cgi_object = $m->cgi_object;
+    my $fh = $cgi_object->upload($arg) or return undef;
+    my $upload_info = $cgi_object->uploadInfo($fh);
+
+    my $filename = "$fh";
+    $filename =~ s#^.*[\\/]##;
+    binmode($fh);
+
+    return {
+        Value => $filename,
+        LargeContent => do { local $/; scalar <$fh> },
+        ContentType => $upload_info->{'Content-Type'},
+    };
+}
+
+=head2 _load_container_object ( $type, $id );
+
+Instantiate container object for saving searches.
+
+=cut
+
+sub _load_container_object {
+    my ($obj_type, $obj_id) = @_;
+    return RT::SavedSearch->new($session{'CurrentUser'})->_load_privacy_object($obj_type, $obj_id);
+}
+
+=head2 _parse_saved_search ( $arg );
+
+Given a serialization string for saved search, and returns the
+container object and the search id.
+
+=cut
+
+sub _parse_saved_search {
+    my $spec = shift;
+    return unless $spec;
+    if ($spec  !~ /^(.*?)-(\d+)-SavedSearch-(\d+)$/ ) {
+        return;
+    }
+    my $obj_type  = $1;
+    my $obj_id    = $2;
+    my $search_id = $3;
+
+    return (_load_container_object ($obj_type, $obj_id), $search_id);
+}
 
 eval "require RT::Interface::Web_Vendor";
 die $@ if ($@ && $@ !~ qr{^Can't locate RT/Interface/Web_Vendor.pm});

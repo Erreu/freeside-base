@@ -1,8 +1,14 @@
-# BEGIN LICENSE BLOCK
+# BEGIN BPS TAGGED BLOCK {{{
 # 
-# Copyright (c) 1996-2003 Jesse Vincent <jesse@bestpractical.com>
+# COPYRIGHT:
+#  
+# This software is Copyright (c) 1996-2007 Best Practical Solutions, LLC 
+#                                          <jesse@bestpractical.com>
 # 
-# (Except where explictly superceded by other copyright notices)
+# (Except where explicitly superseded by other copyright notices)
+# 
+# 
+# LICENSE:
 # 
 # This work is made available to you under the terms of Version 2 of
 # the GNU General Public License. A copy of that license should have
@@ -14,13 +20,31 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 # General Public License for more details.
 # 
-# Unless otherwise specified, all modifications, corrections or
-# extensions to this work which alter its source code become the
-# property of Best Practical Solutions, LLC when submitted for
-# inclusion in the work.
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+# 02110-1301 or visit their web page on the internet at
+# http://www.gnu.org/copyleft/gpl.html.
 # 
 # 
-# END LICENSE BLOCK
+# CONTRIBUTION SUBMISSION POLICY:
+# 
+# (The following paragraph is not intended to limit the rights granted
+# to you to modify and distribute this software under the terms of
+# the GNU General Public License and is only of importance to you if
+# you choose to contribute your changes and enhancements to the
+# community by submitting them to Best Practical Solutions, LLC.)
+# 
+# By intentionally submitting any modifications, corrections or
+# derivatives to this work, or any other work intended for use with
+# Request Tracker, to Best Practical Solutions, LLC, you confirm that
+# you are the copyright holder for those contributions and you grant
+# Best Practical Solutions,  LLC a nonexclusive, worldwide, irrevocable,
+# royalty-free, perpetual, license to use, copy, create derivative
+# works based on those contributions, and sublicense and distribute
+# those contributions and any derivatives thereof.
+# 
+# END BPS TAGGED BLOCK }}}
 =head1 NAME
 
   RT::CurrentUser - an RT object representing the current user
@@ -51,8 +75,7 @@ use RT::Record;
 use RT::I18N;
 
 use strict;
-use vars qw/@ISA/;
-@ISA= qw(RT::Record);
+use base qw/RT::Record/;
 
 # {{{ sub _Init 
 
@@ -60,17 +83,30 @@ use vars qw/@ISA/;
 # to be a CurrentUser object. but that's hard to do when we're trying to load
 # the CurrentUser object
 
-sub _Init  {
-  my $self = shift;
-  my $Name = shift;
+sub _Init {
+    my $self = shift;
+    my $User = shift;
 
-  $self->{'table'} = "Users";
+    $self->{'table'} = "Users";
 
-  if (defined($Name)) {
-    $self->Load($Name);
-  }
-  
-  $self->CurrentUser($self);
+    if ( defined($User) ) {
+
+        if (   UNIVERSAL::isa( $User, 'RT::User' )
+            || UNIVERSAL::isa( $User, 'RT::CurrentUser' ) )
+        {
+            $self->Load( $User->id );
+
+        }
+        elsif ( ref($User) ) {
+            $RT::Logger->crit(
+                "RT::CurrentUser->new() called with a bogus argument: $User");
+        }
+        else {
+            $self->Load($User);
+        }
+    }
+
+    $self->_BuildTableAttributes();
 
 }
 # }}}
@@ -104,15 +140,13 @@ sub Delete {
 sub UserObj {
     my $self = shift;
     
-    unless ($self->{'UserObj'}) {
 	use RT::User;
-	$self->{'UserObj'} = RT::User->new($self);
-	unless ($self->{'UserObj'}->Load($self->Id)) {
+	my $user = RT::User->new($self);
+
+	unless ($user->Load($self->Id)) {
 	    $RT::Logger->err($self->loc("Couldn't load [_1] from the users database.\n", $self->Id));
 	}
-	
-    }
-    return ($self->{'UserObj'});
+    return ($user);
 }
 # }}}
 
@@ -153,18 +187,18 @@ sub PrincipalId {
 
 
 # {{{ sub _Accessible 
-sub _Accessible  {
-  my $self = shift;
-  my %Cols = (
-	      Name => 'read',
-	      Gecos => 'read',
-	      RealName => 'read',
-	      Password => 'neither',
-	      EmailAddress => 'read',
-	      Privileged => 'read',
-	      IsAdministrator => 'read'
-	     );
-  return($self->SUPER::_Accessible(@_, %Cols));
+
+
+ sub _CoreAccessible  {
+     {
+         Name           => { 'read' => 1 },
+           Gecos        => { 'read' => 1 },
+           RealName     => { 'read' => 1 },
+           Lang     => { 'read' => 1 },
+           Password     => { 'read' => 0, 'write' => 0 },
+          EmailAddress => { 'read' => 1, 'write' => 0 }
+     };
+  
 }
 # }}}
 
@@ -212,6 +246,7 @@ sub LoadByGecos  {
 
 Loads a User into this CurrentUser object.
 Takes a Name.
+
 =cut
 
 sub LoadByName {
@@ -241,6 +276,11 @@ sub Load  {
   if ($identifier !~ /\D/) {
     $self->SUPER::LoadById($identifier);
   }
+
+  elsif (UNIVERSAL::isa($identifier,"RT::User")) {
+         # DWIM if they pass a user in
+         $self->SUPER::LoadById($identifier->Id);
+  } 
   else {
       # This is a bit dangerous, we might get false authen if somebody
       # uses ambigous userids or real names:
@@ -313,12 +353,15 @@ specification. but currently doesn't
 =begin testing
 
 ok (my $cu = RT::CurrentUser->new('root'));
-ok (my $lh = $cu->LanguageHandle);
-ok ($lh != undef);
+ok (my $lh = $cu->LanguageHandle('en-us'));
+ok (defined $lh);
 ok ($lh->isa('Locale::Maketext'));
-ok ($cu->loc('TEST_STRING') eq "Concrete Mixer", "Localized TEST_STRING into English");
+is ($cu->loc('TEST_STRING'), "Concrete Mixer", "Localized TEST_STRING into English");
 ok ($lh = $cu->LanguageHandle('fr'));
-ok ($cu->loc('Before') eq "Avant", "Localized TEST_STRING into Frenc");
+SKIP: {
+    skip "fr locale is not loaded", 1 unless grep $_ eq 'fr', @RT::LexiconLanguages;
+    is ($cu->loc('Before'), "Avant", "Localized TEST_STRING into Frenc");
+}
 
 =end testing
 
@@ -326,16 +369,24 @@ ok ($cu->loc('Before') eq "Avant", "Localized TEST_STRING into Frenc");
 
 sub LanguageHandle {
     my $self = shift;
-    if  ((!defined $self->{'LangHandle'}) || 
-         (!UNIVERSAL::can($self->{'LangHandle'}, 'maketext')) || 
-         (@_))  {
+    if (   ( !defined $self->{'LangHandle'} )
+        || ( !UNIVERSAL::can( $self->{'LangHandle'}, 'maketext' ) )
+        || (@_) ) {
+        if ( !$RT::SystemUser or ($self->id || 0) == $RT::SystemUser->id() ) {
+            @_ = qw(en-US);
+        }
+
+        elsif ( $self->Lang ) {
+            push @_, $self->Lang;
+        }
         $self->{'LangHandle'} = RT::I18N->get_handle(@_);
     }
+
     # Fall back to english.
-    unless ($self->{'LangHandle'}) {
+    unless ( $self->{'LangHandle'} ) {
         die "We couldn't get a dictionary. Nye mogu naidti slovar. No puedo encontrar dictionario.";
     }
-    return ($self->{'LangHandle'});
+    return ( $self->{'LangHandle'} );
 }
 
 sub loc {
@@ -355,7 +406,7 @@ sub loc {
 
 sub loc_fuzzy {
     my $self = shift;
-    return '' if $_[0] eq '';
+    return '' if (!$_[0] ||  $_[0] eq '');
 
     # XXX: work around perl's deficiency when matching utf8 data
     return $_[0] if Encode::is_utf8($_[0]);
@@ -364,6 +415,62 @@ sub loc_fuzzy {
     return($result);
 }
 # }}}
+
+
+=head2 CurrentUser
+
+Return  the current currentuser object
+
+=cut
+
+sub CurrentUser {
+    my $self = shift;
+    return($self);
+
+}
+
+=head2 Authenticate
+
+Takes $password, $created and $nonce, and returns a boolean value
+representing whether the authentication succeeded.
+
+If both $nonce and $created are specified, validate $password against:
+
+    encode_base64(sha1(
+	$nonce .
+	$created .
+	sha1_hex( "$username:$realm:$server_pass" )
+    ))
+
+where $server_pass is the md5_hex(password) digest stored in the
+database, $created is in ISO time format, and $nonce is a random
+string no longer than 32 bytes.
+
+=cut
+
+sub Authenticate { 
+    my ($self, $password, $created, $nonce, $realm) = @_;
+
+    require Digest::MD5;
+    require Digest::SHA1;
+    require MIME::Base64;
+
+    my $username = $self->UserObj->Name or return;
+    my $server_pass = $self->UserObj->__Value('Password') or return;
+    my $auth_digest = MIME::Base64::encode_base64(Digest::SHA1::sha1(
+	$nonce .
+	$created .
+	Digest::MD5::md5_hex("$username:$realm:$server_pass")
+    ));
+
+    chomp($password);
+    chomp($auth_digest);
+
+    return ($password eq $auth_digest);
+}
+
+# }}}
+
 
 eval "require RT::CurrentUser_Vendor";
 die $@ if ($@ && $@ !~ qr{^Can't locate RT/CurrentUser_Vendor.pm});

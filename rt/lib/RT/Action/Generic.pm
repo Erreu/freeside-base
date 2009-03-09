@@ -1,8 +1,14 @@
-# BEGIN LICENSE BLOCK
+# BEGIN BPS TAGGED BLOCK {{{
 # 
-# Copyright (c) 1996-2003 Jesse Vincent <jesse@bestpractical.com>
+# COPYRIGHT:
+#  
+# This software is Copyright (c) 1996-2007 Best Practical Solutions, LLC 
+#                                          <jesse@bestpractical.com>
 # 
-# (Except where explictly superceded by other copyright notices)
+# (Except where explicitly superseded by other copyright notices)
+# 
+# 
+# LICENSE:
 # 
 # This work is made available to you under the terms of Version 2 of
 # the GNU General Public License. A copy of that license should have
@@ -14,13 +20,31 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 # General Public License for more details.
 # 
-# Unless otherwise specified, all modifications, corrections or
-# extensions to this work which alter its source code become the
-# property of Best Practical Solutions, LLC when submitted for
-# inclusion in the work.
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+# 02110-1301 or visit their web page on the internet at
+# http://www.gnu.org/copyleft/gpl.html.
 # 
 # 
-# END LICENSE BLOCK
+# CONTRIBUTION SUBMISSION POLICY:
+# 
+# (The following paragraph is not intended to limit the rights granted
+# to you to modify and distribute this software under the terms of
+# the GNU General Public License and is only of importance to you if
+# you choose to contribute your changes and enhancements to the
+# community by submitting them to Best Practical Solutions, LLC.)
+# 
+# By intentionally submitting any modifications, corrections or
+# derivatives to this work, or any other work intended for use with
+# Request Tracker, to Best Practical Solutions, LLC, you confirm that
+# you are the copyright holder for those contributions and you grant
+# Best Practical Solutions,  LLC a nonexclusive, worldwide, irrevocable,
+# royalty-free, perpetual, license to use, copy, create derivative
+# works based on those contributions, and sublicense and distribute
+# those contributions and any derivatives thereof.
+# 
+# END BPS TAGGED BLOCK }}}
 =head1 NAME
 
   RT::Action::Generic - a generic baseclass for RT Actions
@@ -44,6 +68,9 @@ ok (require RT::Action::Generic);
 package RT::Action::Generic;
 
 use strict;
+use Scalar::Util;
+
+use base qw/RT::Base/;
 
 # {{{ sub new 
 sub new  {
@@ -56,31 +83,35 @@ sub new  {
 }
 # }}}
 
-# {{{ sub new 
-sub loc {
-    my $self = shift;
-    return $self->{'ScripObj'}->loc(@_);
-}
-# }}}
-
 # {{{ sub _Init 
 sub _Init  {
   my $self = shift;
-  my %args = ( TransactionObj => undef,
-	       TicketObj => undef,
-	       ScripObj => undef,
-	       TemplateObj => undef,
-	       Argument => undef,
-	       Type => undef,
-	       @_ );
-  
-  
+  my %args = ( Argument => undef,
+               CurrentUser => undef,
+               ScripActionObj => undef,
+               ScripObj => undef,
+               TemplateObj => undef,
+               TicketObj => undef,
+               TransactionObj => undef,
+               Type => undef,
+
+               @_ );
+
   $self->{'Argument'} = $args{'Argument'};
+  $self->CurrentUser( $args{'CurrentUser'});
+  $self->{'ScripActionObj'} = $args{'ScripActionObj'};
   $self->{'ScripObj'} = $args{'ScripObj'};
+  $self->{'TemplateObj'} = $args{'TemplateObj'};
   $self->{'TicketObj'} = $args{'TicketObj'};
   $self->{'TransactionObj'} = $args{'TransactionObj'};
-  $self->{'TemplateObj'} = $args{'TemplateObj'};
   $self->{'Type'} = $args{'Type'};
+
+  Scalar::Util::weaken($self->{'ScripActionObj'});
+  Scalar::Util::weaken($self->{'ScripObj'});
+  Scalar::Util::weaken($self->{'TemplateObj'});
+  Scalar::Util::weaken($self->{'TicketObj'});
+  Scalar::Util::weaken($self->{'TransactionObj'});
+
 }
 # }}}
 
@@ -118,6 +149,13 @@ sub TemplateObj  {
 sub ScripObj  {
   my $self = shift;
   return($self->{'ScripObj'});
+}
+# }}}
+
+# {{{ sub ScripActionObj
+sub ScripActionObj  {
+  my $self = shift;
+  return($self->{'ScripActionObj'});
 }
 # }}}
 
@@ -176,13 +214,11 @@ sub DESTROY {
 
     # We need to clean up all the references that might maybe get
     # oddly circular
+    $self->{'ScripActionObj'} = undef;
+    $self->{'ScripObj'} = undef;
     $self->{'TemplateObj'} =undef
     $self->{'TicketObj'} = undef;
     $self->{'TransactionObj'} = undef;
-    $self->{'ScripObj'} = undef;
-
-
-     
 }
 
 # }}}

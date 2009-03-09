@@ -1,8 +1,14 @@
-# BEGIN LICENSE BLOCK
+# BEGIN BPS TAGGED BLOCK {{{
 # 
-# Copyright (c) 1996-2003 Jesse Vincent <jesse@bestpractical.com>
+# COPYRIGHT:
+#  
+# This software is Copyright (c) 1996-2007 Best Practical Solutions, LLC 
+#                                          <jesse@bestpractical.com>
 # 
-# (Except where explictly superceded by other copyright notices)
+# (Except where explicitly superseded by other copyright notices)
+# 
+# 
+# LICENSE:
 # 
 # This work is made available to you under the terms of Version 2 of
 # the GNU General Public License. A copy of that license should have
@@ -14,13 +20,31 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 # General Public License for more details.
 # 
-# Unless otherwise specified, all modifications, corrections or
-# extensions to this work which alter its source code become the
-# property of Best Practical Solutions, LLC when submitted for
-# inclusion in the work.
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+# 02110-1301 or visit their web page on the internet at
+# http://www.gnu.org/copyleft/gpl.html.
 # 
 # 
-# END LICENSE BLOCK
+# CONTRIBUTION SUBMISSION POLICY:
+# 
+# (The following paragraph is not intended to limit the rights granted
+# to you to modify and distribute this software under the terms of
+# the GNU General Public License and is only of importance to you if
+# you choose to contribute your changes and enhancements to the
+# community by submitting them to Best Practical Solutions, LLC.)
+# 
+# By intentionally submitting any modifications, corrections or
+# derivatives to this work, or any other work intended for use with
+# Request Tracker, to Best Practical Solutions, LLC, you confirm that
+# you are the copyright holder for those contributions and you grant
+# Best Practical Solutions,  LLC a nonexclusive, worldwide, irrevocable,
+# royalty-free, perpetual, license to use, copy, create derivative
+# works based on those contributions, and sublicense and distribute
+# those contributions and any derivatives thereof.
+# 
+# END BPS TAGGED BLOCK }}}
 =head1 NAME
 
   RT::Date - a simple Object Oriented date.
@@ -203,23 +227,28 @@ sub Set {
 
 # {{{ sub SetToMidnight 
 
-=head2 SetToMidnight
+=head2 SetToMidnight [Timezone => 'utc']
 
-Sets the date to midnight (at the beginning of the day) GMT
+Sets the date to midnight (at the beginning of the day).
 Returns the unixtime at midnight.
+
+Arguments:
+
+=over 4
+
+=item Timezone - Timezone context C<server> or C<UTC>
 
 =cut
 
 sub SetToMidnight {
     my $self = shift;
-    
-    use Time::Local;
-    my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday) = gmtime($self->Unix);
-    $self->Unix(timegm (0,0,0,$mday,$mon,$year,$wday,$yday));
-    
+    my %args = ( Timezone => 'UTC', @_ );
+    if ( lc $args{'Timezone'} eq 'server' ) {
+        $self->Unix( Time::Local::timelocal( 0,0,0,(localtime $self->Unix)[3..7] ) );
+    } else {
+        $self->Unix( Time::Local::timegm( 0,0,0,(gmtime $self->Unix)[3..7] ) );
+    }
     return ($self->Unix);
-    
-    
 }
 
 
@@ -330,7 +359,8 @@ sub DurationAsString {
         $s         = int( $duration / $YEAR );
         $time_unit = $self->loc("years");
     }
-    if (0) { # For now, never display the "AGO" # $negative) {
+
+    if ($negative) {
         return $self->loc( "[_1] [_2] ago", $s, $time_unit );
     }
     else {
@@ -375,6 +405,7 @@ sub AsString {
 # }}}
 
 # {{{ GetWeekday
+
 =head2 GetWeekday DAY
 
 Takes an integer day of week and returns a localized string for that day of week
@@ -397,6 +428,7 @@ sub GetWeekday {
 # }}}
 
 # {{{ GetMonth
+
 =head2 GetMonth DAY
 
 Takes an integer month and returns a localized string for that month 
@@ -529,8 +561,65 @@ sub ISO {
 
 # }}}
 
+# {{{ sub Date
+
+=head2 Date
+
+Takes nothing
+
+Returns the object's date in yyyy-mm-dd format; this is the same as
+the ISO format without the time
+
+=cut
+
+sub Date {
+    my $self = shift;
+    my ($date, $time) = split ' ', $self->ISO;
+    return $date;
+}
+
+# }}}}
+
+# {{{ sub Time
+
+=head2 Time
+
+Takes nothing
+
+Returns the object's time in hh:mm:ss format; this is the same as
+the ISO format without the date
+
+=cut
+
+sub Time {
+    my $self = shift;
+    my ($date, $time) = split ' ', $self->ISO;
+    return $time;
+}
+
+# }}}}
+
+# {{{ sub W3CDTF
+
+=head2 W3CDTF
+
+Takes nothing
+
+Returns the object's date in W3C DTF format
+
+=cut
+
+sub W3CDTF {
+    my $self = shift;
+    my $date = $self->ISO . 'Z';
+    $date =~ s/ /T/;
+    return $date;
+};
+
+# }}}
 
 # {{{ sub LocalTimezone 
+
 =head2 LocalTimezone
 
   Returns the current timezone. For now, draws off a system timezone, RT::Timezone. Eventually, this may
