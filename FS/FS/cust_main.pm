@@ -3368,15 +3368,23 @@ sub retry_realtime {
 
 }
 
-=item realtime_bop METHOD AMOUNT [ OPTION => VALUE ... ]
+=item realtime_collect [ OPTION => VALUE ... ]
 
 Runs a realtime credit card, ACH (electronic check) or phone bill transaction
-via a Business::OnlinePayment realtime gateway.  See
-L<http://420.am/business-onlinepayment> for supported gateways.
+via a Business::OnlinePayment or Business::OnlineThirdPartyPayment realtime
+gateway.  See L<http://420.am/business-onlinepayment> and 
+L<http://420.am/business-onlinethirdpartypayment> for supported gateways.
 
-Available methods are: I<CC>, I<ECHECK> and I<LEC>
+On failure returns an error message.
 
-Available options are: I<description>, I<invnum>, I<quiet>, I<paynum_ref>, I<payunique>
+Returns false or a hashref upon success.  The hashref contains keys popup_url reference, and collectitems.  The first is a URL to which a browser should be redirected for completion of collection.  The second is a reference id for the transaction suitable for the end user.  The collectitems is a reference to a list of name value pairs suitable for assigning to a html form and posted to popup_url.
+
+Available options are: I<method>, I<amount>, I<description>, I<invnum>, I<quiet>, I<paynum_ref>, I<payunique>, I<session_id>
+
+I<method> is one of: I<CC>, I<ECHECK> and I<LEC>.  If none is specified
+then it is deduced from the customer record.
+
+If no I<amount> is specified, then the customer balance is used.
 
 The additional options I<payname>, I<address1>, I<address2>, I<city>, I<state>,
 I<zip>, I<payinfo> and I<paydate> are also available.  Any of these options,
@@ -3396,130 +3404,209 @@ resulting paynum, if any.
 
 I<payunique> is a unique identifier for this payment.
 
+I<session_id> is a session identifier associated with this payment.
+
+I<depend_jobnum> allows payment capture to unlock export jobs
+
+=cut
+
+sub realtime_collect {
+  my( $self, %options ) = @_;
+
+  if ( $DEBUG ) {
+    warn "$me realtime_collect:\n";
+    warn "  $_ => $options{$_}\n" foreach keys %options;
+  }
+
+  $options{amount} = $self->balance unless exists( $options{amount} );
+  $options{method} = FS::payby->payby2bop($self->payby)
+    unless exists( $options{method} );
+
+  return $self->realtime_bop({%options});
+
+}
+
+=item realtime_bop { [ ARG => VALUE ... ] }
+
+Runs a realtime credit card, ACH (electronic check) or phone bill transaction
+via a Business::OnlinePayment realtime gateway.  See
+L<http://420.am/business-onlinepayment> for supported gateways.
+
+Required arguments in the hashref are I<method>, and I<amount>
+
+Available methods are: I<CC>, I<ECHECK> and I<LEC>
+
+Available optional arguments are: I<description>, I<invnum>, I<quiet>, I<paynum_ref>, I<payunique>, I<session_id>
+
+The additional options I<payname>, I<address1>, I<address2>, I<city>, I<state>,
+I<zip>, I<payinfo> and I<paydate> are also available.  Any of these options,
+if set, will override the value from the customer record.
+
+I<description> is a free-text field passed to the gateway.  It defaults to
+"Internet services".
+
+If an I<invnum> is specified, this payment (if successful) is applied to the
+specified invoice.  If you don't specify an I<invnum> you might want to
+call the B<apply_payments> method.
+
+I<quiet> can be set true to surpress email decline notices.
+
+I<paynum_ref> can be set to a scalar reference.  It will be filled in with the
+resulting paynum, if any.
+
+I<payunique> is a unique identifier for this payment.
+
+I<session_id> is a session identifier associated with this payment.
+
+I<depend_jobnum> allows payment capture to unlock export jobs
+
 (moved from cust_bill) (probably should get realtime_{card,ach,lec} here too)
 
 =cut
 
+# some helper routines
+sub _payment_gateway {
+  my ($self, $options) = @_;
+
+  $options->{payment_gateway} = $self->agent->payment_gateway( %$options )
+    unless exists($options->{payment_gateway});
+
+  $options->{payment_gateway};
+}
+
+sub _bop_auth {
+  my ($self, $options) = @_;
+
+  (
+    'login'    => $options->{payment_gateway}->gateway_username,
+    'password' => $options->{payment_gateway}->gateway_password,
+  );
+}
+
+sub _bop_options {
+  my ($self, $options) = @_;
+
+  $options->{payment_gateway}->gatewaynum
+    ? $options->{payment_gateway}->options
+    : @{ $options->{payment_gateway}->get('options') };
+}
+
+sub _bop_defaults {
+  my ($self, $options) = @_;
+
+  $options->{description} ||= 'Internet services';
+  $options->{payinfo} = $self->payinfo unless exists( $options->{payinfo} );
+  $options->{invnum} ||= '';
+  $options->{payname} = $self->payname unless exists( $options->{payname} );
+}
+
+sub _bop_content {
+  my ($self, $options) = @_;
+  my %content = ();
+
+  $content{address} = exists($options->{'address1'})
+                        ? $options->{'address1'}
+                        : $self->address1;
+  my $address2 = exists($options->{'address2'})
+                   ? $options->{'address2'}
+                   : $self->address2;
+  $content{address} .= ", ". $address2 if length($address2);
+
+  my $payip = exists($options->{'payip'}) ? $options->{'payip'} : $self->payip;
+  $content{customer_ip} = $payip if length($payip);
+
+  $content{invoice_number} = $options->{'invnum'}
+    if exists($options->{'invnum'}) && length($options->{'invnum'});
+
+  $content{email_customer} = 
+    (    $conf->exists('business-onlinepayment-email_customer')
+      || $conf->exists('business-onlinepayment-email-override') );
+      
+  $content{payfirst} = $self->getfield('first');
+  $content{paylast} = $self->getfield('last');
+
+  $content{account_name} = "$content{payfirst} $content{paylast}"
+    if $options->{method} eq 'ECHECK';
+
+  $content{name} = $options->{payname};
+  $content{name} = $content{account_name} if exists($content{account_name});
+
+  $content{city} = exists($options->{city})
+                     ? $options->{city}
+                     : $self->city;
+  $content{state} = exists($options->{state})
+                      ? $options->{state}
+                      : $self->state;
+  $content{zip} = exists($options->{zip})
+                    ? $options->{'zip'}
+                    : $self->zip;
+  $content{country} = exists($options->{country})
+                        ? $options->{country}
+                        : $self->country;
+  $content{referer} = 'http://cleanwhisker.420.am/'; #XXX fix referer :/
+  $content{phone} = $self->daytime || $self->night;
+
+  (%content);
+}
+
+my %bop_method2payby = (
+  'CC'     => 'CARD',
+  'ECHECK' => 'CHEK',
+  'LEC'    => 'LECB',
+);
+
 sub realtime_bop {
-  my( $self, $method, $amount, %options ) = @_;
+  my $self = shift;
+
+  my %options = ();
+  if (ref($_[0]) eq 'HASH') {
+    %options = %{$_[0]};
+  } else {
+    my ( $method, $amount ) = ( shift, shift );
+    %options = @_;
+    $options{method} = $method;
+    $options{amount} = $amount;
+  }
+  
   if ( $DEBUG ) {
-    warn "$me realtime_bop: $method $amount\n";
+    warn "$me realtime_bop: $options{method} $options{amount}\n";
     warn "  $_ => $options{$_}\n" foreach keys %options;
   }
 
-  $options{'description'} ||= 'Internet services';
+  return $self->fake_bop(%options) if $options{'fake'};
 
-  return $self->fake_bop($method, $amount, %options) if $options{'fake'};
+  $self->_bop_defaults(\%options);
 
-  eval "use Business::OnlinePayment";  
+  ###
+  # select a gateway
+  ###
+
+  my $payment_gateway =  $self->_payment_gateway( \%options );
+  my $namespace = $payment_gateway->gateway_namespace;
+
+  eval "use $namespace";  
   die $@ if $@;
-
-  my $payinfo = exists($options{'payinfo'})
-                  ? $options{'payinfo'}
-                  : $self->payinfo;
-
-  my %method2payby = (
-    'CC'     => 'CARD',
-    'ECHECK' => 'CHEK',
-    'LEC'    => 'LECB',
-  );
 
   ###
   # check for banned credit card/ACH
   ###
 
   my $ban = qsearchs('banned_pay', {
-    'payby'   => $method2payby{$method},
-    'payinfo' => md5_base64($payinfo),
+    'payby'   => $bop_method2payby{$options{method}},
+    'payinfo' => md5_base64($options{payinfo}),
   } );
   return "Banned credit card" if $ban;
-
-  ###
-  # select a gateway
-  ###
-
-  my $taxclass = '';
-  if ( $options{'invnum'} ) {
-    my $cust_bill = qsearchs('cust_bill', { 'invnum' => $options{'invnum'} } );
-    die "invnum ". $options{'invnum'}. " not found" unless $cust_bill;
-    my @taxclasses =
-      map  { $_->part_pkg->taxclass }
-      grep { $_ }
-      map  { $_->cust_pkg }
-      $cust_bill->cust_bill_pkg;
-    unless ( grep { $taxclasses[0] ne $_ } @taxclasses ) { #unless there are
-                                                           #different taxclasses
-      $taxclass = $taxclasses[0];
-    }
-  }
-
-  #look for an agent gateway override first
-  my $cardtype;
-  if ( $method eq 'CC' ) {
-    $cardtype = cardtype($payinfo);
-  } elsif ( $method eq 'ECHECK' ) {
-    $cardtype = 'ACH';
-  } else {
-    $cardtype = $method;
-  }
-
-  my $override =
-       qsearchs('agent_payment_gateway', { agentnum => $self->agentnum,
-                                           cardtype => $cardtype,
-                                           taxclass => $taxclass,       } )
-    || qsearchs('agent_payment_gateway', { agentnum => $self->agentnum,
-                                           cardtype => '',
-                                           taxclass => $taxclass,       } )
-    || qsearchs('agent_payment_gateway', { agentnum => $self->agentnum,
-                                           cardtype => $cardtype,
-                                           taxclass => '',              } )
-    || qsearchs('agent_payment_gateway', { agentnum => $self->agentnum,
-                                           cardtype => '',
-                                           taxclass => '',              } );
-
-  my $payment_gateway = '';
-  my( $processor, $login, $password, $action, @bop_options );
-  if ( $override ) { #use a payment gateway override
-
-    $payment_gateway = $override->payment_gateway;
-
-    $processor   = $payment_gateway->gateway_module;
-    $login       = $payment_gateway->gateway_username;
-    $password    = $payment_gateway->gateway_password;
-    $action      = $payment_gateway->gateway_action;
-    @bop_options = $payment_gateway->options;
-
-  } else { #use the standard settings from the config
-
-    ( $processor, $login, $password, $action, @bop_options ) =
-      $self->default_payment_gateway($method);
-
-  }
 
   ###
   # massage data
   ###
 
-  my $address = exists($options{'address1'})
-                    ? $options{'address1'}
-                    : $self->address1;
-  my $address2 = exists($options{'address2'})
-                    ? $options{'address2'}
-                    : $self->address2;
-  $address .= ", ". $address2 if length($address2);
+  my (%bop_content) = $self->_bop_content(\%options);
 
-  my $o_payname = exists($options{'payname'})
-                    ? $options{'payname'}
-                    : $self->payname;
-  my($payname, $payfirst, $paylast);
-  if ( $o_payname && $method ne 'ECHECK' ) {
-    ($payname = $o_payname) =~ /^\s*([\w \,\.\-\']*)?\s+([\w\,\.\-\']+)\s*$/
-      or return "Illegal payname $payname";
-    ($payfirst, $paylast) = ($1, $2);
-  } else {
-    $payfirst = $self->getfield('first');
-    $paylast = $self->getfield('last');
-    $payname =  "$payfirst $paylast";
+  if ( $options{method} ne 'ECHECK' ) {
+    $options{payname} =~ /^\s*([\w \,\.\-\']*)?\s+([\w\,\.\-\']+)\s*$/
+      or return "Illegal payname $options{payname}";
+    ($bop_content{payfirst}, $bop_content{paylast}) = ($1, $2);
   }
 
   my @invoicing_list = $self->invoicing_list_emailonly;
@@ -3533,25 +3620,11 @@ sub realtime_bop {
               ? $conf->config('business-onlinepayment-email-override')
               : $invoicing_list[0];
 
-  my %content = ();
-
-  my $payip = exists($options{'payip'})
-                ? $options{'payip'}
-                : $self->payip;
-  $content{customer_ip} = $payip
-    if length($payip);
-
-  $content{invoice_number} = $options{'invnum'}
-    if exists($options{'invnum'}) && length($options{'invnum'});
-
-  $content{email_customer} = 
-    (    $conf->exists('business-onlinepayment-email_customer')
-      || $conf->exists('business-onlinepayment-email-override') );
-      
   my $paydate = '';
-  if ( $method eq 'CC' ) { 
+  my %content = ();
+  if ( $namespace eq 'Business::OnlinePayment' && $options{method} eq 'CC' ) {
 
-    $content{card_number} = $payinfo;
+    $content{card_number} = $options{payinfo};
     $paydate = exists($options{'paydate'})
                     ? $options{'paydate'}
                     : $self->paydate;
@@ -3583,25 +3656,24 @@ sub realtime_bop {
     $content{recurring_billing} = 'YES'
       if qsearch('cust_pay', { 'custnum' => $self->custnum,
                                'payby'   => 'CARD',
-                               'payinfo' => $payinfo,
+                               'payinfo' => $options{payinfo},
                              } )
       || qsearch('cust_pay', { 'custnum' => $self->custnum,
                                'payby'   => 'CARD',
-                               'paymask' => $self->mask_payinfo('CARD', $payinfo),
+                               'paymask' => $self->mask_payinfo('CARD', $options{payinfo}),
                              } );
 
 
-  } elsif ( $method eq 'ECHECK' ) {
+  } elsif ( $namespace eq 'Business::OnlinePayment' && $options{method} eq 'ECHECK' ){
     ( $content{account_number}, $content{routing_code} ) =
-      split('@', $payinfo);
-    $content{bank_name} = $o_payname;
+      split('@', $options{payinfo});
+    $content{bank_name} = $options{payname};
     $content{bank_state} = exists($options{'paystate'})
                              ? $options{'paystate'}
                              : $self->getfield('paystate');
     $content{account_type} = exists($options{'paytype'})
                                ? uc($options{'paytype'}) || 'CHECKING'
                                : uc($self->getfield('paytype')) || 'CHECKING';
-    $content{account_name} = $payname;
     $content{customer_org} = $self->company ? 'B' : 'I';
     $content{state_id}       = exists($options{'stateid'})
                                  ? $options{'stateid'}
@@ -3612,8 +3684,12 @@ sub realtime_bop {
     $content{customer_ssn} = exists($options{'ss'})
                                ? $options{'ss'}
                                : $self->ss;
-  } elsif ( $method eq 'LEC' ) {
-    $content{phone} = $payinfo;
+  } elsif ( $namespace eq 'Business::OnlinePayment' && $options{method} eq 'LEC' ) {
+    $content{phone} = $options{payinfo};
+  } elsif ( $namespace eq 'Business::OnlineThirdPartyPayment' ) {
+    #move along
+  } else {
+    #die an evil death
   }
 
   ###
@@ -3630,9 +3706,9 @@ sub realtime_bop {
   #double-form-submission prevention is taken care of in cust_pay_pending::check
 
   #check the balance
-  return "The customer's balance has changed; $method transaction aborted."
+  return "The customer's balance has changed; $options{method} transaction aborted."
     if $self->balance < $balance;
-    #&& $self->balance < $amount; #might as well anyway?
+    #&& $self->balance < $options{amount}; #might as well anyway?
 
   #also check and make sure there aren't *other* pending payments for this cust
 
@@ -3642,7 +3718,7 @@ sub realtime_bop {
   });
   return "A payment is already being processed for this customer (".
          join(', ', map 'paypendingnum '. $_->paypendingnum, @pending ).
-         "); $method transaction aborted."
+         "); $options{method} transaction aborted."
     if scalar(@pending);
 
   #okay, good to go, if we're a duplicate, cust_pay_pending will kick us out
@@ -3650,50 +3726,39 @@ sub realtime_bop {
   my $cust_pay_pending = new FS::cust_pay_pending {
     'custnum'    => $self->custnum,
     #'invnum'     => $options{'invnum'},
-    'paid'       => $amount,
+    'paid'       => $options{amount},
     '_date'      => '',
-    'payby'      => $method2payby{$method},
-    'payinfo'    => $payinfo,
+    'payby'      => $bop_method2payby{$options{method}},
+    'payinfo'    => $options{payinfo},
     'paydate'    => $paydate,
     'status'     => 'new',
-    'gatewaynum' => ( $payment_gateway ? $payment_gateway->gatewaynum : '' ),
+    'gatewaynum' => $payment_gateway->gatewaynum || '',
+    'session_id' => $options{session_id} || '',
+    'jobnum'     => $options{depend_jobnum} || '',
   };
   $cust_pay_pending->payunique( $options{payunique} )
     if defined($options{payunique}) && length($options{payunique});
   my $cpp_new_err = $cust_pay_pending->insert; #mutex lost when this is inserted
   return $cpp_new_err if $cpp_new_err;
 
-  my( $action1, $action2 ) = split(/\s*\,\s*/, $action );
+  my( $action1, $action2 ) =
+    split( /\s*\,\s*/, $payment_gateway->gateway_action );
 
-  my $transaction = new Business::OnlinePayment( $processor, @bop_options );
+  my $transaction = new $namespace( $payment_gateway->gateway_module,
+                                    $self->_bop_options(\%options),
+                                  );
+
   $transaction->content(
-    'type'           => $method,
-    'login'          => $login,
-    'password'       => $password,
+    'type'           => $options{method},
+    $self->_bop_auth(\%options),          
     'action'         => $action1,
     'description'    => $options{'description'},
-    'amount'         => $amount,
+    'amount'         => $options{amount},
     #'invoice_number' => $options{'invnum'},
     'customer_id'    => $self->custnum,
-    'last_name'      => $paylast,
-    'first_name'     => $payfirst,
-    'name'           => $payname,
-    'address'        => $address,
-    'city'           => ( exists($options{'city'})
-                            ? $options{'city'}
-                            : $self->city          ),
-    'state'          => ( exists($options{'state'})
-                            ? $options{'state'}
-                            : $self->state          ),
-    'zip'            => ( exists($options{'zip'})
-                            ? $options{'zip'}
-                            : $self->zip          ),
-    'country'        => ( exists($options{'country'})
-                            ? $options{'country'}
-                            : $self->country          ),
-    'referer'        => 'http://cleanwhisker.420.am/', #XXX fix referer :/
+    %bop_content,
+    'reference'      => $cust_pay_pending->paypendingnum, #for now
     'email'          => $email,
-    'phone'          => $self->daytime || $self->night,
     %content, #after
   );
 
@@ -3717,7 +3782,12 @@ sub realtime_bop {
     }
   }
 
-  if ( $transaction->is_success() && $action2 ) {
+  if ( $transaction->is_success() && $namespace eq 'Business::OnlineThirdPartyPayment' ) {
+
+    return { reference => $cust_pay_pending->paypendingnum,
+             map { $_ => $transaction->$_ } qw ( popup_url collectitems ) };
+
+  } elsif ( $transaction->is_success() && $action2 ) {
 
     $cust_pay_pending->status('authorized');
     my $cpp_authorized_err = $cust_pay_pending->replace;
@@ -3729,16 +3799,17 @@ sub realtime_bop {
                    : '';
 
     my $capture =
-      new Business::OnlinePayment( $processor, @bop_options );
+      new Business::OnlinePayment( $payment_gateway->gateway_module,
+                                   $self->_bop_options(\%options),
+                                 );
 
     my %capture = (
       %content,
-      type           => $method,
+      type           => $options{method},
       action         => $action2,
-      login          => $login,
-      password       => $password,
+      $self->_bop_auth(\%options),          
       order_number   => $ordernum,
-      amount         => $amount,
+      amount         => $options{amount},
       authorization  => $auth,
       description    => $options{'description'},
     );
@@ -3764,10 +3835,6 @@ sub realtime_bop {
 
   }
 
-  $cust_pay_pending->status($transaction->is_success() ? 'captured' : 'declined');
-  my $cpp_captured_err = $cust_pay_pending->replace;
-  return $cpp_captured_err if $cpp_captured_err;
-
   ###
   # remove paycvv after initial transaction
   ###
@@ -3776,7 +3843,7 @@ sub realtime_bop {
   # correctly
   if ( defined $self->dbdef_table->column('paycvv')
        && length($self->paycvv)
-       && ! grep { $_ eq cardtype($payinfo) } $conf->config('cvv-save')
+       && ! grep { $_ eq cardtype($options{payinfo}) } $conf->config('cvv-save')
   ) {
     my $error = $self->remove_cvv;
     if ( $error ) {
@@ -3788,14 +3855,114 @@ sub realtime_bop {
   # result handling
   ###
 
+  $self->_realtime_bop_result( $cust_pay_pending, $transaction, %options );
+
+}
+
+=item fake_bop
+
+=cut
+
+sub fake_bop {
+  my $self = shift;
+
+  my %options = ();
+  if (ref($_[0]) eq 'HASH') {
+    %options = %{$_[0]};
+  } else {
+    my ( $method, $amount ) = ( shift, shift );
+    %options = @_;
+    $options{method} = $method;
+    $options{amount} = $amount;
+  }
+  
+  if ( $options{'fake_failure'} ) {
+     return "Error: No error; test failure requested with fake_failure";
+  }
+
+  #my $paybatch = '';
+  #if ( $payment_gateway->gatewaynum ) { # agent override
+  #  $paybatch = $payment_gateway->gatewaynum. '-';
+  #}
+  #
+  #$paybatch .= "$processor:". $transaction->authorization;
+  #
+  #$paybatch .= ':'. $transaction->order_number
+  #  if $transaction->can('order_number')
+  #  && length($transaction->order_number);
+
+  my $paybatch = 'FakeProcessor:54:32';
+
+  my $cust_pay = new FS::cust_pay ( {
+     'custnum'  => $self->custnum,
+     'invnum'   => $options{'invnum'},
+     'paid'     => $options{amount},
+     '_date'    => '',
+     'payby'    => $bop_method2payby{$options{method}},
+     #'payinfo'  => $payinfo,
+     'payinfo'  => '4111111111111111',
+     'paybatch' => $paybatch,
+     #'paydate'  => $paydate,
+     'paydate'  => '2012-05-01',
+  } );
+  $cust_pay->payunique( $options{payunique} ) if length($options{payunique});
+
+  my $error = $cust_pay->insert($options{'manual'} ? ( 'manual' => 1 ) : () );
+
+  if ( $error ) {
+    $cust_pay->invnum(''); #try again with no specific invnum
+    my $error2 = $cust_pay->insert( $options{'manual'} ?
+                                    ( 'manual' => 1 ) : ()
+                                  );
+    if ( $error2 ) {
+      # gah, even with transactions.
+      my $e = 'WARNING: Card/ACH debited but database not updated - '.
+              "error inserting (fake!) payment: $error2".
+              " (previously tried insert with invnum #$options{'invnum'}" .
+              ": $error )";
+      warn $e;
+      return $e;
+    }
+  }
+
+  if ( $options{'paynum_ref'} ) {
+    ${ $options{'paynum_ref'} } = $cust_pay->paynum;
+  }
+
+  return ''; #no error
+
+}
+
+
+# item _realtime_bop_result CUST_PAY_PENDING, BOP_OBJECT [ OPTION => VALUE ... ]
+# 
+# Wraps up processing of a realtime credit card, ACH (electronic check) or
+# phone bill transaction.
+
+sub _realtime_bop_result {
+  my( $self, $cust_pay_pending, $transaction, %options ) = @_;
+  if ( $DEBUG ) {
+    warn "$me _realtime_bop_result: pending transaction ".
+      $cust_pay_pending->paypendingnum. "\n";
+    warn "  $_ => $options{$_}\n" foreach keys %options;
+  }
+
+  my $payment_gateway = $options{payment_gateway}
+    or return "no payment gateway in arguments to _realtime_bop_result";
+
+  $cust_pay_pending->status($transaction->is_success() ? 'captured' : 'declined');
+  my $cpp_captured_err = $cust_pay_pending->replace;
+  return $cpp_captured_err if $cpp_captured_err;
+
   if ( $transaction->is_success() ) {
 
     my $paybatch = '';
-    if ( $payment_gateway ) { # agent override
+    if ( $payment_gateway->gatewaynum ) { # agent override
       $paybatch = $payment_gateway->gatewaynum. '-';
     }
 
-    $paybatch .= "$processor:". $transaction->authorization;
+    $paybatch .= $payment_gateway->gateway_module. ":".
+      $transaction->authorization;
 
     $paybatch .= ':'. $transaction->order_number
       if $transaction->can('order_number')
@@ -3804,12 +3971,12 @@ sub realtime_bop {
     my $cust_pay = new FS::cust_pay ( {
        'custnum'  => $self->custnum,
        'invnum'   => $options{'invnum'},
-       'paid'     => $amount,
+       'paid'     => $cust_pay_pending->paid,
        '_date'    => '',
-       'payby'    => $method2payby{$method},
-       'payinfo'  => $payinfo,
+       'payby'    => $cust_pay_pending->payby,
+       #'payinfo'  => $payinfo,
        'paybatch' => $paybatch,
-       'paydate'  => $paydate,
+       'paydate'  => $cust_pay_pending->paydate,
     } );
     #doesn't hurt to know, even though the dup check is in cust_pay_pending now
     $cust_pay->payunique( $options{payunique} )
@@ -3831,8 +3998,9 @@ sub realtime_bop {
       if ( $error2 ) {
         # gah.  but at least we have a record of the state we had to abort in
         # from cust_pay_pending now.
-        my $e = "WARNING: $method captured but payment not recorded - ".
-                "error inserting payment ($processor): $error2".
+        my $e = "WARNING: $options{method} captured but payment not recorded -".
+                " error inserting payment (". $payment_gateway->gateway_module.
+                "): $error2".
                 " (previously tried insert with invnum #$options{'invnum'}" .
                 ": $error ) - pending payment saved as paypendingnum ".
                 $cust_pay_pending->paypendingnum. "\n";
@@ -3841,6 +4009,31 @@ sub realtime_bop {
       }
     }
 
+    my $jobnum = $cust_pay_pending->jobnum;
+    if ( $jobnum ) {
+       my $placeholder = qsearchs( 'queue', { 'jobnum' => $jobnum } );
+      
+       unless ( $placeholder ) {
+         $dbh->rollback or die $dbh->errstr if $oldAutoCommit;
+         my $e = "WARNING: $options{method} captured but job $jobnum not ".
+             "found for paypendingnum ". $cust_pay_pending->paypendingnum. "\n";
+         warn $e;
+         return $e;
+       }
+
+       $error = $placeholder->delete;
+
+       if ( $error ) {
+         $dbh->rollback or die $dbh->errstr if $oldAutoCommit;
+         my $e = "WARNING: $options{method} captured but could not delete ".
+              "job $jobnum for paypendingnum ".
+              $cust_pay_pending->paypendingnum. ": $error\n";
+         warn $e;
+         return $e;
+       }
+
+    }
+    
     if ( $options{'paynum_ref'} ) {
       ${ $options{'paynum_ref'} } = $cust_pay->paynum;
     }
@@ -3853,7 +4046,7 @@ sub realtime_bop {
     if ( $cpp_done_err ) {
 
       $dbh->rollback or die $dbh->errstr if $oldAutoCommit;
-      my $e = "WARNING: $method captured but payment not recorded - ".
+      my $e = "WARNING: $options{method} captured but payment not recorded - ".
               "error updating status for paypendingnum ".
               $cust_pay_pending->paypendingnum. ": $cpp_done_err \n";
       warn $e;
@@ -3868,8 +4061,26 @@ sub realtime_bop {
 
   } else {
 
-    my $perror = "$processor error: ". $transaction->error_message;
+    my $perror = $payment_gateway->gateway_module. " error: ".
+      $transaction->error_message;
 
+    my $jobnum = $cust_pay_pending->jobnum;
+    if ( $jobnum ) {
+       my $placeholder = qsearchs( 'queue', { 'jobnum' => $jobnum } );
+      
+       if ( $placeholder ) {
+         my $error = $placeholder->depended_delete;
+         $error ||= $placeholder->delete;
+         warn "error removing provisioning jobs after declined paypendingnum ".
+           $cust_pay_pending->paypendingnum. "\n";
+       } else {
+         my $e = "error finding job $jobnum for declined paypendingnum ".
+              $cust_pay_pending->paypendingnum. "\n";
+         warn $e;
+       }
+
+    }
+    
     unless ( $transaction->error_message ) {
 
       my $t_response;
@@ -3890,10 +4101,12 @@ sub realtime_bop {
                       };
       } else {
         $t_response .=
-          "No additional debugging information available for $processor";
+          "No additional debugging information available for ".
+            $payment_gateway->gateway_module;
       }
 
-      $perror .= "No error_message returned from $processor -- ".
+      $perror .= "No error_message returned from ".
+                   $payment_gateway->gateway_module. " -- ".
                  ( ref($t_response) ? Dumper($t_response) : $t_response );
 
     }
@@ -3930,8 +4143,8 @@ sub realtime_bop {
     $cust_pay_pending->statustext("declined: $perror");
     my $cpp_done_err = $cust_pay_pending->replace;
     if ( $cpp_done_err ) {
-      my $e = "WARNING: $method declined but pending payment not resolved - ".
-              "error updating status for paypendingnum ".
+      my $e = "WARNING: $options{method} declined but pending payment not ".
+              "resolved - error updating status for paypendingnum ".
               $cust_pay_pending->paypendingnum. ": $cpp_done_err \n";
       warn $e;
       $perror = "$e ($perror)";
@@ -3942,77 +4155,126 @@ sub realtime_bop {
 
 }
 
-=item fake_bop
+=item realtime_botpp_capture CUST_PAY_PENDING [ OPTION => VALUE ... ]
+
+Verifies successful third party processing of a realtime credit card,
+ACH (electronic check) or phone bill transaction via a
+Business::OnlineThirdPartyPayment realtime gateway.  See
+L<http://420.am/business-onlinethirdpartypayment> for supported gateways.
+
+Available options are: I<description>, I<invnum>, I<quiet>, I<paynum_ref>, I<payunique>
+
+The additional options I<payname>, I<city>, I<state>,
+I<zip>, I<payinfo> and I<paydate> are also available.  Any of these options,
+if set, will override the value from the customer record.
+
+I<description> is a free-text field passed to the gateway.  It defaults to
+"Internet services".
+
+If an I<invnum> is specified, this payment (if successful) is applied to the
+specified invoice.  If you don't specify an I<invnum> you might want to
+call the B<apply_payments> method.
+
+I<quiet> can be set true to surpress email decline notices.
+
+I<paynum_ref> can be set to a scalar reference.  It will be filled in with the
+resulting paynum, if any.
+
+I<payunique> is a unique identifier for this payment.
+
+Returns a hashref containing elements bill_error (which will be undefined
+upon success) and session_id of any associated session.
 
 =cut
 
-sub fake_bop {
-  my( $self, $method, $amount, %options ) = @_;
-
-  if ( $options{'fake_failure'} ) {
-     return "Error: No error; test failure requested with fake_failure";
+sub realtime_botpp_capture {
+  my( $self, $cust_pay_pending, %options ) = @_;
+  if ( $DEBUG ) {
+    warn "$me realtime_botpp_capture: pending transaction $cust_pay_pending\n";
+    warn "  $_ => $options{$_}\n" foreach keys %options;
   }
 
-  my %method2payby = (
-    'CC'     => 'CARD',
-    'ECHECK' => 'CHEK',
-    'LEC'    => 'LECB',
+  eval "use Business::OnlineThirdPartyPayment";  
+  die $@ if $@;
+
+  ###
+  # select the gateway
+  ###
+
+  my $method = FS::payby->payby2bop($cust_pay_pending->payby);
+
+  my $payment_gateway = $cust_pay_pending->gatewaynum
+    ? qsearchs( 'payment_gateway',
+                { gatewaynum => $cust_pay_pending->gatewaynum }
+              )
+    : $self->agent->payment_gateway( 'method' => $method,
+                                     # 'invnum'  => $cust_pay_pending->invnum,
+                                     # 'payinfo' => $cust_pay_pending->payinfo,
+                                   );
+
+  $options{payment_gateway} = $payment_gateway; # for the helper subs
+
+  ###
+  # massage data
+  ###
+
+  my @invoicing_list = $self->invoicing_list_emailonly;
+  if ( $conf->exists('emailinvoiceautoalways')
+       || $conf->exists('emailinvoiceauto') && ! @invoicing_list
+       || ( $conf->exists('emailinvoiceonly') && ! @invoicing_list ) ) {
+    push @invoicing_list, $self->all_emails;
+  }
+
+  my $email = ($conf->exists('business-onlinepayment-email-override'))
+              ? $conf->config('business-onlinepayment-email-override')
+              : $invoicing_list[0];
+
+  my %content = ();
+
+  $content{email_customer} = 
+    (    $conf->exists('business-onlinepayment-email_customer')
+      || $conf->exists('business-onlinepayment-email-override') );
+      
+  ###
+  # run transaction(s)
+  ###
+
+  my $transaction =
+    new Business::OnlineThirdPartyPayment( $payment_gateway->gateway_module,
+                                           $self->_bop_options(\%options),
+                                         );
+
+  $transaction->reference({ %options }); 
+
+  $transaction->content(
+    'type'           => $method,
+    $self->_bop_auth(\%options),
+    'action'         => 'Post Authorization',
+    'description'    => $options{'description'},
+    'amount'         => $cust_pay_pending->paid,
+    #'invoice_number' => $options{'invnum'},
+    'customer_id'    => $self->custnum,
+    'referer'        => 'http://cleanwhisker.420.am/',
+    'reference'      => $cust_pay_pending->paypendingnum,
+    'email'          => $email,
+    'phone'          => $self->daytime || $self->night,
+    %content, #after
+    # plus whatever is required for bogus capture avoidance
   );
 
-  #my $paybatch = '';
-  #if ( $payment_gateway ) { # agent override
-  #  $paybatch = $payment_gateway->gatewaynum. '-';
-  #}
-  #
-  #$paybatch .= "$processor:". $transaction->authorization;
-  #
-  #$paybatch .= ':'. $transaction->order_number
-  #  if $transaction->can('order_number')
-  #  && length($transaction->order_number);
+  $transaction->submit();
 
-  my $paybatch = 'FakeProcessor:54:32';
+  my $error =
+    $self->_realtime_bop_result( $cust_pay_pending, $transaction, %options );
 
-  my $cust_pay = new FS::cust_pay ( {
-     'custnum'  => $self->custnum,
-     'invnum'   => $options{'invnum'},
-     'paid'     => $amount,
-     '_date'    => '',
-     'payby'    => $method2payby{$method},
-     #'payinfo'  => $payinfo,
-     'payinfo'  => '4111111111111111',
-     'paybatch' => $paybatch,
-     #'paydate'  => $paydate,
-     'paydate'  => '2012-05-01',
-  } );
-  $cust_pay->payunique( $options{payunique} ) if length($options{payunique});
-
-  my $error = $cust_pay->insert($options{'manual'} ? ( 'manual' => 1 ) : () );
-
-  if ( $error ) {
-    $cust_pay->invnum(''); #try again with no specific invnum
-    my $error2 = $cust_pay->insert( $options{'manual'} ?
-                                    ( 'manual' => 1 ) : ()
-                                  );
-    if ( $error2 ) {
-      # gah, even with transactions.
-      my $e = 'WARNING: Card/ACH debited but database not updated - '.
-              "error inserting (fake!) payment: $error2".
-              " (previously tried insert with invnum #$options{'invnum'}" .
-              ": $error )";
-      warn $e;
-      return $e;
-    }
+  {
+    bill_error => $error,
+    session_id => $cust_pay_pending->session_id,
   }
-
-  if ( $options{'paynum_ref'} ) {
-    ${ $options{'paynum_ref'} } = $cust_pay->paynum;
-  }
-
-  return ''; #no error
 
 }
 
-=item default_payment_gateway
+=item default_payment_gateway DEPRECATED -- use agent->payment_gateway
 
 =cut
 
@@ -4021,6 +4283,8 @@ sub default_payment_gateway {
 
   die "Real-time processing not enabled\n"
     unless $conf->exists('business-onlinepayment');
+
+  warn "default_payment_gateway deprecated -- use agent->payment_gateway\n";
 
   #load up config
   my $bop_config = 'business-onlinepayment';
@@ -4094,14 +4358,21 @@ gateway is attempted.
 #some false laziness w/realtime_bop, not enough to make it worth merging
 #but some useful small subs should be pulled out
 sub realtime_refund_bop {
-  my( $self, $method, %options ) = @_;
-  if ( $DEBUG ) {
-    warn "$me realtime_refund_bop: $method refund\n";
-    warn "  $_ => $options{$_}\n" foreach keys %options;
+  my $self = shift;
+
+  my %options = ();
+  if (ref($_[0]) ne 'HASH') {
+    %options = %{$_[0]};
+  } else {
+    my $method = shift;
+    %options = @_;
+    $options{method} = $method;
   }
 
-  eval "use Business::OnlinePayment";  
-  die $@ if $@;
+  if ( $DEBUG ) {
+    warn "$me realtime_refund_bop: $options{method} refund\n";
+    warn "  $_ => $options{$_}\n" foreach keys %options;
+  }
 
   ###
   # look up the original payment and optionally a gateway for that payment
@@ -4110,7 +4381,7 @@ sub realtime_refund_bop {
   my $cust_pay = '';
   my $amount = $options{'amount'};
 
-  my( $processor, $login, $password, @bop_options ) ;
+  my( $processor, $login, $password, @bop_options, $namespace ) ;
   my( $auth, $order_number ) = ( '', '', '' );
 
   if ( $options{'paynum'} ) {
@@ -4136,13 +4407,22 @@ sub realtime_refund_bop {
       $processor   = $payment_gateway->gateway_module;
       $login       = $payment_gateway->gateway_username;
       $password    = $payment_gateway->gateway_password;
+      $namespace   = $payment_gateway->gateway_namespace;
       @bop_options = $payment_gateway->options;
 
     } else { #try the default gateway
 
-      my( $conf_processor, $unused_action );
-      ( $conf_processor, $login, $password, $unused_action, @bop_options ) =
-        $self->default_payment_gateway($method);
+      my $conf_processor;
+      my $payment_gateway =
+        $self->agent->payment_gateway('method' => $options{method});
+
+      ( $conf_processor, $login, $password, $namespace ) =
+        map { my $method = "gateway_$_"; $payment_gateway->$method }
+          qw( module username password namespace );
+
+      @bop_options = $payment_gateway->gatewaynum
+                       ? $payment_gateway->options
+                       : @{ $payment_gateway->get('options') };
 
       return "processor of payment $options{'paynum'} $processor does not".
              " match default processor $conf_processor"
@@ -4153,46 +4433,27 @@ sub realtime_refund_bop {
 
   } else { # didn't specify a paynum, so look for agent gateway overrides
            # like a normal transaction 
-
-    my $cardtype;
-    if ( $method eq 'CC' ) {
-      $cardtype = cardtype($self->payinfo);
-    } elsif ( $method eq 'ECHECK' ) {
-      $cardtype = 'ACH';
-    } else {
-      $cardtype = $method;
-    }
-    my $override =
-           qsearchs('agent_payment_gateway', { agentnum => $self->agentnum,
-                                               cardtype => $cardtype,
-                                               taxclass => '',              } )
-        || qsearchs('agent_payment_gateway', { agentnum => $self->agentnum,
-                                               cardtype => '',
-                                               taxclass => '',              } );
-
-    if ( $override ) { #use a payment gateway override
  
-      my $payment_gateway = $override->payment_gateway;
+    my $payment_gateway =
+      $self->agent->payment_gateway( 'method'  => $options{method},
+                                     #'payinfo' => $payinfo,
+                                   );
+    my( $processor, $login, $password, $namespace ) =
+      map { my $method = "gateway_$_"; $payment_gateway->$method }
+        qw( module username password namespace );
 
-      $processor   = $payment_gateway->gateway_module;
-      $login       = $payment_gateway->gateway_username;
-      $password    = $payment_gateway->gateway_password;
-      #$action      = $payment_gateway->gateway_action;
-      @bop_options = $payment_gateway->options;
-
-    } else { #use the standard settings from the config
-
-      my $unused_action;
-      ( $processor, $login, $password, $unused_action, @bop_options ) =
-        $self->default_payment_gateway($method);
-
-    }
+    my @bop_options = $payment_gateway->gatewaynum
+                        ? $payment_gateway->options
+                        : @{ $payment_gateway->get('options') };
 
   }
   return "neither amount nor paynum specified" unless $amount;
 
+  eval "use $namespace";  
+  die $@ if $@;
+
   my %content = (
-    'type'           => $method,
+    'type'           => $options{method},
     'login'          => $login,
     'password'       => $password,
     'order_number'   => $order_number,
@@ -4242,7 +4503,7 @@ sub realtime_refund_bop {
   $address .= ", ". $self->address2 if $self->address2;
 
   my($payname, $payfirst, $paylast);
-  if ( $self->payname && $method ne 'ECHECK' ) {
+  if ( $self->payname && $options{method} ne 'ECHECK' ) {
     $payname = $self->payname;
     $payname =~ /^\s*([\w \,\.\-\']*)?\s+([\w\,\.\-\']+)\s*$/
       or return "Illegal payname $payname";
@@ -4271,7 +4532,7 @@ sub realtime_refund_bop {
     if length($payip);
 
   my $payinfo = '';
-  if ( $method eq 'CC' ) {
+  if ( $options{method} eq 'CC' ) {
 
     if ( $cust_pay ) {
       $content{card_number} = $payinfo = $cust_pay->payinfo;
@@ -4285,7 +4546,7 @@ sub realtime_refund_bop {
       $content{expiration} = "$2/$1";
     }
 
-  } elsif ( $method eq 'ECHECK' ) {
+  } elsif ( $options{method} eq 'ECHECK' ) {
 
     if ( $cust_pay ) {
       $payinfo = $cust_pay->payinfo;
@@ -4298,7 +4559,7 @@ sub realtime_refund_bop {
     $content{account_name} = $payname;
     $content{customer_org} = $self->company ? 'B' : 'I';
     $content{customer_ssn} = $self->ss;
-  } elsif ( $method eq 'LEC' ) {
+  } elsif ( $options{method} eq 'LEC' ) {
     $content{phone} = $payinfo = $self->payinfo;
   }
 
@@ -4326,12 +4587,6 @@ sub realtime_refund_bop {
   return "$processor error: ". $refund->error_message
     unless $refund->is_success();
 
-  my %method2payby = (
-    'CC'     => 'CARD',
-    'ECHECK' => 'CHEK',
-    'LEC'    => 'LECB',
-  );
-
   my $paybatch = "$processor:". $refund->authorization;
   $paybatch .= ':'. $refund->order_number
     if $refund->can('order_number') && $refund->order_number;
@@ -4349,7 +4604,7 @@ sub realtime_refund_bop {
     'paynum'   => $options{'paynum'},
     'refund'   => $amount,
     '_date'    => '',
-    'payby'    => $method2payby{$method},
+    'payby'    => $bop_method2payby{$options{method}},
     'payinfo'  => $payinfo,
     'paybatch' => $paybatch,
     'reason'   => $options{'reason'} || 'card or ACH refund',
