@@ -134,8 +134,8 @@ sub reasontext {
 #
 # Used by FS::Upgrade to migrate to a new database.
 
-use FS::h_cust_pkg;
-use FS::h_cust_pkg_reason;
+#use FS::h_cust_pkg;
+#use FS::h_cust_pkg_reason;
 use FS::Schema qw(dbdef);
 
 sub _upgrade_data { # class method
