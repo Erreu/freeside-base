@@ -134,8 +134,8 @@ sub reasontext {
 #
 # Used by FS::Upgrade to migrate to a new database.
 
-#use FS::h_cust_pkg;
-#use FS::h_cust_pkg_reason;
+use FS::h_cust_pkg;
+use FS::h_cust_pkg_reason;
 use FS::Schema qw(dbdef);
 
 sub _upgrade_data { # class method
@@ -149,11 +149,6 @@ sub _upgrade_data { # class method
   my $count = 0;
   my @unmigrated = qsearch('cust_pkg_reason', { 'action' => '' } ); 
   foreach ( @unmigrated ) {
-    # we could create h_cust_pkg_reason and h_cust_pkg_reason packages
-    @FS::h_cust_pkg::ISA = qw( FS::h_Common FS::cust_pkg );
-    sub FS::h_cust_pkg::table { 'h_cust_pkg' };
-    @FS::h_cust_pkg_reason::ISA = qw( FS::h_Common FS::cust_pkg_reason );
-    sub FS::h_cust_pkg_reason::table { 'h_cust_pkg_reason' };
 
     my @history_cust_pkg_reason = qsearch( 'h_cust_pkg_reason', { $_->hash } );
     
@@ -230,9 +225,6 @@ sub _upgrade_data { # class method
                                extra_sql => $extra_sql,
                             }); 
     foreach ( @unmigrated ) {
-      # we could create h_cust_pkg_reason and h_cust_pkg_reason packages
-      @FS::h_cust_pkg::ISA = qw( FS::h_Common FS::cust_pkg );
-      sub FS::h_cust_pkg::table { 'h_cust_pkg' };
 
       my $hashref = { pkgnum => $_->pkgnum,
                       history_date   => $_->date,
