@@ -35,6 +35,7 @@ $socket .= '.'.$tag if defined $tag && length($tag);
   'payment_info'              => 'MyAccount/payment_info',
   'process_payment'           => 'MyAccount/process_payment',
   'process_payment_order_pkg' => 'MyAccount/process_payment_order_pkg',
+  'process_payment_change_pkg' => 'MyAccount/process_payment_change_pkg',
   'process_payment_order_renew' => 'MyAccount/process_payment_order_renew',
   'process_prepay'            => 'MyAccount/process_prepay',
   'list_pkgs'                 => 'MyAccount/list_pkgs',     #add to ss (added?)
@@ -59,6 +60,16 @@ $socket .= '.'.$tag if defined $tag && length($tag);
   'agent_logout'              => 'Agent/agent_logout',
   'agent_info'                => 'Agent/agent_info',
   'agent_list_customers'      => 'Agent/agent_list_customers',
+  #sg
+  'decompify_pkgs'            => 'SGNG/decompify_pkgs',
+  'previous_payment_info'     => 'SGNG/previous_payment_info',
+  'previous_process_payment'  => 'SGNG/previous_process_payment',
+  'previous_process_payment_order_pkg'
+                              => 'SGNG/previous_process_payment_order_pkg',
+  'previous_process_payment_change_pkg'
+                              => 'SGNG/previous_process_payment_change_pkg',
+  'previous_process_payment_order_renew'
+                              => 'SGNG/previous_process_payment_order_renew',
 );
 @EXPORT_OK = ( keys(%autoload), qw( regionselector expselect popselector domainselector) );
 
@@ -549,6 +560,16 @@ as parameter with the keys of both methods.
 Returns a hash reference with a single key, B<error>, empty on success, or an
 error message on errors.
 
+=item process_payment_change_pkg
+
+Combines the B<process_payment> and B<change_pkg> functions in one step.  If the
+payment processes sucessfully, the package is ordered.  Takes a hash reference
+as parameter with the keys of both methods.
+
+Returns a hash reference with a single key, B<error>, empty on success, or an
+error message on errors.
+
+
 =item process_payment_order_renew
 
 Combines the B<process_payment> and B<order_renew> functions in one step.  If
@@ -778,6 +799,31 @@ Optional Access number number
 Returns a hash reference with a single key, B<error>, empty on success, or an
 error message on errors.  The special error '_decline' is returned for
 declined transactions.
+
+=item change_pkg
+
+Changes a package for this customer.
+
+Takes a hash reference as parameter with the following keys:
+
+=over 4
+
+=item session_id
+
+Session identifier
+
+=item pkgnum
+
+Existing customer package.
+
+=item pkgpart
+
+New package to order (see L<FS::part_pkg>).
+
+=back
+
+Returns a hash reference with a single key, B<error>, empty on success, or an
+error message on errors.  
 
 =item renew_info
 
