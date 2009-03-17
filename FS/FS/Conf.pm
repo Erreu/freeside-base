@@ -2418,6 +2418,13 @@ worry that config_items is freeside-specific and icky.
     'type'        => 'text',
   },
 
+  {
+    'key'         => 'sg-multicustomer_hack',
+    'section'     => '',
+    'description' => "Don't use this.",
+    'type'        => 'checkbox',
+  },
+
 );
 
 1;
