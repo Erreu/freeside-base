@@ -945,6 +945,9 @@ sub plan_info {
   \%plans;
 }
 
+#fallback for everything except bulk.pm
+sub hide_svc_detail { 0; }
+
 =item format OPTION DATA
 
 Returns data formatted according to the function 'format' described
