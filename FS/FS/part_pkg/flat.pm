@@ -186,15 +186,21 @@ sub is_prepaid {
   0; #no, we're postpaid
 }
 
-sub reset_usage {
-  my($self, $cust_pkg) = @_;
-  my %values = map { $_, $self->option($_) } 
+sub usage_valuehash {
+  my $self = shift;
+  map { $_, $self->option($_) }
     grep { $self->option($_, 'hush') } 
     qw(seconds upbytes downbytes totalbytes);
+}
+
+sub reset_usage {
+  my($self, $cust_pkg, %opt) = @_;
+  warn "    resetting usage counters" if $opt{debug} > 1;
+  my %values = $self->usage_valuehash; 
   if ($self->option('usage_rollover', 1)) {
     $cust_pkg->recharge(\%values);
   }else{
-    $cust_pkg->set_usage(\%values);
+    $cust_pkg->set_usage(\%values, %opt);
   }
 }
 

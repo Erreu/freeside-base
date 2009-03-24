@@ -27,7 +27,7 @@
 %                                $description, $part_pkg->taxclass);
 %
 %    if ($part_pkg->option('recharge_reset', 1)) {
-%      $error ||= $svc_acct->set_usage(\%rhash);
+%      $error ||= $svc_acct->set_usage(\%rhash, 'null' => 1);
 %    }else{
 %      $error ||= $svc_acct->recharge(\%rhash);
 %    }

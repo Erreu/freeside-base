@@ -26,6 +26,7 @@ use FS::Conf;
 use FS::Record qw( qsearch qsearchs fields dbh dbdef );
 use FS::Msgcat qw(gettext);
 use FS::UI::bytecount;
+use FS::part_pkg;
 use FS::svc_Common;
 use FS::cust_svc;
 use FS::part_svc;
@@ -290,6 +291,7 @@ sub table_info {
                          type  => 'text',
                          disable_inventory => 1,
                          disable_select => 1,
+                         disable_part_svc_column => 1,
                        },
         'upbytes'   => { label => 'Upload',
                          type  => 'text',
@@ -297,6 +299,7 @@ sub table_info {
                          disable_select => 1,
                          'format' => \&FS::UI::bytecount::display_bytecount,
                          'parse' => \&FS::UI::bytecount::parse_bytecount,
+                         disable_part_svc_column => 1,
                        },
         'downbytes' => { label => 'Download',
                          type  => 'text',
@@ -304,6 +307,7 @@ sub table_info {
                          disable_select => 1,
                          'format' => \&FS::UI::bytecount::display_bytecount,
                          'parse' => \&FS::UI::bytecount::parse_bytecount,
+                         disable_part_svc_column => 1,
                        },
         'totalbytes'=> { label => 'Total up and download',
                          type  => 'text',
@@ -311,11 +315,13 @@ sub table_info {
                          disable_select => 1,
                          'format' => \&FS::UI::bytecount::display_bytecount,
                          'parse' => \&FS::UI::bytecount::parse_bytecount,
+                         disable_part_svc_column => 1,
                        },
         'seconds_threshold'   => { label => 'Seconds threshold',
                                    type  => 'text',
                                    disable_inventory => 1,
                                    disable_select => 1,
+                                   disable_part_svc_column => 1,
                                  },
         'upbytes_threshold'   => { label => 'Upload threshold',
                                    type  => 'text',
@@ -323,6 +329,7 @@ sub table_info {
                                    disable_select => 1,
                                    'format' => \&FS::UI::bytecount::display_bytecount,
                                    'parse' => \&FS::UI::bytecount::parse_bytecount,
+                                   disable_part_svc_column => 1,
                                  },
         'downbytes_threshold' => { label => 'Download threshold',
                                    type  => 'text',
@@ -330,6 +337,7 @@ sub table_info {
                                    disable_select => 1,
                                    'format' => \&FS::UI::bytecount::display_bytecount,
                                    'parse' => \&FS::UI::bytecount::parse_bytecount,
+                                   disable_part_svc_column => 1,
                                  },
         'totalbytes_threshold'=> { label => 'Total up and download threshold',
                                    type  => 'text',
@@ -337,6 +345,7 @@ sub table_info {
                                    disable_select => 1,
                                    'format' => \&FS::UI::bytecount::display_bytecount,
                                    'parse' => \&FS::UI::bytecount::parse_bytecount,
+                                   disable_part_svc_column => 1,
                                  },
         'last_login'=>           {
                                    label     => 'Last login',
@@ -533,6 +542,26 @@ sub insert {
   if ( $error ) {
     $dbh->rollback if $oldAutoCommit;
     return $error;
+  }
+
+  # set usage fields and thresholds if unset but set in a package def
+  if ( $self->pkgnum ) {
+    my $cust_pkg = qsearchs( 'cust_pkg', { 'pkgnum' => $self->pkgnum } );
+    my $part_pkg = $cust_pkg->part_pkg if $cust_pkg;
+    if ( $part_pkg && $part_pkg->can('usage_valuehash') ) {
+
+      my %values = $part_pkg->usage_valuehash;
+      my $multiplier = $conf->exists('svc_acct-usage_threshold') 
+                         ? 1 - $conf->config('svc_acct-usage_threshold')/100
+                         : 0.20;
+
+      foreach ( keys %values ) {
+        next if $self->getfield($_);
+        $self->setfield( $_, $values{$_} );
+        $self->setfield( $_. '_threshold', int( $values{$_} * $multiplier ) );
+      }
+
+    }
   }
 
   my @jobnums;
@@ -1720,7 +1749,7 @@ sub _op_usage {
 }
 
 sub set_usage {
-  my( $self, $valueref ) = @_;
+  my( $self, $valueref, %options ) = @_;
 
   warn "$me set_usage called for svcnum ". $self->svcnum.
        ' ('. $self->email. "): ".
@@ -1741,6 +1770,11 @@ sub set_usage {
 
   my $reset = 0;
   my %handyhash = ();
+  if ( $options{null} ) { 
+    %handyhash = ( map { ( $_ => 'NULL', $_."_threshold" => 'NULL' ) }
+                   qw( seconds upbytes downbytes totalbytes )
+                 );
+  }
   foreach my $field (keys %$valueref){
     $reset = 1 if $valueref->{$field};
     $self->setfield($field, $valueref->{$field});
@@ -1759,8 +1793,8 @@ sub set_usage {
   #die $error if $error;         #services not explicity changed via the UI
 
   my $sql = "UPDATE svc_acct SET " .
-    join (',', map { "$_ =  ?" } (keys %handyhash) ).
-    " WHERE svcnum = ?";
+    join (',', map { "$_ =  $handyhash{$_}" } (keys %handyhash) ).
+    " WHERE svcnum = ". $self->svcnum;
 
   warn "$me $sql\n"
     if $DEBUG;
@@ -1768,7 +1802,7 @@ sub set_usage {
   if (scalar(keys %handyhash)) {
     my $sth = $dbh->prepare( $sql )
       or die "Error preparing $sql: ". $dbh->errstr;
-    my $rv = $sth->execute((values %handyhash), $self->svcnum);
+    my $rv = $sth->execute();
     die "Error executing $sql: ". $sth->errstr
       unless defined($rv);
     die "Can't update usage for svcnum ". $self->svcnum
