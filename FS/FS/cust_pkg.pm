@@ -2155,17 +2155,19 @@ sub order {
     }
 
     #reset usage if changing pkgpart
-    if ($old_pkg->pkgpart != $new_pkg->pkgpart) {
-      my $part_pkg = $new_pkg->part_pkg;
-      $error = $part_pkg->reset_usage($new_pkg, $part_pkg->is_prepaid
-                                                  ? ()
-                                                  : ( 'null' => 1 )
-                                     )
-        if $part_pkg->can('reset_usage');
+    foreach my $new_pkg (@$return_cust_pkg) {
+      if ($old_pkg->pkgpart != $new_pkg->pkgpart) {
+        my $part_pkg = $new_pkg->part_pkg;
+        $error = $part_pkg->reset_usage($new_pkg, $part_pkg->is_prepaid
+                                                    ? ()
+                                                    : ( 'null' => 1 )
+                                       )
+          if $part_pkg->can('reset_usage');
 
-      if ($error) {
-        $dbh->rollback if $oldAutoCommit;
-        return "Error setting usage values: $error";
+        if ($error) {
+          $dbh->rollback if $oldAutoCommit;
+          return "Error setting usage values: $error";
+        }
       }
     }
 
