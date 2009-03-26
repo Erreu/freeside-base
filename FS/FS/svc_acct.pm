@@ -21,6 +21,7 @@ use Fcntl qw(:flock);
 use Date::Format;
 use Crypt::PasswdMD5 1.2;
 use Data::Dumper;
+use Text::Template;
 use FS::UID qw( datasrc driver_name );
 use FS::Conf;
 use FS::Record qw( qsearch qsearchs fields dbh dbdef );
