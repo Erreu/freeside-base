@@ -6,7 +6,7 @@ use vars qw( @ISA $DEBUG $me $conf $skip_fuzzyfiles
              $usernamemax $passwordmin $passwordmax
              $username_ampersand $username_letter $username_letterfirst
              $username_noperiod $username_nounderscore $username_nodash
-             $username_uppercase $username_percent
+             $username_uppercase $username_percent $username_colon
              $password_noampersand $password_noexclamation
              $welcome_template $welcome_from
              $welcome_subject $welcome_subject_template $welcome_mimetype
@@ -65,6 +65,7 @@ $FS::UID::callback{'FS::svc_acct'} = sub {
   $username_uppercase = $conf->exists('username-uppercase');
   $username_ampersand = $conf->exists('username-ampersand');
   $username_percent = $conf->exists('username-percent');
+  $username_colon = $conf->exists('username-colon');
   $password_noampersand = $conf->exists('password-noexclamation');
   $password_noexclamation = $conf->exists('password-noexclamation');
   $dirhash = $conf->config('dirhash') || 0;
@@ -1029,11 +1030,11 @@ sub check {
 
   my $ulen = $usernamemax || $self->dbdef_table->column('username')->length;
   if ( $username_uppercase ) {
-    $recref->{username} =~ /^([a-z0-9_\-\.\&\%]{$usernamemin,$ulen})$/i
+    $recref->{username} =~ /^([a-z0-9_\-\.\&\%\:]{$usernamemin,$ulen})$/i
       or return gettext('illegal_username'). " ($usernamemin-$ulen): ". $recref->{username};
     $recref->{username} = $1;
   } else {
-    $recref->{username} =~ /^([a-z0-9_\-\.\&\%]{$usernamemin,$ulen})$/
+    $recref->{username} =~ /^([a-z0-9_\-\.\&\%\:]{$usernamemin,$ulen})$/
       or return gettext('illegal_username'). " ($usernamemin-$ulen): ". $recref->{username};
     $recref->{username} = $1;
   }
@@ -1063,6 +1064,9 @@ sub check {
   }
   unless ( $username_percent ) {
     $recref->{username} =~ /\%/ and return gettext('illegal_username');
+  }
+  unless ( $username_colon ) {
+    $recref->{username} =~ /\:/ and return gettext('illegal_username');
   }
 
   $recref->{popnum} =~ /^(\d*)$/ or return "Illegal popnum: ".$recref->{popnum};
