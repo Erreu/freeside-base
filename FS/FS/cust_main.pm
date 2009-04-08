@@ -74,6 +74,8 @@ $skip_fuzzyfiles = 0;
 $ignore_expired_card = 0;
 
 @encrypted_fields = ('payinfo', 'paycvv');
+sub nohistory_fields { ('paycvv'); }
+
 @paytypes = ('', 'Personal checking', 'Personal savings', 'Business checking', 'Business savings');
 
 #ask FS::UID to run this stuff for us later
@@ -6236,6 +6238,15 @@ sub _agent_plandata {
          " plandata for $option";
     return '';
   }
+
+}
+
+sub _upgrade_data { #class method
+  my ($class, %opts) = @_;
+
+  my $sql = 'UPDATE h_cust_main SET paycvv = NULL';
+  my $sth = dbh->prepare($sql) or die dbh->errstr;
+  $sth->execute or die $sth->errstr;
 
 }
 
