@@ -2593,23 +2593,34 @@ sub realtime_bop {
   );
 
   ###
-  # select a gateway
+  # set taxclass and trans_is_recur based on invnum if there is one
   ###
 
   my $taxclass = '';
+  my $trans_is_recur = 0;
   if ( $options{'invnum'} ) {
+
     my $cust_bill = qsearchs('cust_bill', { 'invnum' => $options{'invnum'} } );
     die "invnum ". $options{'invnum'}. " not found" unless $cust_bill;
-    my @taxclasses =
-      map  { $_->part_pkg->taxclass }
+
+    my @part_pkg =
+      map  { $_->part_pkg }
       grep { $_ }
       map  { $_->cust_pkg }
       $cust_bill->cust_bill_pkg;
-    unless ( grep { $taxclasses[0] ne $_ } @taxclasses ) { #unless there are
-                                                           #different taxclasses
-      $taxclass = $taxclasses[0];
-    }
+
+    my @taxclasses = map $_->taxclass, @part_pkg;
+    $taxclass = $taxclasses[0]
+      unless grep { $taxclasses[0] ne $_ } @taxclasses; #unless there are
+                                                        #different taxclasses
+    $trans_is_recur = 1
+      if grep { $_->freq ne '0' } @part_pkg;
+
   }
+
+  ###
+  # select a gateway
+  ###
 
   #look for an agent gateway override first
   my $cardtype;
@@ -2738,16 +2749,15 @@ sub realtime_bop {
                            : $self->payissue;
     $content{issue_number} = $payissue if $payissue;
 
-    $content{recurring_billing} = 'YES'
-      if qsearch('cust_pay', { 'custnum' => $self->custnum,
-                               'payby'   => 'CARD',
-                               'payinfo' => $payinfo,
-                             } )
-      || qsearch('cust_pay', { 'custnum' => $self->custnum,
-                               'payby'   => 'CARD',
-                               'paymask' => $self->mask_payinfo('CARD', $payinfo),
-                             } );
-
+    if ( $self->_bop_recurring_billing( 'payinfo'        => $payinfo,
+                                        'trans_is_recur' => $trans_is_recur,
+                                      )
+       )
+    {
+      $content{recurring_billing} = 'YES';
+      $content{acct_code} = 'rebill'
+        if $conf->exists('credit_card-recurring_billing_acct_code');
+    }
 
   } elsif ( $method eq 'ECHECK' ) {
     ( $content{account_number}, $content{routing_code} ) =
@@ -2806,15 +2816,16 @@ sub realtime_bop {
   #okay, good to go, if we're a duplicate, cust_pay_pending will kick us out
 
   my $cust_pay_pending = new FS::cust_pay_pending {
-    'custnum'    => $self->custnum,
-    #'invnum'     => $options{'invnum'},
-    'paid'       => $amount,
-    '_date'      => '',
-    'payby'      => $method2payby{$method},
-    'payinfo'    => $payinfo,
-    'paydate'    => $paydate,
-    'status'     => 'new',
-    'gatewaynum' => ( $payment_gateway ? $payment_gateway->gatewaynum : '' ),
+    'custnum'           => $self->custnum,
+    #'invnum'            => $options{'invnum'},
+    'paid'              => $amount,
+    '_date'             => '',
+    'payby'             => $method2payby{$method},
+    'payinfo'           => $payinfo,
+    'paydate'           => $paydate,
+    'recurring_billing' => $content{recurring_billing},
+    'status'            => 'new',
+    'gatewaynum'        => ( $payment_gateway ? $payment_gateway->gatewaynum : '' ),
   };
   $cust_pay_pending->payunique( $options{payunique} )
     if defined($options{payunique}) && length($options{payunique});
@@ -3135,6 +3146,34 @@ sub remove_cvv {
   $self->paycvv('');
   '';
 }
+
+sub _bop_recurring_billing {
+  my( $self, %opt ) = @_;
+
+  my $method = $conf->config('credit_card-recurring_billing_flag');
+
+  if ( $method eq 'transaction_is_recur' ) {
+
+    return 1 if $opt{'trans_is_recur'};
+
+  } else {
+
+    my %hash = ( 'custnum' => $self->custnum,
+                 'payby'   => 'CARD',
+               );
+
+    return 1 
+      if qsearch('cust_pay', { %hash, 'payinfo' => $opt{'payinfo'} } )
+      || qsearch('cust_pay', { %hash, 'paymask' => $self->mask_payinfo('CARD',
+                                                               $opt{'payinfo'} )
+                             } );
+
+  }
+
+  return 0;
+
+}
+
 
 =item realtime_refund_bop METHOD [ OPTION => VALUE ... ]
 
