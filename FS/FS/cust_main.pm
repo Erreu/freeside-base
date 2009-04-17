@@ -6283,7 +6283,7 @@ sub _agent_plandata {
 sub _upgrade_data { #class method
   my ($class, %opts) = @_;
 
-  my $sql = 'UPDATE h_cust_main SET paycvv = NULL';
+  my $sql = 'UPDATE h_cust_main SET paycvv = NULL WHERE paycvv IS NOT NULL';
   my $sth = dbh->prepare($sql) or die dbh->errstr;
   $sth->execute or die $sth->errstr;
 
