@@ -1897,6 +1897,112 @@ sub agent {
   qsearchs( 'agent', { 'agentnum' => $self->agentnum } );
 }
 
+=item bill_and_collect 
+
+Cancels and suspends any packages due, generates bills, applies payments and
+cred
+
+Warns on errors (Does not currently: If there is an error, returns the error, otherwise returns false.)
+
+Options are passed as name-value pairs.  Currently available options are:
+
+=over 4
+
+=item time
+
+Bills the customer as if it were that time.  Specified as a UNIX timestamp; see L<perlfunc/"time">).  Also see L<Time::Local> and L<Date::Parse> for conversion functions.  For example:
+
+ use Date::Parse;
+ ...
+ $cust_main->bill( 'time' => str2time('April 20th, 2001') );
+
+=item invoice_time
+
+Used in conjunction with the I<time> option, this option specifies the date of for the generated invoices.  Other calculations, such as whether or not to generate the invoice in the first place, are not affected.
+
+=item resetup
+
+If set true, re-charges setup fees.
+
+=item debug
+
+Debugging level.  Default is 0 (no debugging), or can be set to 1 (passed-in options), 2 (traces progress), 3 (more information), or 4 (include full search queries)
+
+=back
+
+=cut
+
+sub bill_and_collect {
+  my( $self, %options ) = @_;
+
+  ###
+  # cancel packages
+  ###
+
+  #$options{actual_time} not $options{time} because freeside-daily -d is for
+  #pre-printing invoices
+  my @cancel_pkgs = grep { $_->expire && $_->expire <= $options{actual_time} }
+                         $self->ncancelled_pkgs;
+
+  foreach my $cust_pkg ( @cancel_pkgs ) {
+    my $cpr = $cust_pkg->last_cust_pkg_reason('expire');
+    my $error = $cust_pkg->cancel($cpr ? ( 'reason' => $cpr->reasonnum,
+                                           'reason_otaker' => $cpr->otaker
+                                         )
+                                       : ()
+                                 );
+    warn "Error cancelling expired pkg ". $cust_pkg->pkgnum.
+         " for custnum ". $self->custnum. ": $error"
+      if $error;
+  }
+
+  ###
+  # suspend packages
+  ###
+
+  #$options{actual_time} not $options{time} because freeside-daily -d is for
+  #pre-printing invoices
+  my @susp_pkgs = 
+    grep { ! $_->susp
+           && (    (    $_->part_pkg->is_prepaid
+                     && $_->bill
+                     && $_->bill < $options{actual_time}
+                   )
+                || (    $_->adjourn
+                    && $_->adjourn <= $options{actual_time}
+                  )
+              )
+         }
+         $self->ncancelled_pkgs;
+
+  foreach my $cust_pkg ( @susp_pkgs ) {
+    my $cpr = $cust_pkg->last_cust_pkg_reason('adjourn')
+      if ($cust_pkg->adjourn && $cust_pkg->adjourn < $^T);
+    my $error = $cust_pkg->suspend($cpr ? ( 'reason' => $cpr->reasonnum,
+                                            'reason_otaker' => $cpr->otaker
+                                          )
+                                        : ()
+                                  );
+
+    warn "Error suspending package ". $cust_pkg->pkgnum.
+         " for custnum ". $self->custnum. ": $error"
+      if $error;
+  }
+
+  ###
+  # bill and collect
+  ###
+
+  my $error = $self->bill( %options );
+  warn "Error billing, custnum ". $self->custnum. ": $error" if $error;
+
+  $self->apply_payments_and_credits;
+
+  $error = $self->collect( %options );
+  warn "Error collecting, custnum". $self->custnum. ": $error" if $error;
+
+}
+
 =item bill OPTIONS
 
 Generates invoices (see L<FS::cust_bill>) for this customer.  Usually used in
@@ -6278,6 +6384,16 @@ sub _agent_plandata {
     return '';
   }
 
+}
+
+sub queued_bill {
+  ## actual sub, not a method, designed to be called from the queue.
+  ## sets up the customer, and calls the bill_and_collect
+  my (%args) = @_; #, ($time, $invoice_time, $check_freq, $resetup) = @_;
+  my $cust_main = qsearchs( 'cust_main', { custnum => $args{'custnum'} } );
+      $cust_main->bill_and_collect(
+        %args,
+      );
 }
 
 sub _upgrade_data { #class method

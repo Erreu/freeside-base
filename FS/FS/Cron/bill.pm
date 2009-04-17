@@ -4,7 +4,8 @@ use strict;
 use vars qw( @ISA @EXPORT_OK );
 use Exporter;
 use Date::Parse;
-use FS::Record qw(qsearch qsearchs);
+use FS::UID qw(dbh);
+use FS::Record qw(qsearchs);
 use FS::cust_main;
 
 @ISA = qw( Exporter );
@@ -14,12 +15,30 @@ sub bill {
 
   my %opt = @_;
 
-  $FS::cust_main::DEBUG = 1 if $opt{'v'};
-  
-  my %search = ();
-  $search{'payby'}    = $opt{'p'} if $opt{'p'};
-  $search{'agentnum'} = $opt{'a'} if $opt{'a'};
-  
+  my $debug = 0;
+  $debug = 1 if $opt{'v'};
+  $debug = $opt{'l'} if $opt{'l'};
+ 
+  $FS::cust_main::DEBUG = $debug;
+  #$FS::cust_event::DEBUG = $opt{'l'} if $opt{'l'};
+
+  my @search = ();
+
+  push @search, "cust_main.payby    = '". $opt{'p'}. "'"
+    if $opt{'p'};
+  push @search, "cust_main.agentnum =  ". $opt{'a'}
+    if $opt{'a'};
+
+  if ( @ARGV ) {
+    push @search, "( ".
+      join(' OR ', map "cust_main.custnum = $_", @ARGV ).
+    " )";
+  }
+
+  ###
+  # generate where_pkg / where_bill_event search clause (1.7-style)
+  ###
+
   #we're at now now (and later).
   my($time)= $opt{'d'} ? str2time($opt{'d'}) : $^T;
   $time += $opt{'y'} * 86400 if $opt{'y'};
@@ -68,71 +87,57 @@ END
         )
 END
   
-  my $extra_sql = ( scalar(%search) ? ' AND ' : ' WHERE ' ). "( $where_pkg OR $where_bill_event )";
-  
-  my @cust_main;
-  if ( @ARGV ) {
-    @cust_main = map { qsearchs('cust_main', { custnum => $_, %search } ) } @ARGV
-  } else {
-    @cust_main = qsearch('cust_main', \%search, '', $extra_sql );
-  }
-  ;
-  
-  my($cust_main,%saw);
-  foreach $cust_main ( @cust_main ) {
+  push @search, "( $where_pkg OR $where_bill_event )";
 
-    my $custnum = $cust_main->custnum;
+  ###
+  # get a list of custnums
+  ###
+
+  warn "searching for customers:\n". join("\n", @search). "\n"
+    if $opt{'v'} || $opt{'l'};
+
+  my $sth = dbh->prepare(
+    "SELECT custnum FROM cust_main".
+    " WHERE ". join(' AND ', @search)
+  ) or die dbh->errstr;
+
+  $sth->execute or die $sth->errstr;
+
+  my @custnums = map { $_->[0] } @{ $sth->fetchall_arrayref };
+
+  ###
+  # for each custnum, queue or make one customer object and bill
+  # (one at a time, to reduce memory footprint with large #s of customers)
+  ###
   
-    # $^T not $time because -d is for pre-printing invoices
-    foreach my $cust_pkg (
-      grep { $_->expire && $_->expire <= $^T } $cust_main->ncancelled_pkgs
-    ) {
-      my $cpr = $cust_pkg->last_cust_pkg_reason('expire');
-      my $error = $cust_pkg->cancel($cpr ? ( 'reason' => $cpr->reasonnum,
-                                             'reason_otaker' => $cpr->otaker
-                                           )
-                                         : ()
-                                   );
-      warn "Error cancelling expired pkg ". $cust_pkg->pkgnum.
-           " for custnum $custnum: $error"
-        if $error;
+  foreach my $custnum ( @custnums ) {
+  
+    my %args = (
+        'time'         => $time,
+        'invoice_time' => $invoice_time,
+        'actual_time'  => $^T, #when freeside-bill was started
+                               #(not, when using -m, freeside-queued)
+        'resetup'      => ( $opt{'s'} ? $opt{'s'} : 0 ),
+    );
+
+    if ( $opt{'m'} ) {
+
+      #add job to queue that calls bill_and_collect with options
+      my $queue = new FS::queue {
+        'job'    => 'FS::cust_main::queued_bill',
+        'secure' => 'Y',
+      };
+      my $error = $queue->insert( 'custnum'=>$custnum, %args );
+
+    } else {
+
+      my $cust_main = qsearchs( 'cust_main', { 'custnum' => $custnum } );
+      $cust_main->bill_and_collect( %args, 'debug' => $debug );
+
     }
-    # $^T not $time because -d is for pre-printing invoices
-    foreach my $cust_pkg (
-      grep { (    $_->part_pkg->is_prepaid && $_->bill && $_->bill < $^T
-               || $_->adjourn && $_->adjourn <= $^T
-             )
-             && ! $_->susp
-           }
-           $cust_main->ncancelled_pkgs
-    ) {
-      my $cpr = $cust_pkg->last_cust_pkg_reason('adjourn')
-        if ($cust_pkg->adjourn && $cust_pkg->adjourn < $^T);
-      my $error = $cust_pkg->suspend($cpr ? ( 'reason' => $cpr->reasonnum,
-                                              'reason_otaker' => $cpr->otaker
-                                            )
-                                          : ()
-                                    );
-      warn "Error suspending package ". $cust_pkg->pkgnum.
-           " for custnum $custnum: $error"
-        if $error;
-    }
-  
-    my $error = $cust_main->bill( 'time'         => $time,
-                                  'invoice_time' => $invoice_time,
-                                  'resetup'      => $opt{'s'},
-                                );
-    warn "Error billing, custnum $custnum: $error" if $error;
-  
-    $error = $cust_main->apply_payments_and_credits;
-    warn "Error applying payments and credits, custnum $custnum: $error"
-      if $error;
-  
-    $error = $cust_main->collect( 'invoice_time' => $time,
-                                  'freq'         => $opt{'freq'},
-                                );
-    warn "Error collecting, custnum $custnum: $error" if $error;
-  
+
   }
 
 }
+
+1;
