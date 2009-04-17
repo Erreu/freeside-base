@@ -1184,6 +1184,8 @@ sub tables_hashref {
         'status', 'varchar', '', $char_d, '', '', 
         'statustext', 'text', 'NULL', '', '', '', 
         'svcnum', 'int', 'NULL', '', '', '', 
+        'custnum',        'int', 'NULL',      '', '', '',
+        'priority',       'int', 'NULL',      '', '', '',
       ],
       'primary_key' => 'jobnum',
       'unique'      => [],
