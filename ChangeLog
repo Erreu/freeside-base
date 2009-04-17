@@ -1,3 +1,2198 @@
+2009-04-17 01:25  ivan
+
+	* httemplate/docs/about.html: when you're waiting for a miracle
+
+2009-04-17 00:21  ivan
+
+	* FS/FS/cust_bill.pm: add invoice number to PDF filename in email
+	  attachments, RT#3403
+
+2009-04-17 00:03  ivan
+
+	* httemplate/elements/header.html,
+	  rt/html/Elements/FreesideSvcSearch: hide service search unless
+	  user has "View customer services" ACL, RT#3478
+
+2009-04-16 18:17  ivan
+
+	* httemplate/search/: report_receivables.cgi,
+	  report_receivables.html: add customer status to receivables
+	  report selection, hopefully help enet, RT#5187
+
+2009-04-15 20:57  rsiddall
+
+	* install/rpm/freeside.spec: More fixes for SuSE self-service: 1/
+	  Put binaries in the right folder 2/ Make sure freeside group is
+	  created 3/ Make sure freeside home directory is created
+
+2009-04-14 22:52  ivan
+
+	* httemplate/view/svc_acct.cgi: s/GECOS/Real Name/ RT#3519
+
+2009-04-14 10:12  ivan
+
+	* FS/FS/: Conf.pm, Schema.pm, cust_main.pm: add configuration
+	  option to control recurring_flag behavior, RT#3843
+
+2009-04-13 17:09  ivan
+
+	* FS/FS/Conf.pm: add configuration option to control recurring_flag
+	  behavior, RT#3843
+
+2009-04-08 01:08  ivan
+
+	* FS/FS/Cron/check.pm: don't want to throw false positives, RT#5101
+
+2009-04-08 00:32  ivan
+
+	* FS/FS/: Record.pm, Upgrade.pm, cust_main.pm: eliminate all trace
+	  of cvv from history records, RT#5093
+
+2009-04-07 11:20  ivan
+
+	* FS/FS/: Conf.pm, svc_acct.pm: add a config to allow colon in
+	  usernames, RT#5145
+
+2009-04-07 11:15  ivan
+
+	* FS/FS/svc_acct.pm: truncate long labels that are TOO long...
+	  RT#3519
+
+2009-03-31 12:51  ivan
+
+	* FS/FS/Cron/notify.pm: really fix notify for Pg 8.3
+
+2009-03-31 12:46  ivan
+
+	* FS/FS/Cron/notify.pm: fix impending billing notification for Pg
+	  8.3's more strict type checking
+
+2009-03-29 04:56  ivan
+
+	* FS/FS/Schema.pm: index pkg_svc.quantity, RT#5083
+
+2009-03-25 20:59  ivan
+
+	* FS/FS/svc_acct.pm: yow
+
+2009-03-25 20:53  ivan
+
+	* FS/FS/cust_main.pm: sort packages by label of first (primary)
+	  service, RT#5041
+
+2009-03-24 06:39  jeff
+
+	* FS/FS/cust_pkg.pm: get 2884 backport in the loop
+
+2009-03-23 23:31  ivan
+
+	* FS/FS/Schema.pm: add indices for analyzing cc failures, RT#3843
+
+2009-03-23 21:36  jeff
+
+	* FS/FS/cust_pkg.pm, FS/FS/svc_acct.pm, FS/FS/part_pkg/flat.pm,
+	  httemplate/edit/part_svc.cgi,
+	  httemplate/misc/process/recharge_svc.html: more DTRT with usage
+	  on service transfer between packages and recharges  RT #2884,
+	  #5040
+
+2009-03-23 19:40  ivan
+
+	* FS/FS/: Record.pm, cust_bill.pm, cust_svc.pm, h_cust_svc.pm,
+	  part_pkg.pm, part_pkg/bulk.pm: bulk price plan: label as Name
+	  <email>, supress extraneous service list, RT#3519
+
+2009-03-23 15:45  ivan
+
+	* httemplate/edit/svc_acct.cgi: change label for svc_acct.finger
+	  from GECOS to "Real Name", RT#3519
+
+2009-03-23 10:02  ivan
+
+	* FS/FS/: svc_Common.pm, svc_acct.pm, part_pkg/bulk.pm: add name
+	  (svc_acct.finger) to bulk billing detail, RT#3519
+
+2009-03-21 20:33  ivan
+
+	* FS/FS/Cron/check.pm: 10 is too few, throwing false positives
+
+2009-03-21 16:37  ivan
+
+	* FS/bin/freeside-check: Locale::SubCountry warnings clogging up
+	  cron output not useful
+
+2009-03-21 16:34  ivan
+
+	* Makefile, FS/FS/Cron/check.pm, FS/bin/freeside-check: adding
+	  local checking on 1.7, RT#4610
+
+2009-03-21 16:32  ivan
+
+	* FS/FS/Cron/check.pm: 403 forbidden is okay, at lest the server's
+	  up
+
+2009-03-21 16:32  ivan
+
+	* FS/FS/Cron/check.pm: file check.pm was added on branch
+	  FREESIDE_1_7_BRANCH on 2009-03-21 23:34:36 +0000
+
+2009-03-21 15:14  ivan
+
+	* FS/bin/freeside-check: file freeside-check was added on branch
+	  FREESIDE_1_7_BRANCH on 2009-03-21 23:34:36 +0000
+
+2009-03-21 15:14  ivan
+
+	* FS/: FS/Cron/check.pm, bin/freeside-check: freeside-check local
+	  monitoring, RT#4610
+
+2009-03-17 15:02  ivan
+
+	* fs_selfservice/FS-SelfService/SelfService.pm: add
+	  payment_info_renew_info method to ClientAPI/MyAccount and
+	  SG-equivalent previous_payment_info_renew_info to ClientAPI/SGNG
+
+2009-03-17 14:38  ivan
+
+	* FS/FS/ClientAPI/SGNG.pm,
+	  fs_selfservice/FS-SelfService/SelfService.pm,
+	  FS/FS/ClientAPI/MyAccount.pm: add payment_info_renew_info method
+	  to ClientAPI/MyAccount and SG-equivalent
+	  previous_payment_info_renew_info to ClientAPI/SGNG
+
+2009-03-17 13:41  ivan
+
+	* fs_selfservice/FS-SelfService/SelfService.pm: add SG stuff
+
+2009-03-17 13:13  ivan
+
+	* FS/FS/Conf.pm: add a conf switch to enable sg multicust stuff,
+	  since it could be dangerous
+
+2009-03-17 12:48  ivan
+
+	* FS/FS/ClientAPI/: SGNG.pm: adding ClientAPI/SGNG.pm
+
+2009-03-17 12:48  ivan
+
+	* FS/FS/ClientAPI/SGNG.pm: file SGNG.pm was added on branch
+	  FREESIDE_1_7_BRANCH on 2009-03-17 19:48:33 +0000
+
+2009-03-15 21:21  jeff
+
+	* FS/FS/svc_broadband.pm: use part_svc_router
+
+2009-03-15 17:34  jeff
+
+	* FS/FS/: cust_pkg_reason.pm, h_cust_pkg.pm, h_cust_pkg_reason.pm:
+	  backport history packages
+
+2009-03-15 16:12  ivan
+
+	* FS/FS/ClientAPI/MyAccount.pm: fix old self-service for new-style
+	  cust_main->order_pkgs
+
+2009-03-15 15:46  ivan
+
+	* FS/FS/cust_pkg_reason.pm: not yet
+
+2009-03-15 15:33  ivan
+
+	* FS/FS/cust_svc.pm: don't throw 'Use of uninitialized value in
+	  addition (+) at /usr/local/share/perl/5.8.8/FS/cust_svc.pm line
+	  626.' error when using attribute_since_sqlradacct
+
+2009-03-15 12:42  ivan
+
+	* FS/FS/cust_pkg_reason.pm: should give better performance if we
+	  search for what we want instead of using a string match
+
+2009-03-15 12:00  ivan
+
+	* FS/FS/UI/bytecount.pm: sync with 1.9, slightly change boudnries
+	  of how inexact bytecounts are displayed
+
+2009-03-15 03:46  ivan
+
+	* FS/FS/cust_main.pm: fix application of data fields from prepaid
+	  cards in addition to time field
+
+2009-03-15 03:30  ivan
+
+	* httemplate/edit/prepay_credit.cgi: we're not a disk drive
+	  manufacturer, don't use halfass base-10 megs/gigs
+
+2009-03-11 18:14  jeff
+
+	* FS/FS/: cust_pkg.pm, cust_pkg_reason.pm: backport reason recovery
+	  and patches to where it is required
+
+2009-02-22 11:46  jeff
+
+	* FS/FS/h_cust_pkg.pm: file h_cust_pkg.pm was added on branch
+	  FREESIDE_1_7_BRANCH on 2009-03-16 00:34:50 +0000
+
+2009-02-22 11:46  jeff
+
+	* FS/FS/h_cust_pkg_reason.pm: file h_cust_pkg_reason.pm was added
+	  on branch FREESIDE_1_7_BRANCH on 2009-03-16 00:34:51 +0000
+
+2009-02-22 11:46  ivan
+
+	* FS/FS/: h_cust_pkg.pm, h_cust_pkg_reason.pm: add h_cust_pkg and
+	  h_cust_pkg_reason packages, RT#4896
+
+2009-02-22 02:58  ivan
+
+	* FS/FS/part_pkg/flat.pm: don't do a credit for unused time for
+	  packages that don't have a last bill date.  really.  RT#4881
+
+2009-02-07 11:05  ivan
+
+	* bin/pod2x: no, it doesn't look like we have query
+
+2009-02-06 18:24  ivan
+
+	* fs_selfservice/FS-SelfService/SelfService.pm: paybatch doesn't
+	  actually do anything yet, RT#4727
+
+2009-02-06 18:02  ivan
+
+	* fs_selfservice/FS-SelfService/SelfService.pm: fixup self-service
+	  POD, RT#4727
+
+2009-02-06 17:45  ivan
+
+	* fs_selfservice/FS-SelfService/SelfService.pm: fix up POD
+	  formatting, RT#4727
+
+2009-02-06 17:33  ivan
+
+	* bin/pod2x: don't need this
+
+2009-02-06 17:26  ivan
+
+	* bin/pod2x: update pod2x to use Mediawiki module instead of
+	  WWW:::Mediawiki::Client.  whew, that wasn't so bad.  RT#4727
+
+2009-01-31 20:13  ivan
+
+	* FS/FS/Upgrade.pm: commit after each table upgrade, helps with
+	  getting huge dbs upgraded, RT#4679
+
+2009-01-31 01:53  ivan
+
+	* FS/FS/access_user.pm: cache the results of ACL queries, should
+	  improve performance of customer view page for customers with
+	  shitloads of packages/services, RT#4696
+
+2009-01-30 12:44  ivan
+
+	* FS/FS/ClientAPI_SessionCache.pm: should use FS::Conf
+
+2009-01-29 16:40  ivan
+
+	* FS/FS/UI/bytecount.pm: we're not a disk drive manufacturer
+
+2009-01-29 11:25  ivan
+
+	* FS/FS/cust_pkg.pm: fix unsuspend-always_adjust_next_bill_date
+	  config, RT#4271
+
+2009-01-28 08:28  rsiddall
+
+	* install/rpm/freeside.spec: Removed conflict between core billing
+	  package and self-service RPMs so you can install them all on the
+	  same machine.  This may have applications if you're using XMLRPC
+	  to talk to the self-service interface from PHP, Python, etc.
+
+2009-01-24 17:27  ivan
+
+	* FS/FS/cust_svc.pm: add some debugging to RADIUS db calls
+
+2009-01-24 13:53  ivan
+
+	* FS/FS/ClientAPI/MyAccount.pm: have the prepay amounts include the
+	  current balance, RT#4623
+
+2009-01-22 16:49  ivan
+
+	* FS/FS/ClientAPI/MyAccount.pm: typo in rounding the amounts
+	  returned by renew_info, RT#4623
+
+2009-01-22 16:23  ivan
+
+	* FS/FS/ClientAPI/MyAccount.pm: round the amounts returned by
+	  renew_info, RT#4623
+
+2009-01-22 09:29  ivan
+
+	* FS/FS/part_pkg.pm, FS/FS/ClientAPI/MyAccount.pm,
+	  fs_selfservice/FS-SelfService/SelfService.pm: add self-service
+	  methods renew_info, order_renew and process_payment_order_renew
+	  to enable self-renewal through self-service.	RT#4623
+
+2009-01-18 13:05  rsiddall
+
+	* install/rpm/freeside.sysconfig: bash didn't like spaces on each
+	  side of an equals sign.
+
+2009-01-06 09:49  ivan
+
+	* FS/FS/: Conf.pm, cust_bill.pm, cust_main.pm: add invoice_subject
+	  config with some subsitution vars, RT#4481
+
+2009-01-04 14:07  ivan
+
+	* Makefile, init.d/freeside-init: don't run a self-service server
+	  against localhost OOTB; eliminate those gigantic useless logfiles
+
+2008-12-28 11:10  ivan
+
+	* httemplate/browse/cust_main_county.cgi: finish dealing with
+	  counties with spaces, etc., RT#4496
+
+2008-12-28 11:08  ivan
+
+	* httemplate/edit/process/cust_main_county-expand.cgi: allow normal
+	  ut_textn strings in county expansion, RT#4496
+
+2008-12-28 10:59  ivan
+
+	* httemplate/browse/cust_main_county.cgi: deal with counties with
+	  spaces, etc., RT#4496
+
+2008-12-28 10:52  ivan
+
+	* httemplate/browse/cust_main_county.cgi: put the
+	  country/state/county selections on their own line, RT#4496
+
+2008-12-28 10:48  ivan
+
+	* httemplate/elements/select-country.html: file select-country.html
+	  was added on branch FREESIDE_1_7_BRANCH on 2008-12-28 18:48:16
+	  +0000
+
+2008-12-28 10:48  ivan
+
+	* httemplate/elements/select-county.html: file select-county.html
+	  was added on branch FREESIDE_1_7_BRANCH on 2008-12-28 18:48:16
+	  +0000
+
+2008-12-28 10:48  ivan
+
+	* httemplate/elements/select-state.html: file select-state.html was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-12-28 18:48:16 +0000
+
+2008-12-28 10:48  ivan
+
+	* httemplate/elements/: select-country.html, select-county.html,
+	  select-state.html: fix browse results for selecting counties
+	  (resulting from separating tax classes), also add dropdowns to
+	  browse by state and county, RT#4496
+
+2008-12-28 10:44  ivan
+
+	* httemplate/: browse/cust_main_county.cgi,
+	  edit/cust_main/billing.html, edit/cust_main/contact.html,
+	  misc/payment.cgi, edit/cust_main/select-country.html,
+	  edit/cust_main/select-county.html,
+	  edit/cust_main/select-state.html: fix browse results for
+	  selecting counties (resulting from separating tax classes), also
+	  add dropdowns to browse by state and county, RT#4496
+
+2008-12-26 08:59  rsiddall
+
+	* install/rpm/: freeside-selfservice.conf, freeside.spec: Added an
+	  Apache configuration file for the self-service interface.
+	  Modified the .spec file to allow the self-service interface to be
+	  installed on a machine that already has the billing server on it,
+	  if you override the conflict reported by yum.  Temporarily
+	  disabled the conflict in YaST.  Fixed a long-standing bug where
+	  Makefile sets the ownership of files, causing "install" commands
+	  to fail when building the RPMs.  This showed up on the SuSE
+	  install.  Simplified .spec code to install the init script and
+	  the Apache configuration file.  Added some fix-ups for some of
+	  the remaining SuSE problems.	Included a note on changes to make
+	  once the Freeside cache relocation code is fixed; this cannot be
+	  done until a release of Freeside with the fix in it has been
+	  made, or you'll get broken RPMs again.
+
+2008-12-22 16:52  ivan
+
+	* FS/FS/cust_bill.pm: truncate package descriptions over 50 chars
+	  to avoid pushing the total column out to the right, RT#4449
+
+2008-12-22 13:16  ivan
+
+	* httemplate/edit/: part_pkg.cgi, quick-charge.html: soft-limit
+	  package names to 50 chars to avoid problems with typeset
+	  invoices, RT#4449
+
+2008-12-21 16:51  ivan
+
+	* FS/FS/cust_bill.pm: have \& in invoice_latexreturnaddress
+	  translate to & in HTML, RT#4426
+
+2008-12-21 16:46  ivan
+
+	* FS/FS/cust_bill.pm: have \& in invoice_latexreturnaddress
+	  translate to & in HTML, RT#4426
+
+2008-12-15 16:08  jeff
+
+	* FS/FS/cust_pkg.pm: proper dates on expire and suspend reasons
+
+2008-12-10 13:33  ivan
+
+	* httemplate/graph/: report_cust_bill_pkg.html,
+	  report_cust_pkg.html, report_money_time.html: allow all-agent
+	  reporting again
+
+2008-12-10 11:40  rsiddall
+
+	* install/rpm/freeside.spec: Cleanup .spec file to quieten rpmlint.
+	  First round of modifications to support SuSE as well as
+	  RedHat/Fedora/CentOS.
+
+2008-12-10 11:39  rsiddall
+
+	* install/rpm/rpm2Bundle: Improved code to handle RPM names and
+	  convert back to Perl module names.
+
+2008-12-02 21:53  ivan
+
+	* httemplate/edit/part_pkg.cgi: 60 char soft max length for
+	  packages, so invoices don't wrap, RT#4328
+
+2008-11-30 13:01  ivan
+
+	* FS/FS/cdr.pm: _cdr_min_parser_maker fix for correct setting of
+	  duration/billsec with simple & simple2 rate plans
+
+2008-11-17 18:56  rsiddall
+
+	* install/rpm/rpm2Bundle: Now handles hyphenated Perl requirements
+	  as well as those in parentheses, and handles more version
+	  relation types.
+
+2008-11-11 00:55  ivan
+
+	* FS/FS/cust_bill.pm: add fax to invoice data, RT#3290
+
+2008-11-11 00:45  ivan
+
+	* conf/: invoice_html, invoice_latex: agent_custid and ship_fax
+	  don't belong with the ship address, that was an unrelated
+	  tampabay/pbx-change request, RT#3290
+
+2008-11-10 23:51  ivan
+
+	* conf/invoice_html: make HTML invoice more consistent with current
+	  typeset invoice: center invoice date instead of right-justify
+
+2008-11-06 22:04  ivan
+
+	* httemplate/view/svc_acct.cgi: fix viewing of unlinked services.
+	  wow, it has been a while
+
+2008-11-06 14:53  ivan
+
+	* FS/FS/part_export/sqlradius.pm: should fix open session RADIUS
+	  search, RT #4233
+
+2008-11-06 14:20  ivan
+
+	* FS/FS/part_export/sqlradius.pm: fix radius search, RT#4233
+
+2008-11-02 17:10  ivan
+
+	* httemplate/view/svc_acct.cgi: time remaining is more useful to
+	  display as hours + minutes than days, hours, minutes from
+	  Time::Duration
+
+2008-11-02 12:27  ivan
+
+	* httemplate/search/: report_tax.cgi, cust_bill_pkg.cgi: (and
+	  REALLY fix the line-item links too, whew) fix overreporting of
+	  tax invoiced when using & reporting with taxclasses, RT#4131
+
+2008-11-02 12:03  ivan
+
+	* httemplate/search/report_tax.cgi: (and fix the line-item links
+	  too, whew) fix overreporting of tax invoiced when using &
+	  reporting with taxclasses, RT#4131
+
+2008-11-02 11:40  ivan
+
+	* httemplate/search/report_tax.cgi: (and fix the total too) fix
+	  overreporting of tax invoiced when using & reporting with
+	  taxclasses, RT#4131
+
+2008-11-02 11:26  ivan
+
+	* httemplate/search/report_tax.cgi: fix overreporting of tax
+	  invoiced when using & reporting with taxclasses, RT#4131
+
+2008-11-01 13:01  ivan
+
+	* FS/FS/cust_main_county.pm: 1.7 backport of
+	  cust_main_county::sql_taxclass_sameregion needs FS::Record::dbh
+	  imported, also causing tax report to bail out, sheesh, RT#4133
+
+2008-11-01 12:53  ivan
+
+	* FS/FS/Record.pm: backport bind_param fixes for DBD:Pg 1.x from
+	  1.9, fixes "Cannot bind ... unknown sql_type 6 on tax report,
+	  RT#4133
+
+2008-10-22 22:20  ivan
+
+	* fs_selfservice/FS-SelfService/SelfService.pm: POD cleanup
+
+2008-10-21 21:39  ivan
+
+	* FS/FS/part_export/sqlradius.pm, httemplate/search/sqlradius.cgi,
+	  httemplate/search/sqlradius.html: fix error on open-ended RADIUS
+	  search with Pg, add options for open session search and search on
+	  start time, RT#4051
+
+2008-10-15 22:35  ivan
+
+	* httemplate/misc/payment.cgi, FS/FS/Conf.pm,
+	  httemplate/search/cust_pay_batch.cgi,
+	  httemplate/view/cust_main/payment_history.html: add
+	  batch-enable_payby and realtime_disable_payby for better control
+	  over hybrid realtime/batch installs; deprecate never-used
+	  paymentforcedtobatch, RT#4052
+
+2008-10-15 22:04  ivan
+
+	* httemplate/elements/menu.html: add batch-enable_payby and
+	  realtime_disable_payby for better control over hybrid
+	  realtime/batch installs; deprecate never-used
+	  paymentforcedtobatch, RT#4052
+
+2008-10-13 14:58  ivan
+
+	* FS/: bin/freeside-fetch, FS/Conf.pm: Change subject for
+	  freeside-fetch emailed reports from "subject" to "Freeside
+	  report", and add email_report-subject config to change it.
+	  RT#4093
+
+2008-10-12 16:56  jeff
+
+	* conf/invoice_latex: better column widths and easier maintenance
+
+2008-10-12 14:22  jeff
+
+	* conf/invoice_latex: better value for non-broken tetex
+
+2008-10-11 17:58  ivan
+
+	* httemplate/browse/cust_main_county.cgi: fix link
+
+2008-10-11 17:54  ivan
+
+	* httemplate/: edit/bulk-cust_main_county.html,
+	  edit/process/bulk-cust_main_county.html,
+	  browse/cust_main_county.cgi: add a quick bulk tax add tool
+	  (eating my own dogfood instead of running a one-off SQL query),
+	  RT#4117
+
+2008-10-11 17:54  ivan
+
+	* httemplate/edit/: bulk-cust_main_county.html,
+	  process/bulk-cust_main_county.html: file
+	  bulk-cust_main_county.html was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-10-12 00:54:19 +0000
+
+2008-10-10 17:32  ivan
+
+	* FS/FS/part_pkg.pm: backport part_pkg::pkg_comment in order to
+	  enable suspension notices to an administrator, RT#4083
+
+2008-10-10 17:32  ivan
+
+	* FS/FS/: Conf.pm, cust_pkg.pm: enable suspension notices to an
+	  administrator, RT#4083
+
+2008-10-10 16:36  ivan
+
+	* FS/FS/cust_pkg.pm: quick kludge to eliminate exact duplicates in
+	  h_labels_short in an effort to reduce the number of "XXX service
+	  listing twice on invoice" incidents, RT#3944.  still should be
+	  possible to fundamentally do better with the function in the
+	  first place
+
+2008-10-09 13:06  ivan
+
+	* FS/FS/part_export/sqlradius.pm: use Freeradius := attribute for
+	  ALL attributes except Password.  Crypt-Password, User-Password,
+	  Password-With-Header should now use := instead of ==.  RT#4051
+
+2008-10-06 17:10  ivan
+
+	* FS/FS/Upgrade.pm: oops, brainfart
+
+2008-10-06 17:09  ivan
+
+	* FS/FS/Upgrade.pm: when setting last_login/last_logout, ensure
+	  only accounts actually attached to the export are updated
+
+2008-10-06 08:28  ivan
+
+	* FS/FS/: cdr/netcentrex.pm, cdr.pm: add initial netcentrex CDR
+	  format
+
+2008-10-06 08:28  ivan
+
+	* FS/FS/cdr/netcentrex.pm: file netcentrex.pm was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-10-06 15:28:15 +0000
+
+2008-10-05 14:36  ivan
+
+	* httemplate/search/pay_batch.cgi: fix links to closed batches,
+	  RT#4052
+
+2008-10-04 23:07  ivan
+
+	* httemplate/: edit/elements/ApplicationCommon.html,
+	  view/cust_main/payment_history/credit.html,
+	  view/cust_main/payment_history/payment.html: finish UI
+	  improvements wrt refunds: now you have to post a check or cash
+	  refund explicitly, no more implicit creation by 'applying'
+	  credits.  don't show useless application links.  don't enable
+	  apply button until you pick an invoice/refund.  RT#3812
+
+2008-10-04 15:35  ivan
+
+	* FS/FS/: Misc.pm, cust_bill_ApplicationCommon.pm,
+	  payinfo_transaction_Mixin.pm, Misc/prune.pm: POD cleanups
+
+2008-10-04 13:55  ivan
+
+	* httemplate/edit/rate_region.cgi: fix inappropriate rounding when
+	  editing rates for a whole region
+
+2008-09-30 13:17  jeff
+
+	* fs_selfservice/FS-SelfService/cgi/: bill.html, selfservice.cgi:
+	  turn on and off postal billing from self-service
+
+2008-09-28 20:41  ivan
+
+	* httemplate/misc/delay_susp_pkg.html: use init_calendar.html
+
+2008-09-25 20:54  jeff
+
+	* httemplate/misc/: delay_susp_pkg.html,
+	  process/delay_susp_pkg.html: file delay_susp_pkg.html was added
+	  on branch FREESIDE_1_7_BRANCH on 2008-09-26 03:56:39 +0000
+
+2008-09-25 20:54  jeff
+
+	* httemplate/misc/delay_susp_pkg.html,
+	  httemplate/misc/process/delay_susp_pkg.html,
+	  FS/FS/AccessRight.pm, FS/FS/cust_main.pm,
+	  FS/FS/part_bill_event.pm, httemplate/edit/part_bill_event.cgi,
+	  httemplate/view/cust_main/packages.html: push out event triggered
+	  suspensions
+
+2008-09-24 19:27  jeff
+
+	* FS/FS/part_export/prizm.pm: prizm export improvement for package
+	  changes
+
+2008-09-18 16:17  jeff
+
+	* FS/FS/Schema.pm: trade space for time
+
+2008-09-16 15:21  ivan
+
+	* httemplate/search/report_tax.cgi: minor initialization issue
+	  (backport)
+
+2008-09-14 13:24  ivan
+
+	* FS/FS/cust_main_invoice.pm: silently strip out leading and
+	  trailing spaces from invoicing email addresses instead of
+	  throwing an error
+
+2008-09-12 15:53  ivan
+
+	* FS/FS/part_pkg/voip_cdr.pm: just give up and try again tommorow,
+	  "1011" came from us not the CDRs anyway, RT#3985
+
+2008-09-12 15:48  ivan
+
+	* FS/FS/part_pkg/voip_cdr.pm: not enough sleep to support multiple
+	  internal_prefixen, RT#3985
+
+2008-09-12 15:38  ivan
+
+	* FS/FS/part_pkg/voip_cdr.pm: not enough sleep to support multiple
+	  internal_prefixen, RT#3985
+
+2008-09-12 15:18  ivan
+
+	* FS/FS/part_pkg/voip_cdr.pm: grr, TRY to support multiple
+	  internal_prefixen, RT#3985
+
+2008-09-12 14:56  ivan
+
+	* FS/FS/part_pkg/voip_cdr.pm: support multiple internal_prefixen,
+	  RT#3985
+
+2008-09-12 00:58  ivan
+
+	* FS/FS/: Conf.pm, cust_pkg.pm: make the max # of indivudal
+	  services printed on invoices configurable.  RT#3904
+
+2008-09-12 00:07  ivan
+
+	* FS/FS/: part_pkg/flat.pm, part_pkg/voip_cdr.pm, cust_main.pm:
+	  don't throw noisy warnings about missing new recur_temporality,
+	  RT#3851
+
+2008-09-11 19:02  ivan
+
+	* httemplate/misc/spool_invoices.cgi: file spool_invoices.cgi was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-09-12 02:02:05 +0000
+
+2008-09-11 19:01  ivan
+
+	* httemplate/misc/spool_invoices.cgi, FS/FS/cust_bill.pm,
+	  FS/FS/Conf.pm, httemplate/search/cust_bill.html: add billco
+	  respooling, not re-FTPing, RT#3971
+
+2008-09-11 17:53  ivan
+
+	* FS/FS/part_pkg/: flat.pm, voip_cdr.pm: add recur_temporality to
+	  flat.pm, RT#3851
+
+2008-09-11 17:41  ivan
+
+	* FS/FS/cust_main.pm: correct a (fortunately harmless) typo
+
+2008-09-10 01:33  ivan
+
+	* httemplate/misc/ftp_invoices.cgi: file ftp_invoices.cgi was added
+	  on branch FREESIDE_1_7_BRANCH on 2008-09-10 08:33:58 +0000
+
+2008-09-10 01:33  ivan
+
+	* FS/FS/Conf.pm, FS/FS/cust_bill.pm,
+	  httemplate/misc/ftp_invoices.cgi,
+	  httemplate/search/cust_bill.html: add re-FTP reprint,
+	  RT#create-me-tommorow-for-enet
+
+2008-09-10 00:30  ivan
+
+	* FS/FS/part_pkg/voip_cdr.pm: add upcoming/preceding option,
+	  RT#3851
+
+2008-09-10 00:24  ivan
+
+	* FS/FS/cust_main.pm: add upcoming/preceding option, RT#3851
+
+2008-09-09 15:35  ivan
+
+	* FS/FS/ClientAPI/MyAccount.pm: allow implied primary services to
+	  log into selfservice when selfservice_server-primary_only is on
+
+2008-09-09 14:29  ivan
+
+	* FS/FS/ClientAPI/MyAccount.pm: this should allow implied primary
+	  services to log into selfservice when
+	  selfservice_server-primary_only is on
+
+2008-09-09 14:04  ivan
+
+	* FS/FS/Upgrade.pm: show which _upgrade_data sub is being run
+
+2008-09-09 13:58  ivan
+
+	* FS/FS/cust_pkg_detail.pm: 1.7 somehow got an old copy of
+	  cust_pkg_detail, doh
+
+2008-09-09 01:19  ivan
+
+	* FS/FS/Schema.pm: wtf, cust_pkg_reason has no indices?!
+	  _upgrade_data is hosing cpu badly
+
+2008-09-07 19:49  ivan
+
+	* httemplate/edit/quick-charge.html: extraneous code cleanup
+
+2008-09-07 19:47  ivan
+
+	* FS/FS/: AccessRight.pm, cust_main.pm: add package invoice details
+	  & comments, RT#3810
+
+2008-09-07 19:42  ivan
+
+	* httemplate/edit/process/cust_pkg_detail.html: file
+	  cust_pkg_detail.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-09-08 02:42:35 +0000
+
+2008-09-07 19:42  ivan
+
+	* httemplate/edit/cust_pkg_detail.html: file cust_pkg_detail.html
+	  was added on branch FREESIDE_1_7_BRANCH on 2008-09-08 02:42:34
+	  +0000
+
+2008-09-07 19:42  ivan
+
+	* FS/t/cust_pkg_detail.t: file cust_pkg_detail.t was added on
+	  branch FREESIDE_1_7_BRANCH on 2008-09-08 02:42:31 +0000
+
+2008-09-07 19:42  ivan
+
+	* FS/FS/cust_pkg_detail.pm: file cust_pkg_detail.pm was added on
+	  branch FREESIDE_1_7_BRANCH on 2008-09-08 02:42:30 +0000
+
+2008-09-07 19:42  ivan
+
+	* FS/FS/cust_pkg_detail.pm, FS/t/cust_pkg_detail.t,
+	  httemplate/edit/cust_pkg_detail.html,
+	  httemplate/edit/process/cust_pkg_detail.html, FS/FS/Schema.pm,
+	  httemplate/pref/pref.html, httemplate/pref/pref-process.html,
+	  httemplate/view/cust_main/packages.html, FS/MANIFEST, FS/FS.pm,
+	  FS/FS/cust_pkg.pm: add package invoice details & comments,
+	  RT#3810
+
+2008-09-06 13:54  ivan
+
+	* FS/FS/UI/Web.pm: don't link to customer service view unless the
+	  user has the ACL to view the resulting page
+
+2008-09-03 11:59  jeff
+
+	* FS/FS/: Upgrade.pm, cust_pkg_reason.pm: system only reason update
+	  routine
+
+2008-09-02 18:52  ivan
+
+	* httemplate/view/cust_main/payment_history.html: add back ability
+	  to post a check/cash refund. be more explicit about it instead of
+	  just being a checkbox when posting a credit. RT#3812
+
+2008-09-02 18:46  ivan
+
+	* httemplate/elements/init_calendar.html: file init_calendar.html
+	  was added on branch FREESIDE_1_7_BRANCH on 2008-09-03 01:46:44
+	  +0000
+
+2008-09-02 18:46  ivan
+
+	* httemplate/elements/init_calendar.html, FS/FS/payby.pm,
+	  httemplate/edit/cust_pay.cgi, httemplate/edit/cust_refund.cgi,
+	  httemplate/edit/process/cust_refund.cgi,
+	  httemplate/view/cust_main/payment_history/refund.html,
+	  httemplate/view/cust_refund.html, FS/FS/AccessRight.pm: add back
+	  ability to post a check/cash refund.	be more explicit about it
+	  instead of just being a checkbox when posting a credit.  RT#3812
+
+2008-08-29 16:13  ivan
+
+	* FS/FS/part_export/: acct_freeside.pm: adding fs-to-fs
+	  provisioning of simple accounts for cheepnet, RT#3805
+
+2008-08-29 16:13  ivan
+
+	* FS/FS/part_export/acct_freeside.pm: file acct_freeside.pm was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-08-29 23:14:14 +0000
+
+2008-08-29 13:10  ivan
+
+	* httemplate/edit/part_pkg.cgi: increase maxlength and size of
+	  quantity fields on package edit, for RT#3805
+
+2008-08-26 14:59  ivan
+
+	* FS/FS/cust_main.pm: don't override countrydefault or whatever
+	  with a blank value in bulk customer import
+
+2008-08-26 06:59  rsiddall
+
+	* install/rpm/freeside.spec: More changes to the self-service RPMs,
+	  mostly fixing up paths so the RPM-installed self-service files
+	  are not under /usr/local on the remote machine.  Also fixed an
+	  initialization problem where the system configuration files for
+	  Freeside were assumed to be under /etc/default, not
+	  /etc/sysconfig
+
+2008-08-23 20:40  rsiddall
+
+	* install/rpm/freeside.spec: Create discrete RPMs for different
+	  parts of the self-service interface.
+
+2008-08-21 16:21  ivan
+
+	* FS/bin/freeside-yori: file freeside-yori was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-08-21 23:22:20 +0000
+
+2008-08-21 16:21  ivan
+
+	* FS/: FS/Yori.pm, bin/freeside-yori, MANIFEST: add the client-side
+	  reporting for MCP mode
+
+2008-08-21 16:21  ivan
+
+	* FS/FS/Yori.pm: file Yori.pm was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-08-21 23:22:07 +0000
+
+2008-08-19 11:42  ivan
+
+	* FS/FS/svc_acct.pm: beter error messages for duplicate accounts
+
+2008-08-19 04:35  ivan
+
+	* FS/FS/cdr.pm: fix duration on simple/simple2 CDR formats
+
+2008-08-19 03:09  ivan
+
+	* httemplate/edit/process/rate_region.cgi: also don't neglext nxx
+	  here
+
+2008-08-19 03:06  ivan
+
+	* FS/FS/rate_region.pm, httemplate/browse/rate_region.html,
+	  httemplate/edit/rate_region.cgi: more consistent prefix display,
+	  and don't forget nxx'
+
+2008-08-15 01:45  ivan
+
+	* httemplate/elements/header-minimal.html: 1.7 needs
+	  header-minimal.html for new file upload to work
+
+2008-08-14 17:41  ivan
+
+	* httemplate/elements/form-file_upload.html: can have a message
+	  then a URL too
+
+2008-08-14 04:56  ivan
+
+	* httemplate/: misc/file-upload.html, elements/file-upload.html:
+	  file file-upload.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-08-14 11:56:12 +0000
+
+2008-08-14 04:54  ivan
+
+	* httemplate/elements/form-file_upload.html: file
+	  form-file_upload.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-08-14 11:54:37 +0000
+
+2008-08-14 04:53  ivan
+
+	* FS/FS/Schema.pm, FS/FS/UID.pm, FS/FS/cust_main.pm,
+	  httemplate/elements/progress-init.html,
+	  httemplate/elements/progress-popup.html,
+	  httemplate/misc/cust_main-import.cgi,
+	  httemplate/misc/process/cust_main-import.cgi,
+	  httemplate/search/cust_main.html,
+	  httemplate/elements/form-file_upload.html,
+	  httemplate/misc/file-upload.html,
+	  httemplate/elements/file-upload.html: customer import: add
+	  progress bar & redirect to a search of the imported customers,
+	  #3475
+
+2008-08-14 04:44  ivan
+
+	* Makefile: customer import: add progress bar & redirect to a
+	  search of the imported customers, #3475
+
+2008-08-13 18:58  ivan
+
+	* FS/FS/Conf.pm, FS/FS/Record.pm, FS/FS/cust_main.pm,
+	  httemplate/elements/menu.html,
+	  httemplate/misc/cust_main-import.cgi,
+	  httemplate/misc/process/cust_main-import.cgi: import customer
+	  from Excel file too
+
+2008-08-13 18:52  ivan
+
+	* FS/FS/svc_Common.pm: tyop
+
+2008-08-13 18:38  ivan
+
+	* httemplate/view/svc_forward.cgi: tyop
+
+2008-08-12 01:47  ivan
+
+	* httemplate/edit/process/part_pkg.cgi: fix inability to edit agent
+	  types for a package def when agent_defaultpkg is set on
+
+2008-08-07 15:30  ivan
+
+	* Makefile: don't generate a new key on install-selfservice if
+	  there's already an RSA one either
+
+2008-08-02 16:51  ivan
+
+	* FS/FS/: cdr.pm, cdr/asterisk.pm, cdr/genband_meetme.pm,
+	  cdr/genband.pm, cdr/openser.pm, cdr/simple.pm, cdr/taqua.pm,
+	  cdr/unitel.pm: fix 'Can't call method "parse" on an undefined
+	  value' error from CDR format refactor
+
+2008-07-31 16:32  ivan
+
+	* httemplate/search/report_receivables.cgi: this should fix columns
+	  not showing up in receivables report... not surea bout #3801
+	  (credits/etc show up in all time periods)
+
+2008-07-31 14:16  ivan
+
+	* FS/FS/svc_acct.pm: backport-ish from 1.9: blowfish apsswords
+	  exporting to LDAP should warn and return {CRYPT}* instead of
+	  throwing a fatal error
+
+2008-07-31 13:17  ivan
+
+	* httemplate/search/report_receivables.cgi: fix receivables report:
+	  credits/etc. should be limited by date like before, closes:
+	  Bug#3801
+
+2008-07-30 19:35  ivan
+
+	* httemplate/misc/delete-customer.cgi: fix error on customer
+	  deletion
+
+2008-07-30 15:15  ivan
+
+	* FS/FS/cdr/nt.pm: rename nt to nextone
+
+2008-07-30 15:10  ivan
+
+	* FS/FS/cdr/nextone.pm: file nextone.pm was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-07-30 22:10:52 +0000
+
+2008-07-30 15:10  ivan
+
+	* FS/FS/cdr/: nextone.pm: rename nt to nextone
+
+2008-07-30 13:39  ivan
+
+	* httemplate/search/cust_bill_pkg.cgi: backport line item detail
+	  report from HEAD
+
+2008-07-18 15:32  ivan
+
+	* FS/FS/cust_pkg.pm: random cleanup from 1.9
+
+2008-07-18 15:29  ivan
+
+	* bin/bind.import: add -e option to bind.import (now to actually
+	  implement it)
+
+2008-07-18 15:28  ivan
+
+	* FS/FS/rate_region.pm: show NXX is US if applicable
+
+2008-07-17 16:55  ivan
+
+	* FS/FS/cdr/asterisk.pm: file asterisk.pm was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-07-17 23:55:39 +0000
+
+2008-07-17 16:55  ivan
+
+	* FS/FS/cdr/genband.pm: file genband.pm was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-07-17 23:55:39 +0000
+
+2008-07-17 16:55  ivan
+
+	* FS/FS/cdr/genband_meetme.pm: file genband_meetme.pm was added on
+	  branch FREESIDE_1_7_BRANCH on 2008-07-17 23:55:39 +0000
+
+2008-07-17 16:55  ivan
+
+	* FS/FS/cdr/nt.pm: file nt.pm was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-07-17 23:55:39 +0000
+
+2008-07-17 16:55  ivan
+
+	* FS/FS/cdr/openser.pm: file openser.pm was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-07-17 23:55:39 +0000
+
+2008-07-17 16:55  ivan
+
+	* FS/FS/cdr/simple.pm: file simple.pm was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-07-17 23:55:39 +0000
+
+2008-07-17 16:55  ivan
+
+	* FS/FS/cdr/taqua.pm: file taqua.pm was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-07-17 23:55:39 +0000
+
+2008-07-17 16:55  ivan
+
+	* FS/FS/cdr/unitel.pm: file unitel.pm was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-07-17 23:55:39 +0000
+
+2008-07-17 16:55  ivan
+
+	* FS/FS/: cdr/asterisk.pm, cdr/genband.pm, cdr/genband_meetme.pm,
+	  cdr/nt.pm, cdr/openser.pm, cdr/simple.pm, cdr/taqua.pm,
+	  cdr/unitel.pm, cdr.pm: CDR updates; modularize CDR import
+	  formats; add formats for OpenSER, Genband/Tekelec, and "NT"
+
+2008-07-15 16:25  ivan
+
+	* FS/FS/Upgrade.pm: where in the world is $DBI::errstr
+
+2008-07-15 16:18  ivan
+
+	* FS/FS/Upgrade.pm: parens help alot
+
+2008-07-15 16:17  ivan
+
+	* FS/FS/Upgrade.pm: report errors connecting to sqlradius dbs on
+	  upgrade
+
+2008-07-15 13:56  ivan
+
+	* FS/FS/cust_main.pm: prevent inactive customers from showing up in
+	  reports of cancelled customers
+
+2008-07-14 16:59  ivan
+
+	* httemplate/view/cust_main/notes.html: fuck embedded iframes and
+	  their stupid display problems with scrolling.  also make the
+	  gridding more consistent
+
+2008-07-14 16:08  ivan
+
+	* httemplate/: view/cust_main.cgi, view/cust_main/notes.html,
+	  edit/process/cust_main_note.cgi: fuck embedded iframes and their
+	  stupid display problems with scrolling.  also make the gridding
+	  more consistent
+
+2008-07-10 11:48  ivan
+
+	* httemplate/view/cust_main/packages.html: fix variable scoping
+	  issues preventing customer view page from coing up
+
+2008-07-09 20:22  jeff
+
+	* FS/FS/cust_bill.pm: remove spurious warning
+
+2008-07-09 20:16  jeff
+
+	* FS/FS/cust_bill.pm: restore line item date ranges
+
+2008-07-09 13:37  ivan
+
+	* FS/FS/part_pkg.pm: should avoid spurious uninitialized value
+	  warnings on upgrade
+
+2008-07-09 13:33  ivan
+
+	* FS/FS/svc_Common.pm: perl vs SQL brainfart
+
+2008-07-09 12:35  ivan
+
+	* FS/FS/svc_Common.pm: service searching should be case-insensitive
+	  now
+
+2008-07-08 20:40  ivan
+
+	* httemplate/search/: cust_tax_exempt.cgi: helpful to see when
+	  exemptions were inserted?
+
+2008-07-08 20:27  ivan
+
+	* httemplate/search/cust_tax_exempt.cgi: need the exemptnum...
+
+2008-07-08 20:18  ivan
+
+	* httemplate/search/cust_tax_exempt.html: file cust_tax_exempt.html
+	  was added on branch FREESIDE_1_7_BRANCH on 2008-07-09 03:18:49
+	  +0000
+
+2008-07-08 20:18  ivan
+
+	* httemplate/search/: cust_tax_exempt.html, cust_tax_exempt.cgi:
+	  search legacy tax exemptions by customer status
+
+2008-07-08 19:30  ivan
+
+	* httemplate/edit/process/part_pkg.cgi: don't require an agent type
+	  to be specified when editing a disabled package
+
+2008-07-07 19:19  ivan
+
+	* httemplate/search/cust_bill_pkg.cgi: fix line-item reports on
+	  taxclass-less regions
+
+2008-07-07 19:01  ivan
+
+	* FS/FS/cust_main_county.pm, httemplate/search/report_tax.cgi,
+	  httemplate/search/cust_bill_pkg.cgi: fix line-item reports on
+	  taxclass-less regions
+
+2008-07-07 17:35  ivan
+
+	* httemplate/search/cust_bill_pkg.cgi: order by number for line
+	  items with the same datestamp
+
+2008-07-07 17:20  ivan
+
+	* httemplate/search/cust_bill_pkg.cgi: order line item reports by
+	  date
+
+2008-07-07 16:47  ivan
+
+	* httemplate/search/report_tax.cgi: should be a proper fix for edge
+	  cases where you have taxclass and empty-taxclass rates for a
+	  region, whew
+
+2008-07-02 21:19  ivan
+
+	* FS/FS/Record.pm: should FINALLY get binding correctly in light of
+	  regression caused by get_real_fields refactor
+
+2008-07-02 21:12  ivan
+
+	* FS/FS/Record.pm: this should non-"=" searches on fields that
+	  require SQL type binding...
+
+2008-07-01 19:55  ivan
+
+	* FS/FS/ClientAPI/MyAccount.pm: fix errors paying with an on-file
+	  card through self-service
+
+2008-07-01 00:02  jeff
+
+	* FS/FS/cust_pkg.pm: you shouldn't keep 'em separated
+
+2008-06-30 22:01  jeff
+
+	* httemplate/misc/unadjourn_pkg.cgi,
+	  httemplate/misc/unexpire_pkg.cgi, FS/FS/Schema.pm,
+	  FS/FS/cust_pkg.pm, FS/FS/cust_pkg_reason.pm, FS/FS/Cron/bill.pm,
+	  FS/FS/part_export/shellcommands.pm,
+	  FS/FS/part_export/sqlradius.pm,
+	  httemplate/edit/REAL_cust_pkg.cgi,
+	  httemplate/misc/process/cancel_pkg.html,
+	  httemplate/search/cust_pkg.cgi,
+	  httemplate/view/cust_main/packages.html: correct internal reason
+	  searching, prevent interleaved suspend/cancel/expire/adjourn,
+	  backporting and refactoring
+
+2008-06-30 14:49  jeff
+
+	* FS/FS/cust_pkg.pm, httemplate/misc/process/cancel_pkg.html:
+	  backport reason handling
+
+2008-06-28 21:33  jeff
+
+	* httemplate/view/cust_main/packages.html: spurious 'suspended'
+
+2008-06-28 16:03  ivan
+
+	* httemplate/elements/select-state.html: get DIDs from globalpops
+
+2008-06-25 13:14  ivan
+
+	* httemplate/search/report_receivables.cgi: optimize total query in
+	  receivables report.  very significant speedup for large DBs
+
+2008-06-25 11:14  ivan
+
+	* FS/FS/Upgrade.pm: don't show error messages about FreesideStatus
+	  index already existing either
+
+2008-06-24 17:29  ivan
+
+	* FS/FS/Record.pm, htetc/handler.pl: finish adding
+	  str2time_sql_closing
+
+2008-06-24 09:39  jeff
+
+	* FS/FS/: Conf.pm, cust_main.pm: postal invoice fees
+
+2008-06-23 19:09  ivan
+
+	* FS/FS/part_export/sqlradius.pm: prevent decrementing
+	  time/bandwidth for old RADIUS records
+
+2008-06-23 08:36  jeff
+
+	* FS/FS/cust_bill.pm, conf/invoice_html, conf/invoice_latex:
+	  invoice service address modifications
+
+2008-06-22 17:41  ivan
+
+	* FS/FS/cust_tax_exempt.pm: adding report on legacy tax exemptions
+	  to assist in enet migraiton
+
+2008-06-22 17:37  ivan
+
+	* httemplate/search/cust_tax_exempt.cgi: legacy tax exemption
+	  report fix, no _date
+
+2008-06-22 17:34  ivan
+
+	* httemplate/search/: cust_tax_exempt.cgi: adding report on legacy
+	  tax exemptions to assist in enet migraiton
+
+2008-06-22 17:34  ivan
+
+	* httemplate/search/cust_tax_exempt.cgi: file cust_tax_exempt.cgi
+	  was added on branch FREESIDE_1_7_BRANCH on 2008-06-23 00:34:26
+	  +0000
+
+2008-06-21 13:07  ivan
+
+	* FS/bin/freeside-dbdef-create, bin/dbdef-create: backport
+	  freeside-dbdef-create from HEAD
+
+2008-06-19 22:47  jeff
+
+	* FS/FS/cust_bill.pm: extra values for invoices
+
+2008-06-19 20:36  ivan
+
+	* FS/FS/: cdr.pm, part_pkg/voip_cdr.pm: VoxLineSystems are lying
+	  scum who charged back their customization work and then used the
+	  software anyway
+
+2008-06-19 20:13  ivan
+
+	* Makefile: about time everything defaulted to apache2
+
+2008-06-19 20:00  ivan
+
+	* Makefile: welcome to the future already.  default to apache 2
+
+2008-06-18 14:18  ivan
+
+	* FS/FS/Misc.pm: fix regression caused by use of IPC::Run to run
+	  pslatex: send STDOUT and STDERR from pslatex to /dev/null, we
+	  don't want them
+
+2008-06-17 22:27  ivan
+
+	* httemplate/elements/select-cust_main-status.html: and lastly, add
+	  select-cust_main-status.html to _1_7_BRANCH
+
+2008-06-17 22:23  ivan
+
+	* FS/FS/cust_main.pm: backport cust_main::statuses from HEAD for
+	  /elements/tr-select-cust_main-statuses.html
+
+2008-06-17 22:18  ivan
+
+	* httemplate/elements/tr-select-cust_main-status.html: somehow
+	  missed tr-select-cust_main-status.html on _1_7_BRANCH
+
+2008-06-17 17:49  ivan
+
+	* FS/FS/part_virtual_field.pm: this module, also, has no need to
+	  import qsearch/qsearchs, and is causing dependency loop problems
+	  (Record->part_virtual_field->Record)
+
+2008-06-17 17:42  ivan
+
+	* FS/FS/Msgcat.pm: REALLY, don't use FS::Conf from Msgcat until
+	  runtime... should hopefully FINALLY eliminate the
+	  Record->Msgcat->Conf->Record loop
+
+2008-06-17 17:36  ivan
+
+	* FS/FS/msgcat.pm: msgcat.pm doesn't actually need
+	  qsearch/qsearchs... hopefully this is the last of the weird
+	  dependency loops (this one is Record->Msgcat->msgcat->Record)
+
+2008-06-17 12:29  jeff
+
+	* conf/invoice_latex: fixup damage from quantity addition
+
+2008-06-16 21:03  ivan
+
+	* httemplate/docs/: credits.html, license.html: credits for
+	  FCKeditor on _1_7_BRANCH
+
+2008-06-16 20:57  ivan
+
+	* httemplate/elements/fckeditor/: fckconfig.js, fckeditor.js,
+	  fckeditor.pl, fckpackager.xml, fckstyles.xml, fcktemplates.xml,
+	  editor/fckdebug.html, editor/fckdialog.html,
+	  editor/fckeditor.html, editor/fckeditor.original.html,
+	  editor/css/fck_editorarea.css, editor/css/fck_internal.css,
+	  editor/css/fck_showtableborders_gecko.css,
+	  editor/css/behaviors/disablehandles.htc,
+	  editor/css/behaviors/showtableborders.htc,
+	  editor/css/images/fck_anchor.gif,
+	  editor/css/images/fck_flashlogo.gif,
+	  editor/css/images/fck_hiddenfield.gif,
+	  editor/css/images/fck_pagebreak.gif,
+	  editor/dialog/fck_about.html, editor/dialog/fck_anchor.html,
+	  editor/dialog/fck_button.html, editor/dialog/fck_checkbox.html,
+	  editor/dialog/fck_colorselector.html,
+	  editor/dialog/fck_docprops.html, editor/dialog/fck_find.html,
+	  editor/dialog/fck_flash.html, editor/dialog/fck_form.html,
+	  editor/dialog/fck_hiddenfield.html, editor/dialog/fck_image.html,
+	  editor/dialog/fck_link.html, editor/dialog/fck_listprop.html,
+	  editor/dialog/fck_paste.html, editor/dialog/fck_radiobutton.html,
+	  editor/dialog/fck_replace.html, editor/dialog/fck_select.html,
+	  editor/dialog/fck_smiley.html, editor/dialog/fck_source.html,
+	  editor/dialog/fck_specialchar.html,
+	  editor/dialog/fck_spellerpages.html,
+	  editor/dialog/fck_table.html, editor/dialog/fck_tablecell.html,
+	  editor/dialog/fck_template.html, editor/dialog/fck_textarea.html,
+	  editor/dialog/fck_textfield.html,
+	  editor/dialog/common/fck_dialog_common.css,
+	  editor/dialog/common/fck_dialog_common.js,
+	  editor/dialog/common/fcknumericfield.htc,
+	  editor/dialog/common/moz-bindings.xml,
+	  editor/dialog/common/images/locked.gif,
+	  editor/dialog/common/images/reset.gif,
+	  editor/dialog/common/images/unlocked.gif,
+	  editor/dialog/fck_about/logo_fckeditor.gif,
+	  editor/dialog/fck_about/logo_fredck.gif,
+	  editor/dialog/fck_docprops/fck_document_preview.html,
+	  editor/dialog/fck_flash/fck_flash.js,
+	  editor/dialog/fck_flash/fck_flash_preview.html,
+	  editor/dialog/fck_image/fck_image.js,
+	  editor/dialog/fck_image/fck_image_preview.html,
+	  editor/dialog/fck_link/fck_link.js,
+	  editor/dialog/fck_select/fck_select.js,
+	  editor/dialog/fck_spellerpages/spellerpages/blank.html,
+	  editor/dialog/fck_spellerpages/spellerpages/controlWindow.js,
+	  editor/dialog/fck_spellerpages/spellerpages/controls.html,
+	  editor/dialog/fck_spellerpages/spellerpages/spellChecker.js,
+	  editor/dialog/fck_spellerpages/spellerpages/spellchecker.html,
+	  editor/dialog/fck_spellerpages/spellerpages/spellerStyle.css,
+	  editor/dialog/fck_spellerpages/spellerpages/wordWindow.js,
+	  editor/dialog/fck_spellerpages/spellerpages/server-scripts/spellchecker.pl,
+	  editor/dialog/fck_template/images/template1.gif,
+	  editor/dialog/fck_template/images/template2.gif,
+	  editor/dialog/fck_template/images/template3.gif,
+	  editor/filemanager/browser/default/browser.css,
+	  editor/filemanager/browser/default/browser.html,
+	  editor/filemanager/browser/default/frmactualfolder.html,
+	  editor/filemanager/browser/default/frmcreatefolder.html,
+	  editor/filemanager/browser/default/frmfolders.html,
+	  editor/filemanager/browser/default/frmresourceslist.html,
+	  editor/filemanager/browser/default/frmresourcetype.html,
+	  editor/filemanager/browser/default/frmupload.html,
+	  editor/filemanager/browser/default/connectors/perl/basexml.pl,
+	  editor/filemanager/browser/default/connectors/perl/commands.pl,
+	  editor/filemanager/browser/default/connectors/perl/connector.cgi,
+	  editor/filemanager/browser/default/connectors/perl/io.pl,
+	  editor/filemanager/browser/default/connectors/perl/upload_fck.pl,
+	  editor/filemanager/browser/default/connectors/perl/util.pl,
+	  editor/filemanager/browser/default/images/ButtonArrow.gif,
+	  editor/filemanager/browser/default/images/Folder.gif,
+	  editor/filemanager/browser/default/images/Folder32.gif,
+	  editor/filemanager/browser/default/images/FolderOpened.gif,
+	  editor/filemanager/browser/default/images/FolderOpened32.gif,
+	  editor/filemanager/browser/default/images/FolderUp.gif,
+	  editor/filemanager/browser/default/images/spacer.gif,
+	  editor/filemanager/browser/default/images/icons/ai.gif,
+	  editor/filemanager/browser/default/images/icons/avi.gif,
+	  editor/filemanager/browser/default/images/icons/bmp.gif,
+	  editor/filemanager/browser/default/images/icons/cs.gif,
+	  editor/filemanager/browser/default/images/icons/default.icon.gif,
+	  editor/filemanager/browser/default/images/icons/dll.gif,
+	  editor/filemanager/browser/default/images/icons/doc.gif,
+	  editor/filemanager/browser/default/images/icons/exe.gif,
+	  editor/filemanager/browser/default/images/icons/fla.gif,
+	  editor/filemanager/browser/default/images/icons/gif.gif,
+	  editor/filemanager/browser/default/images/icons/htm.gif,
+	  editor/filemanager/browser/default/images/icons/html.gif,
+	  editor/filemanager/browser/default/images/icons/jpg.gif,
+	  editor/filemanager/browser/default/images/icons/js.gif,
+	  editor/filemanager/browser/default/images/icons/mdb.gif,
+	  editor/filemanager/browser/default/images/icons/mp3.gif,
+	  editor/filemanager/browser/default/images/icons/pdf.gif,
+	  editor/filemanager/browser/default/images/icons/png.gif,
+	  editor/filemanager/browser/default/images/icons/ppt.gif,
+	  editor/filemanager/browser/default/images/icons/rdp.gif,
+	  editor/filemanager/browser/default/images/icons/swf.gif,
+	  editor/filemanager/browser/default/images/icons/swt.gif,
+	  editor/filemanager/browser/default/images/icons/txt.gif,
+	  editor/filemanager/browser/default/images/icons/vsd.gif,
+	  editor/filemanager/browser/default/images/icons/xls.gif,
+	  editor/filemanager/browser/default/images/icons/xml.gif,
+	  editor/filemanager/browser/default/images/icons/zip.gif,
+	  editor/filemanager/browser/default/images/icons/32/ai.gif,
+	  editor/filemanager/browser/default/images/icons/32/avi.gif,
+	  editor/filemanager/browser/default/images/icons/32/bmp.gif,
+	  editor/filemanager/browser/default/images/icons/32/cs.gif,
+	  editor/filemanager/browser/default/images/icons/32/default.icon.gif,
+	  editor/filemanager/browser/default/images/icons/32/dll.gif,
+	  editor/filemanager/browser/default/images/icons/32/doc.gif,
+	  editor/filemanager/browser/default/images/icons/32/exe.gif,
+	  editor/filemanager/browser/default/images/icons/32/fla.gif,
+	  editor/filemanager/browser/default/images/icons/32/gif.gif,
+	  editor/filemanager/browser/default/images/icons/32/htm.gif,
+	  editor/filemanager/browser/default/images/icons/32/html.gif,
+	  editor/filemanager/browser/default/images/icons/32/jpg.gif,
+	  editor/filemanager/browser/default/images/icons/32/js.gif,
+	  editor/filemanager/browser/default/images/icons/32/mdb.gif,
+	  editor/filemanager/browser/default/images/icons/32/mp3.gif,
+	  editor/filemanager/browser/default/images/icons/32/pdf.gif,
+	  editor/filemanager/browser/default/images/icons/32/png.gif,
+	  editor/filemanager/browser/default/images/icons/32/ppt.gif,
+	  editor/filemanager/browser/default/images/icons/32/rdp.gif,
+	  editor/filemanager/browser/default/images/icons/32/swf.gif,
+	  editor/filemanager/browser/default/images/icons/32/swt.gif,
+	  editor/filemanager/browser/default/images/icons/32/txt.gif,
+	  editor/filemanager/browser/default/images/icons/32/vsd.gif,
+	  editor/filemanager/browser/default/images/icons/32/xls.gif,
+	  editor/filemanager/browser/default/images/icons/32/xml.gif,
+	  editor/filemanager/browser/default/images/icons/32/zip.gif,
+	  editor/filemanager/browser/default/js/common.js,
+	  editor/filemanager/browser/default/js/fckxml.js,
+	  editor/filemanager/upload/test.html, editor/images/anchor.gif,
+	  editor/images/arrow_ltr.gif, editor/images/arrow_rtl.gif,
+	  editor/images/spacer.gif,
+	  editor/images/smiley/msn/angel_smile.gif,
+	  editor/images/smiley/msn/angry_smile.gif,
+	  editor/images/smiley/msn/broken_heart.gif,
+	  editor/images/smiley/msn/cake.gif,
+	  editor/images/smiley/msn/confused_smile.gif,
+	  editor/images/smiley/msn/cry_smile.gif,
+	  editor/images/smiley/msn/devil_smile.gif,
+	  editor/images/smiley/msn/embaressed_smile.gif,
+	  editor/images/smiley/msn/envelope.gif,
+	  editor/images/smiley/msn/heart.gif,
+	  editor/images/smiley/msn/kiss.gif,
+	  editor/images/smiley/msn/lightbulb.gif,
+	  editor/images/smiley/msn/omg_smile.gif,
+	  editor/images/smiley/msn/regular_smile.gif,
+	  editor/images/smiley/msn/sad_smile.gif,
+	  editor/images/smiley/msn/shades_smile.gif,
+	  editor/images/smiley/msn/teeth_smile.gif,
+	  editor/images/smiley/msn/thumbs_down.gif,
+	  editor/images/smiley/msn/thumbs_up.gif,
+	  editor/images/smiley/msn/tounge_smile.gif,
+	  editor/images/smiley/msn/whatchutalkingabout_smile.gif,
+	  editor/images/smiley/msn/wink_smile.gif,
+	  editor/js/fckeditorcode_gecko.js, editor/js/fckeditorcode_ie.js,
+	  editor/lang/_getfontformat.html,
+	  editor/lang/_translationstatus.txt, editor/lang/af.js,
+	  editor/lang/ar.js, editor/lang/bg.js, editor/lang/bn.js,
+	  editor/lang/bs.js, editor/lang/ca.js, editor/lang/cs.js,
+	  editor/lang/da.js, editor/lang/de.js, editor/lang/el.js,
+	  editor/lang/en-au.js, editor/lang/en-ca.js, editor/lang/en-uk.js,
+	  editor/lang/en.js, editor/lang/eo.js, editor/lang/es.js,
+	  editor/lang/et.js, editor/lang/eu.js, editor/lang/fa.js,
+	  editor/lang/fi.js, editor/lang/fo.js, editor/lang/fr.js,
+	  editor/lang/gl.js, editor/lang/he.js, editor/lang/hi.js,
+	  editor/lang/hr.js, editor/lang/hu.js, editor/lang/it.js,
+	  editor/lang/ja.js, editor/lang/km.js, editor/lang/ko.js,
+	  editor/lang/lt.js, editor/lang/lv.js, editor/lang/mn.js,
+	  editor/lang/ms.js, editor/lang/nb.js, editor/lang/nl.js,
+	  editor/lang/no.js, editor/lang/pl.js, editor/lang/pt-br.js,
+	  editor/lang/pt.js, editor/lang/ro.js, editor/lang/ru.js,
+	  editor/lang/sk.js, editor/lang/sl.js, editor/lang/sr-latn.js,
+	  editor/lang/sr.js, editor/lang/sv.js, editor/lang/th.js,
+	  editor/lang/tr.js, editor/lang/uk.js, editor/lang/vi.js,
+	  editor/lang/zh-cn.js, editor/lang/zh.js,
+	  editor/plugins/autogrow/fckplugin.js,
+	  editor/plugins/placeholder/fck_placeholder.html,
+	  editor/plugins/placeholder/fckplugin.js,
+	  editor/plugins/placeholder/placeholder.gif,
+	  editor/plugins/placeholder/lang/de.js,
+	  editor/plugins/placeholder/lang/en.js,
+	  editor/plugins/placeholder/lang/fr.js,
+	  editor/plugins/placeholder/lang/it.js,
+	  editor/plugins/placeholder/lang/pl.js,
+	  editor/plugins/simplecommands/fckplugin.js,
+	  editor/plugins/tablecommands/fckplugin.js,
+	  editor/skins/_fckviewstrips.html,
+	  editor/skins/default/fck_dialog.css,
+	  editor/skins/default/fck_editor.css,
+	  editor/skins/default/fck_strip.gif,
+	  editor/skins/default/images/toolbar.arrowright.gif,
+	  editor/skins/default/images/toolbar.buttonarrow.gif,
+	  editor/skins/default/images/toolbar.collapse.gif,
+	  editor/skins/default/images/toolbar.end.gif,
+	  editor/skins/default/images/toolbar.expand.gif,
+	  editor/skins/default/images/toolbar.separator.gif,
+	  editor/skins/default/images/toolbar.start.gif,
+	  editor/skins/office2003/fck_dialog.css,
+	  editor/skins/office2003/fck_editor.css,
+	  editor/skins/office2003/fck_strip.gif,
+	  editor/skins/office2003/images/toolbar.arrowright.gif,
+	  editor/skins/office2003/images/toolbar.bg.gif,
+	  editor/skins/office2003/images/toolbar.buttonarrow.gif,
+	  editor/skins/office2003/images/toolbar.collapse.gif,
+	  editor/skins/office2003/images/toolbar.end.gif,
+	  editor/skins/office2003/images/toolbar.expand.gif,
+	  editor/skins/office2003/images/toolbar.separator.gif,
+	  editor/skins/office2003/images/toolbar.start.gif,
+	  editor/skins/silver/fck_dialog.css,
+	  editor/skins/silver/fck_editor.css,
+	  editor/skins/silver/fck_strip.gif,
+	  editor/skins/silver/images/toolbar.arrowright.gif,
+	  editor/skins/silver/images/toolbar.buttonarrow.gif,
+	  editor/skins/silver/images/toolbar.buttonbg.gif,
+	  editor/skins/silver/images/toolbar.collapse.gif,
+	  editor/skins/silver/images/toolbar.end.gif,
+	  editor/skins/silver/images/toolbar.expand.gif,
+	  editor/skins/silver/images/toolbar.separator.gif,
+	  editor/skins/silver/images/toolbar.start.gif: adding fckeditor on
+	  _17_BRANCH, for customer notices
+
+2008-06-16 20:35  ivan
+
+	* httemplate/misc/: email-customers.html,
+	  process/email-customers.html: file email-customers.html was added
+	  on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:36:10 +0000
+
+2008-06-16 20:35  ivan
+
+	* httemplate/elements/htmlarea.html: file htmlarea.html was added
+	  on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:36:10 +0000
+
+2008-06-16 20:35  ivan
+
+	* httemplate/elements/htmlarea.html,
+	  httemplate/misc/email-customers.html,
+	  httemplate/misc/process/email-customers.html,
+	  FS/FS/AccessRight.pm, FS/FS/ConfDefaults.pm, FS/FS/Misc.pm,
+	  FS/FS/cust_main.pm, htetc/handler.pl,
+	  httemplate/search/cust_main.html: finish adding a feature to
+	  easily list all email addresses for an agent & send them email
+
+2008-06-16 20:13  jeff
+
+	* conf/invoice_latex: not forgetting to add fax and old customer id
+
+2008-06-16 18:43  ivan
+
+	* httemplate/edit/process/cust_main.cgi: have agent_custid editing
+	  now
+
+2008-06-16 00:04  ivan
+
+	* httemplate/view/cust_main/packages.html: missing stuff from HEAD
+
+2008-06-15 23:53  ivan
+
+	* FS/FS/Conf.pm, httemplate/edit/cust_main.cgi: add (with config)
+	  ability to edit agent_custid
+
+2008-06-12 16:15  ivan
+
+	* httemplate/edit/REAL_cust_pkg.cgi: fix visual regression not
+	  displaying package and comment on date editing
+
+2008-06-10 16:24  ivan
+
+	* FS/FS/: Upgrade.pm: start of better error reporting for RADIUS
+	  upgrade errors
+
+2008-06-10 10:39  ivan
+
+	* FS/FS/Misc.pm: turn off debugging that got left on by accident
+
+2008-06-09 19:12  ivan
+
+	* httemplate/edit/process/: cust_credit_bill.cgi,
+	  cust_credit_refund.cgi, cust_pay_refund.cgi: fix up application
+	  of things to refunds, RT#3606/RT#3545
+
+2008-06-09 11:32  ivan
+
+	* FS/FS/cdr.pm: remove name from voxlinesystems2, really
+
+2008-06-05 17:10  ivan
+
+	* FS/FS/Schema.pm: 1.7 needed money_typen
+
+2008-06-05 15:44  ivan
+
+	* FS/FS/cdr.pm: add am/pm to voxlinesystems2 display format, remove
+	  name, revsere src/dst
+
+2008-06-05 13:09  ivan
+
+	* FS/FS/: cust_main.pm, part_pkg/flat.pm: fix one-time charge
+	  quantities &
+
+2008-06-05 12:44  ivan
+
+	* FS/FS/: part_pkg/voip_cdr.pm, cust_svc.pm: disable_src fixes
+
+2008-06-05 12:29  ivan
+
+	* FS/FS/Schema.pm: unit pricing didn't exist before, so it can be
+	  NULL
+
+2008-06-05 12:25  ivan
+
+	* FS/FS/part_pkg/flat.pm: implement quantity charging for setup
+	  fees
+
+2008-06-05 12:24  ivan
+
+	* FS/FS/cdr.pm, FS/FS/cust_main.pm,
+	  httemplate/edit/quick-charge.html,
+	  httemplate/edit/process/quick-charge.cgi,
+	  httemplate/search/cdr.html, httemplate/view/svc_phone.cgi:
+	  voxlinesystems CDRs and quantity bs
+
+2008-06-05 12:06  jeff
+
+	* conf/invoice_html: dash removal
+
+2008-06-05 03:36  ivan
+
+	* FS/FS/cust_main.pm, httemplate/search/cust_main.html,
+	  httemplate/search/report_cust_main.html: add customer status to
+	  adv. customer report, template customer search for future use in
+	  emailing notices, RT#2731
+
+2008-06-05 03:34  ivan
+
+	* FS/FS/: cust_pkg.pm: docs for search_sql
+
+2008-06-05 01:54  ivan
+
+	* httemplate/search/report_cust_bill.html: minor invoice report UI
+
+2008-06-04 22:06  ivan
+
+	* httemplate/edit/: elements/ApplicationCommon.html,
+	  process/elements/ApplicationCommon.html: file
+	  ApplicationCommon.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-05 05:07:55 +0000
+
+2008-06-04 22:06  ivan
+
+	* httemplate/edit/: cust_credit_refund.cgi,
+	  process/cust_credit_refund.cgi: file cust_credit_refund.cgi was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-05 05:07:55 +0000
+
+2008-06-04 22:06  ivan
+
+	* httemplate/edit/: cust_pay_refund.cgi,
+	  process/cust_pay_refund.cgi: file cust_pay_refund.cgi was added
+	  on branch FREESIDE_1_7_BRANCH on 2008-06-05 05:07:55 +0000
+
+2008-06-04 22:06  ivan
+
+	* httemplate/edit/cust_pay_refund.cgi,
+	  httemplate/edit/cust_credit_refund.cgi,
+	  httemplate/edit/elements/ApplicationCommon.html,
+	  httemplate/edit/process/cust_credit_refund.cgi,
+	  httemplate/edit/process/cust_pay_refund.cgi,
+	  httemplate/edit/process/elements/ApplicationCommon.html,
+	  FS/FS/cust_pay.pm, httemplate/edit/cust_bill_pay.cgi,
+	  httemplate/edit/cust_credit_bill.cgi,
+	  httemplate/edit/process/cust_bill_pay.cgi,
+	  httemplate/edit/process/cust_credit_bill.cgi,
+	  httemplate/view/cust_main/payment_history/credit.html,
+	  httemplate/view/cust_main/payment_history/payment.html: payment
+	  and credit applications have separate "apply to refund" choices
+	  now, and no auto-refund choice in the invoice dropdown.  RT#3545
+
+2008-06-04 11:50  ivan
+
+	* FS/FS/cust_bill.pm, httemplate/misc/fax-invoice.cgi: this should
+	  fix the random "HylaFax support has not been configured" error,
+	  caused by cust_bill->fax getting called instead of cust_main->fax
+	  field
+
+2008-06-04 11:40  jeff
+
+	* conf/: invoice_html, invoice_latex: more voxline invoice
+	  formatting
+
+2008-06-04 11:05  jeff
+
+	* FS/FS/cust_bill.pm: voxline invoice formatting
+
+2008-06-04 10:57  jeff
+
+	* FS/FS/cdr.pm, FS/FS/cust_bill_pkg.pm, FS/FS/part_pkg/voip_cdr.pm,
+	  conf/invoice_html, conf/invoice_latex, FS/FS/Conf.pm: voxline
+	  invoice formatting
+
+2008-06-04 06:26  jeff
+
+	* FS/FS/Conf.pm, FS/FS/cust_bill.pm, conf/invoice_latex: service
+	  address on invoice
+
+2008-06-03 14:06  ivan
+
+	* FS/FS/cust_bill.pm, FS/FS/Schema.pm, FS/FS/cust_bill_pkg.pm,
+	  FS/FS/cust_pkg.pm, httemplate/search/cust_pkg.cgi,
+	  httemplate/view/cust_main/packages.html: very basic start at
+	  adding quantities
+
+2008-06-02 11:59  ivan
+
+	* FS/FS/payinfo_transaction_Mixin.pm: fix payinfo_transaction
+
+2008-06-02 11:31  ivan
+
+	* FS/FS/UI/Web/small_custview.pm: fix ntable calls
+
+2008-06-02 10:22  ivan
+
+	* FS/FS/UI/Web/small_custview.pm: oops, missed 1.7
+
+2008-06-02 10:14  ivan
+
+	* FS/FS/UI/Web/small_custview.pm: doh!
+
+2008-06-02 10:06  ivan
+
+	* FS/FS/UI/Web/small_custview.pm: file small_custview.pm was added
+	  on branch FREESIDE_1_7_BRANCH on 2008-06-02 17:06:10 +0000
+
+2008-06-02 10:06  ivan
+
+	* FS/FS/UI/Web/small_custview.pm, FS/FS/CGI.pm,
+	  FS/FS/ClientAPI/MyAccount.pm, htetc/handler.pl,
+	  rt/lib/RT/URI/freeside/Internal.pm,
+	  rt/lib/RT/URI/freeside/XMLRPC.pm: badly placed small_custview all
+	  of a sudden causing fatal errors?!  wtf
+
+2008-06-02 04:16  jeff
+
+	* conf/invoice_latexcoupon: file invoice_latexcoupon was added on
+	  branch FREESIDE_1_7_BRANCH on 2008-06-02 11:17:07 +0000
+
+2008-06-02 04:16  jeff
+
+	* conf/invoice_latexcoupon, conf/invoice_latex, FS/FS/Conf.pm,
+	  FS/FS/cust_bill.pm: typeset tear-off remittance coupon
+
+2008-06-01 19:47  ivan
+
+	* FS/FS/Misc.pm: and batchmode was probably right
+
+2008-06-01 19:45  ivan
+
+	* FS/FS/Misc.pm: yow, don't want everything to waitt until the
+	  timeout
+
+2008-06-01 19:16  ivan
+
+	* FS/FS/: Misc.pm, cust_bill.pm: use IPC::Run to run pslatex & add
+	  a timeout, this should prevent hanging on template errors
+
+2008-06-01 15:48  ivan
+
+	* httemplate/view/cust_main/payment_history/credit.html: file
+	  credit.html was added on branch FREESIDE_1_7_BRANCH on 2008-06-01
+	  22:48:56 +0000
+
+2008-06-01 15:48  ivan
+
+	* httemplate/view/cust_refund.html: file cust_refund.html was added
+	  on branch FREESIDE_1_7_BRANCH on 2008-06-01 22:48:59 +0000
+
+2008-06-01 15:48  ivan
+
+	* httemplate/view/cust_main/payment_history/invoice.html: file
+	  invoice.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-01 22:48:57 +0000
+
+2008-06-01 15:48  ivan
+
+	* httemplate/view/cust_main/payment_history/payment.html: file
+	  payment.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-01 22:48:57 +0000
+
+2008-06-01 15:48  ivan
+
+	* httemplate/view/cust_main/payment_history/refund.html: file
+	  refund.html was added on branch FREESIDE_1_7_BRANCH on 2008-06-01
+	  22:48:58 +0000
+
+2008-06-01 15:48  ivan
+
+	* httemplate/view/cust_main/payment_history/voided_payment.html:
+	  file voided_payment.html was added on branch FREESIDE_1_7_BRANCH
+	  on 2008-06-01 22:48:58 +0000
+
+2008-06-01 15:48  ivan
+
+	* FS/FS/payinfo_transaction_Mixin.pm: file
+	  payinfo_transaction_Mixin.pm was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-06-01 22:48:24 +0000
+
+2008-06-01 15:48  ivan
+
+	* FS/FS/payinfo_transaction_Mixin.pm,
+	  httemplate/view/cust_refund.html,
+	  httemplate/view/cust_main/payment_history/credit.html,
+	  httemplate/view/cust_main/payment_history/invoice.html,
+	  httemplate/view/cust_main/payment_history/payment.html,
+	  httemplate/view/cust_main/payment_history/refund.html,
+	  httemplate/view/cust_main/payment_history/voided_payment.html,
+	  FS/FS/cust_pay.pm, FS/FS/cust_refund.pm, FS/FS/payinfo_Mixin.pm,
+	  httemplate/view/cust_main/payment_history.html,
+	  httemplate/search/elements/cust_pay_or_refund.html: refactor
+	  payment history slightly, add refund receipts, have "unapplied"
+	  refunds show like other unapplied/open things, RT#3545
+
+2008-06-01 14:25  ivan
+
+	* FS/FS/cust_refund.pm: sync with HEAD (add ability to modify
+	  refund records)
+
+2008-06-01 13:13  ivan
+
+	* FS/FS/cust_bill_ApplicationCommon.pm, FS/FS/cust_bill.pm,
+	  httemplate/view/cust_main/payment_history.html: backport
+	  cust_bill_ApplicationCommon::applied_to_invoice and
+	  cust_bill::invnum_date_pretty to 1.7
+
+2008-06-01 00:08  ivan
+
+	* FS/FS/cust_pay.pm: show "Check #" on payment receipts instead of
+	  "Billing #"
+
+2008-05-31 18:23  ivan
+
+	* htetc/handler.pl: depend on CGI.pm 3.29 to fix RT attachment
+	  problems
+
+2008-05-31 17:11  ivan
+
+	* FS/FS/cust_bill.pm: fix problems when service definition names
+	  contain chars that need to be latex escaped
+
+2008-05-29 21:04  ivan
+
+	* httemplate/edit/part_bill_event.cgi: 1.7 sucks.  but people are
+	  still going to be editing old-style invoice events for a little
+	  while more yet, so space them out better (so options don't run
+	  together)
+
+2008-05-29 20:55  ivan
+
+	* FS/FS/cust_bill.pm, httemplate/edit/part_bill_event.cgi: 1.7
+	  sucks.  add a "balance over" option to the 1.7 style
+	  agent-specific invoice send event
+
+2008-05-29 18:38  ivan
+
+	* FS/FS/Misc/prune.pm: fix a missing semicolon bug only triggered
+	  when running prune_applications not in debug mode...
+
+2008-05-29 18:34  ivan
+
+	* FS/FS/Upgrade.pm: don't print out warnings about SQL RADIUS
+	  FreesideStatus every time either.  really?
+
+2008-05-29 18:33  ivan
+
+	* FS/bin/freeside-upgrade: don't print out the cust_credit_refund
+	  pruning every time
+
+2008-05-29 18:28  ivan
+
+	* FS/bin/freeside-upgrade: don't print out the cust_credit_refund
+	  pruning every time
+
+2008-05-29 18:02  ivan
+
+	* FS/FS/cust_pay_pending.pm: clean up any stray/old
+	  cust_pay_pending records causing problems
+
+2008-05-29 17:53  ivan
+
+	* FS/FS/: cust_pay_pending.pm, Upgrade.pm: clean up any stray/old
+	  cust_pay_pending records causing problems
+
+2008-05-28 17:11  ivan
+
+	* httemplate/graph/money_time.cgi: line things up better on the
+	  12mo report (prevent labels from taking up most of the graph
+
+2008-05-28 03:45  ivan
+
+	* htetc/handler.pl: mailgate realiability fix: don't bomb out when
+	  FS dbdef hasn't been initialized yet (& need to import
+	  adminsuidsetup)
+
+2008-05-28 03:41  ivan
+
+	* htetc/: handler.pl: mailgate realiability fix: don't bomb out
+	  when FS dbdef hasn't been initialized yet
+
+2008-05-28 03:14  ivan
+
+	* htetc/handler.pl: mailgate realiability fix: don't bomb out when
+	  FS dbdef hasn't been initialized yet
+
+2008-05-19 20:52  ivan
+
+	* FS/FS/Upgrade.pm: automatically create an index on the new
+	  radacct.FreesideStatus column
+
+2008-05-19 15:31  jeff
+
+	* conf/invoice_latex, FS/FS/cust_bill_pkg.pm: fix broken pagenation
+
+2008-05-19 11:50  ivan
+
+	* FS/FS/Conf.pm: a better link to the T:T docs
+
+2008-05-18 21:29  ivan
+
+	* FS/FS/Schema.pm: add a key on ( history_action, $primary_key ) to
+	  the h_ tables.  this should speed up the cust_pay upgrade??
+
+2008-05-18 21:07  jeff
+
+	* FS/FS/Schema.pm, FS/FS/cdr.pm, FS/FS/cust_bill.pm,
+	  FS/FS/cust_bill_pkg.pm, FS/FS/cust_bill_pkg_detail.pm,
+	  FS/FS/part_pkg/voip_cdr.pm, conf/invoice_html,
+	  conf/invoice_latex, httemplate/misc/cdr-import.html: backport
+	  voip_cdr's upstream_simple, and the columnization features
+
+2008-05-18 21:07  ivan
+
+	* httemplate/search/cust_bill_pay.html: file cust_bill_pay.html was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-05-19 04:07:06 +0000
+
+2008-05-18 21:07  ivan
+
+	* httemplate/search/cust_credit_refund.html: file
+	  cust_credit_refund.html was added on branch FREESIDE_1_7_BRANCH
+	  on 2008-05-19 04:07:06 +0000
+
+2008-05-18 21:07  ivan
+
+	* httemplate/search/elements/cust_pay_or_refund.html: file
+	  cust_pay_or_refund.html was added on branch FREESIDE_1_7_BRANCH
+	  on 2008-05-19 04:07:07 +0000
+
+2008-05-18 21:07  ivan
+
+	* httemplate/search/cust_refund.html: file cust_refund.html was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-05-19 04:07:06 +0000
+
+2008-05-18 21:07  ivan
+
+	* httemplate/search/cust_bill_pay.html,
+	  httemplate/search/cust_credit_refund.html,
+	  httemplate/search/cust_refund.html,
+	  httemplate/search/elements/cust_pay_or_refund.html,
+	  FS/FS/cust_bill_pay.pm, FS/FS/cust_credit_refund.pm,
+	  FS/FS/cust_refund.pm, FS/FS/payby.pm, FS/FS/payinfo_Mixin.pm,
+	  FS/FS/Report/Table/Monthly.pm, httemplate/graph/money_time.cgi,
+	  httemplate/search/cust_credit.html,
+	  httemplate/search/cust_pay.cgi: make net receipts clickable...
+	  and netreceipts != cashflow, really, so separate those concepts,
+	  and cashflow gets gross & net variants.  also add gross/net
+	  refunds.  #3012
+
+2008-05-18 15:57  ivan
+
+	* FS/FS/Upgrade.pm: fix auto sqlradius upgrade: module
+	  include/import
+
+2008-05-18 15:54  ivan
+
+	* FS/FS/part_export/sqlradius.pm: oops, fix minor refactoring of
+	  auto sqlradius upgrade
+
+2008-05-18 15:53  ivan
+
+	* FS/bin/freeside-upgrade: fix the auto sqlradiusupgrade
+
+2008-05-18 15:42  ivan
+
+	* FS/FS/Upgrade.pm, FS/FS/part_export/sqlradius.pm,
+	  FS/bin/freeside-sqlradius-radacctd, FS/bin/freeside-upgrade,
+	  init.d/freeside-init: on upgrade, automatically seed from
+	  sqlradius databases, and start freeside-sqlradius-radacctd by
+	  default
+
+2008-05-17 23:50  ivan
+
+	* FS/FS/Conf.pm, httemplate/edit/process/access_group.html: add a
+	  config value for disabling the ACLs... this should be good for a
+	  demo in 1.7, 1.9 will need some way to disable ACL changes from
+	  OUTSIDE the db
+
+2008-05-15 15:48  ivan
+
+	* FS/FS/CGI.pm: fix minor problem with ship_zip not showing up in
+	  small_custview
+
+2008-05-14 14:21  jeff
+
+	* FS/FS/: Conf.pm, cust_bill.pm: config option to omit statement
+	  type items from invoices
+
+2008-05-13 16:36  ivan
+
+	* FS/bin/freeside-adduser: tyop
+
+2008-05-13 12:13  ivan
+
+	* Makefile: ensure new self-service libs are installed
+
+2008-05-09 14:51  jeff
+
+	* httemplate/: browse/addr_block.cgi, browse/router.cgi,
+	  edit/elements/edit.html, edit/process/addr_block/allocate.cgi,
+	  elements/tr-select-table.html: re-drag address and router even
+	  farther into the century
+
+2008-05-07 14:36  ivan
+
+	* httemplate/: misc/cancel_cust.html, view/cust_main.cgi: fix
+	  customer cancellation, sort of a side effect of #2872, fixes
+	  #3480, #3481
+
+2008-05-05 18:14  ivan
+
+	* httemplate/misc/xmlhttp-cust_main-search.cgi: agent-virtualize
+	  customer # portion of quick payment entry
+
+2008-05-04 19:11  ivan
+
+	* FS/FS/payinfo_Mixin.pm: hopefully really a better fix for using
+	  new payment duplicate stuff with cc encryption :/
+
+2008-05-04 18:52  ivan
+
+	* FS/FS/payinfo_Mixin.pm: better fix for using new payment
+	  duplicate stuff with cc encryption :)
+
+2008-05-04 18:18  ivan
+
+	* FS/FS/payinfo_Mixin.pm: fix for using new payment duplicate stuff
+	  with cc encryption
+
+2008-05-02 13:30  ivan
+
+	* FS/bin/freeside-upgrade: add -s switch to freeside-upgrade for
+	  schema-only changes (for slony slaves)
+
+2008-05-01 19:00  ivan
+
+	* FS/FS/part_pkg.pm: fix backport of _upgrade_data from 1.9 for
+	  very old installs, to eliminate plan-less packages
+
+2008-05-01 18:58  ivan
+
+	* FS/FS/Upgrade.pm: upgrade part_pkg before cust_credit
+
+2008-05-01 18:53  ivan
+
+	* FS/FS/part_pkg.pm: backport _upgrade_data from 1.9 for very old
+	  installs, to eliminate plan-less packages
+
+2008-04-30 17:26  ivan
+
+	* ChangeLog, debian/changelog: Updated for 1.7.3
+
 2008-04-30 16:42  ivan
 
 	* Makefile: not here
@@ -88,9 +2283,33 @@
 	  (cancel/suspend) reason and possibly fix a lingering spurious
 	  usergroup bug
 
+2008-04-15 13:47  ivan
+
+	* httemplate/elements/header-minimal.html: file header-minimal.html
+	  was added on branch FREESIDE_1_7_BRANCH on 2008-08-15 08:45:09
+	  +0000
+
+2008-04-15 13:47  jeff
+
+	* httemplate/: elements/file-upload.html,
+	  elements/header-minimal.html, misc/file-upload.html: (finally)
+	  wrap up new tax rate engine (for now)
+
 2008-04-14 11:42  ivan
 
 	* Makefile, ChangeLog: rc3
+
+2008-04-12 20:03  jeff
+
+	* httemplate/elements/tr-select-table.html: file
+	  tr-select-table.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-05-09 21:51:59 +0000
+
+2008-04-12 20:03  ivan
+
+	* httemplate/elements/tr-select-table.html: more stuff to allow
+	  select-table to be used as as edit/elements/edit.html m2*
+	  element: add tr-select-table.html
 
 2008-04-10 15:00  ivan
 
@@ -2638,6 +4857,17 @@
 	  httemplate/graph/elements/monthly.html,
 	  httemplate/browse/agent.cgi: add package churn report/graph
 
+2007-08-10 16:50  ivan
+
+	* FS/bin/freeside-dbdef-create: file freeside-dbdef-create was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-21 20:07:05 +0000
+
+2007-08-10 16:50  ivan
+
+	* FS/bin/: freeside-dbdef-create: rename dbdef-create to
+	  freeside-dbdef-create and move it to FS/bin, so it gets
+	  %%%FREESIDE_CONF%%% substituted
+
 2007-08-10 15:48  ivan
 
 	* FS/FS/part_pkg.pm: add 3 day, 4 month and 4.5 month (137 day)
@@ -2747,6 +4977,1736 @@
 	* httemplate/misc/cancel_cust.html: file cancel_cust.html was added
 	  on branch FREESIDE_1_7_BRANCH on 2007-12-19 22:31:37 +0000
 
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/skins/silver/images/toolbar.arrowright.gif:
+	  file toolbar.arrowright.gif was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-06-17 03:58:49 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/skins/silver/images/toolbar.buttonarrow.gif:
+	  file toolbar.buttonarrow.gif was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-06-17 03:58:49 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/skins/silver/images/toolbar.buttonbg.gif:
+	  file toolbar.buttonbg.gif was added on branch FREESIDE_1_7_BRANCH
+	  on 2008-06-17 03:58:49 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/skins/silver/images/toolbar.collapse.gif:
+	  file toolbar.collapse.gif was added on branch FREESIDE_1_7_BRANCH
+	  on 2008-06-17 03:58:49 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/skins/silver/images/toolbar.end.gif:
+	  file toolbar.end.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:49 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/skins/silver/images/toolbar.expand.gif:
+	  file toolbar.expand.gif was added on branch FREESIDE_1_7_BRANCH
+	  on 2008-06-17 03:58:49 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/skins/silver/images/toolbar.separator.gif:
+	  file toolbar.separator.gif was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-06-17 03:58:49 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/skins/silver/images/toolbar.start.gif:
+	  file toolbar.start.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:49 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/skins/default/fck_dialog.css:
+	  file fck_dialog.css was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:47 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/skins/office2003/fck_dialog.css:
+	  file fck_dialog.css was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:48 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/skins/silver/fck_dialog.css:
+	  file fck_dialog.css was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:49 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/skins/default/fck_editor.css:
+	  file fck_editor.css was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:47 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/skins/office2003/fck_editor.css:
+	  file fck_editor.css was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:48 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/skins/silver/fck_editor.css:
+	  file fck_editor.css was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:49 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/skins/default/fck_strip.gif:
+	  file fck_strip.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:47 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/skins/office2003/fck_strip.gif:
+	  file fck_strip.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:48 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/skins/silver/fck_strip.gif:
+	  file fck_strip.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:49 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/skins/:
+	  default/images/toolbar.arrowright.gif,
+	  office2003/images/toolbar.arrowright.gif: file
+	  toolbar.arrowright.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:48 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/skins/office2003/images/toolbar.bg.gif:
+	  file toolbar.bg.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:48 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/skins/:
+	  default/images/toolbar.buttonarrow.gif,
+	  office2003/images/toolbar.buttonarrow.gif: file
+	  toolbar.buttonarrow.gif was added on branch FREESIDE_1_7_BRANCH
+	  on 2008-06-17 03:58:48 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/skins/:
+	  default/images/toolbar.collapse.gif,
+	  office2003/images/toolbar.collapse.gif: file toolbar.collapse.gif
+	  was added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:48
+	  +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/skins/:
+	  default/images/toolbar.end.gif,
+	  office2003/images/toolbar.end.gif: file toolbar.end.gif was added
+	  on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:48 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/skins/:
+	  default/images/toolbar.expand.gif,
+	  office2003/images/toolbar.expand.gif: file toolbar.expand.gif was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:48 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/skins/:
+	  default/images/toolbar.separator.gif,
+	  office2003/images/toolbar.separator.gif: file
+	  toolbar.separator.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:48 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/skins/:
+	  default/images/toolbar.start.gif,
+	  office2003/images/toolbar.start.gif: file toolbar.start.gif was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:48 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/skins/_fckviewstrips.html:
+	  file _fckviewstrips.html was added on branch FREESIDE_1_7_BRANCH
+	  on 2008-06-17 03:58:46 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/plugins/simplecommands/fckplugin.js:
+	  file fckplugin.js was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:42 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/plugins/tablecommands/fckplugin.js:
+	  file fckplugin.js was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:43 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/plugins/placeholder/lang/pl.js:
+	  file pl.js was added on branch FREESIDE_1_7_BRANCH on 2008-06-17
+	  03:58:41 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/plugins/placeholder/lang/it.js:
+	  file it.js was added on branch FREESIDE_1_7_BRANCH on 2008-06-17
+	  03:58:41 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/plugins/placeholder/lang/de.js:
+	  file de.js was added on branch FREESIDE_1_7_BRANCH on 2008-06-17
+	  03:58:41 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/plugins/placeholder/lang/en.js:
+	  file en.js was added on branch FREESIDE_1_7_BRANCH on 2008-06-17
+	  03:58:41 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/plugins/placeholder/lang/fr.js:
+	  file fr.js was added on branch FREESIDE_1_7_BRANCH on 2008-06-17
+	  03:58:41 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/plugins/placeholder/fck_placeholder.html:
+	  file fck_placeholder.html was added on branch FREESIDE_1_7_BRANCH
+	  on 2008-06-17 03:58:41 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/plugins/:
+	  autogrow/fckplugin.js, placeholder/fckplugin.js: file
+	  fckplugin.js was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:41 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/plugins/placeholder/placeholder.gif:
+	  file placeholder.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:41 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/tr.js: file tr.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:40 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/uk.js: file uk.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:40 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/vi.js: file vi.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:40 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/zh-cn.js: file zh-cn.js
+	  was added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:41
+	  +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/zh.js: file zh.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:41 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/sl.js: file sl.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:40 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/sr-latn.js: file
+	  sr-latn.js was added on branch FREESIDE_1_7_BRANCH on 2008-06-17
+	  03:58:40 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/sr.js: file sr.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:40 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/sv.js: file sv.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:40 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/th.js: file th.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:40 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/hu.js: file hu.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:35 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/it.js: file it.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:35 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/ja.js: file ja.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:35 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/km.js: file km.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:35 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/ko.js: file ko.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:37 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/lt.js: file lt.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:37 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/lv.js: file lv.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:37 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/mn.js: file mn.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:38 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/ms.js: file ms.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:38 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/nb.js: file nb.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:39 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/nl.js: file nl.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:39 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/no.js: file no.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:39 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/pl.js: file pl.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:39 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/pt-br.js: file pt-br.js
+	  was added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:39
+	  +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/pt.js: file pt.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:39 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/ro.js: file ro.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:40 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/ru.js: file ru.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:40 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/sk.js: file sk.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:40 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/gl.js: file gl.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:35 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/he.js: file he.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:35 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/hi.js: file hi.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:35 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/hr.js: file hr.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:35 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/fa.js: file fa.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:35 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/fi.js: file fi.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:35 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/fo.js: file fo.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:35 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/fr.js: file fr.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:35 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/es.js: file es.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:34 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/et.js: file et.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:35 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/eu.js: file eu.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:35 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/el.js: file el.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:34 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/en-au.js: file en-au.js
+	  was added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:34
+	  +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/en-ca.js: file en-ca.js
+	  was added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:34
+	  +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/en-uk.js: file en-uk.js
+	  was added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:34
+	  +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/en.js: file en.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:34 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/eo.js: file eo.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:34 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/cs.js: file cs.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:33 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/da.js: file da.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:33 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/de.js: file de.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:34 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/bs.js: file bs.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:32 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/ca.js: file ca.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:32 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/bn.js: file bn.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:32 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/_translationstatus.txt:
+	  file _translationstatus.txt was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-06-17 03:58:29 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/af.js: file af.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:30 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/ar.js: file ar.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:31 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/bg.js: file bg.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:58:31 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/lang/_getfontformat.html:
+	  file _getfontformat.html was added on branch FREESIDE_1_7_BRANCH
+	  on 2008-06-17 03:58:29 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/js/fckeditorcode_ie.js: file
+	  fckeditorcode_ie.js was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:28 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/js/fckeditorcode_gecko.js:
+	  file fckeditorcode_gecko.js was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-06-17 03:58:27 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/tounge_smile.gif:
+	  file tounge_smile.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:26 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/whatchutalkingabout_smile.gif:
+	  file whatchutalkingabout_smile.gif was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-06-17 03:58:26 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/wink_smile.gif:
+	  file wink_smile.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:26 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/thumbs_down.gif:
+	  file thumbs_down.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:26 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/thumbs_up.gif:
+	  file thumbs_up.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:26 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/regular_smile.gif:
+	  file regular_smile.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:26 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/sad_smile.gif:
+	  file sad_smile.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:26 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/shades_smile.gif:
+	  file shades_smile.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:26 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/teeth_smile.gif:
+	  file teeth_smile.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:26 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/omg_smile.gif:
+	  file omg_smile.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:26 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/lightbulb.gif:
+	  file lightbulb.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:26 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/images/smiley/msn/kiss.gif:
+	  file kiss.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:26 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/envelope.gif:
+	  file envelope.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:25 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/images/smiley/msn/heart.gif:
+	  file heart.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:25 +0000
+
+2007-08-01 15:26  ivan
+
+	* httemplate/elements/fckeditor/editor/images/smiley/msn/cake.gif:
+	  file cake.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:25 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/confused_smile.gif:
+	  file confused_smile.gif was added on branch FREESIDE_1_7_BRANCH
+	  on 2008-06-17 03:58:25 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/cry_smile.gif:
+	  file cry_smile.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:25 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/devil_smile.gif:
+	  file devil_smile.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:25 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/embaressed_smile.gif:
+	  file embaressed_smile.gif was added on branch FREESIDE_1_7_BRANCH
+	  on 2008-06-17 03:58:25 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/angry_smile.gif:
+	  file angry_smile.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:25 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/broken_heart.gif:
+	  file broken_heart.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:25 +0000
+
+2007-08-01 15:26  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/angel_smile.gif:
+	  file angel_smile.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:25 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/images/arrow_rtl.gif: file
+	  arrow_rtl.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:24 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/images/spacer.gif: file
+	  spacer.gif was added on branch FREESIDE_1_7_BRANCH on 2008-06-17
+	  03:58:24 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/images/arrow_ltr.gif: file
+	  arrow_ltr.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:24 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/images/anchor.gif: file
+	  anchor.gif was added on branch FREESIDE_1_7_BRANCH on 2008-06-17
+	  03:58:24 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/js/common.js:
+	  file common.js was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:23 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/js/fckxml.js:
+	  file fckxml.js was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:23 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/upload/test.html:
+	  file test.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:24 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/js.gif:
+	  file js.gif was added on branch FREESIDE_1_7_BRANCH on 2008-06-17
+	  03:58:21 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/mdb.gif:
+	  file mdb.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:21 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/mp3.gif:
+	  file mp3.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:21 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/pdf.gif:
+	  file pdf.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:21 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/png.gif:
+	  file png.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:21 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/ppt.gif:
+	  file ppt.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:21 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/rdp.gif:
+	  file rdp.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:21 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/swf.gif:
+	  file swf.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:21 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/swt.gif:
+	  file swt.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:21 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/txt.gif:
+	  file txt.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:21 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/vsd.gif:
+	  file vsd.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:21 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/xls.gif:
+	  file xls.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:21 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/xml.gif:
+	  file xml.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:22 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/zip.gif:
+	  file zip.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:22 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/htm.gif:
+	  file htm.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:20 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/html.gif:
+	  file html.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:20 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/jpg.gif:
+	  file jpg.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:20 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/doc.gif:
+	  file doc.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:19 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/exe.gif:
+	  file exe.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:19 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/fla.gif:
+	  file fla.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:19 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/gif.gif:
+	  file gif.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:19 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/ai.gif:
+	  file ai.gif was added on branch FREESIDE_1_7_BRANCH on 2008-06-17
+	  03:58:17 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/avi.gif:
+	  file avi.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:18 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/bmp.gif:
+	  file bmp.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:18 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/cs.gif:
+	  file cs.gif was added on branch FREESIDE_1_7_BRANCH on 2008-06-17
+	  03:58:18 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/default.icon.gif:
+	  file default.icon.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:19 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/dll.gif:
+	  file dll.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:19 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/zip.gif:
+	  file zip.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:11 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/vsd.gif:
+	  file vsd.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:08 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/xls.gif:
+	  file xls.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:10 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/xml.gif:
+	  file xml.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:11 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/swt.gif:
+	  file swt.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:08 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/txt.gif:
+	  file txt.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:08 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/swf.gif:
+	  file swf.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:07 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/rdp.gif:
+	  file rdp.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:06 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/pdf.gif:
+	  file pdf.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:01 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/png.gif:
+	  file png.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:01 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/ppt.gif:
+	  file ppt.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:03 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/js.gif:
+	  file js.gif was added on branch FREESIDE_1_7_BRANCH on 2008-06-17
+	  03:58:00 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/mdb.gif:
+	  file mdb.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:00 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/mp3.gif:
+	  file mp3.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:01 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/exe.gif:
+	  file exe.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:58 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/fla.gif:
+	  file fla.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:58 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/gif.gif:
+	  file gif.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:59 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/htm.gif:
+	  file htm.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:59 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/html.gif:
+	  file html.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:00 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/jpg.gif:
+	  file jpg.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:58:00 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/cs.gif:
+	  file cs.gif was added on branch FREESIDE_1_7_BRANCH on 2008-06-17
+	  03:57:58 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/default.icon.gif:
+	  file default.icon.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:58 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/dll.gif:
+	  file dll.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:58 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/doc.gif:
+	  file doc.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:58 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/avi.gif:
+	  file avi.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:58 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/bmp.gif:
+	  file bmp.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:58 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/ai.gif:
+	  file ai.gif was added on branch FREESIDE_1_7_BRANCH on 2008-06-17
+	  03:57:58 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/spacer.gif:
+	  file spacer.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:57 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/FolderUp.gif:
+	  file FolderUp.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:57 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/ButtonArrow.gif:
+	  file ButtonArrow.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:56 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/Folder.gif:
+	  file Folder.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:56 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/Folder32.gif:
+	  file Folder32.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:57 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/FolderOpened.gif:
+	  file FolderOpened.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:57 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/FolderOpened32.gif:
+	  file FolderOpened32.gif was added on branch FREESIDE_1_7_BRANCH
+	  on 2008-06-17 03:57:57 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/connectors/perl/basexml.pl:
+	  file basexml.pl was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:53 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/connectors/perl/commands.pl:
+	  file commands.pl was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:53 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/connectors/perl/connector.cgi:
+	  file connector.cgi was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:53 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/frmactualfolder.html:
+	  file frmactualfolder.html was added on branch FREESIDE_1_7_BRANCH
+	  on 2008-06-17 03:57:52 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/frmcreatefolder.html:
+	  file frmcreatefolder.html was added on branch FREESIDE_1_7_BRANCH
+	  on 2008-06-17 03:57:52 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/frmfolders.html:
+	  file frmfolders.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:53 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/frmresourceslist.html:
+	  file frmresourceslist.html was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-06-17 03:57:53 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/frmresourcetype.html:
+	  file frmresourcetype.html was added on branch FREESIDE_1_7_BRANCH
+	  on 2008-06-17 03:57:53 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/frmupload.html:
+	  file frmupload.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:53 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/connectors/perl/io.pl:
+	  file io.pl was added on branch FREESIDE_1_7_BRANCH on 2008-06-17
+	  03:57:53 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/connectors/perl/upload_fck.pl:
+	  file upload_fck.pl was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:53 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/connectors/perl/util.pl:
+	  file util.pl was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:55 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/browser.css:
+	  file browser.css was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:52 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/browser.html:
+	  file browser.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:52 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/dialog/fck_template/images/template1.gif:
+	  file template1.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:52 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/dialog/fck_template/images/template2.gif:
+	  file template2.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:52 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/dialog/fck_template/images/template3.gif:
+	  file template3.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:52 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/dialog/fck_spellerpages/spellerpages/spellChecker.js:
+	  file spellChecker.js was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:51 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/dialog/fck_spellerpages/spellerpages/spellchecker.html:
+	  file spellchecker.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:51 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/dialog/fck_spellerpages/spellerpages/server-scripts/spellchecker.pl:
+	  file spellchecker.pl was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:52 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/dialog/fck_spellerpages/spellerpages/spellerStyle.css:
+	  file spellerStyle.css was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:51 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/dialog/fck_spellerpages/spellerpages/wordWindow.js:
+	  file wordWindow.js was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:51 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/dialog/fck_spellerpages/spellerpages/blank.html:
+	  file blank.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:51 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/dialog/fck_spellerpages/spellerpages/controlWindow.js:
+	  file controlWindow.js was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:51 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/dialog/fck_spellerpages/spellerpages/controls.html:
+	  file controls.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:51 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/dialog/fck_link/fck_link.js:
+	  file fck_link.js was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:51 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/dialog/fck_select/fck_select.js:
+	  file fck_select.js was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:51 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/dialog/fck_docprops/fck_document_preview.html:
+	  file fck_document_preview.html was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-06-17 03:57:50 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/dialog/fck_flash/fck_flash.js:
+	  file fck_flash.js was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:51 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/dialog/fck_flash/fck_flash_preview.html:
+	  file fck_flash_preview.html was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-06-17 03:57:51 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/dialog/fck_image/fck_image.js:
+	  file fck_image.js was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:51 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/dialog/fck_image/fck_image_preview.html:
+	  file fck_image_preview.html was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-06-17 03:57:51 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/dialog/fck_about/logo_fckeditor.gif:
+	  file logo_fckeditor.gif was added on branch FREESIDE_1_7_BRANCH
+	  on 2008-06-17 03:57:50 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/dialog/fck_about/logo_fredck.gif:
+	  file logo_fredck.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:50 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/dialog/common/fck_dialog_common.css:
+	  file fck_dialog_common.css was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-06-17 03:57:50 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/dialog/common/fck_dialog_common.js:
+	  file fck_dialog_common.js was added on branch FREESIDE_1_7_BRANCH
+	  on 2008-06-17 03:57:50 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/dialog/common/fcknumericfield.htc:
+	  file fcknumericfield.htc was added on branch FREESIDE_1_7_BRANCH
+	  on 2008-06-17 03:57:50 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/dialog/common/images/locked.gif:
+	  file locked.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:50 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/dialog/common/moz-bindings.xml:
+	  file moz-bindings.xml was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:50 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/dialog/common/images/reset.gif:
+	  file reset.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:50 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/dialog/common/images/unlocked.gif:
+	  file unlocked.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:50 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/dialog/fck_docprops.html:
+	  file fck_docprops.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:46 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/dialog/fck_find.html: file
+	  fck_find.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:46 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/dialog/fck_flash.html: file
+	  fck_flash.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:46 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/dialog/fck_form.html: file
+	  fck_form.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:46 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/dialog/fck_hiddenfield.html:
+	  file fck_hiddenfield.html was added on branch FREESIDE_1_7_BRANCH
+	  on 2008-06-17 03:57:46 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/dialog/fck_image.html: file
+	  fck_image.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:46 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/dialog/fck_link.html: file
+	  fck_link.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:46 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/dialog/fck_listprop.html:
+	  file fck_listprop.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:46 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/dialog/fck_paste.html: file
+	  fck_paste.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:46 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/dialog/fck_radiobutton.html:
+	  file fck_radiobutton.html was added on branch FREESIDE_1_7_BRANCH
+	  on 2008-06-17 03:57:46 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/dialog/fck_replace.html:
+	  file fck_replace.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:46 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/dialog/fck_select.html: file
+	  fck_select.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:46 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/dialog/fck_smiley.html: file
+	  fck_smiley.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:46 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/dialog/fck_source.html: file
+	  fck_source.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:46 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/dialog/fck_specialchar.html:
+	  file fck_specialchar.html was added on branch FREESIDE_1_7_BRANCH
+	  on 2008-06-17 03:57:47 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/dialog/fck_spellerpages.html:
+	  file fck_spellerpages.html was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-06-17 03:57:47 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/dialog/fck_table.html: file
+	  fck_table.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:47 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/dialog/fck_tablecell.html:
+	  file fck_tablecell.html was added on branch FREESIDE_1_7_BRANCH
+	  on 2008-06-17 03:57:48 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/dialog/fck_template.html:
+	  file fck_template.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:50 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/dialog/fck_textarea.html:
+	  file fck_textarea.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:50 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/dialog/fck_textfield.html:
+	  file fck_textfield.html was added on branch FREESIDE_1_7_BRANCH
+	  on 2008-06-17 03:57:50 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/dialog/fck_button.html: file
+	  fck_button.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:46 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/dialog/fck_checkbox.html:
+	  file fck_checkbox.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:46 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/dialog/fck_colorselector.html:
+	  file fck_colorselector.html was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-06-17 03:57:46 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/dialog/fck_about.html: file
+	  fck_about.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:45 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/dialog/fck_anchor.html: file
+	  fck_anchor.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:45 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/css/behaviors/disablehandles.htc:
+	  file disablehandles.htc was added on branch FREESIDE_1_7_BRANCH
+	  on 2008-06-17 03:57:45 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/css/images/fck_anchor.gif:
+	  file fck_anchor.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:45 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/css/images/fck_flashlogo.gif:
+	  file fck_flashlogo.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:45 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/css/images/fck_hiddenfield.gif:
+	  file fck_hiddenfield.gif was added on branch FREESIDE_1_7_BRANCH
+	  on 2008-06-17 03:57:45 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/css/images/fck_pagebreak.gif:
+	  file fck_pagebreak.gif was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:45 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/css/behaviors/showtableborders.htc:
+	  file showtableborders.htc was added on branch FREESIDE_1_7_BRANCH
+	  on 2008-06-17 03:57:45 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/css/fck_editorarea.css: file
+	  fck_editorarea.css was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:45 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/css/fck_internal.css: file
+	  fck_internal.css was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:45 +0000
+
+2007-08-01 15:25  ivan
+
+	*
+	  httemplate/elements/fckeditor/editor/css/fck_showtableborders_gecko.css:
+	  file fck_showtableborders_gecko.css was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-06-17 03:57:45 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/fckdebug.html: file
+	  fckdebug.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:45 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/fckdialog.html: file
+	  fckdialog.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:45 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/fckeditor.html: file
+	  fckeditor.html was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:45 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/editor/fckeditor.original.html:
+	  file fckeditor.original.html was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-06-17 03:57:45 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/fckconfig.js: file fckconfig.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:57:44 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/fckeditor.js: file fckeditor.js was
+	  added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:57:44 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/fckpackager.xml: file
+	  fckpackager.xml was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:44 +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/fckstyles.xml: file fckstyles.xml
+	  was added on branch FREESIDE_1_7_BRANCH on 2008-06-17 03:57:44
+	  +0000
+
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/fckeditor/fcktemplates.xml: file
+	  fcktemplates.xml was added on branch FREESIDE_1_7_BRANCH on
+	  2008-06-17 03:57:44 +0000
+
 2007-08-01 15:25  ivan
 
 	* httemplate/elements/tr-checkbox.html: file tr-checkbox.html was
@@ -2765,6 +6725,12 @@
 
 2007-08-01 15:25  ivan
 
+	* httemplate/elements/tr-select-cust_main-status.html: file
+	  tr-select-cust_main-status.html was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-06-18 05:18:25 +0000
+
+2007-08-01 15:25  ivan
+
 	* httemplate/elements/tr-select.html: file tr-select.html was added
 	  on branch FREESIDE_1_7_BRANCH on 2008-01-04 02:23:20 +0000
 
@@ -2778,6 +6744,12 @@
 	* httemplate/elements/tr-title.html: file tr-title.html was added
 	  on branch FREESIDE_1_7_BRANCH on 2008-01-04 02:47:47 +0000
 
+2007-08-01 15:25  ivan
+
+	* httemplate/elements/select-cust_main-status.html: file
+	  select-cust_main-status.html was added on branch
+	  FREESIDE_1_7_BRANCH on 2008-06-18 05:27:15 +0000
+
 2007-08-01 15:24  jeff
 
 	* FS/FS/part_pkg/prorate_delayed.pm: file prorate_delayed.pm was
@@ -2787,14 +6759,293 @@
 
 	* FS/FS/part_pkg/prorate_delayed.pm,
 	  httemplate/elements/hidden.html,
+	  httemplate/elements/select-cust_main-status.html,
 	  httemplate/elements/tr-checkbox.html,
 	  httemplate/elements/tr-fixed.html,
 	  httemplate/elements/tr-input-money.html,
 	  httemplate/elements/tr-input-text.html,
 	  httemplate/elements/tr-password.html,
+	  httemplate/elements/tr-select-cust_main-status.html,
 	  httemplate/elements/tr-select.html,
 	  httemplate/elements/tr-td-label.html,
 	  httemplate/elements/tr-title.html,
+	  httemplate/elements/fckeditor/fckconfig.js,
+	  httemplate/elements/fckeditor/fckeditor.js,
+	  httemplate/elements/fckeditor/fckpackager.xml,
+	  httemplate/elements/fckeditor/fckstyles.xml,
+	  httemplate/elements/fckeditor/fcktemplates.xml,
+	  httemplate/elements/fckeditor/editor/fckdebug.html,
+	  httemplate/elements/fckeditor/editor/fckdialog.html,
+	  httemplate/elements/fckeditor/editor/fckeditor.html,
+	  httemplate/elements/fckeditor/editor/fckeditor.original.html,
+	  httemplate/elements/fckeditor/editor/css/fck_editorarea.css,
+	  httemplate/elements/fckeditor/editor/css/fck_internal.css,
+	  httemplate/elements/fckeditor/editor/css/fck_showtableborders_gecko.css,
+	  httemplate/elements/fckeditor/editor/css/behaviors/disablehandles.htc,
+	  httemplate/elements/fckeditor/editor/css/behaviors/showtableborders.htc,
+	  httemplate/elements/fckeditor/editor/css/images/fck_anchor.gif,
+	  httemplate/elements/fckeditor/editor/css/images/fck_flashlogo.gif,
+	  httemplate/elements/fckeditor/editor/css/images/fck_hiddenfield.gif,
+	  httemplate/elements/fckeditor/editor/css/images/fck_pagebreak.gif,
+	  httemplate/elements/fckeditor/editor/dialog/fck_about.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_anchor.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_button.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_checkbox.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_colorselector.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_docprops.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_find.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_flash.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_form.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_hiddenfield.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_image.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_link.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_listprop.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_paste.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_radiobutton.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_replace.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_select.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_smiley.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_source.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_specialchar.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_spellerpages.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_table.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_tablecell.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_template.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_textarea.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_textfield.html,
+	  httemplate/elements/fckeditor/editor/dialog/common/fck_dialog_common.css,
+	  httemplate/elements/fckeditor/editor/dialog/common/fck_dialog_common.js,
+	  httemplate/elements/fckeditor/editor/dialog/common/fcknumericfield.htc,
+	  httemplate/elements/fckeditor/editor/dialog/common/moz-bindings.xml,
+	  httemplate/elements/fckeditor/editor/dialog/common/images/locked.gif,
+	  httemplate/elements/fckeditor/editor/dialog/common/images/reset.gif,
+	  httemplate/elements/fckeditor/editor/dialog/common/images/unlocked.gif,
+	  httemplate/elements/fckeditor/editor/dialog/fck_about/logo_fckeditor.gif,
+	  httemplate/elements/fckeditor/editor/dialog/fck_about/logo_fredck.gif,
+	  httemplate/elements/fckeditor/editor/dialog/fck_docprops/fck_document_preview.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_flash/fck_flash.js,
+	  httemplate/elements/fckeditor/editor/dialog/fck_flash/fck_flash_preview.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_image/fck_image.js,
+	  httemplate/elements/fckeditor/editor/dialog/fck_image/fck_image_preview.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_link/fck_link.js,
+	  httemplate/elements/fckeditor/editor/dialog/fck_select/fck_select.js,
+	  httemplate/elements/fckeditor/editor/dialog/fck_spellerpages/spellerpages/blank.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_spellerpages/spellerpages/controlWindow.js,
+	  httemplate/elements/fckeditor/editor/dialog/fck_spellerpages/spellerpages/controls.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_spellerpages/spellerpages/spellChecker.js,
+	  httemplate/elements/fckeditor/editor/dialog/fck_spellerpages/spellerpages/spellchecker.html,
+	  httemplate/elements/fckeditor/editor/dialog/fck_spellerpages/spellerpages/spellerStyle.css,
+	  httemplate/elements/fckeditor/editor/dialog/fck_spellerpages/spellerpages/wordWindow.js,
+	  httemplate/elements/fckeditor/editor/dialog/fck_spellerpages/spellerpages/server-scripts/spellchecker.pl,
+	  httemplate/elements/fckeditor/editor/dialog/fck_template/images/template1.gif,
+	  httemplate/elements/fckeditor/editor/dialog/fck_template/images/template2.gif,
+	  httemplate/elements/fckeditor/editor/dialog/fck_template/images/template3.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/browser.css,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/browser.html,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/frmactualfolder.html,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/frmcreatefolder.html,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/frmfolders.html,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/frmresourceslist.html,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/frmresourcetype.html,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/frmupload.html,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/connectors/perl/basexml.pl,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/connectors/perl/commands.pl,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/connectors/perl/connector.cgi,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/connectors/perl/io.pl,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/connectors/perl/upload_fck.pl,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/connectors/perl/util.pl,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/ButtonArrow.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/Folder.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/Folder32.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/FolderOpened.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/FolderOpened32.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/FolderUp.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/spacer.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/ai.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/avi.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/bmp.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/cs.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/default.icon.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/dll.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/doc.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/exe.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/fla.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/gif.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/htm.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/html.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/jpg.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/js.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/mdb.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/mp3.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/pdf.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/png.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/ppt.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/rdp.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/swf.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/swt.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/txt.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/vsd.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/xls.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/xml.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/zip.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/ai.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/avi.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/bmp.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/cs.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/default.icon.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/dll.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/doc.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/exe.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/fla.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/gif.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/htm.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/html.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/jpg.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/js.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/mdb.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/mp3.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/pdf.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/png.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/ppt.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/rdp.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/swf.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/swt.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/txt.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/vsd.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/xls.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/xml.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/images/icons/32/zip.gif,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/js/common.js,
+	  httemplate/elements/fckeditor/editor/filemanager/browser/default/js/fckxml.js,
+	  httemplate/elements/fckeditor/editor/filemanager/upload/test.html,
+	  httemplate/elements/fckeditor/editor/images/anchor.gif,
+	  httemplate/elements/fckeditor/editor/images/arrow_ltr.gif,
+	  httemplate/elements/fckeditor/editor/images/arrow_rtl.gif,
+	  httemplate/elements/fckeditor/editor/images/spacer.gif,
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/angel_smile.gif,
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/angry_smile.gif,
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/broken_heart.gif,
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/cake.gif,
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/confused_smile.gif,
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/cry_smile.gif,
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/devil_smile.gif,
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/embaressed_smile.gif,
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/envelope.gif,
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/heart.gif,
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/kiss.gif,
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/lightbulb.gif,
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/omg_smile.gif,
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/regular_smile.gif,
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/sad_smile.gif,
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/shades_smile.gif,
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/teeth_smile.gif,
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/thumbs_down.gif,
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/thumbs_up.gif,
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/tounge_smile.gif,
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/whatchutalkingabout_smile.gif,
+	  httemplate/elements/fckeditor/editor/images/smiley/msn/wink_smile.gif,
+	  httemplate/elements/fckeditor/editor/js/fckeditorcode_gecko.js,
+	  httemplate/elements/fckeditor/editor/js/fckeditorcode_ie.js,
+	  httemplate/elements/fckeditor/editor/lang/_getfontformat.html,
+	  httemplate/elements/fckeditor/editor/lang/_translationstatus.txt,
+	  httemplate/elements/fckeditor/editor/lang/af.js,
+	  httemplate/elements/fckeditor/editor/lang/ar.js,
+	  httemplate/elements/fckeditor/editor/lang/bg.js,
+	  httemplate/elements/fckeditor/editor/lang/bn.js,
+	  httemplate/elements/fckeditor/editor/lang/bs.js,
+	  httemplate/elements/fckeditor/editor/lang/ca.js,
+	  httemplate/elements/fckeditor/editor/lang/cs.js,
+	  httemplate/elements/fckeditor/editor/lang/da.js,
+	  httemplate/elements/fckeditor/editor/lang/de.js,
+	  httemplate/elements/fckeditor/editor/lang/el.js,
+	  httemplate/elements/fckeditor/editor/lang/en-au.js,
+	  httemplate/elements/fckeditor/editor/lang/en-ca.js,
+	  httemplate/elements/fckeditor/editor/lang/en-uk.js,
+	  httemplate/elements/fckeditor/editor/lang/en.js,
+	  httemplate/elements/fckeditor/editor/lang/eo.js,
+	  httemplate/elements/fckeditor/editor/lang/es.js,
+	  httemplate/elements/fckeditor/editor/lang/et.js,
+	  httemplate/elements/fckeditor/editor/lang/eu.js,
+	  httemplate/elements/fckeditor/editor/lang/fa.js,
+	  httemplate/elements/fckeditor/editor/lang/fi.js,
+	  httemplate/elements/fckeditor/editor/lang/fo.js,
+	  httemplate/elements/fckeditor/editor/lang/fr.js,
+	  httemplate/elements/fckeditor/editor/lang/gl.js,
+	  httemplate/elements/fckeditor/editor/lang/he.js,
+	  httemplate/elements/fckeditor/editor/lang/hi.js,
+	  httemplate/elements/fckeditor/editor/lang/hr.js,
+	  httemplate/elements/fckeditor/editor/lang/hu.js,
+	  httemplate/elements/fckeditor/editor/lang/it.js,
+	  httemplate/elements/fckeditor/editor/lang/ja.js,
+	  httemplate/elements/fckeditor/editor/lang/km.js,
+	  httemplate/elements/fckeditor/editor/lang/ko.js,
+	  httemplate/elements/fckeditor/editor/lang/lt.js,
+	  httemplate/elements/fckeditor/editor/lang/lv.js,
+	  httemplate/elements/fckeditor/editor/lang/mn.js,
+	  httemplate/elements/fckeditor/editor/lang/ms.js,
+	  httemplate/elements/fckeditor/editor/lang/nb.js,
+	  httemplate/elements/fckeditor/editor/lang/nl.js,
+	  httemplate/elements/fckeditor/editor/lang/no.js,
+	  httemplate/elements/fckeditor/editor/lang/pl.js,
+	  httemplate/elements/fckeditor/editor/lang/pt-br.js,
+	  httemplate/elements/fckeditor/editor/lang/pt.js,
+	  httemplate/elements/fckeditor/editor/lang/ro.js,
+	  httemplate/elements/fckeditor/editor/lang/ru.js,
+	  httemplate/elements/fckeditor/editor/lang/sk.js,
+	  httemplate/elements/fckeditor/editor/lang/sl.js,
+	  httemplate/elements/fckeditor/editor/lang/sr-latn.js,
+	  httemplate/elements/fckeditor/editor/lang/sr.js,
+	  httemplate/elements/fckeditor/editor/lang/sv.js,
+	  httemplate/elements/fckeditor/editor/lang/th.js,
+	  httemplate/elements/fckeditor/editor/lang/tr.js,
+	  httemplate/elements/fckeditor/editor/lang/uk.js,
+	  httemplate/elements/fckeditor/editor/lang/vi.js,
+	  httemplate/elements/fckeditor/editor/lang/zh-cn.js,
+	  httemplate/elements/fckeditor/editor/lang/zh.js,
+	  httemplate/elements/fckeditor/editor/plugins/autogrow/fckplugin.js,
+	  httemplate/elements/fckeditor/editor/plugins/placeholder/fck_placeholder.html,
+	  httemplate/elements/fckeditor/editor/plugins/placeholder/fckplugin.js,
+	  httemplate/elements/fckeditor/editor/plugins/placeholder/placeholder.gif,
+	  httemplate/elements/fckeditor/editor/plugins/placeholder/lang/de.js,
+	  httemplate/elements/fckeditor/editor/plugins/placeholder/lang/en.js,
+	  httemplate/elements/fckeditor/editor/plugins/placeholder/lang/fr.js,
+	  httemplate/elements/fckeditor/editor/plugins/placeholder/lang/it.js,
+	  httemplate/elements/fckeditor/editor/plugins/placeholder/lang/pl.js,
+	  httemplate/elements/fckeditor/editor/plugins/simplecommands/fckplugin.js,
+	  httemplate/elements/fckeditor/editor/plugins/tablecommands/fckplugin.js,
+	  httemplate/elements/fckeditor/editor/skins/_fckviewstrips.html,
+	  httemplate/elements/fckeditor/editor/skins/default/fck_dialog.css,
+	  httemplate/elements/fckeditor/editor/skins/default/fck_editor.css,
+	  httemplate/elements/fckeditor/editor/skins/default/fck_strip.gif,
+	  httemplate/elements/fckeditor/editor/skins/default/images/toolbar.arrowright.gif,
+	  httemplate/elements/fckeditor/editor/skins/default/images/toolbar.buttonarrow.gif,
+	  httemplate/elements/fckeditor/editor/skins/default/images/toolbar.collapse.gif,
+	  httemplate/elements/fckeditor/editor/skins/default/images/toolbar.end.gif,
+	  httemplate/elements/fckeditor/editor/skins/default/images/toolbar.expand.gif,
+	  httemplate/elements/fckeditor/editor/skins/default/images/toolbar.separator.gif,
+	  httemplate/elements/fckeditor/editor/skins/default/images/toolbar.start.gif,
+	  httemplate/elements/fckeditor/editor/skins/office2003/fck_dialog.css,
+	  httemplate/elements/fckeditor/editor/skins/office2003/fck_editor.css,
+	  httemplate/elements/fckeditor/editor/skins/office2003/fck_strip.gif,
+	  httemplate/elements/fckeditor/editor/skins/office2003/images/toolbar.arrowright.gif,
+	  httemplate/elements/fckeditor/editor/skins/office2003/images/toolbar.bg.gif,
+	  httemplate/elements/fckeditor/editor/skins/office2003/images/toolbar.buttonarrow.gif,
+	  httemplate/elements/fckeditor/editor/skins/office2003/images/toolbar.collapse.gif,
+	  httemplate/elements/fckeditor/editor/skins/office2003/images/toolbar.end.gif,
+	  httemplate/elements/fckeditor/editor/skins/office2003/images/toolbar.expand.gif,
+	  httemplate/elements/fckeditor/editor/skins/office2003/images/toolbar.separator.gif,
+	  httemplate/elements/fckeditor/editor/skins/office2003/images/toolbar.start.gif,
+	  httemplate/elements/fckeditor/editor/skins/silver/fck_dialog.css,
+	  httemplate/elements/fckeditor/editor/skins/silver/fck_editor.css,
+	  httemplate/elements/fckeditor/editor/skins/silver/fck_strip.gif,
+	  httemplate/elements/fckeditor/editor/skins/silver/images/toolbar.arrowright.gif,
+	  httemplate/elements/fckeditor/editor/skins/silver/images/toolbar.buttonarrow.gif,
+	  httemplate/elements/fckeditor/editor/skins/silver/images/toolbar.buttonbg.gif,
+	  httemplate/elements/fckeditor/editor/skins/silver/images/toolbar.collapse.gif,
+	  httemplate/elements/fckeditor/editor/skins/silver/images/toolbar.end.gif,
+	  httemplate/elements/fckeditor/editor/skins/silver/images/toolbar.expand.gif,
+	  httemplate/elements/fckeditor/editor/skins/silver/images/toolbar.separator.gif,
+	  httemplate/elements/fckeditor/editor/skins/silver/images/toolbar.start.gif,
 	  httemplate/misc/cancel_cust.html: event refactor, landing on
 	  HEAD!
 
