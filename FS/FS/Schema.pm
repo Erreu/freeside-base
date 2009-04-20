@@ -551,16 +551,23 @@ sub tables_hashref {
         'referral_custnum', 'int',  'NULL', '', '', '', 
         'comments', 'text', 'NULL', '', '', '', 
         'spool_cdr','char', 'NULL', 1, '', '', 
+        'archived', 'char', 'NULL', 1, '', '',
       ],
       'primary_key' => 'custnum',
       'unique' => [ [ 'agentnum', 'agent_custid' ] ],
       #'index' => [ ['last'], ['company'] ],
-      'index' => [ ['last'], [ 'company' ], [ 'referral_custnum' ],
-                   [ 'daytime' ], [ 'night' ], [ 'fax' ], [ 'refnum' ],
-                   [ 'county' ], [ 'state' ], [ 'country' ], [ 'zip' ],
-                   [ 'ship_last' ], [ 'ship_company' ],
+      'index' => [
+                   [ 'agentnum' ], [ 'refnum' ], [ 'custbatch' ],
+                   [ 'referral_custnum' ],
                    [ 'payby' ], [ 'paydate' ],
-                   [ 'agentnum' ], [ 'custbatch' ],
+                   [ 'archived' ],
+                   #billing
+                   ['last'], [ 'company' ],
+                   [ 'county' ], [ 'state' ], [ 'country' ],
+                   [ 'zip' ],
+                   [ 'daytime' ], [ 'night' ], [ 'fax' ],
+                   #shipping
+                   [ 'ship_last' ], [ 'ship_company' ],
                  ],
     },
 
