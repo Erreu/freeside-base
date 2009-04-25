@@ -50,44 +50,46 @@ sub bill {
 
   # select * from cust_main where
   my $where_pkg = <<"END";
-    0 < ( select count(*) from cust_pkg
-            where cust_main.custnum = cust_pkg.custnum
-              and ( cancel is null or cancel = 0 )
-              and (    setup is null or setup =  0
-                    or bill  is null or bill  <= $time 
-                    or ( expire is not null and expire <= $^T )
-                    or ( adjourn is not null and adjourn <= $^T )
-                  )
-        )
+    EXISTS( SELECT 1 FROM cust_pkg
+              WHERE cust_main.custnum = cust_pkg.custnum
+                AND (       cancel IS NULL     OR  cancel   = 0 )
+                AND (      setup   IS NULL     OR  setup    = 0
+                      OR   bill    IS NULL     OR  bill    <= $time 
+                      OR ( expire  IS NOT NULL AND expire  <= $^T   )
+                      OR ( adjourn IS NOT NULL AND adjourn <= $^T   )
+                    )
+          )
 END
   
   # or
   my $where_bill_event = <<"END";
-    0 < ( select count(*) from cust_bill
-            where cust_main.custnum = cust_bill.custnum
-              and 0 < charged
-                      - coalesce(
-                                  ( select sum(amount) from cust_bill_pay
-                                      where cust_bill.invnum = cust_bill_pay.invnum )
-                                  ,0
-                                )
-                      - coalesce(
-                                  ( select sum(amount) from cust_credit_bill
-                                      where cust_bill.invnum = cust_credit_bill.invnum )
-                                  ,0
-                                )
-              and 0 < ( select count(*) from part_bill_event
-                          where payby = cust_main.payby
-                            and ( disabled is null or disabled = '' )
-                            and seconds <= $time - cust_bill._date
-                            and 0 = ( select count(*) from cust_bill_event
-                                       where cust_bill.invnum = cust_bill_event.invnum
-                                         and part_bill_event.eventpart = cust_bill_event.eventpart
-                                         and status = 'done'
-                                    )
-  
-                      )
-        )
+    EXISTS(
+      SELECT 1 FROM cust_bill
+        WHERE cust_main.custnum = cust_bill.custnum
+          AND 0 < charged
+                  - COALESCE(
+                      ( SELECT SUM(amount) FROM cust_bill_pay
+                          WHERE cust_bill.invnum = cust_bill_pay.invnum
+                      ),0
+                    )
+                  - COALESCE(
+                      ( SELECT SUM(amount) FROM cust_credit_bill
+                          WHERE cust_bill.invnum = cust_credit_bill.invnum
+                      ),0
+                    )
+          AND EXISTS(
+            SELECT 1 FROM part_bill_event
+              WHERE payby = cust_main.payby
+                AND ( disabled is null or disabled = '' )
+                AND seconds <= $time - cust_bill._date
+                AND NOT EXISTS (
+                  SELECT 1 FROM cust_bill_event
+                    WHERE cust_bill.invnum = cust_bill_event.invnum
+                      AND part_bill_event.eventpart = cust_bill_event.eventpart
+                      AND status = 'done'
+                )
+          )
+    )
 END
   
   push @search, "( $where_pkg OR $where_bill_event )";
@@ -133,12 +135,16 @@ END
 
       if ( $opt{'m'} ) {
 
-        #add job to queue that calls bill_and_collect with options
-        my $queue = new FS::queue {
-          'job'      => 'FS::cust_main::queued_bill',
-          'priority' => 99, #don't get in the way of provisioning jobs
-        };
-        my $error = $queue->insert( 'custnum'=>$custnum, %args );
+        if ( $opt{'r'} ) {
+          warn "DRY RUN: would add custnum $custnum for queued_bill\n";
+        } else {
+          #add job to queue that calls bill_and_collect with options
+          my $queue = new FS::queue {
+            'job'      => 'FS::cust_main::queued_bill',
+            'priority' => 99, #don't get in the way of provisioning jobs
+          };
+          my $error = $queue->insert( 'custnum'=>$custnum, %args );
+        }
 
       } else {
 
