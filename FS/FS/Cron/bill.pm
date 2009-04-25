@@ -64,30 +64,29 @@ END
   # or
   my $where_bill_event = <<"END";
     0 < ( select count(*) from cust_bill
-
-            LEFT JOIN cust_bill_pay USING ( invnum )
-            LEFT JOIN cust_credit_bill USING ( invnum )
-            LEFT JOIN part_bill_event ON (
-              cust_main.payby = part_bill_event.payby
-              AND ( disabled IS NULL or disabled = '' )
-              AND seconds <= $time - cust_bill._date
-            )
-            LEFT JOIN cust_bill_event ON (
-              part_bill_event.eventpart = cust_bill_event.eventpart
-              AND cust_bill_event.invnum = cust_bill_event.invnum
-              AND status = 'done'
-            )
-
             where cust_main.custnum = cust_bill.custnum
-
-            GROUP BY cust_bill.invnum, cust_bill.charged
-            HAVING
-            0 < charged
-                                  - coalesce( sum(cust_bill_pay.amount) ,0 )
-                                  - coalesce( sum(cust_credit_bill.amount), 0 )
-            AND
-            0 < COUNT( cust_bill_event.eventnum IS NULL )
-
+              and 0 < charged
+                      - coalesce(
+                                  ( select sum(amount) from cust_bill_pay
+                                      where cust_bill.invnum = cust_bill_pay.invnum )
+                                  ,0
+                                )
+                      - coalesce(
+                                  ( select sum(amount) from cust_credit_bill
+                                      where cust_bill.invnum = cust_credit_bill.invnum )
+                                  ,0
+                                )
+              and 0 < ( select count(*) from part_bill_event
+                          where payby = cust_main.payby
+                            and ( disabled is null or disabled = '' )
+                            and seconds <= $time - cust_bill._date
+                            and 0 = ( select count(*) from cust_bill_event
+                                       where cust_bill.invnum = cust_bill_event.invnum
+                                         and part_bill_event.eventpart = cust_bill_event.eventpart
+                                         and status = 'done'
+                                    )
+  
+                      )
         )
 END
   
