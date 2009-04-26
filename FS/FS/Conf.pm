@@ -2450,6 +2450,13 @@ worry that config_items is freeside-specific and icky.
     'type'        => 'checkbox',
   },
 
+  {
+    'key'         => 'queued-max_kids',
+    'section'     => '',
+    'description' => 'Maximum number of queued processes.  Defaults to 10.',
+    'type'        => 'text',
+  },
+
 );
 
 1;
