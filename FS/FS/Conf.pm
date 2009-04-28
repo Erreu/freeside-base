@@ -2457,6 +2457,13 @@ worry that config_items is freeside-specific and icky.
     'type'        => 'text',
   },
 
+  {
+    'key'         => 'cancelled_cust-noevents',
+    'section'     => 'billing',
+    'description' => "Don't run events for cancelled customers",
+    'type'        => 'checkbox',
+  },
+
 );
 
 1;
