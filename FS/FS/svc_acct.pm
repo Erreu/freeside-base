@@ -1639,7 +1639,7 @@ my %op2condition = (
                $self->$column - $amount <= 0;
              },
   '+' => sub { my($self, $column, $amount) = @_;
-               $self->$column + $amount > 0;
+               ($self->$column || 0) + $amount > 0;
              },
 );
 my %op2warncondition = (
@@ -1648,7 +1648,7 @@ my %op2warncondition = (
                $self->$column - $amount <= $self->$threshold + 0;
              },
   '+' => sub { my($self, $column, $amount) = @_;
-               $self->$column + $amount > 0;
+               ($self->$column || 0) + $amount > 0;
              },
 );
 
