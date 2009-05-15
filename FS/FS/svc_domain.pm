@@ -378,7 +378,6 @@ sub check {
     or $self->ut_numbern('setup_date')
     or $self->ut_numbern('renewal_interval')
     or $self->ut_numbern('expiration_date')
-    or $self->ut_textn('purpose')
     or $self->SUPER::check;
 
 }
@@ -447,23 +446,12 @@ sub whois {
 
 =item _whois
 
-Depriciated.
+Deprecated.
 
 =cut
 
 sub _whois {
-  die "_whois depriciated";
-}
-
-=item submit_internic
-
-Submits a registration email for this domain.
-
-=cut
-
-sub submit_internic {
-  #my $self = shift;
-  carp "submit_internic depreciated";
+  die "_whois deprecated";
 }
 
 =back
