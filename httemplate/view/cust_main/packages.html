@@ -450,10 +450,17 @@ Current packages
 %         } 
           </FONT></TD>
 
-          <TD ALIGN="right" VALIGN="top" STYLE="padding-bottom:5px;padding-top:0px"><FONT SIZE="-2">
+          <TD ALIGN="right" VALIGN="top" STYLE="padding-bottom:5px;padding-top:0px">
+
+%           if ( $manage_link && $part_svc->svcdb eq 'svc_broadband' ) {
+%             my $ip_addr = $cust_svc->svc_x->ip_addr;
+%             my $svc_manage_link = eval(qq("$manage_link"));
+              <FONT SIZE="-1" STYLE="float:left">(&nbsp;<A HREF="<% $svc_manage_link %>">Manage Device</A>&nbsp;)</FONT>
+
+%           }
 
 %         if ( $curuser->access_right('Unprovision customer service') ) { 
-            (&nbsp;<%svc_unprovision_link($cust_svc)%>&nbsp;)
+            <FONT SIZE="-2">(&nbsp;<%svc_unprovision_link($cust_svc)%>&nbsp;)</FONT>
 %         } 
           </FONT></TD>
         </TR>
@@ -496,6 +503,8 @@ my $packages = get_packages($cust_main, $conf);
 
 my $colspan = $conf->exists('cust_pkg-display_times') ? 8 : 4;
 my $width = $conf->exists('cust_pkg-display_times') ? '38%' : '56%';
+
+my $manage_link = $conf->config('svc_broadband-manage_link');
 
 sub pkg_status_row {
   my( $cust_pkg, $title, $field, %opt ) = @_;
