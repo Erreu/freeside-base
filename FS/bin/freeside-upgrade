@@ -93,12 +93,12 @@ reload_dbdef($dbdef_file);
 upgrade()
   unless $DRY_RUN || $opt_s;
 
+$dbh->commit or die $dbh->errstr;
+
 upgrade_sqlradius()
   unless $DRY_RUN || $opt_s;
 
 $dbh->commit or die $dbh->errstr;
-
-dbdef_create($dbh, $dbdef_file);
 
 $dbh->disconnect or die $dbh->errstr;
 
