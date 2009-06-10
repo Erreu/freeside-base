@@ -46,17 +46,21 @@ if (dbdef->table('cust_main')->column('agent_custid') && ! $opt_s) {
       if (dbdef->table('h_cust_main')); 
 }
 
+my @statements =
+  grep { $_ !~ /^CREATE +INDEX +h_queue/ } #useless, holds up queue insertion
+       dbdef->sql_update_schema( dbdef_dist(datasrc), $dbh )
+
 if ( $DRY_RUN ) {
   print
-    join(";\n", @bugfix, dbdef->sql_update_schema( dbdef_dist(datasrc), $dbh ) ). ";\n";
+    join(";\n", @bugfix, @statements ). ";\n";
   exit;
 } else {
-  foreach my $statement ( @bugfix ) {
+  foreach my $statement ( @bugfix, @statements ) {
     $dbh->do( $statement )
       or die "Error: ". $dbh->errstr. "\n executing: $statement";
   }
 
-  dbdef->update_schema( dbdef_dist(datasrc), $dbh );
+#  dbdef->update_schema( dbdef_dist(datasrc), $dbh );
 }
 
 my $hashref = {};
