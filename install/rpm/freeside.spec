@@ -208,16 +208,18 @@ cd ../..
 touch install-perl-modules perl-modules
 %{__mkdir_p} $RPM_BUILD_ROOT%{freeside_cache}
 %{__mkdir_p} $RPM_BUILD_ROOT%{freeside_conf}
-#%{__mkdir_p} $RPM_BUILD_ROOT%{freeside_export}
+%{__mkdir_p} $RPM_BUILD_ROOT%{freeside_export}
 %{__mkdir_p} $RPM_BUILD_ROOT%{freeside_lock}
 %{__mkdir_p} $RPM_BUILD_ROOT%{freeside_log}
 for DBTYPE in %{db_types}; do
 	%{__mkdir_p} $RPM_BUILD_ROOT/tmp
+	[ -d $RPM_BUILD_ROOT%{freeside_conf}/default_conf ] && %{__rm} -rf $RPM_BUILD_ROOT%{freeside_conf}/default_conf
 	%{__make} create-config DB_TYPE=$DBTYPE DATASOURCE=DBI:$DBTYPE:dbname=%{name} RT_ENABLED=%{rt_enabled} FREESIDE_CACHE=$RPM_BUILD_ROOT%{freeside_cache} FREESIDE_CONF=$RPM_BUILD_ROOT/tmp FREESIDE_EXPORT=$RPM_BUILD_ROOT%{freeside_export} FREESIDE_LOCK=$RPM_BUILD_ROOT%{freeside_lock} FREESIDE_LOG=$RPM_BUILD_ROOT%{freeside_log}
-	%{__mv} $RPM_BUILD_ROOT/tmp/* $RPM_BUILD_ROOT%{freeside_conf}
-	/bin/rmdir $RPM_BUILD_ROOT/tmp
+	%{__mv} $RPM_BUILD_ROOT/tmp/secrets $RPM_BUILD_ROOT%{freeside_conf}
+	%{__mv} $RPM_BUILD_ROOT/tmp/conf* $RPM_BUILD_ROOT%{freeside_conf}/default_conf
+	%{__rm} -rf $RPM_BUILD_ROOT/tmp
 done
-%{__rm} install-perl-modules perl-modules $RPM_BUILD_ROOT%{freeside_conf}/conf*/ticket_system
+%{__rm} install-perl-modules perl-modules $RPM_BUILD_ROOT%{freeside_conf}/default_conf/ticket_system
 
 touch docs
 %{__perl} -pi -e "s|%%%%%%FREESIDE_DOCUMENT_ROOT%%%%%%|%{freeside_document_root}|g" htetc/handler.pl
@@ -374,9 +376,33 @@ if [ -f %{freeside_conf}/secrets ]; then
 	perl -p -i.fsbackup -e 's/^DBI:.*?:/DBI:Pg:/' %{freeside_conf}/secrets
 fi
 
+%triggerin postgresql -- %{name}
+if [ ! -d %{freeside_conf}/conf.DBI:Pg:dbname=%{name} ]; then
+	mkdir %{freeside_conf}/conf.DBI:Pg:dbname=%{name}
+	cp -pr %{freeside_conf}/default_conf/* %{freeside_conf}/conf.DBI:Pg:dbname=%{name}
+fi
+
+%triggerin -- %{name}-postgresql
+if [ ! -d %{freeside_conf}/conf.DBI:Pg:dbname=%{name} ]; then
+	mkdir %{freeside_conf}/conf.DBI:Pg:dbname=%{name}
+	cp -pr %{freeside_conf}/default_conf/* %{freeside_conf}/conf.DBI:Pg:dbname=%{name}
+fi
+
 %post mysql
 if [ -f %{freeside_conf}/secrets ]; then
 	perl -p -i.fsbackup -e 's/^DBI:.*?:/DBI:mysql:/' %{freeside_conf}/secrets
+fi
+
+%triggerin mysql -- %{name}
+if [ ! -d %{freeside_conf}/conf.DBI:mysql:dbname=%{name} ]; then
+	mkdir %{freeside_conf}/conf.DBI:mysql:dbname=%{name}
+	cp -pr %{freeside_conf}/default_conf/* %{freeside_conf}/conf.DBI:mysql:dbname=%{name}
+fi
+
+%triggerin -- %{name}-mysql
+if [ ! -d %{freeside_conf}/conf.DBI:mysql:dbname=%{name} ]; then
+	mkdir %{freeside_conf}/conf.DBI:mysql:dbname=%{name}
+	cp -pr %{freeside_conf}/default_conf/* %{freeside_conf}/conf.DBI:mysql:dbname=%{name}
 fi
 
 %post mason
@@ -409,6 +435,7 @@ fi
 %attr(-,freeside,freeside) %dir %{freeside_conf}
 %attr(-,freeside,freeside) %dir %{freeside_lock}
 %attr(-,freeside,freeside) %dir %{freeside_log}
+%attr(0711,freeside,freeside) %config(noreplace) %{freeside_conf}/default_conf
 
 %files mason -f %{name}-%{version}-%{release}-mason-filelist
 %defattr(-, freeside, freeside, 0755)
