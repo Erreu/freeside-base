@@ -2068,6 +2068,13 @@ worry that config_items is freeside-specific and icky.
   },
 
   {
+    'key'         => 'postal_invoice-recurring_only',
+    'section'     => 'billing',
+    'description' => 'The postal invoice fee is omitted on invoices without recurring charges when this is set',
+    'type'        => 'checkbox',
+  },
+
+  {
     'key'         => 'batch-enable',
     'section'     => 'deprecated', #make sure batch-enable_payby is set for
                                    #everyone before removing

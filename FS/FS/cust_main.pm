@@ -2229,7 +2229,13 @@ sub bill {
 
       if ( $setup != 0 || $recur != 0 ) {
 
-        unless ($postal_charge) {
+        # Only create a postal charge if:
+        # - this package has a recurring fee OR postal charges are enabled for non-recurring fees
+        # - AND there isn't already a postal charge for this invoice.
+        if ( (!$postal_charge) && 
+            ( !$conf->exists('postal_invoice-recurring_only') ||
+              $recur > 0 )
+            ) {
           $postal_charge = 1;  # try only once
           my $postal_pkg = $self->charge_postal_fee();
           if ( $postal_pkg && !ref( $postal_pkg ) ) {
@@ -2237,7 +2243,9 @@ sub bill {
             return "can't charge postal invoice fee for customer ".
               $self->custnum. ": $postal_pkg";
           }
-          push @cust_pkgs, $postal_pkg if $postal_pkg;
+          if ( $postal_pkg ) {
+            push @cust_pkgs, $postal_pkg;
+          }
         }
 
         warn "    charges (setup=$setup, recur=$recur); adding line items\n"
