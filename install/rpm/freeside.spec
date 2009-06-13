@@ -379,12 +379,14 @@ fi
 %triggerin postgresql -- %{name}
 if [ ! -d %{freeside_conf}/conf.DBI:Pg:dbname=%{name} ]; then
 	mkdir %{freeside_conf}/conf.DBI:Pg:dbname=%{name}
+	chown freeside.freeside %{freeside_conf}/conf.DBI:Pg:dbname=%{name}
 	cp -pr %{freeside_conf}/default_conf/* %{freeside_conf}/conf.DBI:Pg:dbname=%{name}
 fi
 
 %triggerin -- %{name}-postgresql
 if [ ! -d %{freeside_conf}/conf.DBI:Pg:dbname=%{name} ]; then
 	mkdir %{freeside_conf}/conf.DBI:Pg:dbname=%{name}
+	chown freeside.freeside %{freeside_conf}/conf.DBI:Pg:dbname=%{name}
 	cp -pr %{freeside_conf}/default_conf/* %{freeside_conf}/conf.DBI:Pg:dbname=%{name}
 fi
 
@@ -396,12 +398,14 @@ fi
 %triggerin mysql -- %{name}
 if [ ! -d %{freeside_conf}/conf.DBI:mysql:dbname=%{name} ]; then
 	mkdir %{freeside_conf}/conf.DBI:mysql:dbname=%{name}
+	chown freeside.freeside %{freeside_conf}/conf.DBI:mysql:dbname=%{name}
 	cp -pr %{freeside_conf}/default_conf/* %{freeside_conf}/conf.DBI:mysql:dbname=%{name}
 fi
 
 %triggerin -- %{name}-mysql
 if [ ! -d %{freeside_conf}/conf.DBI:mysql:dbname=%{name} ]; then
 	mkdir %{freeside_conf}/conf.DBI:mysql:dbname=%{name}
+	chown freeside.freeside %{freeside_conf}/conf.DBI:mysql:dbname=%{name}
 	cp -pr %{freeside_conf}/default_conf/* %{freeside_conf}/conf.DBI:mysql:dbname=%{name}
 fi
 
@@ -436,6 +440,7 @@ fi
 %attr(-,freeside,freeside) %dir %{freeside_lock}
 %attr(-,freeside,freeside) %dir %{freeside_log}
 %attr(0711,freeside,freeside) %config(noreplace) %{freeside_conf}/default_conf
+%attr(0644,freeside,freeside) %config(noreplace) %{freeside_conf}/default_conf/*
 
 %files mason -f %{name}-%{version}-%{release}-mason-filelist
 %defattr(-, freeside, freeside, 0755)
