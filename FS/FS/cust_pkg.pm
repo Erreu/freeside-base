@@ -216,7 +216,7 @@ sub insert {
              ' packages with '. $part_pkg->freq_pretty. ' frequency';
       } else {
 
-        my $amount = sprintf( "%.2f", $part_pkg->base_recur / $part_pkg->freq );
+        my $amount = sprintf( "%.2f", $part_pkg->base_recur($self) / $part_pkg->freq );
         my $error =
           $referring_cust_main->
             credit( $amount,

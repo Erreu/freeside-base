@@ -1033,7 +1033,8 @@ sub renew_info {
   my $total = $cust_main->balance;
 
   my @array = map {
-                    $total += $_->part_pkg->base_recur;
+                    my $bill = $_->bill;
+                    $total += $_->part_pkg->base_recur($_, \$bill);
                     my $renew_date = $_->part_pkg->add_freq($_->bill);
                     {
                       'pkgnum'             => $_->pkgnum,
