@@ -555,7 +555,14 @@ sub invoice_logo {
   #sessioning for this?  how do we get the session id to the backend invoice
   # template so it can add it to the link, blah
 
-  my $templatename = $p->{'templatename'};
+  my $agentnum = '';
+  if ( $p->{'invnum'} ) {
+    my $cust_bill = qsearchs('cust_bill', { 'invnum' => $p->{'invnum'} } )
+      or return { 'error' => 'unknown invnum' };
+    $agentnum = $cust_bill->cust_main->agentnum;
+  }
+
+  my $templatename = $p->{'template'} || $p->{'templatename'};
 
   #false laziness-ish w/view/cust_bill-logo.cgi
 
@@ -569,7 +576,7 @@ sub invoice_logo {
   my $filename = "logo$templatename.png";
 
   return { 'error'        => '',
-           'logo'         => $conf->config_binary($filename),
+           'logo'         => $conf->config_binary($filename, $agentnum),
            'content_type' => 'image/png', #should allow gif, jpg too
          };
 }
