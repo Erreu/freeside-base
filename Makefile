@@ -115,10 +115,10 @@ RT_PATH = /opt/rt3
 
 #only used for dev kludge now, not a big deal
 FREESIDE_PATH = `pwd`
-PERL_INC_DEV_KLUDGE = /usr/local/share/perl/5.8.8/
+PERL_INC_DEV_KLUDGE = /usr/local/share/perl/5.10.0/
 
-VERSION=1.7.3
-TAG=freeside_1_7_3
+VERSION=1.7.4rc1
+TAG=freeside_1_7_4rc1
 
 DEBVERSION = `echo ${VERSION} | perl -pe 's/(\d)([a-z])/\1~\2/'`-1
 
