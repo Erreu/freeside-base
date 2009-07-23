@@ -35,15 +35,15 @@ SITE_CONFIG_FILE		= 	$(CONFIG_FILE_PATH)/RT_SiteConfig.pm
 
 
 RT_VERSION_MAJOR	=	3
-RT_VERSION_MINOR	=	0
-RT_VERSION_PATCH	=	9
+RT_VERSION_MINOR	=	4
+RT_VERSION_PATCH	=	6
 
 RT_VERSION =	$(RT_VERSION_MAJOR).$(RT_VERSION_MINOR).$(RT_VERSION_PATCH)
 TAG 	   =	rt-$(RT_VERSION_MAJOR)-$(RT_VERSION_MINOR)-$(RT_VERSION_PATCH)
 
 
 # This is the group that all of the installed files will be chgrp'ed to.
-RTGROUP			=	rt
+RTGROUP			=	freeside
 
 
 # User which should own rt binaries.
@@ -55,8 +55,11 @@ LIBS_OWNER 		=	root
 # Group that should own all of RT's libraries, generally root.
 LIBS_GROUP		=	bin
 
-WEB_USER		=	www
-WEB_GROUP		=	www
+WEB_USER		=	freeside
+WEB_GROUP		=	freeside
+
+
+APACHECTL		=	
 
 # {{{ Files and directories 
 
@@ -128,7 +131,7 @@ SYSTEM_BINARIES		=	$(DESTDIR)/$(RT_SBIN_PATH)/
 # "Pg" is known to work
 # "Informix" is known to work
 
-DB_TYPE			=	mysql
+DB_TYPE			=	Pg
 
 # Set DBA to the name of a unix account with the proper permissions and 
 # environment to run your commandline SQL sbin
@@ -140,7 +143,7 @@ DB_TYPE			=	mysql
 # For Oracle, you want 'system'
 # For Informix, you want 'informix'
 
-DB_DBA			=	root
+DB_DBA			=	freeside
 
 DB_HOST			=	localhost
 
@@ -166,9 +169,9 @@ DB_RT_HOST		=	localhost
 # set this to the name you want to give to the RT database in 
 # your database server. For Oracle, this should be the name of your sid
 
-DB_DATABASE		=	rt3
-DB_RT_USER		=	rt_user
-DB_RT_PASS		=	rt_pass
+DB_DATABASE		=	_DBC_DBNAME_
+DB_RT_USER		=	_DBC_DBUSER_
+DB_RT_PASS		=	_DBC_DBPASS_
 
 # }}}
 
@@ -206,10 +209,12 @@ upgrade-instruct:
 	@echo "$(CONFIG_FILE) for any necessary site customization. Additionally,"
 	@echo "you should update RT's system database objects by running "
 	@echo "   ls etc/upgrade"
+        @echo ""
 	@echo "For each file in that directory whose name is greater than"
 	@echo "your previously installed RT version, run:"
-	@echo "	   $(RT_SBIN_PATH)/rt-setup-database --action insert --datafile etc/upgrade/<version>"
-
+	@echo "    $(RT_SBIN_PATH)/rt-setup-database --dba $(DB_DBA) --prompt-for-dba-password --action schema --datadir etc/upgrade/<version>"
+	@echo "    $(RT_SBIN_PATH)/rt-setup-database --dba $(DB_DBA) --prompt-for-dba-password --action acl --datadir etc/upgrade/<version>"
+	@echo "    $(RT_SBIN_PATH)/rt-setup-database --dba $(DB_DBA) --prompt-for-dba-password --action insert --datadir etc/upgrade/<version>"
 
 upgrade: config-install dirs files-install fixperms upgrade-instruct
 
@@ -218,10 +223,10 @@ upgrade-noclobber: config-install libs-install html-install bin-install local-in
 
 # {{{ dependencies
 testdeps:
-	$(PERL) ./sbin/rt-test-dependencies --with-$(DB_TYPE)
+	$(PERL) ./sbin/rt-test-dependencies --verbose --with-$(DB_TYPE)
 
 fixdeps:
-	$(PERL) ./sbin/rt-test-dependencies --install --with-$(DB_TYPE)
+	$(PERL) ./sbin/rt-test-dependencies --verbose --install --with-$(DB_TYPE)
 
 #}}}
 
@@ -241,18 +246,17 @@ fixperms:
 	chmod 0500 $(DESTDIR)/$(RT_ETC_PATH)/*
 
 	#TODO: the config file should probably be able to have its
-	# owner set seperately from the binaries.
+	# owner set separately from the binaries.
 	chown -R $(BIN_OWNER) $(DESTDIR)/$(RT_ETC_PATH)
 	chgrp -R $(RTGROUP) $(DESTDIR)/$(RT_ETC_PATH)
 
 	chmod 0550 $(DESTDIR)/$(CONFIG_FILE)
 	chmod 0550 $(DESTDIR)/$(SITE_CONFIG_FILE)
 
-	# Make the interfaces executable and setgid rt
+	# Make the interfaces executable
 	chown $(BIN_OWNER) $(BINARIES)
 	chgrp $(RTGROUP) $(BINARIES)
 	chmod 0755  $(BINARIES)
-	chmod g+s $(SETGID_BINARIES)
 
 	# Make the web ui readable by all. 
 	chmod -R  u+rwX,go-w,go+rX 	$(DESTDIR)/$(MASON_HTML_PATH) \
@@ -272,12 +276,6 @@ fixperms:
 				$(DESTDIR)/$(MASON_SESSION_PATH)
 # }}}
 
-fixperms-nosetgid: fixperms
-	@echo "You should never be running RT this way. it's unsafe"
-	chmod 0555 $(SETGID_BINARIES)
-	chmod 0555 $(DESTDIR)/$(CONFIG_FILE)
-	chmod 0555 $(DESTDIR)/$(SITE_CONFIG_FILE)
-
 # {{{ dirs
 dirs:
 	mkdir -p $(DESTDIR)/$(RT_LOG_PATH)
@@ -289,6 +287,7 @@ dirs:
 	mkdir -p $(DESTDIR)/$(MASON_HTML_PATH)
 	mkdir -p $(DESTDIR)/$(MASON_LOCAL_HTML_PATH)
 	mkdir -p $(DESTDIR)/$(LOCAL_ETC_PATH)
+	mkdir -p $(DESTDIR)/$(LOCAL_LIB_PATH)
 	mkdir -p $(DESTDIR)/$(LOCAL_LEXICON_PATH)
 # }}}
 
@@ -298,7 +297,7 @@ files-install: libs-install etc-install bin-install sbin-install html-install lo
 
 config-install:
 	mkdir -p $(DESTDIR)/$(CONFIG_FILE_PATH)	
-	cp etc/RT_Config.pm $(DESTDIR)/$(CONFIG_FILE)
+	-cp etc/RT_Config.pm $(DESTDIR)/$(CONFIG_FILE)
 	[ -f $(DESTDIR)/$(SITE_CONFIG_FILE) ] || cp etc/RT_SiteConfig.pm $(DESTDIR)/$(SITE_CONFIG_FILE) 
 
 	chgrp $(RTGROUP) $(DESTDIR)/$(CONFIG_FILE)
@@ -315,14 +314,12 @@ test:
 regression-install: config-install
 	$(PERL) -pi -e 's/Set\(\$$DatabaseName.*\);/Set\(\$$DatabaseName, "rt3regression"\);/' $(DESTDIR)/$(CONFIG_FILE)
 
-regression-nosetgid-quiet: regression-install dirs files-install libs-install sbin-install bin-install regression-instruct regression-reset-db  testify-pods fixperms-nosetgid apachectl
-	$(PERL) sbin/regression_harness
+regression: regression-install dirs files-install libs-install sbin-install bin-install regression-instruct regression-reset-db  testify-pods fixperms apachectl run-regression
 
-regression-nosetgid: regression-install dirs files-install libs-install sbin-install bin-install regression-instruct regression-reset-db  testify-pods fixperms-nosetgid apachectl
-	$(PERL) lib/t/02regression.t
+run-regression:
+	prove -Ilib lib/t/setup_regression.t  lib/t/autogen/ lib/t/regression/
 
-regression: regression-install dirs files-install libs-install sbin-install bin-install regression-instruct regression-reset-db  testify-pods fixperms apachectl
-	$(PERL) lib/t/02regression.t
+regression-noapache: regression-install dirs files-install libs-install sbin-install bin-install regression-instruct regression-reset-db  testify-pods fixperms start-httpd  run-regression
 
 regression-quiet:
 	$(PERL) sbin/regression_harness
@@ -334,8 +331,10 @@ regression-instruct:
 # {{{ database-installation
 
 regression-reset-db:
-	$(PERL)	$(DESTDIR)/$(RT_SBIN_PATH)/rt-setup-database --action drop --dba $(DB_DBA) --dba-password ''
+	$(PERL)	$(DESTDIR)/$(RT_SBIN_PATH)/rt-setup-database --action drop --dba $(DB_DBA) --dba-password '' --force
 	$(PERL) $(DESTDIR)/$(RT_SBIN_PATH)/rt-setup-database --action init --dba $(DB_DBA) --dba-password ''
+
+initdb :: initialize-database
 
 initialize-database: 
 	$(PERL) $(DESTDIR)/$(RT_SBIN_PATH)/rt-setup-database --action init --dba $(DB_DBA) --prompt-for-dba-password
@@ -349,7 +348,7 @@ insert-approval-data:
 
 # {{{ libs-install
 libs-install: 
-	[ -d $(DESTDIR)/$(RT_LIB_PATH) ] || mkdir $(DESTDIR)/$(RT_LIB_PATH)
+	[ -d $(DESTDIR)/$(RT_LIB_PATH) ] || mkdir -p $(DESTDIR)/$(RT_LIB_PATH)
 	-cp -rp lib/* $(DESTDIR)/$(RT_LIB_PATH)
 # }}}
 
@@ -382,9 +381,12 @@ etc-install:
 
 sbin-install:
 	mkdir -p $(DESTDIR)/$(RT_SBIN_PATH)
-	chmod +x sbin/rt-setup-database \
+	chmod +x \
+		sbin/rt-dump-database \
+		sbin/rt-setup-database \
 		sbin/rt-test-dependencies
 	-cp -rp \
+		sbin/rt-dump-database \
 		sbin/rt-setup-database \
 		sbin/rt-test-dependencies \
 		$(DESTDIR)/$(RT_SBIN_PATH)
@@ -401,6 +403,7 @@ bin-install:
 		bin/rt-mailgate \
 		bin/mason_handler.fcgi \
 		bin/mason_handler.scgi \
+		bin/standalone_httpd \
 		bin/mason_handler.svc \
 		bin/rt \
 		bin/webmux.pl \
@@ -422,8 +425,10 @@ POD2TEST_EXE = sbin/extract_pod_tests
 
 testify-pods:
 	[ -d lib/t/autogen ] || mkdir lib/t/autogen
-	find lib -name \*pm |grep -v \*.in |xargs -n 1 $(PERL) $(POD2TEST_EXE)
-	find bin -type f |grep -v \~ | grep -v "\.in" | xargs -n 1 $(PERL) $(POD2TEST_EXE)
+	find lib -name \*pm |grep -v .svn | grep -v \*.in |xargs -n 1 $(PERL) $(POD2TEST_EXE)
+	find bin -type f |grep -v .svn | grep -v \~ | grep -v "\.in" | xargs -n 1 $(PERL) $(POD2TEST_EXE)
+	find lib -name \*pm |grep -v .svn | grep -v \*.in |xargs -n 1 $(PERL) $(POD2TEST_EXE)
+	find bin -type f |grep -v .svn | grep -v \~ | grep -v "\.in" | xargs -n 1 $(PERL) $(POD2TEST_EXE)
 
 
 
@@ -436,55 +441,14 @@ license-tag:
 factory: initialize-database
 	cd lib; $(PERL) ../sbin/factory  $(DB_DATABASE) RT
 
-commit:
-	aegis -build ; aegis -diff ; aegis -test; aegis -develop_end
-
-integrate:
-	aegis -integrate_begin;	aegis -build; aegis -diff; aegis -test ; aegis -integrate_pass
-
-predist: commit tag-and-tar
-
-tag-and-release-baseline:
-	aegis -cp -ind Makefile -output /tmp/Makefile.tagandrelease; \
-	$(MAKE) -f /tmp/Makefile.tagandrelease tag-and-release-never-by-hand
-
-
-# Running this target in a working directory is 
-# WRONG WRONG WRONG.
-# it will tag the current baseline with the version of RT defined 
-# in the currently-being-worked-on makefile. which is wrong.
-#  you want tag-and-release-baseline
-
-tag-and-release-never-by-hand:
-	aegis --delta-name $(TAG)
-	rm -rf /tmp/$(TAG)
-	mkdir /tmp/$(TAG)
-	cd /tmp/$(TAG); \
-		aegis -cp -ind -delta $(TAG) . ;\
-		make reconfigure;\
-		chmod 600 Makefile;\
-		aegis --report --project rt.$(RT_VERSION_MAJOR) \
-		      --page_width 80 \
-		      --page_length 9999 \
-		      --change $(RT_VERSION_MINOR) --output Changelog Change_Log
-
-	cd /tmp; tar czvf /home/ftp/pub/rt/devel/$(TAG).tar.gz $(TAG)/
-	chmod 644 /home/ftp/pub/rt/devel/$(TAG).tar.gz
-
-
 reconfigure:
 	aclocal -I m4
 	autoconf
 	chmod 755 ./configure
 	./configure
 
-rpm:
-	(cd ..; tar czvf /usr/src/redhat/SOURCES/rt.tar.gz rt)
-	rpm -ba etc/rt.spec
-
-
 apachectl:
-	apachectl stop
-	sleep 3
-	apachectl start
+	$(APACHECTL) stop
+	sleep 10
+	$(APACHECTL) start
 # }}}
