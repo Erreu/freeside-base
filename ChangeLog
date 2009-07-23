@@ -1,3 +1,47 @@
+2009-07-23 13:49  ivan
+
+	* rt/: Makefile, bin/mason_handler.fcgi, bin/mason_handler.scgi,
+	  bin/mason_handler.svc, bin/rt-crontool, bin/rt-mailgate,
+	  etc/RT_Config.pm, lib/RT.pm: run make configure-rt to normalize
+	  tempalated .in files
+
+2009-07-23 13:33  ivan
+
+	* rt/html/Elements/Header: new domain
+
+2009-07-23 13:30  ivan
+
+	* rt/Makefile: lost changes from 3.4.6 update, doh
+
+2009-07-23 13:16  ivan
+
+	* rt/Makefile: lost changes from 3.4.6 update, doh
+
+2009-07-23 13:13  ivan
+
+	* rt/Makefile: lost changes from 3.4.6 update, doh
+
+2009-07-23 12:46  ivan
+
+	* FS/FS/cust_pay.pm: avoid harmless warning: Use of uninitialized
+	  value in string ne
+
+2009-07-23 12:40  ivan
+
+	* FS/bin/freeside-void-payments: fix -r option, RT#5675
+
+2009-07-23 07:27  ivan
+
+	* httemplate/docs/license.html: its 2009
+
+2009-07-23 07:00  ivan
+
+	* Makefile: 1.7.4rc1
+
+2009-07-23 06:53  ivan
+
+	* ChangeLog: 1.7.4rc1
+
 2009-07-23 06:36  ivan
 
 	* httemplate/browse/cust_main_county.cgi: add back collapse county
