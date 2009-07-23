@@ -1,3 +1,307 @@
+2009-07-23 06:36  ivan
+
+	* httemplate/browse/cust_main_county.cgi: add back collapse county
+	  links to tax config (backport)
+
+2009-07-23 01:07  ivan
+
+	* FS/bin/freeside-void-payments: adding this to 1.7
+
+2009-07-13 02:19  ivan
+
+	* FS/FS/ClientAPI/MyAccount.pm,
+	  fs_selfservice/FS-SelfService/cgi/cust_bill-logo.cgi: fix
+	  self-service agent-specific logos
+
+2009-07-13 00:21  ivan
+
+	* conf/invoice_html: thank you IE8
+
+2009-07-12 06:27  jeff
+
+	* FS/FS/Record.pm: stop gratuitous hash manipulatoin during enum
+	  untaint
+
+2009-07-07 00:32  mark
+
+	* FS/bin/freeside-void-payments: Add freeside-void-payments script
+	  for returned check processing
+
+2009-07-07 00:32  ivan
+
+	* FS/bin/freeside-void-payments: file freeside-void-payments was
+	  added on branch FREESIDE_1_7_BRANCH on 2009-07-23 08:07:13 +0000
+
+2009-07-01 18:30  jeff
+
+	* FS/FS/: cust_pkg.pm, ClientAPI/MyAccount.pm, part_pkg/flat.pm,
+	  part_pkg/flat_introrate.pm: update flat_introrate plan to better
+	  fit current codebase RT#4912
+
+2009-06-26 11:53  ivan
+
+	* FS/FS/cust_main.pm: in smart_search, move duplicate elimination
+	  bits so that they're used even when doing an exact search on a
+	  browser-remembered result
+
+2009-06-12 19:52  rsiddall
+
+	* install/rpm/freeside.spec: Fix up permissions of default
+	  configuration files and ownership of the data source
+	  configuration folder.
+
+2009-06-12 16:35  rsiddall
+
+	* install/rpm/freeside.spec: Since Freeside uses the absence of
+	  configuration files to turn off config options, don't reinstall
+	  the data source-dependent config directory every time the RPM is
+	  installed or upgraded.  Instead, keep the configuration in a
+	  default folder and copy that to the data source-dependent folder
+	  only if that folder does not exist.
+
+2009-06-12 03:20  mark
+
+	* FS/FS/: Conf.pm, cust_main.pm: backported option for no postal
+	  fee on one-time charges
+
+2009-06-09 20:06  ivan
+
+	* FS/bin/freeside-upgrade: doh, semicolon
+
+2009-06-09 20:00  ivan
+
+	* FS/bin/freeside-upgrade: don't attempt to create h_queue indices,
+	  for SG upgradability
+
+2009-06-09 19:08  ivan
+
+	* httemplate/edit/payment_gateway.html: update gateway list in
+	  order to add WesternACH, RT#5409
+
+2009-06-04 07:27  ivan
+
+	* httemplate/docs/credits.html: fix scrolling
+
+2009-06-04 07:08  ivan
+
+	* httemplate/docs/credits.html: $core->add("jeremyd");
+
+2009-06-03 12:52  ivan
+
+	* FS/FS/UID.pm: add a hack to set default schema, cf.
+	  http://www.freeside.biz/mediawiki/index.php/Freeside:1.7:Documentation:Administration:PostgreSQL_Schema
+
+2009-05-29 20:40  ivan
+
+	* FS/FS/part_pkg/prepaid.pm: and enable overlimit_action, RT#4995
+
+2009-05-29 20:14  ivan
+
+	* FS/FS/: svc_acct.pm, part_pkg/flat.pm, part_pkg/prepaid.pm: add
+	  ability for prepaid packages to have usage limits and cancel if
+	  they're hit, RT#4995
+
+2009-05-29 19:31  ivan
+
+	* FS/FS/: Conf.pm, svc_acct.pm: require svc_acct-usage_threshold to
+	  be set explicitly, don't default to 80%
+
+2009-05-21 20:22  ivan
+
+	* FS/bin/freeside-upgrade: commit before sqlradius upgrade so
+	  sqlradius upgrade errors from permissions can be ignored for now
+
+2009-05-20 08:27  ivan
+
+	* FS/FS/Conf.pm, httemplate/view/cust_main/packages.html: add
+	  "manage device" link & config, RT#5438
+
+2009-05-16 13:07  rsiddall
+
+	* FS/FS/part_export/domreg_opensrs.pm: Added information on common
+	  failure causes to the perldoc.
+
+2009-05-16 12:29  rsiddall
+
+	* FS/FS/part_export/domreg_opensrs.pm: Defer loading Net::OpenSRS
+	  so that failure to install this module doesn't stop Apache from
+	  starting.  This will cause attempts to register domains to fail
+	  instead.
+
+2009-05-15 19:31  rsiddall
+
+	* FS/FS/part_export/domreg_opensrs.pm: Provide better diagnostics
+	  when the cust_main owning this domain lacks fields required for
+	  use as a contact handle in the domain registration record.  Also
+	  temporarily disable the ability to use the export for only
+	  registration or only transfers.
+
+2009-05-15 12:43  rsiddall
+
+	* FS/FS/svc_domain.pm, FS/FS/part_export/domreg_opensrs.pm,
+	  httemplate/edit/part_export.cgi, httemplate/edit/svc_domain.cgi,
+	  httemplate/edit/process/part_export.cgi,
+	  httemplate/edit/process/svc_domain.cgi: Simple domain
+	  registration at Tucows OpenSRS using an export based on
+	  Net::OpenSRS.  When a domain is added and the export runs, it
+	  will register the domain or initiate a transfer.  You can also
+	  choose no action.  There's currently no provision for revoking
+	  domains or renewing registrations.  Depending on the settings at
+	  OpenSRS, orders may look like they've succeeded in Freeside but
+	  actually be queued pending input by the reseller at OpenSRS.	The
+	  part_export CGIs were modified to allow a multi-valued select to
+	  be used to control which TLDs are enabled for registration.
+
+2009-05-15 12:41  rsiddall
+
+	* FS/FS/part_export/domreg_opensrs.pm: Simple domain registration
+	  at Tucows OpenSRS using an export based on Net::OpenSRS.  When a
+	  domain is added and the export runs, it will register the domain
+	  or initiate a transfer.  You can also choose no action.  There's
+	  currently no provision for revoking domains or renewing
+	  registrations.  Depending on the settings at OpenSRS, orders may
+	  look like they've succeeded in Freeside but actually be queued
+	  pending input by the reseller at OpenSRS.  The part_export CGIs
+	  were modified to allow a multi-valued select to be used to
+	  control which TLDs are enabled for registration.
+
+2009-05-15 12:41  rsiddall
+
+	* FS/FS/part_export/domreg_opensrs.pm: file domreg_opensrs.pm was
+	  added on branch FREESIDE_1_7_BRANCH on 2009-05-15 19:43:06 +0000
+
+2009-05-03 18:17  ivan
+
+	* FS/FS/svc_acct.pm: eliminate Argument "" isn't numeric in
+	  addition (+) warning
+
+2009-04-29 11:25  ivan
+
+	* httemplate/edit/svc_www.cgi: fix inadvertant select box, RT#5277
+
+2009-04-28 15:38  ivan
+
+	* fs_selfservice/FS-SelfService/cgi/bill.html: UI
+
+2009-04-27 21:36  ivan
+
+	* FS/FS/cust_main.pm: add cancelled_cust-noevents flag to emulate
+	  SG billing-daily -r behavior, RT#4412
+
+2009-04-27 21:13  ivan
+
+	* FS/FS/: Conf.pm, cust_main.pm: add cancelled_cust-noevents flag
+	  to emulate SG billing-daily -r behavior
+
+2009-04-27 16:06  ivan
+
+	* htetc/handler.pl: typo
+
+2009-04-27 16:01  ivan
+
+	* htetc/handler.pl: refuse to run w/CGI.pm 3.38.  all lenny
+	  upgrades will need libcgi-pm-perl removed, suck
+
+2009-04-26 16:43  ivan
+
+	* FS/FS/Schema.pm: would help to have an index on priority if we're
+	  going to order based on it
+
+2009-04-26 16:19  ivan
+
+	* FS/bin/freeside-queued: start small jobs more efficiently,
+	  RT#4412
+
+2009-04-26 16:09  ivan
+
+	* FS/FS/Conf.pm: add a config option for max # of queued kids,
+	  RT#4412
+
+2009-04-25 15:50  ivan
+
+	* FS/: FS/Cron/bill.pm, bin/freeside-daily: add dry run to
+	  multi-process mode for testing, RT#4412
+
+2009-04-25 10:02  ivan
+
+	* FS/FS/Cron/bill.pm: well.  that never returned any results at
+	  all.	reverting.  RT#4412
+
+2009-04-24 12:06  ivan
+
+	* FS/FS/Cron/bill.pm: tune 1.7 query for better performance,
+	  hopefully.  RT#4412
+
+2009-04-22 21:57  ivan
+
+	* FS/FS/Cron/bill.pm: we don't actually need the results ordered,
+	  and i'm sure it doesn't help the planner get us results sooner.
+	  last chance to try and get cursor approach working?  RT#4412
+
+2009-04-22 21:14  ivan
+
+	* FS/FS/Cron/bill.pm: does pg try to finish the query when the job
+	  addition is committed?  well, if this works, that answers that.
+	  RT#4412
+
+2009-04-22 13:24  ivan
+
+	* FS/FS/Cron/bill.pm: hopefully better performance running the big
+	  query once and then fetching results with a cursor, rather than
+	  running it multiple times with an OFFSET and LIMIT, RT#4412
+
+2009-04-21 23:52  ivan
+
+	* FS/FS/Cron/bill.pm: perhaps a happier medium, RT#4412
+
+2009-04-21 17:54  ivan
+
+	* FS/FS/Cron/bill.pm: have the big query find customers in batches.
+	  this should be way more efficient in multi-process mode, can
+	  start billing before the big query completes.  RT#4412
+
+2009-04-21 09:42  ivan
+
+	* FS/FS/Cron/bill.pm: yow.  fix fallout from cust_main.archived
+	  stuff causing nothing to bill.  RT#4412
+
+2009-04-20 13:55  rsiddall
+
+	* install/rpm/freeside.spec: Acceptance testing of the RPM build
+	  system flushed out a place where /bin/rm stops for input if
+	  you're running /bin/su as another user to do the build.  Adding a
+	  -f flag to stop it asking for input.
+
+2009-04-20 09:57  ivan
+
+	* FS/FS/: Schema.pm, cust_main.pm, Cron/bill.pm: add
+	  cust_main.archived field, skip billing if Y, RT#4412
+
+2009-04-19 17:20  ivan
+
+	* httemplate/elements/header.html: fix botched backport from 1.9
+
+2009-04-17 12:50  ivan
+
+	* FS/: FS/Schema.pm, FS/Cron/bill.pm, bin/freeside-queued: add
+	  priority to job queue so billing jobs don't don't drown out
+	  provisioning jobs
+
+2009-04-17 05:08  ivan
+
+	* FS/: FS/Cron/bill.pm, bin/freeside-daily, FS/cust_main.pm:
+	  backport freeside-daily -m and cust_main::bill_and_collect to
+	  1.7, RT#4412
+
+2009-04-17 03:17  ivan
+
+	* FS/FS/cust_main.pm: backport paycvv upgrade from 1.9: "orders of
+	  magnitude faster"
+
+2009-04-17 01:33  ivan
+
+	* ChangeLog: 1.7.4?
+
 2009-04-17 01:25  ivan
 
 	* httemplate/docs/about.html: when you're waiting for a miracle
