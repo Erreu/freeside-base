@@ -1,13 +1,13 @@
-# BEGIN BSP TAGGED BLOCK {{{
+# BEGIN BPS TAGGED BLOCK {{{
 # 
 # COPYRIGHT:
 #  
 # This software is Copyright (c) 1996-2005 Best Practical Solutions, LLC 
 #                                          <jesse@bestpractical.com>
 # 
-# (Except where explicitly superceded by other copyright notices)
-#
-#
+# (Except where explicitly superseded by other copyright notices)
+# 
+# 
 # LICENSE:
 # 
 # This work is made available to you under the terms of Version 2 of
@@ -23,9 +23,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
-#
-#
+# 
+# 
 # CONTRIBUTION SUBMISSION POLICY:
+# 
 # (The following paragraph is not intended to limit the rights granted
 # to you to modify and distribute this software under the terms of
 # the GNU General Public License and is only of importance to you if
@@ -87,8 +88,8 @@ APACHECTL		=
 # DESTDIR allows you to specify that RT be installed somewhere other than
 # where it will eventually reside
 
-DESTDIR			=	
 
+DESTDIR			=	
 
 RT_PATH			=	/opt/rt3
 RT_ETC_PATH		=	/opt/rt3/etc
@@ -105,7 +106,7 @@ MASON_HTML_PATH		=	/opt/rt3/share/html
 MASON_LOCAL_HTML_PATH	=	/opt/rt3/local/html
 MASON_DATA_PATH		=	/opt/rt3/var/mason_data
 MASON_SESSION_PATH	=	/opt/rt3/var/session_data
-RT_LOG_PATH	    =       /opt/rt3/var/log
+RT_LOG_PATH		=	/opt/rt3/var/log
 
 # RT_READABLE_DIR_MODE is the mode of directories that are generally meant
 # to be accessable
@@ -118,6 +119,10 @@ RT_READABLE_DIR_MODE	=	0755
 
 # RT_MODPERL_HANDLER is the mason handler script for mod_perl
 RT_MODPERL_HANDLER	=	$(RT_BIN_PATH)/webmux.pl
+# RT_STANDALONE_SERVER is a stand-alone HTTP server
+RT_STANDALONE_SERVER	=	$(RT_BIN_PATH)/standalone_httpd
+# RT_SPEEDYCGI_HANDLER is the mason handler script for SpeedyCGI
+RT_SPEEDYCGI_HANDLER	=	$(RT_BIN_PATH)/mason_handler.scgi
 # RT_FASTCGI_HANDLER is the mason handler script for FastCGI
 RT_FASTCGI_HANDLER	=	$(RT_BIN_PATH)/mason_handler.fcgi
 # RT_WIN32_FASTCGI_HANDLER is the mason handler script for FastCGI
@@ -131,14 +136,15 @@ RT_CRON_BIN		=	$(RT_BIN_PATH)/rt-crontool
 
 # }}}
 
-SETGID_BINARIES	 	= 	$(DESTDIR)/$(RT_FASTCGI_HANDLER) \
-				$(DESTDIR)/$(RT_WIN32_FASTCGI_HANDLER)
 
 BINARIES		=	$(DESTDIR)/$(RT_MODPERL_HANDLER) \
 				$(DESTDIR)/$(RT_MAILGATE_BIN) \
 				$(DESTDIR)/$(RT_CLI_BIN) \
 				$(DESTDIR)/$(RT_CRON_BIN) \
-				$(SETGID_BINARIES)
+				$(DESTDIR)/$(RT_STANDALONE_SERVER) \
+				$(DESTDIR)/$(RT_SPEEDYCGI_HANDLER) \
+				$(DESTDIR)/$(RT_FASTCGI_HANDLER) \
+				$(DESTDIR)/$(RT_WIN32_FASTCGI_HANDLER)
 SYSTEM_BINARIES		=	$(DESTDIR)/$(RT_SBIN_PATH)/
 
 
@@ -213,8 +219,11 @@ instruct:
 	@echo ""
 	@echo "You must now configure RT by editing $(SITE_CONFIG_FILE)."
 	@echo ""
-	@echo "(You will definitely need to set RT's database password before continuing."
-	@echo " Not doing so could be very dangerous)"
+	@echo "(You will definitely need to set RT's database password in "
+	@echo "$(SITE_CONFIG_FILE) before continuing. Not doing so could be "
+	@echo "very dangerous.  Note that you do not have to manually add a "
+	@echo "database user or set up a database for RT.  These actions will be "
+	@echo "taken care of in the next step.)"
 	@echo ""
 	@echo "After that, you need to initialize RT's database by running" 
 	@echo " 'make initialize-database'"
@@ -230,12 +239,13 @@ upgrade-instruct:
 	@echo "$(CONFIG_FILE) for any necessary site customization. Additionally,"
 	@echo "you should update RT's system database objects by running "
 	@echo "   ls etc/upgrade"
-        @echo ""
-	@echo "For each file in that directory whose name is greater than"
+	@echo ""
+	@echo "For each item in that directory whose name is greater than"
 	@echo "your previously installed RT version, run:"
-	@echo "    $(RT_SBIN_PATH)/rt-setup-database --dba $(DB_DBA) --prompt-for-dba-password --action schema --datadir etc/upgrade/<version>"
-	@echo "    $(RT_SBIN_PATH)/rt-setup-database --dba $(DB_DBA) --prompt-for-dba-password --action acl --datadir etc/upgrade/<version>"
-	@echo "    $(RT_SBIN_PATH)/rt-setup-database --dba $(DB_DBA) --prompt-for-dba-password --action insert --datadir etc/upgrade/<version>"
+	@echo "	   $(RT_SBIN_PATH)/rt-setup-database --dba $(DB_DBA) --prompt-for-dba-password --action schema --datadir etc/upgrade/<version>"
+	@echo "	   $(RT_SBIN_PATH)/rt-setup-database --dba $(DB_DBA) --prompt-for-dba-password --action acl --datadir etc/upgrade/<version>"
+	@echo "	   $(RT_SBIN_PATH)/rt-setup-database --dba $(DB_DBA) --prompt-for-dba-password --action insert --datadir etc/upgrade/<version>"
+
 
 upgrade: config-install dirs files-install fixperms upgrade-instruct
 
@@ -245,6 +255,8 @@ upgrade-noclobber: config-install libs-install html-install bin-install local-in
 # {{{ dependencies
 testdeps:
 	$(PERL) ./sbin/rt-test-dependencies --verbose --with-$(DB_TYPE)
+
+depends: fixdeps
 
 fixdeps:
 	$(PERL) ./sbin/rt-test-dependencies --verbose --install --with-$(DB_TYPE)
@@ -340,6 +352,7 @@ regression: regression-install dirs files-install libs-install sbin-install bin-
 run-regression:
 	prove -Ilib lib/t/setup_regression.t  lib/t/autogen/ lib/t/regression/
 
+
 regression-noapache: regression-install dirs files-install libs-install sbin-install bin-install regression-instruct regression-reset-db  testify-pods fixperms start-httpd  run-regression
 
 regression-quiet:
@@ -375,7 +388,7 @@ libs-install:
 
 # {{{ html-install
 html-install:
-	[ -d $(DESTDIR)/$(MASON_HTML_PATH) ] || mkdir $(DESTDIR)/$(MASON_HTML_PATH)
+	[ -d $(DESTDIR)/$(MASON_HTML_PATH) ] || mkdir -p $(DESTDIR)/$(MASON_HTML_PATH)
 	-cp -rp ./html/* $(DESTDIR)/$(MASON_HTML_PATH)
 # }}}
 
@@ -383,7 +396,7 @@ html-install:
 doc-install:
 	# RT 3.0.0 - RT 3.0.2 would accidentally create a file instead of a dir
 	-[ -f $(DESTDIR)/$(RT_DOC_PATH) ] && rm $(DESTDIR)/$(RT_DOC_PATH) 
-	[ -d $(DESTDIR)/$(RT_DOC_PATH) ] || mkdir $(DESTDIR)/$(RT_DOC_PATH)
+	[ -d $(DESTDIR)/$(RT_DOC_PATH) ] || mkdir -p $(DESTDIR)/$(RT_DOC_PATH)
 	-cp -rp ./README $(DESTDIR)/$(RT_DOC_PATH)
 # }}}
 
@@ -468,8 +481,12 @@ reconfigure:
 	chmod 755 ./configure
 	./configure
 
+start-httpd:
+	$(PERL) bin/standalone_httpd 80 &
+
 apachectl:
 	$(APACHECTL) stop
 	sleep 10
 	$(APACHECTL) start
+	sleep 5
 # }}}
