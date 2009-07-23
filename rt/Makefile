@@ -88,8 +88,8 @@ APACHECTL		=
 # DESTDIR allows you to specify that RT be installed somewhere other than
 # where it will eventually reside
 
-
 DESTDIR			=	
+
 
 RT_PATH			=	/opt/rt3
 RT_ETC_PATH		=	/opt/rt3/etc
@@ -101,12 +101,13 @@ RT_VAR_PATH		=	/opt/rt3/var
 RT_DOC_PATH		=	/opt/rt3/share/doc
 RT_LOCAL_PATH		=	/opt/rt3/local
 LOCAL_ETC_PATH		=	/opt/rt3/local/etc
+LOCAL_LIB_PATH		=	/opt/rt3/local/lib
 LOCAL_LEXICON_PATH	=	/opt/rt3/local/po
-MASON_HTML_PATH		=	/opt/rt3/share/html
+MASON_HTML_PATH		=	/var/www/freeside/rt
 MASON_LOCAL_HTML_PATH	=	/opt/rt3/local/html
-MASON_DATA_PATH		=	/opt/rt3/var/mason_data
+MASON_DATA_PATH		=	/usr/local/etc/freeside/masondata
 MASON_SESSION_PATH	=	/opt/rt3/var/session_data
-RT_LOG_PATH		=	/opt/rt3/var/log
+RT_LOG_PATH	    =       /opt/rt3/var/log
 
 # RT_READABLE_DIR_MODE is the mode of directories that are generally meant
 # to be accessable
@@ -196,9 +197,9 @@ DB_RT_HOST		=	localhost
 # set this to the name you want to give to the RT database in 
 # your database server. For Oracle, this should be the name of your sid
 
-DB_DATABASE		=	_DBC_DBNAME_
-DB_RT_USER		=	_DBC_DBUSER_
-DB_RT_PASS		=	_DBC_DBPASS_
+DB_DATABASE		=	freeside
+DB_RT_USER		=	freeside
+DB_RT_PASS		=	
 
 # }}}
 
