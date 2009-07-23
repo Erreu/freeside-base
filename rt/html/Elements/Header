@@ -106,15 +106,15 @@ ONLOAD="
         <tr>
           <td align=right>
             <FONT SIZE="-3">
-              <A HREF="http://www.sisd.com/freeside">Freeside</A>&nbsp;v<% &RT::URI::freeside::FreesideVersion() %><BR>
-             <A HREF="<% FS::Conf->new->config('support-key') ? "http://www.sisd.com/mediawiki/index.php/Supported:Documentation" : "http://www.sisd.com/mediawiki/index.php/Freeside:1.7:Documentation" %>">Documentation</A><BR>
+              <A HREF="http://www.freeside.biz/freeside" TARGET="_blank">Freeside</A>&nbsp;v<% &RT::URI::freeside::FreesideVersion() %><BR>
+             <A HREF="<% FS::Conf->new->config('support-key') ? "http://www.freeside.biz/mediawiki/index.php/Supported:Documentation" : "http://www.freeside.biz/mediawiki/index.php/Freeside:1.7:Documentation" %>" TARGET="_blank">Documentation</A><BR>
             </FONT>
           </td>
           <td bgcolor=#000000></td>
           <td align=left>
             <FONT SIZE="-3">
-             <A HREF="http://www.bestpractical.com/rt">RT</A>&nbsp;v<% $RT::VERSION %><BR>
-             <A HREF="http://wiki.bestpractical.com/">Documentation</A><BR>
+             <A HREF="http://www.bestpractical.com/rt" TARGET="_blank">RT</A>&nbsp;v<% $RT::VERSION %><BR>
+             <A HREF="http://wiki.bestpractical.com/" TARGET="_blank">Documentation</A><BR>
             </FONT>
           </td>
 
