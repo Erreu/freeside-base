@@ -1641,7 +1641,7 @@ worry that config_items is freeside-specific and icky.
     'type'        => 'select',
     'select_hash' => [
                        'actual_oncard' => 'Default/classic behavior: set the flag if a customer has actual previous charges on the card.',
-		       'transaction_is_recur' => 'Set the flag if the transaction itself is recurring, irregardless of previous charges on the card.',
+                       'transaction_is_recur' => 'Set the flag if the transaction itself is recurring, irregardless of previous charges on the card.',
                      ],
   },
 
@@ -2063,16 +2063,16 @@ worry that config_items is freeside-specific and icky.
     'type'        => 'select-sub',
     'options_sub' => sub { require FS::Record;
                            require FS::part_pkg;
-			   map { $_->pkgpart => $_->pkg }
+                           map { $_->pkgpart => $_->pkg }
                                FS::Record::qsearch('part_pkg', { disabled=>'' } );
-			 },
+                         },
     'option_sub'  => sub { require FS::Record;
                            require FS::part_pkg;
-			   my $part_pkg = FS::Record::qsearchs(
-			     'part_pkg', { 'pkgpart'=>shift }
-			   );
+                           my $part_pkg = FS::Record::qsearchs(
+                             'part_pkg', { 'pkgpart'=>shift }
+                           );
                            $part_pkg ? $part_pkg->pkg : '';
-			 },
+                         },
   },
 
   {
@@ -2308,8 +2308,6 @@ worry that config_items is freeside-specific and icky.
     'type'        => 'checkbox',
   },
 
-  
-
   {
     'key'         => 'cust_main-require_phone',
     'section'     => '',
@@ -2331,16 +2329,16 @@ worry that config_items is freeside-specific and icky.
     'type'        => 'select-sub',
     'options_sub' => sub { require FS::Record;
                            require FS::reason_type;
-			   map { $_->typenum => $_->type }
+                           map { $_->typenum => $_->type }
                                FS::Record::qsearch('reason_type', { class=>'R' } );
-			 },
+                         },
     'option_sub'  => sub { require FS::Record;
                            require FS::reason_type;
-			   my $reason_type = FS::Record::qsearchs(
-			     'reason_type', { 'typenum' => shift }
-			   );
+                           my $reason_type = FS::Record::qsearchs(
+                             'reason_type', { 'typenum' => shift }
+                           );
                            $reason_type ? $reason_type->type : '';
-			 },
+                         },
   },
 
   {
@@ -2350,16 +2348,16 @@ worry that config_items is freeside-specific and icky.
     'type'        => 'select-sub',
     'options_sub' => sub { require FS::Record;
                            require FS::reason_type;
-			   map { $_->typenum => $_->type }
+                           map { $_->typenum => $_->type }
                                FS::Record::qsearch('reason_type', { class=>'R' } );
-			 },
+                         },
     'option_sub'  => sub { require FS::Record;
                            require FS::reason_type;
-			   my $reason_type = FS::Record::qsearchs(
-			     'reason_type', { 'typenum' => shift }
-			   );
+                           my $reason_type = FS::Record::qsearchs(
+                             'reason_type', { 'typenum' => shift }
+                           );
                            $reason_type ? $reason_type->type : '';
-			 },
+                         },
   },
 
   {
@@ -2369,16 +2367,16 @@ worry that config_items is freeside-specific and icky.
     'type'        => 'select-sub',
     'options_sub' => sub { require FS::Record;
                            require FS::reason_type;
-			   map { $_->typenum => $_->type }
+                           map { $_->typenum => $_->type }
                                FS::Record::qsearch('reason_type', { class=>'R' } );
-			 },
+                         },
     'option_sub'  => sub { require FS::Record;
                            require FS::reason_type;
-			   my $reason_type = FS::Record::qsearchs(
-			     'reason_type', { 'typenum' => shift }
-			   );
+                           my $reason_type = FS::Record::qsearchs(
+                             'reason_type', { 'typenum' => shift }
+                           );
                            $reason_type ? $reason_type->type : '';
-			 },
+                         },
   },
 
   {
