@@ -176,7 +176,7 @@ sub calc_remain {
   #my $last_bill = $cust_pkg->last_bill || 0;
   my $last_bill = $cust_pkg->get('last_bill') || 0; #->last_bill falls back to setup
 
-  return 0 if    ! $self->base_recur
+  return 0 if    ! $self->base_recur($cust_pkg)
               || ! $self->option('unused_credit', 1)
               || ! $last_bill
               || ! $next_bill
@@ -194,7 +194,7 @@ sub calc_remain {
   my $freq_sec = $1 * $sec{$2||'m'};
   return 0 unless $freq_sec;
 
-  sprintf("%.2f", $self->base_recur * ( $next_bill - $time ) / $freq_sec );
+  sprintf("%.2f", $self->base_recur($cust_pkg) * ( $next_bill - $time ) / $freq_sec );
 
 }
 
@@ -216,7 +216,7 @@ sub usage_valuehash {
 sub reset_usage {
   my($self, $cust_pkg, %opt) = @_;
   warn "    resetting usage counters" if $opt{debug} > 1;
-  my %values = $self->usage_valuehash; 
+  my %values = $self->usage_valuehash;
   if ($self->option('usage_rollover', 1)) {
     $cust_pkg->recharge(\%values);
   }else{
