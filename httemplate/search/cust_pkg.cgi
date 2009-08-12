@@ -138,15 +138,15 @@ die "access denied"
 
 # my %part_pkg = map { $_->pkgpart => $_ } qsearch('part_pkg', {});
 
-
 my %search_hash = ();
 
 $search_hash{'query'} = $cgi->keywords;
 
-for my $param (qw(agentnum magic status classnum pkgpart)) {
-  $search_hash{$param} = $cgi->param($param)
-    if $cgi->param($param);
+for my $param (qw( agentnum magic status classnum )) {
+  $search_hash{$param} = $cgi->param($param) if $cgi->param($param);
 }
+
+$search_hash{'pkgpart'} = [ $cgi->param('pkgpart') ];
 
 ###
 # parse dates
