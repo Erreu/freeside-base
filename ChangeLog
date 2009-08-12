@@ -1,3 +1,80 @@
+2009-08-12 15:26  ivan
+
+	* Makefile, debian/changelog, debian/control, debian/copyright:
+	  1.7.4rc2
+
+2009-08-12 04:57  ivan
+
+	* httemplate/: docs/about.html, docs/credits.html,
+	  docs/license.html, elements/header-popup.html: slight
+	  about/credits UI tweak
+
+2009-08-11 19:36  ivan
+
+	* FS/FS/cust_pkg.pm, httemplate/misc/bulk_change_pkg.cgi,
+	  httemplate/search/cust_pkg.cgi: fix multiple pkgpart search,
+	  RT#5924
+
+2009-08-11 14:32  rsiddall
+
+	* install/rpm/freeside.spec: Back out kludge to show CVS snapshot
+	  date in version number in GUI.  You'll have to do an "rpm -q" to
+	  determine this.
+
+2009-08-11 14:29  rsiddall
+
+	* Makefile: Reset RPM release number back to 1 on a new version
+	  release.
+
+2009-08-05 16:32  ivan
+
+	* FS/FS/part_pkg/: flat.pm, flat_delayed.pm, prorate_delayed.pm:
+	  fix cancellation errors with updated flat_introrate, RT#5865
+
+2009-08-04 19:27  ivan
+
+	* FS/FS/: svc_acct.pm: export negative byte values to chillispot
+	  attributes as 0, RT#5815
+
+2009-08-04 16:49  ivan
+
+	* FS/: FS/svc_acct.pm, bin/freeside-sqlradius-reset: hopefully
+	  ignore errors about deleted accounts and properly finish
+	  freeside-sqlradius-reset, RT#5868
+
+2009-08-04 15:04  ivan
+
+	* FS/: FS/svc_Common.pm, bin/freeside-sqlradius-reset: ignore
+	  problams calling ->overlimit during sqlradius-reset, wtf?!
+	  RT#5868
+
+2009-07-26 11:39  ivan
+
+	* FS/FS/Conf.pm: some whitespace changes to make it easier to keep
+	  in sync with 1.9 Conf_compat17.pm, RT#2873
+
+2009-07-25 23:38  jeff
+
+	* FS/bin/freeside-apply_payments_and_credits: command line tool to
+	  apply payments and credits
+
+2009-07-25 15:00  ivan
+
+	* htetc/handler.pl: set a character encoding for all pages; this
+	  should fix problems with diamond question marks even when the
+	  server gets an UTF-8 default setting, RT#3094
+
+2009-07-24 02:38  ivan
+
+	* FS/FS/: Conf.pm, svc_acct.pm: add handling of ChilliSpot (and
+	  CoovaChilli) Max attributes, specifically
+	  ChilliSpot-Max-{Input,Output,Total}-{Octets,Gigawords}, RT#5815
+
+2009-07-23 14:00  ivan
+
+	* ChangeLog, install/rpm/freeside.spec, debian/changelog: Updated
+	  for 1.7.4rc1
+
 2009-07-23 13:49  ivan
 
 	* rt/: Makefile, bin/mason_handler.fcgi, bin/mason_handler.scgi,
