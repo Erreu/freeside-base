@@ -1,3 +1,11 @@
+2009-08-12 17:26  ivan
+
+	* init.d/freeside-init: useful stuff for webdemo & profiling
+
+2009-08-12 15:29  ivan
+
+	* ChangeLog: 1.7.4rc2
+
 2009-08-12 15:26  ivan
 
 	* Makefile, debian/changelog, debian/control, debian/copyright:
