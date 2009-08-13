@@ -1,9 +1,3 @@
-freeside (1.7.4~rc2-1) unstable; urgency=low
-
-  * New upstream (RC) release
-
- -- Ivan Kohler <ivan-debian@420.am>  Wed, 12 Aug 2009 14:18:29 -0700
-
 freeside (1.7.4~rc1-1) unstable; urgency=low
 
   * New upstream release
