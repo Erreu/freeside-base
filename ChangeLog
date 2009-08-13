@@ -1,3 +1,11 @@
+2009-08-12 19:24  ivan
+
+	* debian/changelog: doh, let make release do it
+
+2009-08-12 19:23  ivan
+
+	* ChangeLog, install/rpm/freeside.spec: Updated for 1.7.4rc2
+
 2009-08-12 17:26  ivan
 
 	* init.d/freeside-init: useful stuff for webdemo & profiling
