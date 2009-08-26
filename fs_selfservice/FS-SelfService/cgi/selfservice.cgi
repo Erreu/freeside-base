@@ -323,7 +323,7 @@ sub payment_results {
   my $amount = $1;
 
   my $payinfo = $cgi->param('payinfo');
-  $payinfo =~ s/\D//g;
+  $payinfo =~ s/[^\dx]//g;
   $payinfo =~ /^(\d{13,16})$/
     #or $error ||= $init_data->{msgcat}{invalid_card}; #. $self->payinfo;
     or die "illegal card"; #!!!
