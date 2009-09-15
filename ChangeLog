@@ -1,3 +1,27 @@
+2009-08-26 13:55  jeff
+
+	* fs_selfservice/FS-SelfService/cgi/selfservice.cgi: improve
+	  testing need for invoicing list
+
+2009-08-25 17:45  ivan
+
+	* fs_selfservice/FS-SelfService/cgi/selfservice.cgi: should fix
+	  processing payment with remembered/masked card info, hopefully,
+	  RT#5799
+
+2009-08-21 17:27  ivan
+
+	* FS/FS/Cron/check.pm: fewer false positives
+
+2009-08-13 08:18  jeff
+
+	* FS/FS/cust_pkg.pm: fix fix multiple pkgpart search (need sanity
+	  check): don't let empty set limit search
+
+2009-08-12 19:32  ivan
+
+	* ChangeLog, debian/changelog: Updated for 1.7.4rc2
+
 2009-08-12 19:24  ivan
 
 	* debian/changelog: doh, let make release do it
