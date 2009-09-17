@@ -8,13 +8,14 @@ use FS::Record qw(qsearchs);
 use FS::Conf;
 use FS::cust_main;
 use FS::cust_pay;
+use FS::cust_pay_void;
 use Business::OnlinePayment; # For retrieving the void list only.
 use Time::Local;
 use Date::Parse 'str2time';
 use Date::Format 'time2str';
 
 my %opt;
-getopts("r:f:ca:g:s:e:", \%opt);
+getopts("r:f:ca:g:s:e:vX:", \%opt);
 
 $user = shift or die &usage;
 &adminsuidsetup( $user );
@@ -31,6 +32,10 @@ elsif($opt{'a'}) {
     or die "Agent not found: '".$opt{'a'}."'.";
   $gateway = $agent->payment_gateway(method => $method)
     or die "Agent has no payment gateway for method '$method'.";
+}
+
+if(defined($opt{'X'}) and !qsearchs('reason', { reasonnum => $opt{'X'} })) {
+  die "Cancellation reason not found: '".$opt{'X'}."'";
 }
 
 my ($processor, $login, $password, $action, @bop_options) =
@@ -80,20 +85,61 @@ else {
 }
 
 $opt{'r'} ||= 'freeside-void-payments';
+my $success = 0;
+my $notfound = 0;
+my $canceled = 0;
 
 foreach my $authnum (@auths) {
   my $paybatch = $gatewaynum . $processor . ':' . $authnum;
   my $cust_pay = qsearchs('cust_pay', { paybatch => $paybatch } );
+  my $error;
+  my $cancel_error;
   if($cust_pay) {
-    $cust_pay->void($opt{'r'});
+    $error = $cust_pay->void($opt{'r'});
+    $success++ if not $error;
+    if($opt{'X'} and not $error) {
+      $cancel_error = join(';', $cust_pay->cust_main->cancel(reason => $opt{'X'}));
+      $canceled++ if !$cancel_error;
+    }
   }
   else {
-    warn "cust_pay record not found: '$paybatch'";
+    my $cpv = qsearchs('cust_pay_void', { paybatch => $paybatch });
+    if($cpv) {
+      $error = 'already voided '.time2str('%Y-%m-%d', $cpv->void_date).
+               ' by '.$cpv->otaker;
+    }
+    else {
+      $error = 'not found';
+      $notfound++;
+    }
+  }
+  if($opt{'v'}) {
+    print $authnum;
+    if($error) {
+      print "\t$error";
+    }
+    elsif($opt{'X'}) {
+      print "\t(canceled service)" if !$cancel_error;
+      print "\n\t(cancellation failed: $cancel_error)" if $cancel_error;
+    }
+    print "\n";
   }
 }
 
+if($opt{'v'}) {
+  print scalar(@auths)." transactions: $success voided, $notfound not found\n";
+  print "$canceled customer".($canceled == 1 ? '' : 's')." canceled\n" if $opt{'X'};
+}
+
 sub usage {
-    die "Usage:\n\n  freeside-void-payments [ -f file | [ -s start-date ] [ -e end-date ] ] [ -r 'reason' ] [ -g gatewaynum | -a agentnum ] [ -c ] user\n";
+    die 
+"Usage:
+freeside-void-payments [ -f file | [ -s start-date ] [ -e end-date ] ] 
+                       [ -r 'reason' ]
+                       [ -g gatewaynum | -a agentnum ] 
+                       [ -c ] [ -v ] [ -n ] 
+                       [ -X reasonnum ]
+                       user\n";
 }
 
 __END__
@@ -106,7 +152,12 @@ freeside-void-payments - Automatically void a list of returned payments.
 
 =head1 SYNOPSIS
 
-  freeside-void-payments [ -f file | [ -s start-date ] [ -e end-date ] ] [ -r 'reason' ] [ -g gatewaynum | -a agentnum ] [ -c ] user
+  freeside-void-payments [ -f file | [ -s start-date ] [ -e end-date ] ] 
+                         [ -r 'reason' ]
+                         [ -g gatewaynum | -a agentnum ] 
+                         [ -c ] [ -v ] 
+                         [ -X reasonnum ]
+                         user
 
 =head1 DESCRIPTION
 
@@ -144,6 +195,11 @@ generally how the processor will identify them later.
 
   -c: Use the default gateway for check transactions rather than 
       credit cards.
+  
+  -v: Be verbose.
+
+  -X: Automatically cancel all packages belonging to customers whose payments
+      were returned.  Requires a cancellation reasonnum (from L<FS::reason>).
 
 A warning will be emitted for each transaction that can't be found.  
 This may happen if it's already been voided, or if the gateway 
@@ -168,7 +224,7 @@ day at 8:30 every morning:
 
 =head1 BUGS
 
-Most payment gateways don't support it, making the script largely useless.
+Most payment gateways don't support it.
 
 =head1 SEE ALSO
 
