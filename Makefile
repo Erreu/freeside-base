@@ -164,6 +164,7 @@ install-docs: docs
 	cp htetc/handler.pl ${MASON_HANDLER}
 	  perl -p -i -e "\
 	    s'%%%FREESIDE_DOCUMENT_ROOT%%%'${FREESIDE_DOCUMENT_ROOT}'g; \
+	    s'%%%FREESIDE_CONF%%%'${FREESIDE_CONF}'g; \
 	    s'%%%RT_ENABLED%%%'${RT_ENABLED}'g; \
 	    s'%%%MASONDATA%%%'${MASONDATA}'g;\
 	  " ${MASON_HANDLER}

@@ -4,6 +4,7 @@ package HTML::Mason;
 
 use strict;
 use vars qw($r);
+use File::Slurp qw( slurp );
 use HTML::Mason 1.27; #http://www.masonhq.com/?ApacheModPerl2Redirect
 use HTML::Mason::Interp;
 use HTML::Mason::Compiler::ToObject;
@@ -32,6 +33,26 @@ if ( %%%RT_ENABLED%%% ) {
  die $@ if $@;
 }
 
+# Some hooks supporting strange legacy ways people have added stuff on
+
+my @addl_comp_root = ();
+my $addl_comp_root_file = '%%%FREESIDE_CONF%%%/addl_comp_root.pl';
+if ( -e $addl_comp_root_file ) {
+  my $text = slurp( $addl_comp_root_file );
+  my @addl = eval $text;
+  if ( @addl && ! $@ ) {
+    @addl_comp_root = @addl;
+  } elsif ($@) {
+    warn "error parsing $addl_comp_root_file: $@\n";
+  }
+}
+
+$FS::Mason::addl_handler_use = '';
+my $addl_handler_use_file = '%%%FREESIDE_CONF%%%/addl_handler_use.pl';
+if ( -e $addl_handler_use_file ) {
+  $FS::Mason::addl_handler_use = slurp( $addl_handler_use_file );
+}
+
 # Create Mason objects
 
 my %interp = (
@@ -43,6 +64,7 @@ my %interp = (
   comp_root            => [
                             [ 'freeside' => '%%%FREESIDE_DOCUMENT_ROOT%%%'    ],
                             [ 'rt'       => '%%%FREESIDE_DOCUMENT_ROOT%%%/rt' ],
+                            @addl_comp_root,
                           ],
 );
 
@@ -216,6 +238,11 @@ sub handler
       use FS::reason_type;
       use FS::reason;
       use FS::cust_main_note;
+
+      if ( $FS::Mason::addl_handler_use ) {
+        eval $FS::Mason::addl_handler_use;
+        die $@ if $@;
+      }
 
       if ( %%%RT_ENABLED%%% ) {
         eval '
