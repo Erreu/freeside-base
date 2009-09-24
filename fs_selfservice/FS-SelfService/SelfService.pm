@@ -62,6 +62,7 @@ $socket .= '.'.$tag if defined $tag && length($tag);
   'agent_info'                => 'Agent/agent_info',
   'agent_list_customers'      => 'Agent/agent_list_customers',
   #sg
+  'ping'                      => 'SGNG/ping',
   'decompify_pkgs'            => 'SGNG/decompify_pkgs',
   'previous_payment_info'     => 'SGNG/previous_payment_info',
   'previous_payment_info_renew_info'
