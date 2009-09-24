@@ -2464,6 +2464,20 @@ worry that config_items is freeside-specific and icky.
   },
 
   {
+    'key'         => 'sg-ping_username',
+    'section'     => '',
+    'description' => "Don't use this.",
+    'type'        => 'text',
+  },
+
+  {
+    'key'         => 'sg-ping_password',
+    'section'     => '',
+    'description' => "Don't use this.",
+    'type'        => 'text',
+  },
+
+  {
     'key'         => 'queued-max_kids',
     'section'     => '',
     'description' => 'Maximum number of queued processes.  Defaults to 10.',
