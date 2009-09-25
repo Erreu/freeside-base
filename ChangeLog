@@ -1,3 +1,34 @@
+2009-09-24 12:59  ivan
+
+	* FS/FS/: Cron/check.pm, Conf.pm: get the ping username/pass from a
+	  config, good enough, RT#4610
+
+2009-09-23 20:14  ivan
+
+	* FS/FS/ClientAPI/SGNG.pm, FS/FS/Cron/check.pm,
+	  FS/bin/freeside-check,
+	  fs_selfservice/FS-SelfService/SelfService.pm: add SG and SGNG
+	  ping, RT#4610
+
+2009-09-23 16:47  ivan
+
+	* FS/FS/TicketSystem/RT_External.pm: this should fix the occasional
+	  extra ticket showing up on wrong customer record
+
+2009-09-21 20:08  ivan
+
+	* Makefile, htetc/handler.pl: add addl_comp_root.pl and
+	  addl_handler_use.pl config files, RT#4743
+
+2009-09-17 16:55  mark
+
+	* FS/bin/freeside-void-payments: Add option to
+	  freeside-void-payments to cancel customers
+
+2009-09-14 18:24  ivan
+
+	* ChangeLog, Makefile, debian/changelog: 1.7.4rc3
+
 2009-08-26 13:55  jeff
 
 	* fs_selfservice/FS-SelfService/cgi/selfservice.cgi: improve
