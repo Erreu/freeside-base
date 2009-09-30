@@ -317,7 +317,7 @@ sub make_payment {
 
 sub payment_results {
 
-  use Business::CreditCard;
+  use Business::CreditCard 0.30;
 
   #we should only do basic checking here for DoS attacks and things
   #that couldn't be constructed by the web form...  let process_payment() do
@@ -329,7 +329,7 @@ sub payment_results {
 
   my $payinfo = $cgi->param('payinfo');
   $payinfo =~ s/[^\dx]//g;
-  $payinfo =~ /^(\d{13,16})$/
+  $payinfo =~ /^([\dx]{13,16})$/
     #or $error ||= $init_data->{msgcat}{invalid_card}; #. $self->payinfo;
     or die "illegal card"; #!!!
   $payinfo = $1;
