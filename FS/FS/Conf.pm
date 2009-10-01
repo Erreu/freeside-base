@@ -2478,6 +2478,13 @@ worry that config_items is freeside-specific and icky.
   },
 
   {
+    'key'         => 'sg-login_username',
+    'section'     => '',
+    'description' => "Don't use this.",
+    'type'        => 'text',
+  },
+
+  {
     'key'         => 'queued-max_kids',
     'section'     => '',
     'description' => 'Maximum number of queued processes.  Defaults to 10.',
