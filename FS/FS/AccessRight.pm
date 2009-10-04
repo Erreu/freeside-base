@@ -139,6 +139,7 @@ assigned to users and/or groups.
 ###
   'View invoices',
   'Resend invoices', #NEWNEW
+  'Delete invoices', #new, but no need to phase in
   'View customer tax exemptions', #yow
   'View customer batched payments', #NEW
 
@@ -216,3 +217,19 @@ sub rights {
   @rights;
 }
 
+sub default_superuser_rights {
+  my $class = shift;
+  my %omit = map { $_=>1 } (
+    'Delete customer',
+    'Delete invoices',
+    'Delete payment',
+    'Delete credit', #?
+    'Delete refund', #?
+    'Raw SQL',
+  );
+
+  no warnings 'uninitialized';
+  grep { ! $omit{$_} } $class->rights;
+}
+
+1;

@@ -1,7 +1,7 @@
 package FS::cust_bill_pkg;
 
 use strict;
-use vars qw( @ISA );
+use vars qw( @ISA $DEBUG $me );
 use FS::Record qw( qsearch qsearchs dbdef dbh );
 use FS::cust_main_Mixin;
 use FS::cust_pkg;
@@ -11,6 +11,9 @@ use FS::cust_bill_pay_pkg;
 use FS::cust_credit_bill_pkg;
 
 @ISA = qw( FS::cust_main_Mixin FS::Record );
+
+$DEBUG = 0;
+$me = '[FS::cust_bill_pkg]';
 
 =head1 NAME
 
@@ -133,13 +136,51 @@ sub insert {
 
 =item delete
 
-Currently unimplemented.  I don't remove line items because there would then be
-no record the items ever existed (which is bad, no?)
+Not recommended.
 
 =cut
 
 sub delete {
-  return "Can't delete cust_bill_pkg records!";
+  my $self = shift;
+
+  local $SIG{HUP} = 'IGNORE';
+  local $SIG{INT} = 'IGNORE';
+  local $SIG{QUIT} = 'IGNORE';
+  local $SIG{TERM} = 'IGNORE';
+  local $SIG{TSTP} = 'IGNORE';
+  local $SIG{PIPE} = 'IGNORE';
+
+  my $oldAutoCommit = $FS::UID::AutoCommit;
+  local $FS::UID::AutoCommit = 0;
+  my $dbh = dbh;
+
+  foreach my $table (qw(
+    cust_bill_pkg_detail
+    cust_tax_exempt_pkg
+    cust_bill_pay_pkg
+    cust_credit_bill_pkg
+  )) {
+
+    foreach my $linked ( qsearch($table, { billpkgnum=>$self->billpkgnum }) ) {
+      my $error = $linked->delete;
+      if ( $error ) {
+        $dbh->rollback if $oldAutoCommit;
+        return $error;
+      }
+    }
+
+  }
+
+  my $error = $self->SUPER::delete(@_);
+  if ( $error ) {
+    $dbh->rollback if $oldAutoCommit;
+    return $error;
+  }
+
+  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
+
+  '';
+
 }
 
 =item replace OLD_RECORD
@@ -196,6 +237,7 @@ Returns the package (see L<FS::cust_pkg>) for this invoice line item.
 
 sub cust_pkg {
   my $self = shift;
+  warn "$me $self -> cust_pkg" if $DEBUG;
   qsearchs( 'cust_pkg', { 'pkgnum' => $self->pkgnum } );
 }
 
