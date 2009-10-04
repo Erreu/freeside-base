@@ -218,7 +218,8 @@ sub edit_info {
 
     $new->set( 'payby' => $p->{'auto'} ? 'CARD' : 'DCRD' );
 
-  }elsif ( $payby =~ /^(CHEK|DCHK)$/ ) {
+  } elsif ( $payby =~ /^(CHEK|DCHK)$/ ) {
+
     my $payinfo;
     $p->{'payinfo1'} =~ /^([\dx]+)$/
       or return { 'error' => "illegal account number ". $p->{'payinfo1'} };
@@ -228,15 +229,15 @@ sub edit_info {
     my $payinfo2 = $1;
     $payinfo = $payinfo1. '@'. $payinfo2;
 
-    if ( $payinfo eq $cust_main->paymask ) {
-      $new->payinfo($cust_main->payinfo);
-    } else {
-      $new->payinfo($payinfo);
-    }
+    $new->payinfo( ($payinfo eq $cust_main->paymask)
+                     ? $cust_main->payinfo
+                     : $payinfo
+                 );
 
     $new->set( 'payby' => $p->{'auto'} ? 'CHEK' : 'DCHK' );
 
-  }elsif ( $payby =~ /^(BILL)$/ ) {
+  } elsif ( $payby =~ /^(BILL)$/ ) {
+    #no-op
   } elsif ( $payby ) {  #notyet ready
     return { 'error' => "unknown payby $payby" };
   }
@@ -398,6 +399,8 @@ sub process_payment {
    
     $payinfo = $p->{'payinfo'};
 
+    #more intelligent mathing will be needed here if you change
+    #card_masking_method and don't remove existing paymasks
     $payinfo = $cust_main->payinfo
       if $cust_main->paymask eq $payinfo;
 
@@ -450,15 +453,15 @@ sub process_payment {
     if ($payby eq 'CARD' || $payby eq 'DCRD') {
       $new->set( $_ => $p->{$_} )
         foreach qw( payname paystart_month paystart_year payissue payip
-                    address1 address2 city state zip payinfo );
+                    address1 address2 city state zip country );
       $new->set( 'payby' => $p->{'auto'} ? 'CARD' : 'DCRD' );
     } elsif ($payby eq 'CHEK' || $payby eq 'DCHK') {
       $new->set( $_ => $p->{$_} )
         foreach qw( payname payip paytype paystate
                     stateid stateid_state );
-      $new->set( 'payinfo' => $payinfo );
       $new->set( 'payby' => $p->{'auto'} ? 'CHEK' : 'DCHK' );
     }
+    $new->set( 'payinfo' => $payinfo );
     $new->set( 'paydate' => $p->{'year'}. '-'. $p->{'month'}. '-01' );
     my $error = $new->replace($cust_main);
     return { 'error' => $error } if $error;
