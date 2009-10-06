@@ -1,3 +1,104 @@
+2009-10-05 09:57  ivan
+
+	* httemplate/view/cust_main/payment_history/voided_payment.html:
+	  doh, fix error viewing voided payments, RT#6382
+
+2009-10-04 16:36  ivan
+
+	* fs_selfservice/FS-SelfService/cgi/selfservice.cgi: fix the same
+	  problem with processing payments & masked ACH amounts, RT#6374
+
+2009-10-04 16:31  ivan
+
+	* FS/FS/ClientAPI/MyAccount.pm: fix problems "re-saving" a masked
+	  card.  hopefully the last of it!
+
+2009-10-03 19:09  ivan
+
+	* httemplate/misc/: delete-cust_bill.html: delete invoices, RT#4048
+
+2009-10-03 19:09  ivan
+
+	* httemplate/misc/delete-cust_bill.html: file delete-cust_bill.html
+	  was added on branch FREESIDE_1_7_BRANCH on 2009-10-04 02:09:15
+	  +0000
+
+2009-10-03 19:04  ivan
+
+	* FS/FS/Conf.pm, FS/FS/Setup.pm, FS/FS/cust_bill.pm,
+	  FS/FS/AccessRight.pm, FS/FS/cust_bill_pkg.pm,
+	  FS/bin/freeside-addgroup, bin/mapsecrets2access_user,
+	  httemplate/view/cust_bill.cgi,
+	  httemplate/view/cust_main/payment_history/invoice.html: delete
+	  invoices, RT#4048
+
+2009-10-03 17:08  ivan
+
+	* httemplate/view/cust_main.cgi: more room for cancellation reason
+
+2009-10-03 17:07  ivan
+
+	* httemplate/elements/popup_link-cust_main.html: doc
+
+2009-10-03 15:09  ivan
+
+	* httemplate/edit/part_bill_event.cgi: cancel to 80, comp @ 90,
+	  RT#5674
+
+2009-10-03 15:06  ivan
+
+	* httemplate/edit/part_bill_event.cgi: in old invoice events,
+	  chance default weight of cancel event to 90 so you can place it
+	  at the same time as a realtime event, RT#5674
+
+2009-10-01 16:48  ivan
+
+	* FS/FS/cust_main.pm: hopefully fully fix bulk email errors when
+	  selecting a single payby
+
+2009-10-01 15:02  ivan
+
+	* httemplate/view/cust_main/payment_history/voided_payment.html:
+	  consistency with un-voided payments wrt display
+
+2009-09-30 17:52  ivan
+
+	* fs_selfservice/FS-SelfService/cgi/selfservice.cgi: hopefully the
+	  really final fix for the problems using remembered cards in
+	  self-service. *sigh*
+
+2009-09-30 17:29  ivan
+
+	* FS/: FS/Conf.pm, FS/Cron/check.pm, bin/freeside-check: add login
+	  check to FS::ClientAPI::SG/SGNG checks. RT#4610
+
+2009-09-30 12:33  ivan
+
+	* fs_selfservice/FS-SelfService/cgi/selfservice.cgi: hopefully the
+	  final fix for the problems using remembered cards in self-service
+
+2009-09-29 15:08  ivan
+
+	* httemplate/misc/email-customers.html: should fix newsletter
+	  sending error when you select a single payby only
+
+2009-09-28 15:45  ivan
+
+	* FS/FS/Cron/check.pm: more accurate SG check, RT#4610
+
+2009-09-28 15:35  ivan
+
+	* FS/: FS/Cron/check.pm, bin/freeside-check: correct place for use
+	  Email::Send, RT#4610
+
+2009-09-28 15:23  ivan
+
+	* FS/FS/Cron/check.pm: oops, hopefully fix sg cron check, RT#4610
+
+2009-09-25 08:41  ivan
+
+	* ChangeLog: meta
+
 2009-09-24 12:59  ivan
 
 	* FS/FS/: Cron/check.pm, Conf.pm: get the ping username/pass from a
