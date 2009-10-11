@@ -1,9 +1,10 @@
 package FS::cust_bill_pkg_detail;
 
 use strict;
-use vars qw( @ISA $me $DEBUG );
-use FS::Record qw( qsearch qsearchs dbdef );
+use vars qw( @ISA $me $DEBUG %GetInfoType );
+use FS::Record qw( qsearch qsearchs dbdef dbh );
 use FS::cust_bill_pkg;
+use FS::Conf;
 
 @ISA = qw(FS::Record);
 $me = '[ FS::cust_bill_pkg_detail ]';
@@ -102,10 +103,27 @@ and replace methods.
 sub check {
   my $self = shift;
 
+  my $conf = new FS::Conf;
+
+  my $phonenum = $self->phonenum;
+  my $phonenum_check_method;
+  if ( $conf->exists('svc_phone-allow_alpha_phonenum') ) {
+    $phonenum =~ s/\W//g;
+    $phonenum_check_method = 'ut_alphan';
+  } else {
+    $phonenum =~ s/\D//g;
+    $phonenum_check_method = 'ut_numbern';
+  }
+  $self->phonenum($phonenum);
+
   $self->ut_numbern('detailnum')
     || $self->ut_foreign_key('billpkgnum', 'cust_bill_pkg', 'billpkgnum')
+    #|| $self->ut_moneyn('amount')
+    || $self->ut_floatn('amount')
     || $self->ut_enum('format', [ '', 'C' ] )
     || $self->ut_text('detail')
+    || $self->ut_foreign_keyn('classnum', 'usage_class', 'classnum')
+    || $self->$phonenum_check_method('phonenum')
     || $self->SUPER::check
     ;
 
@@ -120,6 +138,79 @@ sub _upgrade_data { # class method
   my ($class, %opts) = @_;
 
   warn "$me upgrading $class\n" if $DEBUG;
+
+  my $columndef = dbdef->table($class->table)->column('classnum');
+  unless ($columndef->type eq 'int4') {
+
+    my $dbh = dbh;
+    if ( $dbh->{Driver}->{Name} eq 'Pg' ) {
+
+      eval "use DBI::Const::GetInfoType;";
+      die $@ if $@;
+
+      my $major_version = 0;
+      $dbh->get_info( $GetInfoType{SQL_DBMS_VER} ) =~ /^(\d{2})/
+        && ( $major_version = sprintf("%d", $1) );
+
+      if ( $major_version > 7 ) {
+
+        # ideally this would be supported in DBIx-DBSchema and friends
+
+        foreach my $table ( qw( cust_bill_pkg_detail h_cust_bill_pkg_detail ) ){
+
+          warn "updating $table column classnum to integer\n" if $DEBUG;
+          my $sql = "ALTER TABLE $table ALTER classnum TYPE int USING ".
+            "int4(classnum)";
+          my $sth = $dbh->prepare($sql) or die $dbh->errstr;
+          $sth->execute or die $sth->errstr;
+
+        }
+
+      } elsif ( $dbh->{pg_server_version} =~ /^704/ ) {  # earlier?
+
+        # ideally this would be supported in DBIx-DBSchema and friends
+
+        #  XXX_FIXME better locking
+
+        foreach my $table ( qw( cust_bill_pkg_detail h_cust_bill_pkg_detail ) ){
+
+          warn "updating $table column classnum to integer\n" if $DEBUG;
+
+          my $sql = "ALTER TABLE $table RENAME classnum TO old_classnum";
+          my $sth = $dbh->prepare($sql) or die $dbh->errstr;
+          $sth->execute or die $sth->errstr;
+
+          my $def = dbdef->table($table)->column('classnum');
+          $def->type('integer');
+          $def->length(''); 
+          $sql = "ALTER TABLE $table ADD COLUMN ". $def->line($dbh);
+          $sth = $dbh->prepare($sql) or die $dbh->errstr;
+          $sth->execute or die $sth->errstr;
+
+          $sql = "UPDATE $table SET classnum = int4( text( old_classnum ) )";
+          $sth = $dbh->prepare($sql) or die $dbh->errstr;
+          $sth->execute or die $sth->errstr;
+
+          $sql = "ALTER TABLE $table DROP old_classnum";
+          $sth = $dbh->prepare($sql) or die $dbh->errstr;
+          $sth->execute or die $sth->errstr;
+
+        }
+
+      } else {
+
+        die "cust_bill_pkg_detail classnum upgrade unsupported for this Pg version\n";
+
+      }
+
+    } else {
+
+      die "cust_bill_pkg_detail classnum upgrade only supported for Pg 8+\n";
+
+    }
+
+  }
+
 
   if ( defined( dbdef->table($class->table)->column('billpkgnum') ) &&
        defined( dbdef->table($class->table)->column('invnum') ) &&

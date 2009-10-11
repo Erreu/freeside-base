@@ -132,37 +132,39 @@ Example:
     # initialization callbacks
     ###
 
-    ###global callbacks
+    ###global callbacks, always run if provided
 
-    #always run if provided, after decoding long CGI "redirect=" responses but
+    #after decoding long CGI "redirect=" responses but
     # before object creation/search
     # (useful if you have a long form that might trigger redirect= and you need
     #  to do things with $cgi params - they're not decoded in the calling
     #  <%init> block yet)
     'begin_callback' = sub { my( $cgi, $fields_listref, $opt_hashref ) = @_; },
 
-    #always run, after the mode-specific object creation/search
+    #after the mode-specific object creation/search
     'end_callback' = sub { my( $cgi, $object, $fields_listref, $opt_hashref ) = @_; },
 
-    ###mode-specific callbacks
+    ###mode-specific callbacks.  one (and only one) of these four is called
    
+    #run when adding
+    'new_callback' => sub { my( $cgi, $object, $fields_listref, $opt_hashref ) = @_; },
+
+    #run when editing
+    'edit_callback' => sub { my( $cgi, $object, $fields_listref, $opt_hashref ) = @_; },
+
     #run when re-displaying with an error
     'error_callback' => sub { my( $cgi, $object, $fields_listref, $opt_hashref ) = @_; },
    
-    #run when editing
-    'edit_callback' => sub { my( $cgi, $object, $fields_listref ) = @_; },
-   
+    #run when cloning
+    'clone_callback' => sub { my( $cgi, $object, $fields_listref, $opt_hashref ) = @_; },
+
+    ###callbacks called in new mode only
+
     # returns a hashref for the new object
     'new_hashref_callback'
 
     # returns the new object iself (otherwise, ->new is called)
     'new_object_callback'
-   
-    #run when adding
-    'new_callback' => sub { my( $cgi, $object, $fields_listref ) = @_; },
-
-    #run when cloning
-    'clone_callback' => sub { my( $cgi, $object, $fields_listref, $opt_hashref ) = @_; },
 
     ###display callbacks
 
@@ -287,7 +289,8 @@ Example:
 %     foreach grep exists($f->{$_}), qw( hashref agent_virt agent_null_right );
 %
 %   if ( $type eq 'tablebreak-tr-title' ) {
-%     $include_common{'table_id'} = 'TableNumber'. $tablenum++
+%     $include_common{'table_id'} = 'TableNumber'. $tablenum++;
+%     $include_common{'colspan'} = $f->{colspan} if $f->{colspan};
 %   }
 %
 %   my $layer_prefix_on = '';
@@ -313,6 +316,27 @@ Example:
 %         %opt,
 %     );
 %     @include;
+%   };
+%
+%   my $column_sub = sub {
+%     my %opt = @_;
+%
+%     my $column   = delete($opt{field});
+%     my $fieldnum = delete($opt{fieldnum});
+%     my $include  = delete($opt{type}) || 'text';
+%     $include = "input-$include" if $include =~ /^(text|money|percentage)$/;
+%
+%     ( "/elements/$include.html",
+%         'field'        => $field.'__'.$column.$fieldnum,
+%         'id'           => $field.'__'.$column.$fieldnum,
+%         'layer_prefix' => $field.'__'.$column.$fieldnum.".",
+%         ( $fieldnum
+%             ? ('cell_style' => 'border-top:1px solid black')
+%             : ()
+%         ),
+%         'cgi' => $cgi,
+%         %opt,
+%     );
 %   };
 %
 %   unless ( $type =~ /^column/ ) {
@@ -380,8 +404,35 @@ Example:
 %         'layer_values' => $layer_values,
 %         'cell_style'   => ( $fieldnum ? 'border-top:1px solid black' : '' ),
 %       );
+%       $existing[0] =~ s(^/elements/tr-)(/elements/);
+%       my @label = @existing;
+%       $label[0] = '/elements/tr-td-label.html';
 
+        <% include( @label ) %>
+        <TD>
         <% include( @existing ) %>
+        </TD>
+
+%       if ( $f->{'m2_fields'} ) {
+%         foreach my $c ( @{ $f->{'m2_fields'} } ) {
+%           my $column = $c->{field};
+%           my @column = &{ $column_sub }( %$c,
+%                                          'fieldnum' => $fieldnum,
+%                                          'curr_value' => $name_obj->$column()
+%                                        );
+
+            <TD id='<% $field %>__<% $column %>_label<% $fieldnum %>'
+                style='text-align:right;vertical-align:top;
+                       border-top:1px solid black;padding-top:5px;'>
+              <% $c->{'label'} || '' %>
+            </TD>
+            <TD style='border-top:1px solid black;padding-top:3px;'>
+              <% include( @column ) %>
+            </TD>
+%         }
+%       }
+
+        </TR>
 
 %       $fieldnum++;
 %       $g_row++;
@@ -407,9 +458,40 @@ Example:
 %     'onchange'   => $onchange,
 %     ( $fieldnum ? ('cell_style' => 'border-top:1px solid black') : () ),
 %   );
+%
+%   if ( $f->{'m2name_table'} || $f->{'m2m_method'} ) {
+%     $include[0] =~ s(^/elements/tr-)(/elements/);
+%     my @label = @include;
+%     $label[0] = '/elements/tr-td-label.html';
 
-    <% include( @include ) %>
+      <% include( @label ) %>
+      <TD>
+      <% include( @include ) %>
+      </TD>
 
+%     if ( $f->{'m2_fields'} ) {
+%       foreach my $c ( @{ $f->{'m2_fields'} } ) {
+%         my $column = $c->{field};
+%         my @column = &{ $column_sub }( %$c, 'fieldnum' => $fieldnum );
+
+          <TD id='<% $field %>__<% $column %>_label<% $fieldnum %>'
+              style='text-align:right;vertical-align:top;
+                     border-top:1px solid black;padding-top:5px;'>
+            <% $c->{'label'} || '' %>
+          </TD>
+          <TD style='border-top:1px solid black;padding-top:3px;'>
+            <% include( @column ) %>
+          </TD>
+%       }
+%     }
+
+      </TR>
+
+%   } else {
+
+      <% include( @include ) %>
+
+%   }
 %   if ( $f->{'m2name_table'} || $f->{'m2m_method'} ) {
 
       <SCRIPT TYPE="text/javascript">
@@ -497,6 +579,39 @@ Example:
 
           row.appendChild(widget_cell);
 
+%         if ( $f->{'m2_fields'} ) {
+%           foreach my $c ( @{ $f->{'m2_fields'} } ) {
+%             my $column = $c->{field};
+%             my @column = &{ $column_sub }(%$c, 'fieldnum' => 'MAGIC_NUMBER');
+
+              var column =  <% include(@column, html_only=>1) |js_string %>;
+              column  = column.replace(  magic_regex, <%$field%>_fieldnum );
+
+              var column_label = document.createElement('TD');
+              column_label.id =
+                '<% $field %>__<% $column %>_label' + <%$field%>_fieldnum;
+
+              column_label.style.textAlign = "right";
+              column_label.style.verticalAlign = "top";
+              column_label.style.borderTop = "1px solid black";
+              column_label.style.paddingTop = "5px";
+
+              column_label.innerHTML = '<% $c->{'label'} || '' %>';
+
+              row.appendChild(column_label);
+          
+              var column_widget = document.createElement('TD');
+
+              column_widget.style.borderTop = "1px solid black";
+              column_widget.style.paddingTop = "3px";
+
+              column_widget.innerHTML = column;
+
+              row.appendChild(column_widget);
+
+%           }
+%         }
+
 %         if ( $f->{'m2_new_js'} ) {
             // take out items selected in previous dropdowns
             var new_element = document.getElementById("<%$field%>" + <%$field%>_fieldnum );
@@ -562,7 +677,7 @@ Example:
 
 <BR>
 
-<INPUT TYPE="submit" ID="submit" VALUE="<% ( !$clone && $object->$pkey() ) ? "Apply changes" : "Add $opt{'name'}" %>">
+<INPUT TYPE="submit" ID="submit" VALUE="<% ( !$clone && $object->$pkey() ) ? "Apply changes" : "Add ". ( $opt{'name'} || $opt{'name_singular'} ) %>">
 
 </FORM>
 
@@ -618,7 +733,7 @@ if ( $cgi->param('error') ) {
     map { $_ => scalar($cgi->param($_)) } fields($table)
   });
 
-  &{$opt{'error_callback'}}($cgi, $object, $fields, \%opt )
+  &{$opt{'error_callback'}}( $cgi, $object, $fields, \%opt )
     if $opt{'error_callback'};
 
 } elsif ( $cgi->param('clone') =~ /^(\d+)$/ ) {
@@ -630,9 +745,10 @@ if ( $cgi->param('error') ) {
   $qsearch{'extra_sql'} = ' AND '. $opt{'agent_clone_extra_sql'}
     if $opt{'agent_clone_extra_sql'};
 
-  $object = qsearchs({ %qsearch, 'hashref' => { $pkey => $clone } });
+  $object = qsearchs({ %qsearch, 'hashref' => { $pkey => $clone } })
+    or die "$pkey $clone not found in $table";
 
-  &{$opt{'clone_callback'}}($cgi, $object, $fields, \%opt )
+  &{$opt{'clone_callback'}}( $cgi, $object, $fields, \%opt )
     if $opt{'clone_callback'};
 
   #$object->$pkey('');
@@ -657,7 +773,7 @@ if ( $cgi->param('error') ) {
   warn "$table $pkey => $1"
     if $opt{'debug'};
 
-  &{$opt{'edit_callback'}}($cgi, $object, $fields)
+  &{$opt{'edit_callback'}}( $cgi, $object, $fields, \%opt )
     if $opt{'edit_callback'};
 
 } else { #adding
@@ -672,7 +788,7 @@ if ( $cgi->param('error') ) {
               ? &{$opt{'new_object_callback'}}( $cgi, $hashref, $fields, \%opt )
               : $class->new( $hashref );
 
-  &{$opt{'new_callback'}}($cgi, $object, $fields)
+  &{$opt{'new_callback'}}( $cgi, $object, $fields, \%opt )
     if $opt{'new_callback'};
 
 }
@@ -682,7 +798,7 @@ if ( $cgi->param('error') ) {
 
 $opt{action} ||= $object->$pkey() ? 'Edit' : 'Add';
 
-my $title = $opt{action}. ' '. $opt{name};
+my $title = $opt{action}. ' '. ( $opt{name} || $opt{'name_singular'} );
 
 my $viewall_url = $p . ( $opt{'viewall_dir'} || 'search' ) . "/$table.html";
 $viewall_url = $opt{'viewall_url'} if $opt{'viewall_url'};  

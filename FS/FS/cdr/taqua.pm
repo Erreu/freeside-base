@@ -13,7 +13,13 @@ use FS::cdr qw(_cdr_date_parser_maker);
   'import_fields' => [  #some of these are kind arbitrary...
 
     #0
-    'cdrtypenum',                         #RecordType
+    #RecordType
+    sub {
+      my($cdr, $field, $conf, $hashref) = @_;
+      $hashref->{skiprow} = 1 unless ($field == 0 && $cdr->disposition == 100);
+      $cdr->cdrtypenum($field);
+    },
+
     sub { my($cdr, $field) = @_; },             #all10#RecordVersion
     sub { my($cdr, $field) = @_; },       #OrigShelfNumber
     sub { my($cdr, $field) = @_; },       #OrigCardNumber
@@ -22,11 +28,20 @@ use FS::cdr qw(_cdr_date_parser_maker);
     'uniqueid',                           #SequenceNumber
     'accountcode',                        #SessionNumber
     'src',                                #CallingPartyNumber
-    'dst',                                #CalledPartyNumber
+    #'dst',                                #CalledPartyNumber
+    #CalledPartyNumber
+    sub {
+      my( $cdr, $field, $conf ) = @_;
+      if ( $cdr->calltypenum == 6 && $cdr->cdrtypenum == 0 ) {
+        $cdr->dst("+$field");
+      } else {
+        $cdr->dst($field);
+      }
+    },
 
     #10
-    _cdr_date_parser_maker('startdate'),  #CallArrivalTime
-    _cdr_date_parser_maker('enddate'),    #CallCompletionTime
+    _cdr_date_parser_maker('startdate', 'gmt' => 1),  #CallArrivalTime
+    _cdr_date_parser_maker('enddate', 'gmt' => 1),    #CallCompletionTime
 
     #Disposition
     #sub { my($cdr, $d ) = @_; $cdr->disposition( $disposition{$d}): },
@@ -42,7 +57,7 @@ use FS::cdr qw(_cdr_date_parser_maker);
                                           # 201 => '',
                                           # 203 => '',
 
-    _cdr_date_parser_maker('answerdate'), #DispositionTime
+    _cdr_date_parser_maker('answerdate', 'gmt' => 1), #DispositionTime
     sub { my($cdr, $field) = @_; },       #TCAP
     sub { my($cdr, $field) = @_; },       #OutboundCarrierConnectTime
     sub { my($cdr, $field) = @_; },       #OutboundCarrierDisconnectTime
@@ -79,7 +94,11 @@ use FS::cdr qw(_cdr_date_parser_maker);
           return;
         }
       }
-      $cdr->charged_party($field);
+      if ( $cdr->is_tollfree ) {        # thankfully this is already available
+        $cdr->charged_party($cdr->dst); # and this
+      } else {
+        $cdr->charged_party($field);
+      }
     },
 
     sub { my($cdr, $field) = @_; },       #SubscriberNumber

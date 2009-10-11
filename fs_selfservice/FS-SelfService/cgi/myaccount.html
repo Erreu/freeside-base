@@ -1,14 +1,21 @@
-<HTML><HEAD><TITLE>MyAccount</TITLE></HEAD>
-<BODY BGCOLOR="#eeeeee"><FONT SIZE=5>MyAccount</FONT><BR><BR>
 <%= $url = "$selfurl?session=$session_id;action="; ''; %>
-<%= include('myaccount_menu') %>
-<TD VALIGN="top">
+<%= include('header') %>
 
 Hello <%= $name %>!<BR><BR>
 <%= $small_custview %>
 <BR>
+<%= if ( $pkgnum ) {
+      $OUT .= qq!Balance: <B>\$$balance</B><BR><BR>!;
+    }
+    '';
+%>
+
 <%= if ( $balance > 0 ) {
-  $OUT .= qq! <B><A HREF="${url}make_payment">Make a payment</A></B><BR><BR>!;
+  if (scalar(grep $_, @hide_payment_fields)) {
+    $OUT .= qq! <B><A HREF="${url}make_thirdparty_payment&payby_method=CC">Make a payment</A></B><BR><BR>!;
+  } else {
+    $OUT .= qq! <B><A HREF="${url}make_payment">Make a payment</A></B><BR><BR>!;
+  }
 } %>
 <%=
   if ( @open_invoices ) {
@@ -90,5 +97,4 @@ Hello <%= $name %>!<BR><BR>
   }
 %>
 
-</TD></TR></TABLE>
 <%= include('footer') %>

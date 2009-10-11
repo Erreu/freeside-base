@@ -7,7 +7,7 @@
 %  if ( $cgi->param('apply') eq 'yes' ) {
 %    my $cust_main = qsearchs('cust_main', { 'custnum' => $linknum })
 %      or die "unknown custnum $linknum";
-%    $cust_main->apply_payments;
+%    $cust_main->apply_payments( 'manual' => 1 );
 %  }
 %  if ( $link eq 'popup' ) {
 %    
@@ -46,7 +46,9 @@ my $new = new FS::cust_pay ( {
   _date  => $_date,
   map {
     $_, scalar($cgi->param($_));
-  } qw(paid payby payinfo paybatch)
+  } qw( paid payby payinfo paybatch
+        pkgnum
+      )
   #} fields('cust_pay')
 } );
 

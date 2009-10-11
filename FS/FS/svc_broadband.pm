@@ -6,6 +6,7 @@ use FS::Record qw( qsearchs qsearch dbh );
 use FS::svc_Common;
 use FS::cust_svc;
 use FS::addr_block;
+use FS::part_svc_router;
 use NetAddr::IP;
 
 @ISA = qw( FS::svc_Common );
@@ -109,6 +110,8 @@ sub table_info {
 }
 
 sub table { 'svc_broadband'; }
+
+sub table_dupcheck_fields { ( 'mac_addr' ); }
 
 =item search_sql STRING
 
@@ -243,7 +246,19 @@ sub check {
     }
   }
 
+  $error = $self->_check_ip_addr;
+  return $error if $error;
+
+  $self->SUPER::check;
+}
+
+sub _check_ip_addr {
+  my $self = shift;
+
   if (not($self->ip_addr) or $self->ip_addr eq '0.0.0.0') {
+
+    return '' if $conf->exists('svc_broadband-allow_null_ip_addr'); #&& !$self->blocknum
+
     return "Must supply either address or block"
       unless $self->blocknum;
     my $next_addr = $self->addr_block->next_free_addr;
@@ -252,6 +267,7 @@ sub check {
     } else {
       return "No free addresses in addr_block (blocknum: ".$self->blocknum.")";
     }
+
   }
 
   if (not($self->blocknum)) {
@@ -285,8 +301,20 @@ sub check {
     return 'Router '.$router->routernum.' cannot provide svcpart '.$self->svcpart;
   }
 
-  $self->SUPER::check;
+  '';
 }
+
+sub _check_duplicate {
+  my $self = shift;
+
+  return "MAC already in use"
+    if ( $self->mac_addr &&
+         scalar( qsearch( 'svc_broadband', { 'mac_addr', $self->mac_addr } ) )
+       );
+
+  '';
+}
+
 
 =item NetAddr
 

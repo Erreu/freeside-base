@@ -1,4 +1,4 @@
-<% include("/elements/header.html", "$agentname Sales Tax Report - ".
+<% include("/elements/header.html", "$agentname Tax Report - ".
               ( $beginning
                   ? time2str('%h %o %Y ', $beginning )
                   : ''
@@ -44,12 +44,11 @@
 % foreach my $region ( @regions ) {
 %
 %   my $link = '';
-%   if ( $region->{'label'} ne 'Total' ) {
-%     if ( $region->{'label'} eq $out ) {
-%       $link = ';out=1';
-%     } else {
-%       $link = ';'. $region->{'url_param'};
-%     }
+%   if ( $region->{'label'} eq $out ) {
+%     $link = ';out=1';
+%   } else {
+%     $link = ';'. $region->{'url_param'}
+%       if $region->{'url_param'};
 %   }
 %
 %   if ( $bgcolor eq $bgcolor1 ) {
@@ -111,8 +110,12 @@
       </TD>
 
 % unless ( $cgi->param('show_taxclasses') ) { 
+%       my $invlink = $region->{'url_param_inv'}
+%                       ? ';'. $region->{'url_param_inv'}
+%                       : $link;
+
         <<%$tdh%> ALIGN="right">
-          <A HREF="<% $baselink. $link %>;istax=1"
+          <A HREF="<% $baselink. $invlink %>;istax=1"
           ><% &$money_sprintf( $region->{'tax'} ) %></A>
         </TD>
 % } 
@@ -138,13 +141,12 @@
 %   foreach my $region ( @base_regions ) {
 %
 %     my $link = '';
-%     #if ( $region->{'label'} ne 'Total' ) {
-%       if ( $region->{'label'} eq $out ) {
-%         $link = ';out=1';
-%       } else {
-%         $link = ';'. $region->{'url_param'};
-%       }
-%     #}
+%     if ( $region->{'label'} eq $out ) {
+%       $link = ';out=1';
+%     } else {
+%       $link = ';'. $region->{'url_param'}
+%         if $region->{'url_param'};
+%     }
 %
 %     if ( $bgcolor eq $bgcolor1 ) {
 %       $bgcolor = $bgcolor2;
@@ -174,7 +176,7 @@
    <<%$td%>>Total</TD>
    <<%$td%> ALIGN="right">
      <A HREF="<% $baselink %>;istax=1"
-     ><% &$money_sprintf( $tax ) %></A>
+     ><% &$money_sprintf( $tot_tax ) %></A>
    </TD>
   </TR>
 
@@ -275,8 +277,6 @@ if ( $conf->exists('tax-pkg_address') ) {
     "WHERE 0 < ( SELECT COUNT(*) FROM cust_main WHERE $gotcust LIMIT 1 )";
 }
 
-my($total, $tot_taxable, $owed, $tax) = ( 0, 0, 0, 0 );
-my( $exempt_cust, $exempt_pkg, $exempt_monthly ) = ( 0, 0, 0 );
 my $out = 'Out of taxable region(s)';
 my %regions = ();
 
@@ -289,6 +289,9 @@ foreach my $r ( qsearch({ 'table'     => 'cust_main_county',
 
   my $label = getlabel($r);
   $regions{$label}->{'label'} = $label;
+
+  $regions{$label}->{$_} = $r->$_() for (qw( county state country )); #taxname?
+
   $regions{$label}->{'url_param'} =
     join(';', map "$_=".uri_escape($r->$_()),
                   qw( county state country taxname )
@@ -303,6 +306,8 @@ foreach my $r ( qsearch({ 'table'     => 'cust_main_county',
     push @param, 'taxclass';
     $regions{$label}->{'url_param'} .= ';taxclass='. uri_escape($r->taxclass);
     #no, always#  if $cgi->param('show_taxclasses');
+
+    $regions{$label}->{'taxclass'} = $r->taxclass;
 
   } else {
 
@@ -326,10 +331,9 @@ foreach my $r ( qsearch({ 'table'     => 'cust_main_county',
   my $t_sql =
    "SELECT SUM(cust_bill_pkg.setup+cust_bill_pkg.recur) $fromwhere AND $nottax";
   my $t = scalar_sql($r, \@param, $t_sql);
-  $total += $t;
   $regions{$label}->{'total'} += $t;
 
-  #if ( $label eq $out ) {# && $t ) {
+  #if ( $label eq $out ) # && $t ) {
   #  warn "adding $t for ".
   #       join('/', map $r->$_, qw( taxclass county state country ) ). "\n";
   #  #warn $t_sql if $r->state eq 'FL';
@@ -351,12 +355,27 @@ foreach my $r ( qsearch({ 'table'     => 'cust_main_county',
 #    );
 #  }
 
+  #false laziness -ish w/report_tax.cgi
+  my $cust_exempt;
+  if ( $r->taxname ) {
+    my $q_taxname = dbh->quote($r->taxname);
+    $cust_exempt =
+      "( tax = 'Y'
+         OR EXISTS ( SELECT 1 FROM cust_main_exemption
+                       WHERE cust_main_exemption.custnum = cust_main.custnum
+                         AND cust_main_exemption.taxname = $q_taxname
+                   )
+       )
+      ";
+  } else {
+    $cust_exempt = " tax = 'Y' ";
+  }
+
   my $x_cust = scalar_sql($r, \@param,
     "SELECT SUM(cust_bill_pkg.setup+cust_bill_pkg.recur)
-     $fromwhere AND $nottax AND tax = 'Y' "
+     $fromwhere AND $nottax AND $cust_exempt "
   );
 
-  $exempt_cust += $x_cust;
   $regions{$label}->{'exempt_cust'} += $x_cust;
   
   ## calculate package-exemption for this region
@@ -384,7 +403,6 @@ foreach my $r ( qsearch({ 'table'     => 'cust_main_county',
        AND ( tax != 'Y' OR tax IS NULL )
     "
   );
-  $exempt_pkg += $x_pkg;
   $regions{$label}->{'exempt_pkg'} += $x_pkg;
 
   ## calculate monthly exemption (texas tax) for this region
@@ -399,20 +417,11 @@ foreach my $r ( qsearch({ 'table'     => 'cust_main_county',
        $join_cust_pkg
      $mywhere"
   );
-#  if ( $x_monthly ) {
-#    #warn $r->taxnum(). ": $x_monthly\n";
-#    $taxable -= $x_monthly;
-#  }
-
-  $exempt_monthly += $x_monthly;
   $regions{$label}->{'exempt_monthly'} += $x_monthly;
 
   my $taxable = $t - $x_cust - $x_pkg - $x_monthly;
-
-  $tot_taxable += $taxable;
   $regions{$label}->{'taxable'} += $taxable;
 
-  $owed += $taxable * ($r->tax/100);
   $regions{$label}->{'owed'} += $taxable * ($r->tax/100);
 
   if ( defined($regions{$label}->{'rate'})
@@ -474,20 +483,43 @@ my $_taxamount_sub = sub {
   scalar_sql($r, \@taxparam, $sql );
 };
 
+#tax-report_groups filtering
+my($group_op, $group_value) = ( '', '' );
+if ( $cgi->param('report_group') =~ /^(=|!=) (.*)$/ ) {
+  ( $group_op, $group_value ) = ( $1, $2 );
+}
+my $group_test = sub {
+  my $label = shift;
+  return 1 unless $group_op; #in case we get called inadvertantly
+  if ( $label eq $out ) { #don't display "out of taxable region" in this case
+    0;
+  } elsif ( $group_op eq '=' ) {
+    $label =~ /^$group_value/;
+  } elsif ( $group_op eq '!=' ) {
+    $label !~ /^$group_value/;
+  } else {
+    die "guru meditation #00de: group_op $group_op\n";
+  }
+};
+
+my $tot_tax = 0;
 #foreach my $label ( keys %regions ) {
 foreach my $r ( qsearch(\%qsearch) ) {
 
   #warn join('-', map { $r->$_() } qw( country state county taxname ) )."\n";
 
   my $label = getlabel($r);
+  if ( $group_op ) {
+    next unless &{$group_test}($label);
+  }
 
   #my $fromwhere = $join_pkg. $where. " AND payby != 'COMP' ";
   #my @param = @base_param; 
 
   my $x = &{$_taxamount_sub}($r);
 
-  $tax += $x unless $cgi->param('show_taxclasses');
   $regions{$label}->{'tax'} += $x;
+  $tot_tax += $x unless $cgi->param('show_taxclasses');
 
 }
 
@@ -508,34 +540,86 @@ if ( $cgi->param('show_taxclasses') ) {
           );
 
     $base_regions{$base_label}->{'tax'} += $x;
-    $tax += $x;
+    $tot_tax += $x;
   }
 
 }
 
+my @regions = keys %regions;
+
+#tax-report_groups filtering
+@regions = grep &{$group_test}($_), @regions
+  if $group_op;
+
+#calculate totals
+my( $total, $tot_taxable, $tot_owed ) = ( 0, 0, 0 );
+my( $exempt_cust, $exempt_pkg, $exempt_monthly ) = ( 0, 0, 0 );
+my %taxclasses = ();
+my %county = ();
+my %state = ();
+my %country = ();
+foreach (@regions) {
+  $total          += $regions{$_}->{'total'};
+  $tot_taxable    += $regions{$_}->{'taxable'};
+  $tot_owed       += $regions{$_}->{'owed'};
+  $exempt_cust    += $regions{$_}->{'exempt_cust'};
+  $exempt_pkg     += $regions{$_}->{'exempt_pkg'};
+  $exempt_monthly += $regions{$_}->{'exempt_monthly'};
+  $taxclasses{$regions{$_}->{'taxclass'}} = 1
+    if $regions{$_}->{'taxclass'};
+  $county{$regions{$_}->{'county'}} = 1;
+  $state{$regions{$_}->{'state'}} = 1;
+  $country{$regions{$_}->{'country'}} = 1;
+}
+
+my $total_url_param = '';
+my $total_url_param_invoiced = '';
+if ( $group_op ) {
+
+  my @country = keys %country;
+  warn "WARNING: multiple countries on this grouped report; total links broken"
+    if scalar(@country) > 1;
+  my $country = $country[0];
+
+  my @state = keys %state;
+  warn "WARNING: multiple countries on this grouped report; total links broken"
+    if scalar(@state) > 1;
+  my $state = $state[0];
+
+  $total_url_param_invoiced =
+  $total_url_param =
+    'report_group='.uri_escape("$group_op $group_value").';'.
+    join(';', map 'taxclass='.uri_escape($_), keys %taxclasses );
+  $total_url_param .= ';'.
+    "country=$country;state=".uri_escape($state).';'.
+    join(';', map 'county='.uri_escape($_), keys %county ) ;
+
+}
 
 #ordering
-my @regions =
+@regions =
   map $regions{$_},
   sort { ( ($a eq $out) cmp ($b eq $out) ) || ($b cmp $a) }
-  keys %regions;
+  @regions;
 
 my @base_regions =
   map $base_regions{$_},
   sort { ( ($a eq $out) cmp ($b eq $out) ) || ($b cmp $a) }
   keys %base_regions;
 
+#add total line
 push @regions, {
   'label'          => 'Total',
-  'url_param'      => '',
+  'url_param'      => $total_url_param,
+  'url_param_inv'  => $total_url_param_invoiced,
   'total'          => $total,
   'exempt_cust'    => $exempt_cust,
   'exempt_pkg'     => $exempt_pkg,
   'exempt_monthly' => $exempt_monthly,
   'taxable'        => $tot_taxable,
   'rate'           => '',
-  'owed'           => $owed,
-  'tax'            => $tax,
+  'owed'           => $tot_owed,
+  'tax'            => $tot_tax,
 };
 
 #-- 

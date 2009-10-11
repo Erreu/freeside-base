@@ -32,6 +32,11 @@
   </TR>
 
   <TR>
+    <TD ALIGN="right">Custom</TD>
+    <TD BGCOLOR="#ffffff"><% $part_pkg->custom %></TD>
+  </TR>
+
+  <TR>
     <TD ALIGN="right">Comment</TD>
     <TD BGCOLOR="#ffffff"><% $part_pkg->comment %></TD>
   </TR>
@@ -41,6 +46,7 @@
     <TD BGCOLOR="#ffffff"><% $cust_pkg->otaker %></TD>
   </TR>
 
+  <& .row_edit, cust_pkg=>$cust_pkg, column=>'start_date', label=>'Start' &>
   <& .row_edit, cust_pkg=>$cust_pkg, column=>'setup',     label=>'Setup' &>
   <& .row_edit, cust_pkg=>$cust_pkg, column=>'last_bill', label=>$last_bill_or_renewed &>
   <& .row_edit, cust_pkg=>$cust_pkg, column=>'bill',      label=>$next_bill_or_prepaid_until &>

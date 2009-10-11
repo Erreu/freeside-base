@@ -8,7 +8,10 @@
                    '#',
                    'Description',
                    'Setup charge',
-                   'Recurring charge',
+                   ( $use_usage eq 'usage'
+                     ? 'Usage charge'
+                     : 'Recurring charge'
+                   ),
                    'Invoice',
                    'Date',
                    FS::UI::Web::cust_header(),
@@ -16,13 +19,23 @@
                  'fields'      => [
                    'billpkgnum',
                    sub { $_[0]->pkgnum > 0
-                           ? $_[0]->get('pkg')
-                           : $_[0]->get('itemdesc')
+                           ? $_[0]->get('pkg')      # possibly use override.pkg
+                           : $_[0]->get('itemdesc') # but i think this correct
                        },
                    #strikethrough or "N/A ($amount)" or something these when
                    # they're not applicable to pkg_tax search
                    sub { sprintf($money_char.'%.2f', shift->setup ) },
-                   sub { sprintf($money_char.'%.2f', shift->recur ) },
+                   sub { my $row = shift;
+                         my $value = 0;
+                         if ( $use_usage eq 'recurring' ) {
+                           $value = $row->recur - $row->usage;
+                         } elsif ( $use_usage eq 'usage' ) {
+                           $value = $row->usage;
+                         } else {
+                           $value = $row->recur;
+                         }
+                         sprintf($money_char.'%.2f', $value );
+                       },
                    'invnum',
                    sub { time2str('%b %d %Y', shift->_date ) },
                    \&FS::UI::Web::cust_fields,
@@ -83,32 +96,66 @@ if ( $cgi->param('agentnum') =~ /^(\d+)$/ ) {
   push @where, "cust_main.agentnum = $1";
 }
 
+#classnum
+# not specified: all classes
+# 0: empty class
+# N: classnum
+my $use_override = $cgi->param('use_override');
 if ( $cgi->param('classnum') =~ /^(\d+)$/ ) {
+  my $comparison = '';
   if ( $1 == 0 ) {
-    push @where, "classnum IS NULL";
+    $comparison = "IS NULL";
   } else {
-    push @where, "classnum = $1";
+    $comparison = "= $1";
+  }
+
+  if ( $use_override ) {
+    push @where, "(
+      part_pkg.classnum $comparison AND pkgpart_override IS NULL OR
+      override.classnum $comparison AND pkgpart_override IS NOT NULL
+    )";
+  } else {
+    push @where, "part_pkg.classnum $comparison";
   }
 }
 
-#sub _where {
-# my $table = shift;
-# my $prefix = @_ ? shift : '';
-# "
-#      (    cust_main_county.county  = $table.${prefix}.county
-#      OR ( cust_main_county.county IS NULL AND $table.${prefix}.county  =  '' )
-#      OR ( cust_main_county.county  =  ''  AND $table.${prefix}.county IS NULL)
-#      OR ( cust_main_county.county IS NULL AND $table.${prefix}.county IS NULL)
-#      )
-#  AND (    cust_main_county.state   = $table.${prefix}.state
-#      OR ( cust_main_county.state  IS NULL AND $table.${prefix}.state  =  ''  )
-#      OR ( cust_main_county.state   =  ''  AND $table.${prefix}.state IS NULL )
-#      OR ( cust_main_county.state  IS NULL AND $table.${prefix}.state IS NULL )
-#      )
-#  AND cust_main_county.country = $table.${prefix}.country
-# ";
-#
-#}
+if ( $cgi->param('taxclass')
+     && ! $cgi->param('istax')  #no part_pkg.taxclass in this case
+                                #(should we save a taxclass or a link to taxnum
+                                # in cust_bill_pkg or something like
+                                # cust_bill_pkg_tax_location?)
+   )
+{
+
+  #override taxclass when use_override is specified?  probably
+  #if ( $use_override ) {
+  #
+  #  push @where,
+  #    ' ( '. join(' OR ',
+  #                  map {
+  #                        ' (    part_pkg.taxclass = '. dbh->quote($_).
+  #                        '      AND pkgpart_override IS NULL '.
+  #                        '   OR '.
+  #                        '      override.taxclass = '. dbh->quote($_).
+  #                        '      AND pkgpart_override IS NOT NULL '.
+  #                        ' ) '
+  #                      }
+  #                      $cgi->param('taxclass')
+  #               ).
+  #    ' ) ';
+  #
+  #} else {
+
+    push @where,
+      ' ( '. join(' OR ',
+                    map ' part_pkg.taxclass = '.dbh->quote($_),
+                        $cgi->param('taxclass')
+                 ).
+      ' ) ';
+
+  #}
+
+}
 
 if ( $cgi->param('out') ) {
 
@@ -143,17 +190,49 @@ if ( $cgi->param('out') ) {
 
   }
 
-} elsif ( $cgi->param('country' ) ) {
+} elsif ( $cgi->param('country') ) {
 
-  my %ph = map { $_ => dbh->quote( $cgi->param($_) ) }
-               qw( county state country );
+  my @counties = $cgi->param('county');
+   
+  if ( scalar(@counties) > 1 ) {
 
-  my ( $loc_sql, @param ) = FS::cust_pkg->location_sql;
-  while ( $loc_sql =~ /\?/ ) { #easier to do our own substitution
-    $loc_sql =~ s/\?/$ph{shift(@param)}/e;
+    #hacky, could be more efficient.  care if it is ever used for more than the
+    # tax-report_groups filtering kludge
+
+    my $locs_sql =
+      ' ( '. join(' OR ', map {
+
+          my %ph = ( 'county' => dbh->quote($_),
+                     map { $_ => dbh->quote( $cgi->param($_) ) }
+                       qw( state country )
+                   );
+
+          my ( $loc_sql, @param ) = FS::cust_pkg->location_sql;
+          while ( $loc_sql =~ /\?/ ) { #easier to do our own substitution
+            $loc_sql =~ s/\?/$ph{shift(@param)}/e;
+          }
+
+          $loc_sql;
+
+        } @counties
+
+      ). ' ) ';
+
+    push @where, $locs_sql;
+
+  } else {
+
+    my %ph = map { $_ => dbh->quote( $cgi->param($_) ) }
+                 qw( county state country );
+
+    my ( $loc_sql, @param ) = FS::cust_pkg->location_sql;
+    while ( $loc_sql =~ /\?/ ) { #easier to do our own substitution
+      $loc_sql =~ s/\?/$ph{shift(@param)}/e;
+    }
+
+    push @where, $loc_sql;
+
   }
-
-  push @where, $loc_sql;
    
   if ( $cgi->param('istax') ) {
     if ( $cgi->param('taxname') ) {
@@ -167,13 +246,6 @@ if ( $cgi->param('out') ) {
   } else {
     #warn "neither nottax nor istax parameters specified";
   }
-
-  push @where, ' taxclass = '. dbh->quote( $cgi->param('taxclass') )
-    if $cgi->param('taxclass')
-    && ! $cgi->param('istax'); #no part_pkg.taxclass in this case
-                               #(should we save a taxclass or a link to taxnum
-                               # in cust_bill_pkg or something like
-                               # cust_bill_pkg_tax_location?)
 
   if ( $cgi->param('taxclassNULL') ) {
 
@@ -189,19 +261,72 @@ if ( $cgi->param('out') ) {
 
   }
 
+} elsif ( scalar( grep( /locationtaxid/, $cgi->param ) ) ) {
+
+  # this should really be shoved out to FS::cust_pkg->location_sql or something
+  # along with the code in report_newtax.cgi
+
+  my %pn = (
+   'county'        => 'tax_rate_location.county',
+   'state'         => 'tax_rate_location.state',
+   'city'          => 'tax_rate_location.city',
+   'locationtaxid' => 'cust_bill_pkg_tax_rate_location.locationtaxid',
+  );
+
+  my %ph = map { ( $pn{$_} => dbh->quote( $cgi->param($_) || '' ) ) }
+           qw( county state city locationtaxid );
+
+  push @where,
+    join( ' AND ', map { "( $_ = $ph{$_} OR $ph{$_} = '' AND $_ IS NULL)" }
+                   keys %ph
+    );
+
 }
 
-if ($cgi->param('itemdesc')) {
-  if ($cgi->param('itemdesc') eq 'Tax') {
+if ( $cgi->param('itemdesc') ) {
+  if ( $cgi->param('itemdesc') eq 'Tax' ) {
     push @where, "(itemdesc='Tax' OR itemdesc is null)";
-  }else{
+  } else {
     push @where, 'itemdesc='. dbh->quote($cgi->param('itemdesc'));
   }
 }
+
+if ( $cgi->param('report_group') =~ /^(=|!=) (.*)$/ && $cgi->param('istax') ) {
+  my ( $group_op, $group_value ) = ( $1, $2 );
+  if ( $group_op eq '=' ) {
+    #push @where, 'itemdesc LIKE '. dbh->quote($group_value.'%');
+    push @where, 'itemdesc = '. dbh->quote($group_value);
+  } elsif ( $group_op eq '!=' ) {
+    push @where, '( itemdesc != '. dbh->quote($group_value) .' OR itemdesc IS NULL )';
+  } else {
+    die "guru meditation #00de: group_op $group_op\n";
+  }
+  
+}
+
 push @where, 'cust_bill_pkg.pkgnum != 0' if $cgi->param('nottax');
 push @where, 'cust_bill_pkg.pkgnum  = 0' if $cgi->param('istax');
 
-push @where, " tax = 'Y' " if $cgi->param('cust_tax');
+if ( $cgi->param('cust_tax') ) {
+  #false laziness -ish w/report_tax.cgi
+  my $cust_exempt;
+  if ( $cgi->param('taxname') ) {
+    my $q_taxname = dbh->quote($cgi->param('taxname'));
+    $cust_exempt =
+      "( tax = 'Y'
+         OR EXISTS ( SELECT 1 FROM cust_main_exemption
+                       WHERE cust_main_exemption.custnum = cust_main.custnum
+                         AND cust_main_exemption.taxname = $q_taxname )
+       )
+      ";
+  } else {
+    $cust_exempt = " tax = 'Y' ";
+  }
+
+  push @where, $cust_exempt;
+}
+
+my $use_usage = $cgi->param('use_usage');
 
 my $count_query;
 if ( $cgi->param('pkg_tax') ) {
@@ -267,8 +392,15 @@ if ( $cgi->param('pkg_tax') ) {
 
 } else {
 
-  $count_query =
-    "SELECT COUNT(*), SUM(cust_bill_pkg.setup + cust_bill_pkg.recur)";
+  $count_query = "SELECT COUNT(*), ";
+
+  if ( $use_usage eq 'recurring' ) {
+    $count_query .= "SUM(setup + recur - usage)";
+  } elsif ( $use_usage eq 'usage' ) {
+    $count_query .= "SUM(usage)";
+  } else {
+    $count_query .= "SUM(cust_bill_pkg.setup + cust_bill_pkg.recur)";
+  }
 
 }
 
@@ -282,7 +414,9 @@ my $join_pkg;
 if ( $cgi->param('nottax') ) {
 
   $join_pkg =  ' LEFT JOIN cust_pkg USING ( pkgnum )
-                 LEFT JOIN part_pkg USING ( pkgpart ) ';
+                 LEFT JOIN part_pkg USING ( pkgpart )
+                 LEFT JOIN part_pkg AS override
+                   ON pkgpart_override = override.pkgpart ';
   $join_pkg .= ' LEFT JOIN cust_location USING ( locationnum ) '
     if $conf->exists('tax-pkg_address');
 
@@ -295,6 +429,10 @@ if ( $cgi->param('nottax') ) {
 
     #quelle kludge, false laziness w/report_tax.cgi
     $where =~ s/cust_pkg\.locationnum/cust_bill_pkg_tax_location.locationnum/g; 
+  } elsif ( scalar( grep( /locationtaxid/, $cgi->param ) ) ) {
+    $join_pkg .=
+      ' LEFT JOIN cust_bill_pkg_tax_rate_location USING ( billpkgnum ) '.
+      ' LEFT JOIN tax_rate_location USING ( taxratelocationnum ) ';
   }
 
 } else { 
@@ -307,7 +445,17 @@ if ( $cgi->param('nottax') ) {
 
 }
 
-$count_query .= " FROM cust_bill_pkg $join_cust $join_pkg $where";
+if ($use_usage) {
+  $count_query .=
+    " FROM (SELECT cust_bill_pkg.setup, cust_bill_pkg.recur, 
+             ( SELECT COALESCE( SUM(amount), 0 ) FROM cust_bill_pkg_detail
+               WHERE cust_bill_pkg.billpkgnum = cust_bill_pkg_detail.billpkgnum
+             ) AS usage FROM cust_bill_pkg  $join_cust $join_pkg $where
+           ) AS countquery";
+} else {
+  $count_query .= " FROM cust_bill_pkg $join_cust $join_pkg $where";
+}
+warn "count_query is $count_query\n";
 
 my @select = (
                'cust_bill_pkg.*',

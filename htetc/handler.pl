@@ -44,7 +44,8 @@ sub handler
 
     ###Module::Refresh->refresh;###
 
-    $r->content_type('text/html');
+    #$r->content_type('text/html; charset=utf-8');
+    $r->content_type('text/html; charset=iso-8859-1');
     #eorar
 
     my $headers = $r->headers_out;
@@ -68,6 +69,15 @@ sub handler
                 && $r->content_type !~ m!(^text/|\bxml\b)!io;
 
     } else {
+
+      local $SIG{__WARN__};
+      local $SIG{__DIE__};
+
+      RT::Init() if $RT::VERSION; #for lack of something else
+
+      #we don't want the RT error handlers under FS
+      undef $SIG{__WARN__} if defined($SIG{__WARN__});
+      undef $SIG{__DIE__}  if defined($SIG{__DIE__} );
 
       $ah->interp($fs_interp);
 

@@ -29,6 +29,7 @@ use FS::cdr qw( _cdr_date_parser_maker _cdr_min_parser_maker );
     #premade subref factory for date+time parsing, understands dates like:
     #  10/31/2007 08:57:24
     #  2007-10-31 08:57:24.113000000
+    #  Mon Dec 15 11:38:34 2003
     _cdr_date_parser_maker('startddate'), #for example
     
     #premade subref factory for decimal minute parsing
@@ -71,7 +72,7 @@ list of freeside CDR fields, useful ones marked with *
        amaflags - What flags to use: BILL, IGNORE etc, specified on a per
        channel basis like accountcode.
 *[3]   accountcode - CDR account number to use: account
-       uniqueid - Unique channel identifier (Unitel/RSLCOM Event ID)
+       uniqueid - Unique channel identifier
        userfield - CDR user-defined field
        cdr_type - CDR type - see FS::cdr_type (Usage = 1, S&E = 7, OC&C = 8)
 *[4]   charged_party - Service number to be billed
@@ -85,7 +86,7 @@ list of freeside CDR fields, useful ones marked with *
        description - Description (cdr_type 7&8 only) (used for
        cust_bill_pkg.itemdesc)
        quantity - Number of items (cdr_type 7&8 only)
-       carrierid - Upstream Carrier ID (see FS::cdr_carrier)
+*[7]   carrierid - Upstream Carrier ID (see FS::cdr_carrier)
        upstream_rateid - Upstream Rate ID
        svcnum - Link to customer service (see FS::cust_svc)
        freesidestatus - NULL, done (or something)
@@ -97,3 +98,4 @@ list of freeside CDR fields, useful ones marked with *
 [5] When using 'upstream_simple' rating method.
 [6] Set to usage class classnum when using pre-rated CDRs and usage class-based
     taxation (local/intrastate/interstate/international)
+[7] If doing settlement charging

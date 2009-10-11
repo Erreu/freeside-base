@@ -91,6 +91,9 @@ sub upgrade_data {
 
   tie my %hash, 'Tie::IxHash', 
 
+    #cust_main (remove paycvv from history)
+    'cust_main' => [],
+
     #msgcat
     'msgcat' => [],
 
@@ -125,6 +128,15 @@ sub upgrade_data {
 
     #fixup access rights
     'access_right' => [],
+
+    #change tax_rate column types
+    'tax_rate' => [],
+
+    #change recur_flat and enable_prorate
+    'part_pkg_option' => [],
+
+    #add weights to pkg_category
+    'pkg_category' => [],
 
   ;
 

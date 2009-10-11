@@ -3,16 +3,23 @@
 <% $cgi->redirect(popurl(2). "REAL_cust_pkg.cgi?". $cgi->query_string ) %>
 %} else { 
 %  my $custnum = $new->custnum;
-<% $cgi->redirect(popurl(3). "view/cust_main.cgi?$custnum#cust_pkg$pkgnum" ) %>
+%  my $show = $curuser->default_customer_view =~ /^(jumbo|packages)$/
+%               ? ''
+%               : ';show=packages';
+%  my $frag = "cust_pkg$pkgnum"; #hack for IE ignoring real #fragment
+<% $cgi->redirect(popurl(3). "view/cust_main.cgi?custnum=$custnum$show;fragment=$frag#$frag" ) %>
 %}
 <%init>
 
+my $curuser = $FS::CurrentUser::CurrentUser;
+
 die "access denied"
-  unless $FS::CurrentUser::CurrentUser->access_right('Edit customer package dates');
+  unless $curuser->access_right('Edit customer package dates');
 
 my $pkgnum = $cgi->param('pkgnum') or die;
 my $old = qsearchs('cust_pkg',{'pkgnum'=>$pkgnum});
 my %hash = $old->hash;
+$hash{'start_date'} = $cgi->param('start_date') ? str2time($cgi->param('start_date')) : '';
 $hash{'setup'} = $cgi->param('setup') ? str2time($cgi->param('setup')) : '';
 $hash{'bill'} = $cgi->param('bill') ? str2time($cgi->param('bill')) : '';
 $hash{'last_bill'} =

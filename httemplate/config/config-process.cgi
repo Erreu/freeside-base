@@ -41,15 +41,18 @@ foreach my $type ( ref($i->type) ? @{$i->type} : $i->type ) {
     } else {
       push @delete, $i->key;
     }
-  } elsif ( $type eq 'text' || $type eq 'select' || $type eq 'select-sub' )  {
-    if ( $cgi->param($i->key.$n) ne '' ) {
-      $conf->set($i->key, $cgi->param($i->key.$n), $agentnum);
+  } elsif (
+    $type =~ /^(editlist|selectmultiple)$/
+    or ( $type =~ /^select(-(sub|part_svc|part_pkg))?$/ || $i->multiple )
+  ) {
+    if ( scalar(@{[ $cgi->param($i->key.$n) ]}) ) {
+      $conf->set($i->key, join("\n", @{[ $cgi->param($i->key.$n) ]} ), $agentnum);
     } else {
       $conf->delete($i->key, $agentnum);
     }
-  } elsif ( $type eq 'editlist' || $type eq 'selectmultiple' )  {
-    if ( scalar(@{[ $cgi->param($i->key.$n) ]}) ) {
-      $conf->set($i->key, join("\n", @{[ $cgi->param($i->key.$n) ]} ), $agentnum);
+  } elsif ( $type =~ /^(text|select(-(sub|part_svc|part_pkg))?)$/ ) {
+    if ( $cgi->param($i->key.$n) ne '' ) {
+      $conf->set($i->key, $cgi->param($i->key.$n), $agentnum);
     } else {
       $conf->delete($i->key, $agentnum);
     }
@@ -65,7 +68,10 @@ $conf->delete($_, $agentnum) foreach @delete;
   <SCRIPT TYPE="text/javascript">
 %   my $n = 0;
 %   foreach my $type ( ref($i->type) ? @{$i->type} : $i->type ) {
-    var configCell = window.top.document.getElementById('<% $i->key. $n %>');
+    var configCell = window.top.document.getElementById('<% $agentnum. $i->key. $n %>');
+    if ( ! configCell ) {
+      window.top.location.reload();
+    }
     //alert('found cell ' + configCell);
 %     if (    $type eq 'textarea'
 %          || $type eq 'editlist'
@@ -87,8 +93,22 @@ $conf->delete($_, $agentnum) foreach @delete;
           configCell.style.backgroundColor = '#ff0000';
           configCell.innerHTML = 'NO';
 %       }
+%     } elsif ( $type eq 'select' && $i->select_hash ) {
+%       my %hash;
+%       if ( ref($i->select_hash) eq 'ARRAY' ) {
+%         tie %hash, 'Tie::IxHash', '' => '', @{ $i->select_hash };
+%       } else {
+%         tie %hash, 'Tie::IxHash', '' => '', %{ $i->select_hash };
+%       }
+        configCell.innerHTML = <% $conf->exists($i->key, $agentnum) ? $hash{ $conf->config($i->key, $agentnum) } : '' |js_string %>;
+
 %     } elsif ( $type eq 'text' || $type eq 'select' ) {
         configCell.innerHTML = <% $conf->exists($i->key, $agentnum) ? $conf->config($i->key, $agentnum) : '' |js_string %>;
+%     } elsif ( $type =~ /^select-(part_svc|part_pkg)$/ && ! $i->multiple ) {
+        configCell.innerHTML =
+          <% $conf->config($i->key, $agentnum) |js_string %>
+%# + ': ' +
+%#          <% &{ $i->option_sub }( $conf->config($i->key, $agentnum) ) |js_string %>;
 %     } elsif ( $type eq 'select-sub' ) {
         configCell.innerHTML =
           <% $conf->config($i->key, $agentnum) |js_string %> + ': ' +

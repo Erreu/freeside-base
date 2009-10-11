@@ -1,94 +1,24 @@
-<A NAME="cust_pkg"><FONT SIZE="+2">Packages</FONT></A><BR>
-
-% if ( $curuser->access_right('One-time charge') ) {
-
-<SCRIPT TYPE="text/javascript">
-
-function taxproductmagic(which) {
-  var str = '';
-  var elements = which.form.elements;
-  for (var i = 0; i<elements.length; i++) {
-    if (elements[i].name == 'taxproductnum'){
-      document.getElementById('taxproductnum').value = elements[i].value;
-      continue;
-    }
-    if (elements[i].name == 'taxproductnum_description'){
-      continue;
-    }
-    if (str.length){str += ';';}
-    str += elements[i].name + '=' + escape(elements[i].value);
-  }
-  document.getElementById('charge_storage').value = str;
-  cClick();
-  overlib( OLiframeContent('<% $p %>/browse/part_pkg_taxproduct.cgi?_type=select&id=taxproductnum&onclick=taxproductquickchargemagic&taxproductnum='+document.getElementById('taxproductnum').value, 1000, 400, 'tax_product_popup'), CAPTION, 'Select product', STICKY, AUTOSTATUSCAP, MIDX, 0, MIDY, 0, DRAGGABLE, CLOSECLICK);
-}
-
-function taxproductquickchargemagic() {
-  var str = document.getElementById('charge_storage').value;
-  if (str.length){str += ';';}
-  str += 'magic=taxproductnum;taxproductnum=';
-  str += escape(document.getElementById('taxproductnum').value);
-  cClick();
-  overlib( OLiframeContent('<% $p %>/edit/quick-charge.html?'+str, 545, 336, 'One-time charge'), CAPTION, 'One-time charge', STICKY, AUTOSTATUSCAP, MIDX, 0, MIDY, 0, DRAGGABLE, CLOSECLICK, BGCOLOR, '#333399', CGCOLOR, '#333399', CLOSETEXT, 'Close');
-
-}
-
-function taxoverridemagic(which) {
-  var str = '';
-  var elements = which.ownerDocument.QuickChargeForm.elements;
-  for (var i = 0; i<elements.length; i++) {
-    if (elements[i].name == 'tax_override'){
-      document.getElementById('tax_override').value = elements[i].value;
-      continue;
-    }
-    if (str.length){str += ';';}
-    str += elements[i].name + '=' + escape(elements[i].value);
-  }
-  document.getElementById('charge_storage').value = str;
-  cClick();
-  overlib( OLiframeContent('<% $p %>/edit/part_pkg_taxoverride.html?element_name=tax_override;onclick=taxoverridequickchargemagic;selected='+document.getElementById('tax_override').value, 1100, 600, 'tax_product_popup'), CAPTION, 'Edit product tax overrides', STICKY, AUTOSTATUSCAP, MIDX, 0, MIDY, 0, DRAGGABLE, CLOSECLICK);
-}
-
-function taxoverridequickchargemagic() {
-  var str = document.getElementById('charge_storage').value;
-  if (str.length){str += ';';}
-  str += 'magic=taxoverride;tax_override=';
-  str += document.getElementById('tax_override').value;
-  cClick();
-  overlib( OLiframeContent('<% $p %>/edit/quick-charge.html?'+str, 545, 336, 'One-time charge'), CAPTION, 'One-time charge', STICKY, AUTOSTATUSCAP, MIDX, 0, MIDY, 0, DRAGGABLE, CLOSECLICK, BGCOLOR, '#333399', CGCOLOR, '#333399', CLOSETEXT, 'Close');
-
-}
-
-</SCRIPT>
-<FORM NAME='quickcharge'>
-  <INPUT NAME="taxproductnum"  ID="taxproductnum"  TYPE="hidden">
-  <INPUT NAME="tax_override"   ID="tax_override"   TYPE="hidden">
-  <INPUT NAME="charge_storage" ID="charge_storage" TYPE="hidden">
-  <INPUT NAME="taxproductnum_description"  ID="taxproductnum_description" TYPE="hidden">
-</FORM>
-% } 
-
 % my $s = 0;
 % if ( $curuser->access_right('Order customer package') ) { 
   <% $s++ ? ' | ' : '' %>
-  <% order_pkg_link($cust_main) %>
+  <% include( '/elements/popup_link-cust_main.html',
+                'action'      => $p. 'misc/order_pkg.html',
+                'label'       => 'Order&nbsp;new&nbsp;package',
+                'actionlabel' => 'Order new package',
+                'color'       => '#333399',
+                'cust_main'   => $cust_main,
+                'closetext'   => 'Close',
+                'width'       => 763,
+                'height'      => 350,
+            )
+  %>
 % } 
 
 % if ( $curuser->access_right('One-time charge')
 %        && $conf->config('payby-default') ne 'HIDE'
 %      ) {
-%
   <% $s++ ? ' | ' : '' %>
-  <% include('/elements/popup_link.html',
-     { 
-       'action'      => $p. 'edit/quick-charge.html?custnum='. $cust_main->custnum,
-       'label'       => 'One-time charge',
-       'actionlabel' => 'One-time charge',
-       'color'       => '#333399',
-       'width'       => 763,
-       'height'      => 408,
-     })
-  %>
+  <% include('one_time_charge_link.html', $cust_main) %>
 % } 
 
 % if ( $curuser->access_right('Bulk change customer packages') ) { 
@@ -109,19 +39,25 @@ Current packages
 %             )
 %        )
 %     {
+%       my $prev = $cgi->param('showcancelledpackages');
 %       $cgi->param('showcancelledpackages', 1);
-%
-
   ( <a href="<% $cgi->self_url %>">show
+%       $cgi->param('showcancelledpackages', $prev);
 %   } else {
 %       $cgi->param('showcancelledpackages', 0);
-%
-
   ( <a href="<% $cgi->self_url %>">hide
+%       $cgi->param('showcancelledpackages', 1);
 %   } 
 
  cancelled packages</a> )
 % } 
+% if ( $num_old_packages ) {
+%   $cgi->param('showoldpackages', 1);
+    ( <a href="<% $cgi->self_url %>">show old packages</a> )
+% } elsif ( $cgi->param('showoldpackages') ) {
+%   $cgi->param('showoldpackages', 0);
+    ( <a href="<% $cgi->self_url %>">hide old packages</a> )
+% }
 % if ( @$packages ) { 
 
 <% include('/elements/table-grid.html') %>
@@ -138,6 +74,7 @@ Current packages
   <TH CLASS="grid" BGCOLOR="#cccccc">Services</TH>
 </TR>
 
+% #$FS::cust_pkg::DEBUG = 2;
 % foreach my $cust_pkg (@$packages) {
 %
 %   if ( $bgcolor eq $bgcolor1 ) {
@@ -146,25 +83,13 @@ Current packages
 %     $bgcolor = $bgcolor1;
 %   }
 %
-%   my $countrydefault = scalar($conf->config('countrydefault')) || 'US';
 %   my %iopt = (
-%     'bgcolor'                  => $bgcolor,
-%     'cust_pkg'                 => $cust_pkg,
-%     'part_pkg'                 => $cust_pkg->part_pkg,
-%
-%     #for services.html and status.html
-%     'cust_pkg-display_times'   => $conf->exists('cust_pkg-display_times'),
-%
-%     #for location.html
-%     'countrydefault'           => $countrydefault,
-%     'statedefault'             => ( scalar($conf->config('statedefault'))
-%                                    || ($countrydefault eq 'US' ? 'CA' : '') ),
-%
-%     #for services.html
-%     'svc_external-skip_manual' => $conf->exists('svc_external-skip_manual'),
-%     'legacy_link'              => $conf->exists('legacy_link'),
-%
+%     'bgcolor'  => $bgcolor,
+%     'cust_pkg' => $cust_pkg,
+%     'part_pkg' => $cust_pkg->part_pkg,
+%     %conf_opt,
 %   );
+%
 
     <!--pkgnum: <% $cust_pkg->pkgnum %>-->
     <TR>
@@ -193,6 +118,7 @@ Current packages
     if ( el ) el.scrollIntoView(true);
   </SCRIPT>
 % }
+
 <%init>
 
 my( $cust_main ) = @_;
@@ -200,18 +126,38 @@ my $conf = new FS::Conf;
 
 my $curuser = $FS::CurrentUser::CurrentUser;
 
-my $packages = get_packages($cust_main, $conf);
+my( $packages, $num_old_packages ) = get_packages($cust_main, $conf);
 
 my $show_location = $conf->exists('cust_pkg-always_show_location')
                         || ( grep $_->locationnum, @$packages ); # ? '1' : '0';
+
+my $countrydefault = scalar($conf->config('countrydefault')) || 'US';
+my %conf_opt = (
+  #for services.html and status.html
+  'cust_pkg-display_times'    => $conf->exists('cust_pkg-display_times'),
+
+  #for status.html
+  'cust_pkg-show_autosuspend' => $conf->exists('cust_pkg-show_autosuspend'),
+  #for status.html pkg-balances
+  'pkg-balances'              => $conf->exists('pkg-balances'),
+  'money_char'                => ( $conf->config('money_char') || '$' ),
+
+  #for location.html
+  'countrydefault'            => $countrydefault,
+  'statedefault'              => ( scalar($conf->config('statedefault'))
+                                  || ($countrydefault eq 'US' ? 'CA' : '') ),
+  #for services.html
+  'svc_external-skip_manual'  => $conf->exists('svc_external-skip_manual'),
+  'legacy_link'               => $conf->exists('legacy_link'),
+  'svc_broadband-manage_link' => $conf->config('svc_broadband-manage_link'),
+);
 
 #subroutines
 
 sub get_packages {
   my $cust_main = shift or return undef;
   my $conf = shift;
-  
-  my @packages = ();
+
   my $method;
   if (  $cgi->param('showcancelledpackages') eq '0' #see if it was set by me
      || ( $conf->exists('hidecancelledpackages')
@@ -223,19 +169,51 @@ sub get_packages {
     $method = 'all_pkgs';
   }
 
-  [ $cust_main->$method() ];
-}
+  my $cust_pkg_fields =
+    join(', ', map { "cust_pkg.$_ AS $_"          } fields('cust_pkg') );
 
-sub order_pkg_link {
-  include( '/elements/popup_link-cust_main.html',
-             'action'      => $p. 'misc/order_pkg.html',
-             'label'       => 'Order&nbsp;new&nbsp;package',
-             'actionlabel' => 'Order new package',
-             'color'       => '#333399',
-             'cust_main'   => shift,
-             'closetext'   => 'Close',
-             'width'       => 763,
-         )
+  my $part_pkg_fields =
+    join(', ', map { "part_pkg.$_ AS part_pkg_$_" } fields('part_pkg') );
+
+  my $group_by =
+    join(', ', map "cust_pkg.$_", fields('cust_pkg') ). ', '.
+    join(', ', map "part_pkg.$_", fields('part_pkg') );
+
+  my $num_svcs = '( SELECT COUNT(*) FROM cust_svc '.
+                 '    WHERE cust_svc.pkgnum = cust_pkg.pkgnum ) AS num_svcs';
+
+  my @packages = $cust_main->$method( {
+    'select'    => "$cust_pkg_fields, $part_pkg_fields, $num_svcs",
+    'addl_from' => 'LEFT JOIN part_pkg USING ( pkgpart )',
+  } );
+  my $num_old_packages = scalar(@packages);
+
+  foreach my $cust_pkg ( @packages ) {
+    my %hash = $cust_pkg->hash;
+    my %part_pkg = map  { /^part_pkg_(.+)$/ or die; ( $1 => $hash{$_} ); }
+                   grep { /^part_pkg_/ } keys %hash;
+    $cust_pkg->{'_pkgpart'} = new FS::part_pkg \%part_pkg;
+  }
+
+  unless ( $cgi->param('showoldpackages') ) {
+    my $years = $conf->config('cust_main-packages-years') || 2;
+    my $seconds = 31556926; #60*60*24*365.2422 is close enough
+    my $then = time - $seconds;
+
+    my %hide = ( 'cancelled'       => 'cancel',
+                 'one-time charge' => 'setup',
+               );
+  
+    @packages =
+      grep { !exists($hide{$_->status}) or $_->get($hide{$_->status}) > $then
+             or $_->num_svcs #don't hide packages w/services
+           }
+           @packages;
+  }
+
+  $num_old_packages -= scalar(@packages);
+
+  ( \@packages, $num_old_packages );
 }
 
 </%init>

@@ -1,6 +1,6 @@
 %{!?_initrddir:%define _initrddir /etc/rc.d/init.d}
-%{!?version:%define version 1.9}
-%{!?release:%define release 6}
+%{!?version:%define version 1.9.1}
+%{!?release:%define release 8}
 
 Summary: Freeside ISP Billing System
 Name: freeside
@@ -17,8 +17,10 @@ Requires: %{name}-frontend
 Requires: %{name}-backend
 %if "%{_vendor}" != "suse"
 Requires: tetex-latex
+Requires: ghostscript
 %else
 Requires: te_latex
+Requires: ghostscript-library
 %endif
 Requires: perl-Fax-Hylafax-Client
 
@@ -48,11 +50,13 @@ Requires: perl-Fax-Hylafax-Client
 %define	fs_cron_user		fs_daily
 %define	db_types		Pg mysql
 
+%define texmflocal	/usr/share/texmf
+
 %define _rpmlibdir	/usr/lib/rpm
 %define	rpmfiles	rpm
 
 %description
-Freeside is a flexible ISP billing system written by Ivan Kohler
+Freeside is a flexible ISP billing system
 
 %package mason
 Summary: HTML::Mason interface for %{name}
@@ -135,7 +139,7 @@ For security reasons, it is set to conflict with %{name} as you should not insta
 
 %prep
 %setup -q
-%{__rm} bin/pod2x # Only useful to Ivan Kohler now
+%{__rm} -f bin/pod2x # Only useful to Ivan Kohler now
 perl -pi -e 's|/usr/local/bin|%{_bindir}|g' FS/Makefile.PL
 # RPM handles changing file ownership, so Makefile shouldn't
 perl -pi -e 's/\s+-o\s+(freeside|root)(\s+-g\s+\$\{\w+\})?\s+/ /g' Makefile
@@ -144,6 +148,7 @@ perl -ni -e 'print if !/\s+chown\s+/;' Makefile
 # Fix-ups for self-service.  Should merge this into Makefile
 perl -pi -e 's|/usr/local/sbin|%{_sbindir}|g' FS/bin/freeside-selfservice-server
 perl -pi -e 's|/usr/local/bin|%{_bindir}|g' fs_selfservice/FS-SelfService/Makefile.PL
+perl -pi -e 's|/usr/local/sbin|%{_sbindir}|g' fs_selfservice/FS-SelfService/Makefile.PL
 perl -pi -e 's|/usr/local/freeside|%{freeside_socket}|g' fs_selfservice/FS-SelfService/*.pm
 perl -pi -e 's|socket\s*=\s*"/usr/local/freeside|socket = "%{freeside_socket}|g' fs_selfservice/FS-SelfService/freeside-selfservice-*
 perl -pi -e 's|log_file\s*=\s*"/usr/local/freeside|log_file = "%{freeside_log}|g' fs_selfservice/FS-SelfService/freeside-selfservice-*
@@ -161,6 +166,7 @@ cat << \EOF > %{name}-req
 tee %{_tmppath}/filelist | %{_rpmlibdir}/rpmdeps --requires | grep -v -E '^perl\(the\)$' \
 | grep -v -E '^perl\((lib|strict|vars|RT)\)$' \
 | grep -v -E '^perl\(RT::' \
+| grep -v -E '^perl\(FS::' \
 | sort -u
 grep handler.pl %{_tmppath}/filelist | xargs %{_rpmlibdir}/perldeps.pl --requires \
 | grep -v -E '^perl\((lib|strict|vars|RT)\)$' \
@@ -189,7 +195,7 @@ else
 fi
 %{__make} OPTIMIZE="$RPM_OPT_FLAGS"
 cd ..
-%{__make} perl-modules VERSION='%{version}-%{release}' RT_ENABLED=%{rt_enabled} FREESIDE_CACHE=%{freeside_cache} FREESIDE_CONF=%{freeside_conf} FREESIDE_EXPORT=%{freeside_export} FREESIDE_LOCK=%{freeside_lock} FREESIDE_LOG=%{freeside_log}
+%{__make} perl-modules RT_ENABLED=%{rt_enabled} FREESIDE_CACHE=%{freeside_cache} FREESIDE_CONF=%{freeside_conf} FREESIDE_EXPORT=%{freeside_export} FREESIDE_LOCK=%{freeside_lock} FREESIDE_LOG=%{freeside_log}
 touch perl-modules
 
 cd fs_selfservice/FS-SelfService
@@ -209,17 +215,17 @@ cd ../..
 touch install-perl-modules perl-modules
 %{__mkdir_p} $RPM_BUILD_ROOT%{freeside_cache}
 %{__mkdir_p} $RPM_BUILD_ROOT%{freeside_conf}
-#%{__mkdir_p} $RPM_BUILD_ROOT%{freeside_export}
+%{__mkdir_p} $RPM_BUILD_ROOT%{freeside_export}
 %{__mkdir_p} $RPM_BUILD_ROOT%{freeside_lock}
 %{__mkdir_p} $RPM_BUILD_ROOT%{freeside_log}
 for DBTYPE in %{db_types}; do
 	%{__mkdir_p} $RPM_BUILD_ROOT/tmp
 	[ -d $RPM_BUILD_ROOT%{freeside_conf}/default_conf ] && %{__rm} -rf $RPM_BUILD_ROOT%{freeside_conf}/default_conf
-	%{__make} create-config DB_TYPE=$DBTYPE DATASOURCE=DBI:$DBTYPE:dbname=%{name} RT_ENABLED=%{rt_enabled} FREESIDE_CACHE=$RPM_BUILD_ROOT%{freeside_cache} FREESIDE_CONF=$RPM_BUILD_ROOT/tmp FREESIDE_EXPORT=$RPM_BUILD_ROOT%{freeside_export} FREESIDE_LOCK=$RPM_BUILD_ROOT%{freeside_lock} FREESIDE_LOG=$RPM_BUILD_ROOT%{freeside_log}
-	%{__mv} $RPM_BUILD_ROOT/tmp/* $RPM_BUILD_ROOT%{freeside_conf}
-	/bin/rmdir $RPM_BUILD_ROOT/tmp
+	%{__make} create-config DB_TYPE=$DBTYPE DATASOURCE=DBI:$DBTYPE:dbname=%{name} RT_ENABLED=%{rt_enabled} FREESIDE_CACHE=$RPM_BUILD_ROOT%{freeside_cache} FREESIDE_CONF=$RPM_BUILD_ROOT/tmp FREESIDE_EXPORT=$RPM_BUILD_ROOT%{freeside_export} FREESIDE_LOCK=$RPM_BUILD_ROOT%{freeside_lock} FREESIDE_LOG=$RPM_BUILD_ROOT%{freeside_log} DIST_CONF=$RPM_BUILD_ROOT%{freeside_conf}/default_conf
+	%{__mv} $RPM_BUILD_ROOT/tmp/secrets $RPM_BUILD_ROOT%{freeside_conf}
+	%{__rm} -rf $RPM_BUILD_ROOT/tmp
 done
-%{__rm} install-perl-modules perl-modules $RPM_BUILD_ROOT%{freeside_conf}/conf*/ticket_system
+%{__rm} install-perl-modules perl-modules $RPM_BUILD_ROOT%{freeside_conf}/default_conf/ticket_system
 
 touch docs
 %{__perl} -pi -e "s|%%%%%%FREESIDE_DOCUMENT_ROOT%%%%%%|%{freeside_document_root}|g" htetc/handler.pl
@@ -327,29 +333,47 @@ cd ../..
 %{__install} %{rpmfiles}/freeside-selfservice.conf $RPM_BUILD_ROOT%{apache_confdir}/%{name}-selfservice.conf
 %{__perl} -pi -e "s|%%%%%%FREESIDE_SELFSERVICE_DOCUMENT_ROOT%%%%%%|%{freeside_selfservice_document_root}|g" $RPM_BUILD_ROOT%{apache_confdir}/%{name}-selfservice.conf
 
+# This is part of Makefile's install-texmf.  The rest is in triggers.  These files are not in the filelist
+%{__install} -D etc/fslongtable.sty $RPM_BUILD_ROOT%{texmflocal}/tex/generic/fslongtable.sty
+
 %pre
 if ! %{__id} freeside &>/dev/null; then
-	/usr/sbin/useradd freeside
+%if "%{_vendor}" == "suse"
+	/usr/sbin/groupadd freeside
+%endif
+	/usr/sbin/useradd -m freeside
 fi
 
 %pre mason
 if ! %{__id} freeside &>/dev/null; then
-	/usr/sbin/useradd freeside
+%if "%{_vendor}" == "suse"
+	/usr/sbin/groupadd freeside
+%endif
+	/usr/sbin/useradd -m freeside
 fi
 
 %pre postgresql
 if ! %{__id} freeside &>/dev/null; then
-	/usr/sbin/useradd freeside
+%if "%{_vendor}" == "suse"
+	/usr/sbin/groupadd freeside
+%endif
+	/usr/sbin/useradd -m freeside
 fi
 
 %pre mysql
 if ! %{__id} freeside &>/dev/null; then
-	/usr/sbin/useradd freeside
+%if "%{_vendor}" == "suse"
+	/usr/sbin/groupadd freeside
+%endif
+	/usr/sbin/useradd -m freeside
 fi
 
 %pre selfservice-cgi
 if ! %{__id} freeside &>/dev/null; then
-	/usr/sbin/useradd freeside
+%if "%{_vendor}" == "suse"
+	/usr/sbin/groupadd freeside
+%endif
+	/usr/sbin/useradd -m freeside
 fi
 
 %post
@@ -389,6 +413,10 @@ if ! %{__grep} TEXINPUTS /etc/init.d/apache2 >/dev/null; then
 fi
 %endif
 
+%triggerin -- tetex 
+#texhash `kpsewhich -expand-var \$TEXMFLOCAL`
+texhash %{texmflocal}
+
 %clean
 %{__rm} -rf %{buildroot}
 
@@ -400,7 +428,9 @@ fi
 %attr(-,freeside,freeside) %dir %{freeside_conf}
 %attr(-,freeside,freeside) %dir %{freeside_lock}
 %attr(-,freeside,freeside) %dir %{freeside_log}
-%attr(0644,freeside,freeside) %config(noreplace) %{freeside_conf}/default_conf
+%attr(0711,freeside,freeside) %config(noreplace) %{freeside_conf}/default_conf
+%attr(0644,freeside,freeside) %config(noreplace) %{freeside_conf}/default_conf/*
+%attr(444,root,root) %{texmflocal}/tex/generic/fslongtable.sty
 
 %files mason -f %{name}-%{version}-%{release}-mason-filelist
 %defattr(-, freeside, freeside, 0755)
@@ -431,6 +461,9 @@ fi
 %attr(0755,freeside,freeside) %{freeside_selfservice_document_root}/php
 
 %changelog
+* Thu Jun 11 2009 Richard Siddall <richard.siddall@elirion.net> - 1.9-8
+- Since configuration is now kept in the RDBMS, don't install a configuration folder
+
 * Mon Dec 22 2008 Richard Siddall <richard.siddall@elirion.net> - 1.9-5
 - Modifications to make self-service work if you really insist on installing it on the same machine as Freeside
 

@@ -1,7 +1,7 @@
 package FS::part_pkg;
 
 use strict;
-use vars qw( @ISA %plans $DEBUG $setup_hack );
+use vars qw( @ISA %plans $DEBUG $setup_hack $skip_pkg_svc_hack );
 use Carp qw(carp cluck confess);
 use Scalar::Util qw( blessed );
 use Time::Local qw( timelocal_nocheck );
@@ -23,6 +23,7 @@ use FS::part_pkg_link;
 @ISA = qw( FS::m2m_Common FS::option_Common );
 $DEBUG = 0;
 $setup_hack = 0;
+$skip_pkg_svc_hack = 0;
 
 =head1 NAME
 
@@ -85,6 +86,12 @@ inherits from FS::Record.  The following fields are currently supported:
 
 =item disabled - Disabled flag, empty or `Y'
 
+=item custom - Custom flag, empty or `Y'
+
+=item setup_cost - for cost tracking
+
+=item recur_cost - for cost tracking
+
 =item pay_weight - Weight (relative to credit_weight and other package definitions) that controls payment application to specific line items.
 
 =item credit_weight - Weight (relative to other package definitions) that controls credit application to specific line items.
@@ -109,9 +116,8 @@ sub table { 'part_pkg'; }
 =item clone
 
 An alternate constructor.  Creates a new package definition by duplicating
-an existing definition.  A new pkgpart is assigned and `(CUSTOM) ' is prepended
-to the comment field.  To add the package definition to the database, see
-L<"insert">.
+an existing definition.  A new pkgpart is assigned and the custom flag is
+set to Y.  To add the package definition to the database, see L<"insert">.
 
 =cut
 
@@ -120,8 +126,7 @@ sub clone {
   my $class = ref($self);
   my %hash = $self->hash;
   $hash{'pkgpart'} = '';
-  $hash{'comment'} = "(CUSTOM) ". $hash{'comment'}
-    unless $hash{'comment'} =~ /^\(CUSTOM\) /;
+  $hash{'custom'} = 'Y';
   #new FS::part_pkg ( \%hash ); # ?
   new $class ( \%hash ); # ?
 }
@@ -213,26 +218,30 @@ sub insert {
     }
   }
 
-  warn "  inserting pkg_svc records" if $DEBUG;
-  my $pkg_svc = $options{'pkg_svc'} || {};
-  foreach my $part_svc ( qsearch('part_svc', {} ) ) {
-    my $quantity = $pkg_svc->{$part_svc->svcpart} || 0;
-    my $primary_svc =
-      ( $options{'primary_svc'} && $options{'primary_svc'}==$part_svc->svcpart )
-        ? 'Y'
-        : '';
+  unless ( $skip_pkg_svc_hack ) {
 
-    my $pkg_svc = new FS::pkg_svc( {
-      'pkgpart'     => $self->pkgpart,
-      'svcpart'     => $part_svc->svcpart,
-      'quantity'    => $quantity, 
-      'primary_svc' => $primary_svc,
-    } );
-    my $error = $pkg_svc->insert;
-    if ( $error ) {
-      $dbh->rollback if $oldAutoCommit;
-      return $error;
+    warn "  inserting pkg_svc records" if $DEBUG;
+    my $pkg_svc = $options{'pkg_svc'} || {};
+    foreach my $part_svc ( qsearch('part_svc', {} ) ) {
+      my $quantity = $pkg_svc->{$part_svc->svcpart} || 0;
+      my $primary_svc =
+        ( $options{'primary_svc'} && $options{'primary_svc'}==$part_svc->svcpart )
+          ? 'Y'
+          : '';
+
+      my $pkg_svc = new FS::pkg_svc( {
+        'pkgpart'     => $self->pkgpart,
+        'svcpart'     => $part_svc->svcpart,
+        'quantity'    => $quantity, 
+        'primary_svc' => $primary_svc,
+      } );
+      my $error = $pkg_svc->insert;
+      if ( $error ) {
+        $dbh->rollback if $oldAutoCommit;
+        return $error;
+      }
     }
+
   }
 
   if ( $options{'cust_pkg'} ) {
@@ -365,7 +374,7 @@ sub replace {
   foreach my $part_svc ( qsearch('part_svc', {} ) ) {
     my $quantity = $pkg_svc->{$part_svc->svcpart} || 0;
     my $primary_svc =
-      ( defined($options->{'primary_svc'})
+      ( defined($options->{'primary_svc'}) && $options->{'primary_svc'}
         && $options->{'primary_svc'} == $part_svc->svcpart
       )
         ? 'Y'
@@ -448,6 +457,11 @@ sub check {
     || $self->ut_enum('recurtax', [ '', 'Y' ] )
     || $self->ut_textn('taxclass')
     || $self->ut_enum('disabled', [ '', 'Y' ] )
+    || $self->ut_enum('custom', [ '', 'Y' ] )
+    #|| $self->ut_moneyn('setup_cost')
+    #|| $self->ut_moneyn('recur_cost')
+    || $self->ut_floatn('setup_cost')
+    || $self->ut_floatn('recur_cost')
     || $self->ut_floatn('pay_weight')
     || $self->ut_floatn('credit_weight')
     || $self->ut_numbern('taxproductnum')
@@ -480,20 +494,30 @@ sub check {
   '';
 }
 
-=item pkg_comment
+=item pkg_comment [ OPTION => VALUE... ]
 
 Returns an (internal) string representing this package.  Currently,
 "pkgpart: pkg - comment", is returned.  "pkg - comment" may be returned in the
-future, omitting pkgpart.
+future, omitting pkgpart.  The comment will have '(CUSTOM) ' prepended if
+custom is Y.
+
+If the option nopkgpart is true then the "pkgpart: ' is omitted.
 
 =cut
 
 sub pkg_comment {
   my $self = shift;
+  my %opt = @_;
 
   #$self->pkg. ' - '. $self->comment;
   #$self->pkg. ' ('. $self->comment. ')';
-  $self->pkgpart. ': '. $self->pkg. ' - '. $self->comment;
+  my $pre = $opt{nopkgpart} ? '' : $self->pkgpart. ': ';
+  $pre. $self->pkg. ' - '. $self->custom_comment;
+}
+
+sub custom_comment {
+  my $self = shift;
+  ( $self->custom ? '(CUSTOM) ' : '' ). $self->comment;
 }
 
 =item pkg_class
@@ -613,25 +637,49 @@ Returns the svcpart of the primary service definition (see L<FS::part_svc>)
 associated with this package definition (see L<FS::pkg_svc>).  Returns
 false if there not a primary service definition or exactly one service
 definition with quantity 1, or if SVCDB is specified and does not match the
-svcdb of the service definition, 
+svcdb of the service definition.  SVCDB can be specified as a scalar table
+name, such as 'svc_acct', or as an arrayref of possible table names.
 
 =cut
 
 sub svcpart {
+  my $pkg_svc = shift->_primary_pkg_svc(@_);
+  $pkg_svc ? $pkg_svc->svcpart : '';
+}
+
+=item part_svc [ SVCDB ]
+
+Like the B<svcpart> method, but returns the FS::part_svc object (see
+L<FS::part_svc>).
+
+=cut
+
+sub part_svc {
+  my $pkg_svc = shift->_primary_pkg_svc(@_);
+  $pkg_svc ? $pkg_svc->part_svc : '';
+}
+
+sub _primary_pkg_svc {
   my $self = shift;
-  my $svcdb = scalar(@_) ? shift : '';
+
+  my $svcdb = scalar(@_) ? shift : [];
+  $svcdb = ref($svcdb) ? $svcdb : [ $svcdb ];
+  my %svcdb = map { $_=>1 } @$svcdb;
+
   my @svcdb_pkg_svc =
-    grep { ( $svcdb eq $_->part_svc->svcdb || !$svcdb ) } $self->pkg_svc;
+    grep { !scalar(@$svcdb) || $svcdb{ $_->part_svc->svcdb } }
+         $self->pkg_svc;
+
   my @pkg_svc = grep { $_->primary_svc =~ /^Y/i } @svcdb_pkg_svc;
   @pkg_svc = grep {$_->quantity == 1 } @svcdb_pkg_svc
     unless @pkg_svc;
   return '' if scalar(@pkg_svc) != 1;
-  $pkg_svc[0]->svcpart;
+  $pkg_svc[0];
 }
 
 =item svcpart_unique_svcdb SVCDB
 
-Returns the svcpart of the a service definition (see L<FS::part_svc>) matching
+Returns the svcpart of a service definition (see L<FS::part_svc>) matching
 SVCDB associated with this package definition (see L<FS::pkg_svc>).  Returns
 false if there not a primary service definition for SVCDB or there are multiple
 service definitions for SVCDB.
@@ -874,10 +922,12 @@ sub svc_part_pkg_link {
 
 sub _part_pkg_link {
   my( $self, $type ) = @_;
-  qsearch('part_pkg_link', { 'src_pkgpart' => $self->pkgpart,
-                             'link_type'   => $type,
-                           }
-         );
+  qsearch({ table    => 'part_pkg_link',
+            hashref  => { 'src_pkgpart' => $self->pkgpart,
+                          'link_type'   => $type,
+                        },
+            order_by => "ORDER BY hidden",
+         });
 }
 
 sub self_and_bill_linked {
@@ -885,12 +935,18 @@ sub self_and_bill_linked {
 }
 
 sub _self_and_linked {
-  my( $self, $type ) = @_;
+  my( $self, $type, $hidden ) = @_;
+  $hidden ||= '';
 
-  ( $self,
-    map { $_->dst_pkg->_self_and_linked($type) }
-        $self->_part_pkg_link($type)
-  );
+  my @result = ();
+  foreach ( ( $self, map { $_->dst_pkg->_self_and_linked($type, $_->hidden) }
+                     $self->_part_pkg_link($type) ) )
+  {
+    $_->hidden($hidden) if $hidden;
+    push @result, $_;
+  }
+
+  (@result);
 }
 
 =item part_pkg_taxoverride [ CLASS ]
@@ -1116,6 +1172,9 @@ sub calc_remain { 0; }
 sub calc_cancel { 0; }
 sub calc_units  { 0; }
 
+#fallback for everything except bulk.pm
+sub hide_svc_detail { 0; }
+
 =item format OPTION DATA
 
 Returns data formatted according to the function 'format' described
@@ -1179,27 +1238,29 @@ sub _upgrade_data { # class method
   foreach my $part_pkg (@part_pkg) {
 
     unless ( $part_pkg->plan ) {
-
       $part_pkg->plan('flat');
+    }
 
-      if ( $part_pkg->setup =~ /^\s*([\d\.]+)\s*$/ ) {
+    if ( length($part_pkg->option('setup_fee')) == 0 
+         && $part_pkg->setup =~ /^\s*([\d\.]+)\s*$/ ) {
 
-        my $opt = new FS::part_pkg_option {
-          'pkgpart'     => $part_pkg->pkgpart,
-          'optionname'  => 'setup_fee',
-          'optionvalue' => $1,
-        };
-        my $error = $opt->insert;
-        die $error if $error;
+      my $opt = new FS::part_pkg_option {
+        'pkgpart'     => $part_pkg->pkgpart,
+        'optionname'  => 'setup_fee',
+        'optionvalue' => $1,
+      };
+      my $error = $opt->insert;
+      die $error if $error;
 
-        $part_pkg->setup('');
 
-      } else {
-        die "Can't parse part_pkg.setup for fee; convert pkgnum ".
-            $part_pkg->pkgnum. " manually: ". $part_pkg->setup. "\n";
-      }
+      #} else {
+      #  die "Can't parse part_pkg.setup for fee; convert pkgnum ".
+      #      $part_pkg->pkgnum. " manually: ". $part_pkg->setup. "\n";
+    }
+    $part_pkg->setup('');
 
-      if ( $part_pkg->recur =~ /^\s*([\d\.]+)\s*$/ ) {
+    if ( length($part_pkg->option('recur_fee')) == 0
+         && $part_pkg->recur =~ /^\s*([\d\.]+)\s*$/ ) {
 
         my $opt = new FS::part_pkg_option {
           'pkgpart'     => $part_pkg->pkgpart,
@@ -1209,17 +1270,43 @@ sub _upgrade_data { # class method
         my $error = $opt->insert;
         die $error if $error;
 
-        $part_pkg->recur('');
 
-      } else {
-        die "Can't parse part_pkg.setup for fee; convert pkgnum ".
-            $part_pkg->pkgnum. " manually: ". $part_pkg->setup. "\n";
-      }
-
+      #} else {
+      #  die "Can't parse part_pkg.setup for fee; convert pkgnum ".
+      #      $part_pkg->pkgnum. " manually: ". $part_pkg->setup. "\n";
     }
+    $part_pkg->recur('');
 
     $part_pkg->replace; #this should take care of plandata, right?
 
+  }
+
+  # now upgrade to the explicit custom flag
+
+  @part_pkg = qsearch({
+    'table'     => 'part_pkg',
+    'hashref'   => { disabled => 'Y', custom => '' },
+    'extra_sql' => "AND comment LIKE '(CUSTOM) %'",
+  });
+
+  foreach my $part_pkg (@part_pkg) {
+    my $new = new FS::part_pkg { $part_pkg->hash };
+    $new->custom('Y');
+    my $comment = $part_pkg->comment;
+    $comment =~ s/^\(CUSTOM\) //;
+    $comment = '(none)' unless $comment =~ /\S/;
+    $new->comment($comment);
+
+    my $pkg_svc = { map { $_->svcpart => $_->quantity } $part_pkg->pkg_svc };
+    my $primary = $part_pkg->svcpart;
+    my $options = { $part_pkg->options };
+
+    my $error = $new->replace( $part_pkg,
+                               'pkg_svc'     => $pkg_svc,
+                               'primary_svc' => $primary,
+                               'options'     => $options,
+                             );
+    die $error if $error;
   }
 
 }
@@ -1233,9 +1320,31 @@ L<FS::type_pkgs>).
 =cut
 
 sub curuser_pkgs_sql {
-  #my($class) = shift;
+  my $class = shift;
 
-  my $agentnums = join(',', $FS::CurrentUser::CurrentUser->agentnums);
+  $class->_pkgs_sql( $FS::CurrentUser::CurrentUser->agentnums );
+
+}
+
+=item agent_pkgs_sql AGENT | AGENTNUM, ...
+
+Returns an SQL fragment for searching for packages the provided agent or agents
+can use, either via part_pkg.agentnum directly, or via agent type (see
+L<FS::type_pkgs>).
+
+=cut
+
+sub agent_pkgs_sql {
+  my $class = shift;  #i'm a class method, not a sub (the question is... why??)
+  my @agentnums = map { ref($_) ? $_->agentnum : $_ } @_;
+
+  $class->_pkgs_sql(@agentnums); #is this why
+
+}
+
+sub _pkgs_sql {
+  my( $class, @agentnums ) = @_;
+  my $agentnums = join(',', @agentnums);
 
   "
     (
@@ -1321,6 +1430,8 @@ FS::cust_bill.  hmm.).  now they're deprecated and need to go.
 plandata should go
 
 part_pkg_taxrate is Pg specific
+
+replace should be smarter about managing the related tables (options, pkg_svc)
 
 =head1 SEE ALSO
 

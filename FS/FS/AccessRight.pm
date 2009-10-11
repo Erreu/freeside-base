@@ -94,11 +94,10 @@ tie my %rights, 'Tie::IxHash',
     'View customer',
     #'View Customer | View tickets',
     'Edit customer',
+    'View customer history',
     'Cancel customer',
     'Complimentary customer', #aka users-allow_comp 
     { rightname=>'Delete customer', desc=>"Enable customer deletions. Be very careful! Deleting a customer will remove all traces that this customer ever existed! It should probably only be used when auditing a legacy database. Normally, you cancel all of a customer's packages if they cancel service." }, #aka. deletecustomers
-    'Add customer note', #NEW
-    'Edit customer note', #NEW
     'Bill customer now', #NEW
     'Bulk send customer notices', #NEW
   ],
@@ -140,6 +139,7 @@ tie my %rights, 'Tie::IxHash',
     'Edit www config', #NEW
     'Edit domain catchall', #NEW
     'Edit domain nameservice', #NEW
+    'Manage domain registration',
   
     { rightname=>'View/link unlinked services', global=>1 }, #not agent-virtualizable without more work
   ],
@@ -150,7 +150,9 @@ tie my %rights, 'Tie::IxHash',
   'Customer invoice / financial info rights' => [
     'View invoices',
     'Resend invoices', #NEWNEW
+    'Delete invoices', #new, but no need to phase in
     'View customer tax exemptions', #yow
+    'Add customer tax adjustment', #new, but no need to phase in
     'View customer batched payments', #NEW
     'View customer pending payments', #NEW
     'Edit customer pending payments', #NEW
@@ -197,6 +199,21 @@ tie my %rights, 'Tie::IxHash',
     
   
   ],
+ 
+  ###
+  # note/attachment rights...
+  ###
+  'Customer note and attachment rights' => [
+    'Add customer note', #NEW
+    'Edit customer note', #NEW
+    'Download attachment', #NEW
+    'Add attachment', #NEW
+    'Edit attachment', #NEW
+    'Delete attachment', #NEW
+    'View deleted attachments', #NEW
+    'Undelete attachment', #NEW
+    'Purge attachment', #NEW
+  ],
   
   ###
   # report/listing rights...
@@ -210,6 +227,7 @@ tie my %rights, 'Tie::IxHash',
   
     { rightname=> 'List rating data', desc=>'Usage reports', global=>1 },
     'Billing event reports',
+    'Receivables report',
     'Financial reports',
   ],
   
@@ -221,6 +239,7 @@ tie my %rights, 'Tie::IxHash',
     { rightname=>'Time queue', global=>1 },
     { rightname=>'Process batches', global=>1 },
     { rightname=>'Reprocess batches', global=>1 },
+    { rightname=>'Redownload resolved batches', global=>1 },
     { rightname=>'Import', global=>1 }, #some of these are ag-virt'ed now?  give em their own ACLs
     { rightname=>'Export', global=>1 },
     { rightname=> 'Edit rating data', desc=>'Delete CDRs', global=>1 },
@@ -267,14 +286,38 @@ tie my %rights, 'Tie::IxHash',
   
 =item rights
 
-Returns a list of right names.
+Returns the full list of right names.
 
 =cut
   
-  sub rights {
+sub rights {
   #my $class = shift;
   map { ref($_) ? $_->{'rightname'} : $_ } map @{ $rights{$_} }, keys %rights;
-  }
+}
+
+=item default_superuser_rights
+
+Most (but not all) right names.
+
+=cut
+
+sub default_superuser_rights {
+  my $class = shift;
+  my %omit = map { $_=>1 } (
+    'Delete customer',
+    'Delete invoices',
+    'Delete payment',
+    'Delete credit', #?
+    'Delete refund', #?
+    'Time queue',
+    'Redownload resolved batches',
+    'Raw SQL',
+    'Configuration download',
+  );
+
+  no warnings 'uninitialized';
+  grep { ! $omit{$_} } $class->rights;
+}
   
 =item rights_info
 

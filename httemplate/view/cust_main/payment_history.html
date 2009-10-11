@@ -1,5 +1,3 @@
-<BR><BR><A NAME="history"><FONT SIZE="+2">Payment History</FONT></A><BR>
-
 %# payment links
 
 % my $s = 0;
@@ -129,10 +127,33 @@
 
 %# tax exemption link
 
-% if ( $curuser->access_right('View customer tax exemptions') ) { 
-  <A HREF="<% $p %>search/cust_tax_exempt_pkg.cgi?custnum=<% $custnum %>">View tax exemptions</A>
+% my $view_exemptions = $curuser->access_right('View customer tax exemptions');
+% my $add_adjustment = ( $conf->exists('enable_tax_adjustments')
+%                       && $curuser->access_right('Add customer tax adjustment')
+%                      );
+% if ( $view_exemptions || $add_adjustment ) {
+
+%   if ( $view_exemptions ) {
+      <A HREF="<% $p %>search/cust_tax_exempt_pkg.cgi?custnum=<% $custnum %>">View tax exemptions</A>
+      <% $add_adjustment ? '|' : '' %>
+%   } 
+
+%   if ( $add_adjustment ) {
+      <% include('/elements/popup_link.html', {
+           'action' => $p.'edit/cust_tax_adjustment.html?custnum='. $cust_main->custnum,
+           'label'  => 'Add tax adjustment',
+           'actionlabel' => 'Add tax adjustment',
+           #'color'  => '#333399',
+           #'width' => 763,
+           'height' => 200,
+         })
+      %>
+      |
+      <A HREF="<% $p %>search/cust_tax_adjustment.html?custnum=<% $custnum %>">View tax adjustments</A>
+%   } 
+
   <BR>
-% } 
+% }
 
 %# batched payment links
 
@@ -353,13 +374,14 @@ my %status = (
 #get payment history
 my @history = ();
 
-my %opt =
+my %opt = (
   ( map { $_ => scalar($conf->config($_)) }
         qw( card_refund-days )
   ),
   ( map { $_ => $conf->exists($_) } 
-        qw( deletepayments deleterefunds )
-  );
+        qw( deleteinvoices deletepayments deleterefunds pkg-balances )
+  )
+);
 
 #invoices
 foreach my $cust_bill ($cust_main->cust_bill) {
@@ -367,6 +389,15 @@ foreach my $cust_bill ($cust_main->cust_bill) {
     'date'   => $cust_bill->_date,
     'desc'   => include('payment_history/invoice.html', $cust_bill, %opt ),
     'charge' => $cust_bill->charged,
+  };
+}
+
+#statements
+foreach my $cust_statement ($cust_main->cust_statement) {
+  push @history, {
+    'date'   => $cust_statement->_date,
+    'desc'   => include('payment_history/statement.html', $cust_statement, %opt ),
+    #'charge' => $cust_bill->charged,
   };
 }
 
@@ -384,7 +415,7 @@ foreach my $cust_pay ($cust_main->cust_pay) {
 foreach my $cust_pay_void ($cust_main->cust_pay_void) {
   push @history, {
     'date'   => $cust_pay_void->_date,
-    'desc'   => include('payment_history/voided_payment.html', $cust_pay_void),
+    'desc'   => include('payment_history/voided_payment.html', $cust_pay_void, %opt ),
     'void_payment' => $cust_pay_void->paid,
   };
 
@@ -394,7 +425,7 @@ foreach my $cust_pay_void ($cust_main->cust_pay_void) {
 foreach my $cust_credit ($cust_main->cust_credit) {
   push @history, {
     'date'   => $cust_credit->_date,
-    'desc'   => include('payment_history/credit.html', $cust_credit),
+    'desc'   => include('payment_history/credit.html', $cust_credit, %opt ),
     'credit' => $cust_credit->amount,
   };
 

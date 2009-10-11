@@ -3,6 +3,8 @@ package FS::part_pkg_taxrate;
 use strict;
 use vars qw( @ISA );
 use Date::Parse;
+use DateTime;
+use DateTime::Format::Strptime;
 use FS::UID qw(dbh);
 use FS::Record qw( qsearch qsearchs );
 use FS::part_pkg_taxproduct;
@@ -181,7 +183,7 @@ sub batch_import {
   if ( $format eq 'cch-fixed' || $format eq 'cch-fixed-update' ) {
     $format =~ s/-fixed//;
     my $date_format = sub { my $r='';
-                            /^(\d{4})(\d{2})(\d{2})$/ && ($r="$1/$2/$3");
+                            /^(\d{4})(\d{2})(\d{2})$/ && ($r="$3/$2/$1");
                             $r;
                           };
     $column_callbacks[16] = $date_format;
@@ -248,8 +250,8 @@ sub batch_import {
 
         $part_pkg_taxproduct{'description'} = 
           join(' : ', (map{ $hash->{$_} } qw(groupdesc itemdesc)),
-                      $providers{$hash->{'provider'}},
-                      $customers{$hash->{'customer'}},
+                      $providers{$hash->{'provider'}} || '',
+                      $customers{$hash->{'customer'}} || '',
               );
         $part_pkg_taxproduct = new FS::part_pkg_taxproduct \%part_pkg_taxproduct;
         my $error = $part_pkg_taxproduct->insert;
@@ -286,7 +288,12 @@ sub batch_import {
         delete($hash->{$_}) foreach @{$map{$item}};
       }
 
-      $hash->{'effdate'} = str2time($hash->{'effdate'});
+      my $parser = new DateTime::Format::Strptime( pattern => "%m/%d/%Y",
+                                                   time_zone => 'floating',
+                                                 );
+      my $dt = $parser->parse_datetime( $hash->{'effdate'} );
+      $hash->{'effdate'} = $dt ? $dt->epoch : '';
+ 
       $hash->{'country'} = 'US'; # CA is available
 
       delete($hash->{'taxable'}) if ($hash->{'taxable'} eq 'N');
@@ -295,10 +302,18 @@ sub batch_import {
         delete($hash->{actionflag});
 
         my $part_pkg_taxrate = qsearchs('part_pkg_taxrate', $hash);
-        return "Can't find part_pkg_taxrate to delete: ".
-               #join(" ", map { "$_ => ". $hash->{$_} } @fields)
-               join(" ", map { "$_ => *". $hash->{$_}. '*' } keys(%$hash) )
-          unless $part_pkg_taxrate;
+        unless ( $part_pkg_taxrate ) {
+          if ( $hash->{taxproductnum} ) {
+            my $taxproduct =
+              qsearchs( 'part_pkg_taxproduct',
+                        { 'taxproductnum' => $hash->{taxproductnum} }
+                      );
+            $hash->{taxproductnum} .= ' ( '. $taxproduct->taxproduct. ' )'
+              if $taxproduct;
+          }
+          return "Can't find part_pkg_taxrate to delete: ".
+                 join(" ", map { "$_ => *". $hash->{$_}. '*' } keys(%$hash) );
+        }
 
         my $error = $part_pkg_taxrate->delete;
         return $error if $error;
@@ -345,7 +360,7 @@ sub batch_import {
     if ( $job ) {  # progress bar
       if ( time - $min_sec > $last ) {
         my $error = $job->update_statustext(
-          int( 100 * $imported / $count )
+          int( 100 * $imported / $count ). ",Importing tax matrix"
         );
         die $error if $error;
         $last = time;

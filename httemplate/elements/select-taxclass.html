@@ -1,6 +1,6 @@
 % if ( $conf->exists('enable_taxclasses') ) { 
 
-    <SELECT NAME="<% $opt{'name'} || 'taxclass' %>">
+    <SELECT NAME="<% $opt{'element_name'} || $opt{'field'} || 'taxclass' %>">
 
 %   if ( $conf->exists('require_taxclasses') ) { 
         <OPTION VALUE="(select)">Select tax class
@@ -16,7 +16,7 @@
 
 % } else { 
 
-  <INPUT TYPE="hidden" NAME="taxclass" VALUE="<% $selected_taxclass %>">
+  <INPUT TYPE="hidden" NAME="<% $opt{'element_name'} || $opt{'field'} || 'taxclass' %>" VALUE="<% $selected_taxclass %>">
 
 % } 
 
@@ -30,9 +30,9 @@ my $conf = new FS::Conf;
 unless ( $opt{'taxclasses'} ) {
 
   #my $sth = dbh->prepare('SELECT DISTINCT taxclass FROM cust_main_county')
-  my $sth = dbh->prepare('SELECT taxclass FROM part_pkg_taxclass')
+  my $sth = dbh->prepare("SELECT taxclass FROM part_pkg_taxclass WHERE disabled IS NULL OR disabled = '' OR taxclass = ?")
     or die dbh->errstr;
-  $sth->execute or die $sth->errstr;
+  $sth->execute($selected_taxclass) or die $sth->errstr;
   my %taxclasses = map { $_->[0] => 1 } @{$sth->fetchall_arrayref};
   @{ $opt{'taxclasses'} } = grep $_, keys %taxclasses;
 

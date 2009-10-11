@@ -7,6 +7,7 @@ use FS::cust_main_Mixin;
 use FS::cust_bill_ApplicationCommon;
 use FS::cust_bill;
 use FS::cust_pay;
+use FS::cust_pkg;
 
 @ISA = qw( FS::cust_main_Mixin FS::cust_bill_ApplicationCommon );
 
@@ -121,6 +122,7 @@ sub check {
     || $self->ut_foreign_key('invnum', 'cust_bill', 'invnum' )
     || $self->ut_numbern('_date')
     || $self->ut_money('amount')
+    || $self->ut_foreign_keyn('pkgnum', 'cust_pkg', 'pkgnum')
   ;
   return $error if $error;
 
@@ -146,6 +148,25 @@ Returns the payment (see L<FS::cust_pay>)
 sub cust_pay {
   my $self = shift;
   qsearchs( 'cust_pay', { 'paynum' => $self->paynum } );
+}
+
+=item send_receipt HASHREF | OPTION => VALUE ...
+
+
+Sends a payment receipt for the associated payment, against this specific
+invoice.  If there is an error, returns the error, otherwise returns false.
+
+See L<FS::cust_pay/send_receipt>.
+
+=cut
+
+sub send_receipt {
+  my $self = shift;
+  my $opt = ref($_[0]) ? shift : { @_ };
+  $self->cust_pay->send_receipt(
+    'cust_bill' => $self->cust_bill,
+    %$opt,
+  );
 }
 
 =back

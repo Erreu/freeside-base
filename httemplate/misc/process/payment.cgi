@@ -32,6 +32,11 @@ $cgi->param('amount') =~ /^\s*(\d*(\.\d\d)?)\s*$/
 my $amount = $1;
 errorpage("amount <= 0") unless $amount > 0;
 
+if ( $cgi->param('fee') =~ /^\s*(\d*(\.\d\d)?)\s*$/ ) {
+  my $fee = $1;
+  $amount = sprintf('%.2f', $amount + $fee);
+}
+
 $cgi->param('year') =~ /^(\d+)$/
   or errorpage("illegal year ". $cgi->param('year'));
 my $year = $1;
@@ -44,7 +49,7 @@ $cgi->param('payby') =~ /^(CARD|CHEK)$/
   or errorpage("illegal payby ". $cgi->param('payby'));
 my $payby = $1;
 my %payby2fields = (
-  'CARD' => [ qw( address1 address2 city state zip ) ],
+  'CARD' => [ qw( address1 address2 city county state zip country ) ],
   'CHEK' => [ qw( ss paytype paystate stateid stateid_state ) ],
 );
 my %type = ( 'CARD' => 'credit card',
@@ -142,6 +147,22 @@ if ( $cgi->param('batch') ) {
     map { $_ => $cgi->param($_) } @{$payby2fields{$payby}}
   );
   errorpage($error) if $error;
+
+  #no error, so order the fee package if applicable...
+  if ( $cgi->param('fee_pkgpart') =~ /^(\d+)$/ ) {
+
+    my $cust_pkg = new FS::cust_pkg { 'pkgpart' => $1 };
+
+    my $error = $cust_main->order_pkg( 'cust_pkg' => $cust_pkg );
+    errorpage("payment processed successfully, but error ordering fee: $error")
+      if $error;
+
+    #and generate an invoice for it now too
+    $error = $cust_main->bill( 'pkg_list' => [ $cust_pkg ] );
+    errorpage("payment processed and fee ordered sucessfully, but error billing fee: $error")
+      if $error;
+
+  }
 
   $cust_main->apply_payments;
 

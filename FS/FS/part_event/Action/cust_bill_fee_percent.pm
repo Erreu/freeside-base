@@ -9,10 +9,17 @@ sub eventtable_hashref {
   { 'cust_bill' => 1 };
 }
 
+sub event_stage { 'pre-bill'; }
+
 sub option_fields {
   ( 
-    'percent' => { label=>'Percent', size=>2, },
-    'reason'  => 'Reason',
+    'percent'  => { label=>'Percent', size=>2, },
+    'reason'   => 'Reason',
+    'taxclass' => { label=>'Tax class', type=>'select-taxclass', },
+    'nextbill' => { label=>'Hold late fee until next invoice',
+                    type=>'checkbox', value=>'Y' },
+    'setuptax' => { label=>'Late fee is tax exempt',
+                    type=>'checkbox', value=>'Y' },
   );
 }
 
@@ -24,10 +31,24 @@ sub do_action {
   #my $cust_main = $self->cust_main($cust_bill);
   my $cust_main = $cust_bill->cust_main;
 
-  my $error = $cust_main->charge(
-    sprintf('%.2f', $cust_bill->owed * $self->option('percent') / 100 ),
-    $self->option('reason')
+  my $conf = new FS::Conf;
+
+  my $amount =
+    sprintf('%.2f', $cust_bill->owed * $self->option('percent') / 100 );
+
+  my %charge = (
+    'amount'   => $amount,
+    'pkg'      => $self->option('reason'),
+    'taxclass' => $self->option('taxclass'),
+    'classnum'   => $conf->config('finance_pkgclass'),
+    'setuptax' => $self->option('setuptax'),
   );
+
+  $charge{'start_date'} = $cust_main->next_bill_date #unless its more than N months away?
+    if $self->option('nextbill');
+
+  my $error = $cust_main->charge( \%charge );
+
   die $error if $error;
 
   '';

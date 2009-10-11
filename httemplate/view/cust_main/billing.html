@@ -159,11 +159,24 @@ Billing information
 </TR>
 % } 
 
-
+% my @exempt_groups = grep /\S/, $conf->config('tax-cust_exempt-groups');
 <TR>
-  <TD ALIGN="right">Tax&nbsp;exempt</TD>
+  <TD ALIGN="right">Tax&nbsp;exempt<% @exempt_groups ? ' (all taxes)' : '' %></TD>
   <TD BGCOLOR="#ffffff"><% $cust_main->tax ? 'yes' : 'no' %></TD>
 </TR>
+% foreach my $exempt_group ( @exempt_groups ) {
+<TR>
+  <TD ALIGN="right">Tax&nbsp;exempt (<% $exempt_group %> taxes)</TD>
+  <TD BGCOLOR="#ffffff"><% $cust_main->tax_exemption($exempt_group) ? 'yes' : 'no' %></TD>
+</TR>
+% }
+
+% if ( $conf->exists('enable_taxproducts') ) {
+<TR>
+  <TD ALIGN="right">Tax&nbsp;location</TD>
+  <TD BGCOLOR="#ffffff"><% $cust_main->geocode('cch') %></TD>
+</TR>
+% }
 <TR>
   <TD ALIGN="right">Postal&nbsp;invoices</TD>
   <TD BGCOLOR="#ffffff">
@@ -203,6 +216,20 @@ Billing information
   </TR>
 % } 
 
+% if ( $conf->exists('voip-cust_email_csv_cdr') ) { 
+  <TR>
+    <TD ALIGN="right">Email&nbsp;CDRs&nbsp;as&nbsp;CSV</TD>
+    <TD BGCOLOR="#ffffff"><% $cust_main->email_csv_cdr ? 'yes' : 'no' %></TD>
+  </TR>
+% } 
+
+% if ( $show_term || $cust_main->cdr_termination_percentage ) {
+  <TR>
+    <TD ALIGN="right">CDR termination settlement</TD>
+    <TD BGCOLOR="#ffffff"><% $cust_main->cdr_termination_percentage %><% $cust_main->cdr_termination_percentage =~ /\d/ ? '%' : '' %></TD>
+  </TR>
+% }
+
 </TABLE></TD></TR></TABLE>
 <%once>
 
@@ -216,5 +243,11 @@ my( $cust_main ) = @_;
 my @invoicing_list = $cust_main->invoicing_list;
 my $conf = new FS::Conf;
 my $money_char = $conf->config('money_char') || '$';
+
+#false laziness w/edit/cust_main/billing.html
+my $term_sql = "SELECT COUNT(*) FROM cust_pkg LEFT JOIN part_pkg USING ( pkgpart ) WHERE custnum = ? AND plan = 'cdr_termination' LIMIT 1";
+my $term_sth = dbh->prepare($term_sql)  or die dbh->errstr;
+$term_sth->execute($cust_main->custnum) or die $term_sth->errstr;
+my $show_term = $term_sth->fetchrow_arrayref->[0];
 
 </%init>

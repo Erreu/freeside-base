@@ -37,6 +37,8 @@
                             'taxproduct_select'=> 'Tax products',
                             'plan'             => 'Price plan',
                             'disabled'         => 'Disable new orders',
+                            'setup_cost'       => 'Setup cost',
+                            'recur_cost'       => 'Recur cost',
                             'pay_weight'       => 'Payment weight',
                             'credit_weight'    => 'Credit weight',
                             'agentnum'         => 'Agent',
@@ -44,6 +46,7 @@
                             'recur_fee'        => 'Recurring fee',
                             'bill_dst_pkgpart' => 'Include line item(s) from package',
                             'svc_dst_pkgpart'  => 'Include services of package',
+                            'report_option'    => 'Report classes',
                           },
 
               'fields' => [
@@ -55,6 +58,8 @@
                               curr_value_callback =>
                                 sub { shift->param('pkgnum') },
                             },
+
+                            { field=>'custom',  type=>'hidden' },
 
                             { type => 'columnstart' },
                             
@@ -131,10 +136,10 @@
                               { field=>'promo_code', type=>'text', size=>15 },
 
                               { type  => 'tablebreak-tr-title',
-                                value => 'Line-item revenue recogition', #better name?
+                                value => 'Cost tracking', #better name?
                               },
-                              { field=>'pay_weight',    type=>'text', size=>6 },
-                              { field=>'credit_weight', type=>'text', size=>6 },
+                              { field=>'setup_cost', type=>'money', },
+                              { field=>'recur_cost', type=>'money', },
 
                             { type => 'columnnext' },
 
@@ -148,10 +153,31 @@
                                 },
                               },
 
+                              { type  => 'tablebreak-tr-title',
+                                value => 'Line-item revenue recogition', #better name?
+                              },
+                              { field=>'pay_weight',    type=>'text', size=>6 },
+                              { field=>'credit_weight', type=>'text', size=>6 },
+
+
                             { type => 'columnend' },
 
-                            { 'type'  => 'tablebreak-tr-title',
-                              'value' => 'Pricing add-ons',
+                            { 'type'  => $census ? 'tablebreak-tr-title'
+                                                 : 'hidden',
+                              'value' => 'Optional report classes',
+                              'field' => 'census_title',
+                            },
+                            { 'field'    => 'report_option',
+                              'type'     => $census ? 'select-table' : 'hidden',
+                              'table'    => 'part_pkg_report_option',
+                              'name_col' => 'name',
+                              'multiple' => 1,
+                            },
+
+
+                            { 'type'    => 'tablebreak-tr-title',
+                              'value'   => 'Pricing add-ons',
+                              'colspan' => 4,
                             },
                             { 'field'      => 'bill_dst_pkgpart',
                               'type'       => 'select-part_pkg',
@@ -160,6 +186,13 @@
                               'm2m_dstcol' => 'dst_pkgpart',
                               'm2_error_callback' =>
                                 &{$m2_error_callback_maker}('bill'),
+                              'm2_fields' => [ { 'field' => 'hidden',
+                                                 'type'  => 'checkbox',
+                                                 'value' => 'Y',
+                                                 'curr_value' => '',
+                                                 'label' => 'Bundle',
+                                               },
+                                             ],
                             },
 
                             { type  => 'tablebreak-tr-title',
@@ -208,12 +241,12 @@ my $disabled_type = $acl_edit_either ? 'checkbox' : 'hidden';
 
 my $agent_clone_extra_sql = 
   ' ( '. FS::part_pkg->curuser_pkgs_sql.
-  #kludge to clone custom customer packages you otherwise couldn't see
-  "   OR ( part_pkg.disabled = 'Y' AND part_pkg.comment LIKE '(CUSTOM)%' ) ".
+  "   OR ( part_pkg.custom = 'Y' ) ".
   ' ) ';
 
 my $conf = new FS::Conf;
 my $taxproducts = $conf->exists('enable_taxproducts');
+my $census = scalar( qsearch( 'part_pkg_report_option', {} ) );
 
 #XXX
 # - tr-part_pkg_freq: month_increments_only (from price plans)
@@ -291,12 +324,25 @@ my $edit_callback = sub {
 
   (@agent_type) = map {$_->typenum} qsearch('type_pkgs',{'pkgpart'=>$1});
 
+  my @report_option = ();
   foreach ($object->options) {
     /^usage_taxproductnum_(\d+)$/ && ($taxproductnums{$1} = 1);
+    /^report_option_(\d+)$/ && (push @report_option, $1);
   }
   foreach ($object->part_pkg_taxoverride) {
     $taxproductnums{$_->usage_class} = 1
       if $_->usage_class;
+  }
+
+  $cgi->param('report_option', join(',', @report_option));
+  foreach my $field ( @$fields ) {
+    next unless ( 
+      ref($field) eq 'HASH' &&
+      $field->{field} &&
+      $field->{field} eq 'report_option'
+    );
+    #$field->{curr_value} = join(',', @report_option);
+    $field->{value} = join(',', @report_option);
   }
 
   %options = $object->options;
@@ -328,9 +374,8 @@ my $clone_callback = sub {
     $opt->{action} = 'Custom';
 
     #my $part_pkg = $clone_part_pkg->clone;
-    #this is all clone did anyway
-    $object->comment( '(CUSTOM) '. $object->comment )
-      unless $object->comment =~ /^\(CUSTOM\) /;
+    #this is all clone does anyway
+    $object->custom('Y');
 
     $object->disabled('Y');
 
@@ -348,16 +393,26 @@ my $m2_error_callback_maker = sub {
   my $link_type = shift; #yay closures
   return sub {
     my( $cgi, $object ) = @_;
-      map  {
-             new FS::part_pkg_link {
-               'link_type'   => $link_type,
-               'src_pkgpart' => $object->pkgpart,
-               'dst_pkgpart' => $_,
-             };
-           }
-      grep $_,
-      map  $cgi->param($_),
-      grep /^${link_type}_dst_pkgpart(\d+)$/, $cgi->param;
+    my $num;
+    map {
+
+          if ( /^${link_type}_dst_pkgpart(\d+)$/ &&
+               ( my $dst = $cgi->param("${link_type}_dst_pkgpart$1") ) )
+          {
+
+            my $hidden = $cgi->param("${link_type}_dst_pkgpart__hidden$1")
+                         || '';
+            new FS::part_pkg_link {
+              'link_type'   => $link_type,
+              'src_pkgpart' => $object->pkgpart,
+              'dst_pkgpart' => $dst,
+              'hidden'      => $hidden,
+            };
+          } else {
+            ();
+          }
+        }
+    $cgi->param;
   };
 };
 

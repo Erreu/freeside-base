@@ -11,6 +11,11 @@
   </TR>
 
   <% include( '/elements/tr-select-agent.html', 'disable_empty'=>0 ) %>
+
+  <% include( '/elements/tr-select-cust_main-status.html',
+                'label' => 'Customer Status'
+            )
+  %>
   
   <TR>
     <TD ALIGN="right">Customers</TD>
@@ -30,6 +35,7 @@
 <%init>
 
 die "access denied"
-  unless $FS::CurrentUser::CurrentUser->access_right('Financial reports');
+  unless $FS::CurrentUser::CurrentUser->access_right('Receivables report')
+      or $FS::CurrentUser::CurrentUser->access_right('Financial reports');
 
 </%init>

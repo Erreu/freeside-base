@@ -1,7 +1,7 @@
 package FS::cust_bill_ApplicationCommon;
 
 use strict;
-use vars qw( @ISA $DEBUG $me );
+use vars qw( @ISA $DEBUG $me $skip_apply_to_lineitems_hack );
 use List::Util qw(min);
 use FS::Schema qw( dbdef );
 use FS::Record qw( qsearch qsearchs dbh );
@@ -10,6 +10,8 @@ use FS::Record qw( qsearch qsearchs dbh );
 
 $DEBUG = 0;
 $me = '[FS::cust_bill_ApplicationCommon]';
+
+$skip_apply_to_lineitems_hack = 0;
 
 =head1 NAME
 
@@ -54,7 +56,7 @@ sub insert {
   my $dbh = dbh;
 
   my $error =    $self->SUPER::insert(@_)
-              || $self->apply_to_lineitems;
+              || $self->apply_to_lineitems(@_);
   if ( $error ) {
     $dbh->rollback if $oldAutoCommit;
     return $error;
@@ -111,9 +113,14 @@ Auto-applies this invoice application to specific line items, if possible.
 =cut
 
 sub apply_to_lineitems {
-  my $self = shift;
+  #my $self = shift;
+  my( $self, %options ) = @_;
+
+  return '' if $skip_apply_to_lineitems_hack;
 
   my @apply = ();
+
+  my $conf = new FS::Conf;
 
   local $SIG{HUP} = 'IGNORE';
   local $SIG{INT} = 'IGNORE';
@@ -127,6 +134,8 @@ sub apply_to_lineitems {
   my $dbh = dbh;
 
   my @open = $self->cust_bill->open_cust_bill_pkg; #FOR UPDATE...?
+  @open = grep { $_->pkgnum == $self->pkgnum } @open
+    if $conf->exists('pkg-balances') && $self->pkgnum;
   warn "$me ". scalar(@open). " open line items for invoice ".
        $self->cust_bill->invnum. ": ". join(', ', @open). "\n"
     if $DEBUG;
@@ -314,7 +323,7 @@ sub apply_to_lineitems {
       'sdate'      => $cust_bill_pkg->sdate,
       'edate'      => $cust_bill_pkg->edate,
     });
-    my $error = $application->insert;
+    my $error = $application->insert(%options);
     if ( $error ) {
       $dbh->rollback if $oldAutoCommit;
       return $error;

@@ -1,8 +1,9 @@
 package FS::Mason;
 
 use strict;
-use vars qw( @ISA @EXPORT_OK );
+use vars qw( @ISA @EXPORT_OK $addl_handler_use );
 use Exporter;
+use File::Slurp qw( slurp );
 use HTML::Mason 1.27; #http://www.masonhq.com/?ApacheModPerl2Redirect
 use HTML::Mason::Interp;
 use HTML::Mason::Compiler::ToObject;
@@ -30,6 +31,12 @@ Initializes the Mason environment, loads all Freeside and RT libraries, etc.
 
 =cut
 
+$addl_handler_use = '';
+my $addl_handler_use_file = '%%%FREESIDE_CONF%%%/addl_handler_use.pl';
+if ( -e $addl_handler_use_file ) {
+  $addl_handler_use = slurp( $addl_handler_use_file );
+}
+
 # List of modules that you want to use from components (see Admin
 # manual for details)
 {
@@ -38,6 +45,13 @@ Initializes the Mason environment, loads all Freeside and RT libraries, etc.
   use strict;
   use vars qw( %session );
   use CGI 3.29 qw(-private_tempfiles); #3.29 to fix RT attachment problems
+
+  #breaks quick payment entry
+  #http://rt.cpan.org/Public/Bug/Display.html?id=37365
+  die "CGI.pm v3.38 is broken, use any other version >= 3.29".
+      " (Debian 5.0?  aptitude remove libcgi-pm-perl)"
+    if $CGI::VERSION == 3.38;
+
   #use CGI::Carp qw(fatalsToBrowser);
   use CGI::Cookie;
   use List::Util qw( max min );
@@ -45,12 +59,13 @@ Initializes the Mason environment, loads all Freeside and RT libraries, etc.
   use Date::Format;
   use Date::Parse;
   use Time::Local;
+  use Time::HiRes;
   use Time::Duration;
   use DateTime;
   use DateTime::Format::Strptime;
   use Lingua::EN::Inflect qw(PL);
   use Tie::IxHash;
-  use URI::URL;
+  use URI;
   use URI::Escape;
   use HTML::Entities;
   use HTML::TreeBuilder;
@@ -70,6 +85,19 @@ Initializes the Mason environment, loads all Freeside and RT libraries, etc.
   use Spreadsheet::WriteExcel;
   use Business::CreditCard 0.30; #for mask-aware cardtype()
   use NetAddr::IP;
+  use Net::Ping;
+  use Net::Ping::External;
+  #if CPAN #7815 ever gets fixed# if ( $Net::Ping::External::VERSION <= 0.12 )
+  {
+    no warnings 'redefine';
+    eval 'sub Net::Ping::External::_ping_linux { 
+            my %args = @_;
+            my $command = "ping -s $args{size} -c $args{count} -w $args{timeout} $args{host}";
+            return Net::Ping::External::_ping_system($command, 0);
+          }
+         ';
+    die $@ if $@;
+  }
   use String::Approx qw(amatch);
   use Chart::LinesPoints;
   use Chart::Mountain;
@@ -91,6 +119,7 @@ Initializes the Mason environment, loads all Freeside and RT libraries, etc.
   use FS::UI::bytecount;
   use FS::Msgcat qw(gettext geterror);
   use FS::Misc qw( send_email send_fax states_hash counties state_label );
+  use FS::Misc::eps2png qw( eps2png );
   use FS::Report::Table::Monthly;
   use FS::TicketSystem;
   use FS::Tron qw( tron_lint );
@@ -166,6 +195,8 @@ Initializes the Mason environment, loads all Freeside and RT libraries, etc.
   use FS::access_right;
   use FS::AccessRight;
   use FS::svc_phone;
+  use FS::phone_device;
+  use FS::part_device;
   use FS::reason_type;
   use FS::reason;
   use FS::cust_main_note;
@@ -175,6 +206,25 @@ Initializes the Mason environment, loads all Freeside and RT libraries, etc.
   use FS::part_pkg_taxoverride;
   use FS::part_pkg_taxrate;
   use FS::tax_rate;
+  use FS::part_pkg_report_option;
+  use FS::cust_attachment;
+  use FS::h_cust_pkg;
+  use FS::h_svc_acct;
+  use FS::h_svc_broadband;
+  use FS::h_svc_domain;
+  #use FS::h_domain_record;
+  use FS::h_svc_external;
+  use FS::h_svc_forward;
+  use FS::h_svc_phone;
+  #use FS::h_phone_device;
+  use FS::h_svc_www;
+  use FS::cust_statement;
+  # Sammath Naur
+
+  if ( $FS::Mason::addl_handler_use ) {
+    eval $FS::Mason::addl_handler_use;
+    die $@ if $@;
+  }
 
   if ( %%%RT_ENABLED%%% ) {
     eval '
@@ -211,7 +261,7 @@ Initializes the Mason environment, loads all Freeside and RT libraries, etc.
 
       #slow, unreliable, segfaults and is optional
       #see rt/html/Ticket/Elements/ShowTransactionAttachments
-      #use Text::Quoted;
+      use Text::Quoted;
 
       #?#use File::Path qw( rmtree );
       #?#use File::Glob qw( bsd_glob );
@@ -351,6 +401,21 @@ sub mason_interps {
     RT::LoadConfig();
   }
 
+  # A hook supporting strange legacy ways people have added stuff on
+
+  my @addl_comp_root = ();
+  my $addl_comp_root_file = '%%%FREESIDE_CONF%%%/addl_comp_root.pl';
+  if ( -e $addl_comp_root_file ) {
+    warn "reading $addl_comp_root_file\n";
+    my $text = slurp( $addl_comp_root_file );
+    my @addl = eval $text;
+    if ( @addl && ! $@ ) {
+      @addl_comp_root = @addl;
+    } elsif ($@) {
+      warn "error parsing $addl_comp_root_file: $@\n";
+    }
+  }
+
   my %interp = (
     request_class        => $request_class,
     data_dir             => '%%%MASONDATA%%%',
@@ -360,6 +425,7 @@ sub mason_interps {
     comp_root            => [
                               [ 'freeside'=>'%%%FREESIDE_DOCUMENT_ROOT%%%'    ],
                               [ 'rt'      =>'%%%FREESIDE_DOCUMENT_ROOT%%%/rt' ],
+                              @addl_comp_root,
                             ],
   );
 
@@ -374,6 +440,9 @@ sub mason_interps {
                         ${$_[0]} = "'". ${$_[0]}. "'";
                       }
                     },
+    compiler     => HTML::Mason::Compiler::ToObject->new(
+                      allow_globals        => [qw(%session)],
+                    ),
   );
 
   my $rt_interp = new HTML::Mason::Interp (

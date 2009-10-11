@@ -1,7 +1,7 @@
 package FS::cust_bill_pkg;
 
 use strict;
-use vars qw( @ISA $DEBUG );
+use vars qw( @ISA $DEBUG $me );
 use FS::Record qw( qsearch qsearchs dbdef dbh );
 use FS::cust_main_Mixin;
 use FS::cust_pkg;
@@ -12,10 +12,14 @@ use FS::cust_bill_pkg_display;
 use FS::cust_bill_pay_pkg;
 use FS::cust_credit_bill_pkg;
 use FS::cust_tax_exempt_pkg;
+use FS::cust_bill_pkg_tax_location;
+use FS::cust_bill_pkg_tax_rate_location;
+use FS::cust_tax_adjustment;
 
 @ISA = qw( FS::cust_main_Mixin FS::Record );
 
-$DEBUG = 0;
+$DEBUG = 2;
+$me = '[FS::cust_bill_pkg]';
 
 =head1 NAME
 
@@ -40,28 +44,57 @@ supported:
 
 =over 4
 
-=item billpkgnum - primary key
+=item billpkgnum
 
-=item invnum - invoice (see L<FS::cust_bill>)
+primary key
 
-=item pkgnum - package (see L<FS::cust_pkg>) or 0 for the special virtual sales tax package, or -1 for the virtual line item (itemdesc is used for the line)
+=item invnum
 
-=item pkgpart_override - optional package definition (see L<FS::part_pkg>) override
-=item setup - setup fee
+invoice (see L<FS::cust_bill>)
 
-=item recur - recurring fee
+=item pkgnum
 
-=item sdate - starting date of recurring fee
+package (see L<FS::cust_pkg>) or 0 for the special virtual sales tax package, or -1 for the virtual line item (itemdesc is used for the line)
 
-=item edate - ending date of recurring fee
+=item pkgpart_override
 
-=item itemdesc - Line item description (overrides normal package description)
+optional package definition (see L<FS::part_pkg>) override
 
-=item quantity - If not set, defaults to 1
+=item setup
 
-=item unitsetup - If not set, defaults to setup
+setup fee
 
-=item unitrecur - If not set, defaults to recur
+=item recur
+
+recurring fee
+
+=item sdate
+
+starting date of recurring fee
+
+=item edate
+
+ending date of recurring fee
+
+=item itemdesc
+
+Line item description (overrides normal package description)
+
+=item quantity
+
+If not set, defaults to 1
+
+=item unitsetup
+
+If not set, defaults to setup
+
+=item unitrecur
+
+If not set, defaults to recur
+
+=item hidden
+
+If set to Y, indicates data should not appear as separate line item on invoice
 
 =back
 
@@ -109,7 +142,7 @@ sub insert {
     return $error;
   }
 
-  if ( defined dbdef->table('cust_bill_pkg_detail') && $self->get('details') ) {
+  if ( $self->get('details') ) {
     foreach my $detail ( @{$self->get('details')} ) {
       my $cust_bill_pkg_detail = new FS::cust_bill_pkg_detail {
         'billpkgnum' => $self->billpkgnum,
@@ -117,22 +150,23 @@ sub insert {
         'detail'     => (ref($detail) ? $detail->[1] : $detail ),
         'amount'     => (ref($detail) ? $detail->[2] : '' ),
         'classnum'   => (ref($detail) ? $detail->[3] : '' ),
+        'phonenum'   => (ref($detail) ? $detail->[4] : '' ),
       };
       $error = $cust_bill_pkg_detail->insert;
       if ( $error ) {
         $dbh->rollback if $oldAutoCommit;
-        return $error;
+        return "error inserting cust_bill_pkg_detail: $error";
       }
     }
   }
 
-  if ( defined dbdef->table('cust_bill_pkg_display') && $self->get('display') ){
+  if ( $self->get('display') ) {
     foreach my $cust_bill_pkg_display ( @{ $self->get('display') } ) {
       $cust_bill_pkg_display->billpkgnum($self->billpkgnum);
       $error = $cust_bill_pkg_display->insert;
       if ( $error ) {
         $dbh->rollback if $oldAutoCommit;
-        return $error;
+        return "error inserting cust_bill_pkg_display: $error";
       }
     }
   }
@@ -143,7 +177,7 @@ sub insert {
       $error = $cust_tax_exempt_pkg->insert;
       if ( $error ) {
         $dbh->rollback if $oldAutoCommit;
-        return $error;
+        return "error inserting cust_tax_exempt_pkg: $error";
       }
     }
   }
@@ -152,13 +186,33 @@ sub insert {
   if ( $tax_location ) {
     foreach my $cust_bill_pkg_tax_location ( @$tax_location ) {
       $cust_bill_pkg_tax_location->billpkgnum($self->billpkgnum);
-      warn $cust_bill_pkg_tax_location;
       $error = $cust_bill_pkg_tax_location->insert;
-      warn $error;
       if ( $error ) {
         $dbh->rollback if $oldAutoCommit;
-        return $error;
+        return "error inserting cust_bill_pkg_tax_location: $error";
       }
+    }
+  }
+
+  my $tax_rate_location = $self->get('cust_bill_pkg_tax_rate_location');
+  if ( $tax_rate_location ) {
+    foreach my $cust_bill_pkg_tax_rate_location ( @$tax_rate_location ) {
+      $cust_bill_pkg_tax_rate_location->billpkgnum($self->billpkgnum);
+      $error = $cust_bill_pkg_tax_rate_location->insert;
+      if ( $error ) {
+        $dbh->rollback if $oldAutoCommit;
+        return "error inserting cust_bill_pkg_tax_rate_location: $error";
+      }
+    }
+  }
+
+  my $cust_tax_adjustment = $self->get('cust_tax_adjustment');
+  if ( $cust_tax_adjustment ) {
+    $cust_tax_adjustment->billpkgnum($self->billpkgnum);
+    $error = $cust_tax_adjustment->replace;
+    if ( $error ) {
+      $dbh->rollback if $oldAutoCommit;
+      return "error replacing cust_tax_adjustment: $error";
     }
   }
 
@@ -169,13 +223,65 @@ sub insert {
 
 =item delete
 
-Currently unimplemented.  I don't remove line items because there would then be
-no record the items ever existed (which is bad, no?)
+Not recommended.
 
 =cut
 
 sub delete {
-  return "Can't delete cust_bill_pkg records!";
+  my $self = shift;
+
+  local $SIG{HUP} = 'IGNORE';
+  local $SIG{INT} = 'IGNORE';
+  local $SIG{QUIT} = 'IGNORE';
+  local $SIG{TERM} = 'IGNORE';
+  local $SIG{TSTP} = 'IGNORE';
+  local $SIG{PIPE} = 'IGNORE';
+
+  my $oldAutoCommit = $FS::UID::AutoCommit;
+  local $FS::UID::AutoCommit = 0;
+  my $dbh = dbh;
+
+  foreach my $table (qw(
+    cust_bill_pkg_detail
+    cust_bill_pkg_display
+    cust_bill_pkg_tax_location
+    cust_bill_pkg_tax_rate_location
+    cust_tax_exempt_pkg
+    cust_bill_pay_pkg
+    cust_credit_bill_pkg
+  )) {
+
+    foreach my $linked ( qsearch($table, { billpkgnum=>$self->billpkgnum }) ) {
+      my $error = $linked->delete;
+      if ( $error ) {
+        $dbh->rollback if $oldAutoCommit;
+        return $error;
+      }
+    }
+
+  }
+
+  foreach my $cust_tax_adjustment (
+    qsearch('cust_tax_adjustment', { billpkgnum=>$self->billpkgnum })
+  ) {
+    $cust_tax_adjustment->billpkgnum(''); #NULL
+    my $error = $cust_tax_adjustment->replace;
+    if ( $error ) {
+      $dbh->rollback if $oldAutoCommit;
+      return $error;
+    }
+  }
+
+  my $error = $self->SUPER::delete(@_);
+  if ( $error ) {
+    $dbh->rollback if $oldAutoCommit;
+    return $error;
+  }
+
+  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
+
+  '';
+
 }
 
 #alas, bin/follow-tax-rename
@@ -211,6 +317,8 @@ sub check {
       || $self->ut_numbern('sdate')
       || $self->ut_numbern('edate')
       || $self->ut_textn('itemdesc')
+      || $self->ut_textn('itemcomment')
+      || $self->ut_enum('hidden', [ '', 'Y' ])
   ;
   return $error if $error;
 
@@ -234,6 +342,7 @@ Returns the package (see L<FS::cust_pkg>) for this invoice line item.
 
 sub cust_pkg {
   my $self = shift;
+  #warn "$me $self -> cust_pkg"; #carp?
   qsearchs( 'cust_pkg', { 'pkgnum' => $self->pkgnum } );
 }
 
@@ -248,7 +357,10 @@ sub part_pkg {
   if ( $self->pkgpart_override ) {
     qsearchs('part_pkg', { 'pkgpart' => $self->pkgpart_override } );
   } else {
-    $self->cust_pkg->part_pkg;
+    my $part_pkg;
+    my $cust_pkg = $self->cust_pkg;
+    $part_pkg = $cust_pkg->part_pkg if $cust_pkg;
+    $part_pkg;
   }
 }
 
@@ -261,6 +373,24 @@ Returns the invoice (see L<FS::cust_bill>) for this invoice line item.
 sub cust_bill {
   my $self = shift;
   qsearchs( 'cust_bill', { 'invnum' => $self->invnum } );
+}
+
+=item previous_cust_bill_pkg
+
+Returns the previous cust_bill_pkg for this package, if any.
+
+=cut
+
+sub previous_cust_bill_pkg {
+  my $self = shift;
+  return unless $self->sdate;
+  qsearchs({
+    'table'    => 'cust_bill_pkg',
+    'hashref'  => { 'pkgnum' => $self->pkgnum,
+                    'sdate'  => { op=>'<', value=>$self->sdate },
+                  },
+    'order_by' => 'ORDER BY sdate DESC LIMIT 1',
+  });
 }
 
 =item details [ OPTION => VALUE ... ]
@@ -325,7 +455,7 @@ sub details {
   $format_sub = $opt{format_function} if $opt{format_function};
 
   map { ( $_->format eq 'C'
-          ? &{$format_sub}( $_->detail )
+          ? &{$format_sub}( $_->detail, $_ )
           : &{$escape_function}( $_->detail )
         )
       }
@@ -351,7 +481,9 @@ sub desc {
   if ( $self->pkgnum > 0 ) {
     $self->itemdesc || $self->part_pkg->pkg;
   } else {
-    $self->itemdesc || 'Tax';
+    my $desc = $self->itemdesc || 'Tax';
+    $desc .= ' '. $self->itemcomment if $self->itemcomment =~ /\S/;
+    $desc;
   }
 }
 

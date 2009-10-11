@@ -12,23 +12,66 @@
 
 <% ntable('#cccccc') %>
   <TR>
-    <TD ALIGN="right">Payment amount</TD>
-    <TD>
+    <TH ALIGN="right">Payment amount</TH>
+    <TD COLSPAN=7>
       <TABLE><TR><TD BGCOLOR="#ffffff">
-        $<INPUT TYPE="text" NAME="amount" SIZE=8 VALUE="<% $balance > 0 ? sprintf("%.2f", $balance) : '' %>">
+        <% $money_char %><INPUT NAME     = "amount"
+                                TYPE     = "text"
+                                VALUE    = "<% $amount %>"
+                                SIZE     = 8
+                                STYLE    = "text-align:right;"
+%                               if ( $fee ) {
+                                  onChange   = "amount_changed(this)"
+                                  onKeyDown  = "amount_changed(this)"
+                                  onKeyUp    = "amount_changed(this)"
+                                  onKeyPress = "amount_changed(this)"
+%                               }
+                         >
+      </TD><TD BGCOLOR="#cccccc">
+%        if ( $fee ) {
+           <INPUT TYPE="hidden" NAME="fee_pkgpart" VALUE="<% $fee_pkg->pkgpart %>">
+           <INPUT TYPE="hidden" NAME="fee" VALUE="<% $fee_display eq 'add' ? $fee : '' %>">
+           <B><FONT SIZE='+1'><% $fee_op %></FONT>
+              <% $money_char . $fee %>
+           </B>
+           <% $fee_pkg->pkg |h %>
+           <B><FONT SIZE='+1'>=</FONT></B>
+      </TD><TD ID="ajax_total_cell" BGCOLOR="#dddddd" STYLE="border:1px solid blue">
+           <FONT SIZE="+1"><% length($amount) ? $money_char. sprintf('%.2f', ($fee_display eq 'add') ? $amount + $fee : $amount - $fee ) : '' %> <% $fee_display eq 'add' ? 'TOTAL' : 'AVAILABLE' %></FONT>
+  
+%        }
       </TD></TR></TABLE>
     </TD>
   </TR>
+
+% if ( $fee ) {
+
+    <SCRIPT TYPE="text/javascript">
+
+      function amount_changed(what) {
+
+
+        var total = '';
+        if ( what.value.length ) {
+          total = parseFloat(what.value) <% $fee_op %> <% $fee %>;
+          /* total = Math.round(total*100)/100; */
+          total = '<% $money_char %>' + total.toFixed(2);
+        }
+
+        var total_cell = document.getElementById('ajax_total_cell');
+        total_cell.innerHTML = '<FONT SIZE="+1">' + total + ' <% $fee_display eq 'add' ? 'TOTAL' : 'AVAILABLE' %></FONT>';
+
+      }
+
+    </SCRIPT>
+
+% }
+
 
 % if ( $payby eq 'CARD' ) {
 %
 %   my( $payinfo, $paycvv, $month, $year ) = ( '', '', '', '' );
 %   my $payname = $cust_main->first. ' '. $cust_main->getfield('last');
-%   my $address1 = $cust_main->address1;
-%   my $address2 = $cust_main->address2;
-%   my $city     = $cust_main->city;
-%   my $state    = $cust_main->state;
-%   my $zip     = $cust_main->zip;
 %   if ( $cust_main->payby =~ /^(CARD|DCRD)$/ ) {
 %     $payinfo = $cust_main->paymask;
 %     $paycvv = $cust_main->paycvv;
@@ -37,13 +80,13 @@
 %   }
 
     <TR>
-      <TD ALIGN="right">Card&nbsp;number</TD>
-      <TD>
+      <TH ALIGN="right">Card&nbsp;number</TH>
+      <TD COLSPAN=7>
         <TABLE>
           <TR>
             <TD>
               <INPUT TYPE="text" NAME="payinfo" SIZE=20 MAXLENGTH=19 VALUE="<%$payinfo%>"> </TD>
-            <TD>Exp.</TD>
+            <TH>Exp.</TH>
             <TD>
               <SELECT NAME="month">
 % for ( ( map "0$_", 1 .. 9 ), 10 .. 12 ) { 
@@ -68,50 +111,22 @@
       </TD>
     </TR>
     <TR>
-      <TD ALIGN="right">CVV2</TD>
+      <TH ALIGN="right">CVV2</TH>
       <TD><INPUT TYPE="text" NAME="paycvv" VALUE="<% $paycvv %>" SIZE=4 MAXLENGTH=4>
           (<A HREF="javascript:void(0);" onClick="overlib( OLiframeContent('../docs/cvv2.html', 480, 352, 'cvv2_popup' ), CAPTION, 'CVV2 Help', STICKY, AUTOSTATUSCAP, CLOSECLICK, DRAGGABLE ); return false;">help</A>)
       </TD>
     </TR>
     <TR>
-      <TD ALIGN="right">Exact&nbsp;name&nbsp;on&nbsp;card</TD>
+      <TH ALIGN="right">Exact&nbsp;name&nbsp;on&nbsp;card</TH>
       <TD><INPUT TYPE="text" SIZE=32 MAXLENGTH=80 NAME="payname" VALUE="<%$payname%>"></TD>
-    </TR><TR>
-      <TD ALIGN="right">Card&nbsp;billing&nbsp;address</TD>
-      <TD>
-        <INPUT TYPE="text" SIZE=40 MAXLENGTH=80 NAME="address1" VALUE="<%$address1%>">
-      </TD>
-    </TR><TR>
-      <TD ALIGN="right">Address&nbsp;line&nbsp;2</TD>
-      <TD>
-        <INPUT TYPE="text" SIZE=40 MAXLENGTH=80 NAME="address2" VALUE="<%$address2%>">
-      </TD>
-    </TR><TR>
-      <TD ALIGN="right">City</TD>
-      <TD>
-        <TABLE>
-          <TR>
-            <TD>
-              <INPUT TYPE="text" NAME="city" SIZE="12" MAXLENGTH=80 VALUE="<%$city%>">
-            </TD>
-            <TD>State</TD>
-            <TD>
-              <SELECT NAME="state">
-% for ( @states ) { 
-
-                  <OPTION<% $_ eq $state ? ' SELECTED' : '' %>><% $_ %> 
-% } 
-
-              </SELECT>
-            </TD>
-            <TD>Zip</TD>
-            <TD>
-              <INPUT TYPE="text" NAME="zip" SIZE=11 MAXLENGTH=10 VALUE="<%$zip%>">
-            </TD>
-          </TR>
-        </TABLE>
-      </TD>
     </TR>
+
+    <% include( '/elements/location.html',
+                  'object'         => $cust_main, #XXX errors???
+                  'no_asterisks'   => 1,
+                  'address1_label' => 'Card billing address',
+              )
+    %>
 
 % } elsif ( $payby eq 'CHEK' ) {
 %
@@ -270,16 +285,51 @@ my $balance = $cust_main->balance;
 
 my $payinfo = '';
 
-#false laziness w/selfservice make_payment.html shortcut for one-country
 my $conf = new FS::Conf;
+
+my $money_char = $conf->config('money_char') || '$';
+
+#false laziness w/selfservice make_payment.html shortcut for one-country
 my %states = map { $_->state => 1 }
                qsearch('cust_main_county', {
                  'country' => $conf->config('countrydefault') || 'US'
                } );
 my @states = sort { $a cmp $b } keys %states;
 
+my $fee = '';
+my $fee_pkg = '';
+my $fee_display = '';
+my $fee_op = '';
+my $num_payments = scalar($cust_main->cust_pay);
+#handle old cust_main.pm (remove...)
+$num_payments = scalar( @{ [ $cust_main->cust_pay ] } )
+  unless defined $num_payments;
+if ( $conf->config('manual_process-pkgpart')
+     and ! $conf->exists('manual_process-skip_first') || $num_payments
+   )
+{
+
+  $fee_display = $conf->config('manual_process-display') || 'add';
+  $fee_op = $fee_display eq 'add' ? '+' : '-';
+
+  $fee_pkg =
+    qsearchs('part_pkg', { pkgpart=>$conf->config('manual_process-pkgpart') } );
+
+  #well ->unit_setup or ->calc_setup both call for a $cust_pkg
+  # (though ->unit_setup doesn't use it...)
+  $fee = $fee_pkg->option('setup_fee')
+    if $fee_pkg; #in case.. better than dying with a perl traceback
+
+}
+
+my $amount = '';
+if ( $balance > 0 ) {
+  $amount = $balance;
+  $amount += $fee
+    if $fee && $fee_display eq 'subtract';
+  $amount = sprintf("%.2f", $amount);
+}
+
 my $payunique = "webui-payment-". time. "-$$-". rand() * 2**32;
 
 </%init>
-
-

@@ -2,7 +2,7 @@
      'post_url'             => popurl(1). 'process/svc_broadband.cgi',
      'name'                 => 'broadband service',
      'table'                => 'svc_broadband',
-     'labels'               => { 'svcnum'       => 'Service #',
+     'labels'               => { 'svcnum'       => 'Service',
                                  'description'  => 'Description',
                                  'ip_addr'      => 'IP address',
                                  'speed_down'   => 'Download speed',
@@ -14,6 +14,7 @@
                                  'longitude'    => 'Longitude',
                                  'altitude'     => 'Altitude',
                                  'vlan_profile' => 'VLAN profile',
+                                 'performance_profile' => 'Performance profile',
                                  'authkey'      => 'Authentication key',
                                },
      'fields'               => \@fields, 
@@ -34,7 +35,7 @@ my $conf = new FS::Conf;
 my @fields = (
   qw( description ip_addr speed_down speed_up blocknum ),
   { field=>'block_label', type=>'fixed' },
-  qw( mac_addr latitude longitude altitude vlan_profile authkey )
+  qw( mac_addr latitude longitude altitude vlan_profile performance_profile authkey )
 );
 
 my $fixedblock = '';

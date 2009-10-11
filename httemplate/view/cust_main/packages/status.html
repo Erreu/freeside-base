@@ -8,20 +8,21 @@
 
     <% pkg_status_row($cust_pkg, 'Cancelled', 'cancel', 'color'=>'FF0000', %opt ) %>
 
-    <% pkg_status_row_colspan(
+    <% pkg_status_row_colspan( $cust_pkg,
          ( $cpr ? $cpr->reasontext. ' by '. $cpr->otaker : '' ), '',
-         'align' => 'right', 'color' => 'ff0000', 'size' => '-2',
+         'align'=>'right', 'color'=>'ff0000', 'size'=>'-2', 'colspan'=>$colspan,
+         %opt
        )
     %>
 
 %   unless ( $cust_pkg->get('setup') ) { 
 
-        <% pkg_status_row_colspan('Never billed') %>
+        <% pkg_status_row_colspan( $cust_pkg, 'Never billed', '', 'colspan'=>$colspan, %opt, ) %>
 
 %   } else { 
 
        <% pkg_status_row( $cust_pkg, 'Setup', 'setup', %opt ) %>
-       <% pkg_status_row_changed( $cust_pkg, %opt ) %>
+       <% pkg_status_row_changed( $cust_pkg, %opt, 'colspan'=>$colspan ) %>
        <% pkg_status_row_if( $cust_pkg, $last_bill_or_renewed, 'last_bill', %opt, curuser=>$curuser ) %>
        <% pkg_status_row_if( $cust_pkg, 'Suspended', 'susp', %opt, curuser=>$curuser ) %>
 
@@ -34,19 +35,20 @@
 
     <% pkg_status_row( $cust_pkg, 'Suspended', 'susp', 'color'=>'FF9900', %opt ) %>
 
-    <% pkg_status_row_colspan(
+    <% pkg_status_row_colspan( $cust_pkg,
          ( $cpr ? $cpr->reasontext. ' by '. $cpr->otaker : '' ), '',
-         'align' => 'right', 'color' => 'FF9900', 'size' => '-2',
+         'align'=>'right', 'color'=>'FF9900', 'size'=>'-2', 'colspan'=>$colspan,
+         %opt,
        )
     %>
 
 %   unless ( $cust_pkg->get('setup') ) { 
-      <% pkg_status_row_colspan('Never billed') %>
+      <% pkg_status_row_colspan( $cust_pkg, 'Never billed', '', 'colspan'=>$colspan, %opt ) %>
 %   } else { 
       <% pkg_status_row($cust_pkg, 'Setup', 'setup', %opt ) %>
 %   } 
 
-    <% pkg_status_row_changed( $cust_pkg, %opt ) %>
+    <% pkg_status_row_changed( $cust_pkg, %opt, 'colspan'=>$colspan ) %>
     <% pkg_status_row_if( $cust_pkg, $last_bill_or_renewed, 'last_bill', %opt, curuser=>$curuser ) %>
 %   # pkg_status_row($cust_pkg, 'Next bill', 'bill', %opt)
     <% pkg_status_row_if( $cust_pkg, 'Expires', 'expire', %opt, curuser=>$curuser ) %>
@@ -70,7 +72,15 @@
 %
 %       unless ( $part_pkg->freq ) { 
 
-          <% pkg_status_row_colspan('Not&nbsp;yet&nbsp;billed&nbsp;(one-time&nbsp;charge)') %>
+          <% pkg_status_row_colspan( $cust_pkg, 'Not&nbsp;yet&nbsp;billed&nbsp;(one-time&nbsp;charge)', '', 'colspan'=>$colspan, %opt ) %>
+
+          <% pkg_status_row_if(
+               $cust_pkg,
+               ( $part_pkg->freq ? 'Start billing' : 'Bill on' ),
+               'start_date',
+               %opt
+             )
+          %>
 
           <TR>
             <TD COLSPAN=<%$colspan%>>
@@ -84,7 +94,9 @@
 
 %       } else { 
 
-         <% pkg_status_row_colspan("Not&nbsp;yet&nbsp;billed&nbsp;($billed_or_prepaid&nbsp;". myfreq($part_pkg). ')' ) %>
+         <% pkg_status_row_colspan($cust_pkg, "Not&nbsp;yet&nbsp;billed&nbsp;($billed_or_prepaid&nbsp;". myfreq($part_pkg). ')', '', 'colspan'=>$colspan, %opt ) %>
+
+          <% pkg_status_row_if($cust_pkg, 'Start billing', 'start_date', %opt) %>
 
 %       } 
 %
@@ -92,7 +104,7 @@
 %
 %       unless ( $part_pkg->freq ) { 
 
-          <% pkg_status_row_colspan('One-time&nbsp;charge') %>
+          <% pkg_status_row_colspan($cust_pkg, 'One-time&nbsp;charge', '', 'colspan'=>$colspan, %opt ) %>
 
           <% pkg_status_row($cust_pkg, 'Billed', 'setup', %opt) %>
 
@@ -100,18 +112,20 @@
 %
 %         if (scalar($cust_pkg->overlimit)) {
 
-            <% pkg_status_row_colspan(
+            <% pkg_status_row_colspan( $cust_pkg,
                  'Overlimit',
                  $billed_or_prepaid. '&nbsp;'. myfreq($part_pkg),
-                 'color' => 'FFD000',
+                 'color'=>'FFD000', 'colspan'=>$colspan,
+                 %opt
                )
             %>
 
 %         } else {
-            <% pkg_status_row_colspan(
+            <% pkg_status_row_colspan( $cust_pkg,
                  'Active',
                  $billed_or_prepaid. '&nbsp;'. myfreq($part_pkg),
-                 'color' => '00CC00',
+                 'color'=>'00CC00', 'colspan'=>$colspan,
+                 %opt
                )
             %>
 %         } 
@@ -122,12 +136,12 @@
 %
 %     } 
 %
-%     if ( $conf->exists('cust_pkg-show_autosuspend') ) {
+%     if ( $opt{'cust_pkg-show_autosuspend'} ) {
 %       my $autosuspend = pkg_autosuspend_time( $cust_pkg );
 %       $cust_pkg->set('autosuspend', $autosuspend) if $autosuspend;
 %     }
 
-      <% pkg_status_row_changed( $cust_pkg, %opt ) %>
+      <% pkg_status_row_changed( $cust_pkg, %opt, 'colspan'=>$colspan ) %>
       <% pkg_status_row_if( $cust_pkg, $last_bill_or_renewed, 'last_bill', %opt, curuser=>$curuser ) %>
       <% pkg_status_row_if( $cust_pkg, $next_bill_or_prepaid_until, 'bill', %opt, curuser=>$curuser ) %>
       <% pkg_status_row_if($cust_pkg, 'Will automatically suspend by', 'autosuspend', %opt) %>
@@ -165,12 +179,9 @@
 
   </TABLE>
 </TD>
-
 <%init>
 
 my %opt = @_;
-
-my $conf = new FS::Conf;
 
 my $bgcolor  = $opt{'bgcolor'};
 my $cust_pkg = $opt{'cust_pkg'};
@@ -216,8 +227,15 @@ sub pkg_status_row {
   $html   .= qq(<FONT COLOR="#$color"><B>) if length($color);
   $html   .= qq($title&nbsp;);
   $html   .= qq(</B></FONT>) if length($color);
+
+  if ( $opt{'pkg_balances'} && ! $cust_pkg->{_printed_balance}++ ) { #kludge
+    $html .= ' (Balance:&nbsp;<B>'. $opt{'money_char'}.
+             $cust_pkg->cust_main->balance_pkgnum($cust_pkg->pkgnum).
+             '</B>)';
+  }
+
   $html   .= qq(</TD>);
-  $html   .= pkg_datestr($cust_pkg, $field, %opt).'</TR>';
+  $html   .= pkg_datestr($cust_pkg, $field, %opt). '</TR>';
 
   $html;
 }
@@ -240,20 +258,31 @@ sub pkg_status_row_if {
 
 sub pkg_status_row_changed {
   my( $cust_pkg, %opt ) = @_;
+
   return '' unless $cust_pkg->change_date;
-  my $html = pkg_status_row( $cust_pkg, 'Package&nbsp;changed', 'change_date', %opt );
+
+  my $html =
+    pkg_status_row( $cust_pkg, 'Package&nbsp;changed', 'change_date', %opt );
+
   my $old = $cust_pkg->old_cust_pkg;
   if ( $old ) {
     my $part_pkg = $old->part_pkg;
     my $label = 'Changed from '. $cust_pkg->change_pkgnum. ': '.
-                $part_pkg->pkg. ' - '. $part_pkg->comment;
-    $html .= pkg_status_row_colspan( $label, '', size=>'-1', align=>'right' );
+                $part_pkg->pkg_comment(nopartpkg => 1);
+    $html .= pkg_status_row_colspan( $cust_pkg, $label, '',
+                                     'size'    => '-1',
+                                     'align'   => 'right',
+                                     'colspan' => $opt{'colspan'},
+                                   );
   }
+
   $html;
 }
 
 sub pkg_status_row_colspan {
-  my($title, $addl, %opt) = @_;
+  my($cust_pkg, $title, $addl, %opt) = @_;
+
+  my $colspan  = $opt{'colspan'};
 
   my $align = $opt{'align'} ? 'ALIGN="'. $opt{'align'}.'"' : '';
   my $color = $opt{'color'} ? 'COLOR="#'.$opt{'color'}.'"' : '';
@@ -266,6 +295,13 @@ sub pkg_status_row_colspan {
   $html   .= qq(</B>) if $color && !$size;
   $html   .= qq(</FONT>) if length($color) || $size;
   $html   .= ",&nbsp;$addl" if length($addl);
+
+  if ( $opt{'pkg-balances'} && ! $cust_pkg->{_printed_balance}++ ) { #kludge
+    $html .= ' (Balance:&nbsp;<B>'. $opt{'money_char'}.
+             $cust_pkg->cust_main->balance_pkgnum($cust_pkg->pkgnum).
+             '</B>)';
+  }
+
   $html   .= qq(</TD></TR>);
 
   $html;

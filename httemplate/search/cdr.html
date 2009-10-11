@@ -10,7 +10,7 @@
                'count_query' => $count_query,
                'header' => [
                              '', # checkbox column
-                             fields('cdr'), #XXX fill in some nice names
+                             @header,
                            ],
                'fields' => [
                              sub {
@@ -20,9 +20,10 @@
                                my $acctid = $cdr->acctid;
                                qq!<INPUT NAME="acctid$acctid" TYPE="checkbox" VALUE="1">!;
                              },
-                             fields('cdr'), #XXX fill in some pretty-print
+                             @fields,       #XXX fill in some pretty-print
                                             #processing, etc.
                            ],
+               'links' => \@links,
 
                'html_form'   => qq!<FORM NAME="cdrForm" ACTION="$p/misc/cdr.cgi" METHOD="POST">!,
                #false laziness w/queue.html
@@ -65,24 +66,6 @@ my $hashref = {};
 my @search = ();
 
 ###
-# freesidestatus
-###
-
-if ( $cgi->param('freesidestatus') eq 'NULL' ) {
-
-  my $title = "Unprocessed $title";
-  $hashref->{'freesidestatus'} = ''; # Record.pm will take care of it
-  push @search, "( freesidestatus IS NULL OR freesidestatus = '' )";
-
-} elsif ( $cgi->param('freesidestatus') =~ /^([\w ]+)$/ ) {
-
-  my $title = "Processed $title";
-  $hashref->{'freesidestatus'} = $1;
-  push @search, "freesidestatus = '$1'";
-
-}
-
-###
 # dates
 ###
 
@@ -99,11 +82,70 @@ push @search, "$str2time_sql calldate) >= $beginning ",
 push @search, FS::UI::Web::parse_lt_gt($cgi, 'duration');
 push @search, FS::UI::Web::parse_lt_gt($cgi, 'billsec');
 
+#above here things just push @search
+#below here things also have to define $hashref->{} or push @qsearch
+my @qsearch = @search;
+
+###
+# freesidestatus
+###
+
+if ( $cgi->param('freesidestatus') eq 'NULL' ) {
+
+  $title = "Unprocessed $title";
+  $hashref->{'freesidestatus'} = ''; # Record.pm will take care of it
+  push @search, "( freesidestatus IS NULL OR freesidestatus = '' )";
+
+} elsif ( $cgi->param('freesidestatus') =~ /^([\w ]+)$/ ) {
+
+  $title = "Processed $title";
+  $hashref->{'freesidestatus'} = $1;
+  push @search, "freesidestatus = '$1'";
+
+}
+
+###
+# termpartNstatus
+###
+
+foreach my $param ( grep /^termpart\d+status$/, $cgi->param ) {
+
+  my $status = $cgi->param($param);
+
+  $param =~ /^termpart(\d+)status$/ or die 'guru meditation 54something';
+  my $termpart = $1;
+
+  my $search = '';
+  if ( $status eq 'NULL' ) {
+
+    #false lazienss w/cdr_termination.pm (i should be a part_termination method)
+    my $where_term =
+      "( cdr.acctid = cdr_termination.acctid AND termpart = $termpart ) ";
+    #my $join_term = "LEFT JOIN cdr_termination ON ( $where_term )";
+    $search =
+      "NOT EXISTS ( SELECT 1 FROM cdr_termination WHERE $where_term )";
+
+  } elsif ( $cgi->param('freesidestatus') =~ /^([\w ]+)$/ ) {
+
+    #false lazienss w/cdr_termination.pm (i should be a part_termination method)
+    my $where_term =
+      "( cdr.acctid = cdr_termination.acctid AND termpart = $termpart AND status = '$1' ) ";
+    #my $join_term = "LEFT JOIN cdr_termination ON ( $where_term )";
+    $search =
+      "EXISTS ( SELECT 1 FROM cdr_termination WHERE $where_term )";
+
+  }
+
+  if ( $search ) {
+    push @search,  $search;
+    push @qsearch, $search;
+  }
+
+}
+
 ###
 # src/dest/charged_party
 ###
-
-my @qsearch = @search;
 
 if ( $cgi->param('src') =~ /^\s*([\d\-\+\ ]+)\s*$/ ) {
   ( my $src = $1 ) =~ s/\D//g;
@@ -117,15 +159,23 @@ if ( $cgi->param('dst') =~ /^\s*([\d\-\+ ]+)\s*$/ ) {
   push @search, "dst = '$dst'";
 }
 
+if ( $cgi->param('dcontext') =~ /^\s*(.+)\s*$/ ) {
+  my $dcontext = $1;
+  $hashref->{'dcontext'} = $dcontext;
+  push @search, "dcontext = '$dcontext'";
+}
+
 if ( $cgi->param('charged_party') =~ /^\s*([\d\-\+\ ]+)\s*$/ ) {
   ( my $charged_party = $1 ) =~ s/\D//g;
   #$hashref->{'charged_party'} = $charged_party;
   #push @search, "charged_party = '$charged_party'";
   #XXX countrycode
-  push @search,  " (    charged_party = '$charged_party'
-                     OR charged_party = '1$charged_party' ) ";
-  push @qsearch, " (    charged_party = '$charged_party'
-                    OR charged_party = '1$charged_party' ) ";
+
+  my $search = " (    charged_party = '$charged_party'
+                   OR charged_party = '1$charged_party' ) ";
+
+  push @search,  $search;
+  push @qsearch, $search;
 }
 
 ###
@@ -144,6 +194,23 @@ if ( $cgi->param('cdrbatch') ne '__ALL__' ) {
 }
 
 ###
+# acctid
+###
+
+if ( $cgi->param('acctid') =~ /\d/ ) {
+  my $acctid = $cgi->param('acctid');
+  $acctid =~ s/\r\n/\n/g; #browsers?
+  my @acctid = map  { /^\s*(\d+)\s*$/ or die "guru meditation #4"; $1; }
+               grep { /^\s*(\d+)\s*$/ }
+               split(/\n/, $acctid);
+  if ( @acctid ) {
+    my $search = 'acctid IN ( '. join(',', @acctid). ' )';
+    push @qsearch, $search;
+    push @search,  $search;
+  }
+}
+
+###
 # finish it up
 ###
 
@@ -155,5 +222,54 @@ my $count_query = "SELECT COUNT(*) FROM cdr $search";
 my $qsearch = join(' AND ', @qsearch);
 $qsearch = ( scalar(keys %$hashref) ? ' AND ' : ' WHERE ' ) . $qsearch
   if $qsearch;
+
+###
+# display fields
+###
+
+my %header = %{ FS::cdr->table_info->{'fields'} };
+
+my @first = qw( acctid calldate clid charged_party src dst dcontext );
+my %first = map { $_=>1 } @first;
+
+my @fields = ( @first, grep !$first{$_}, fields('cdr') );
+
+if ( $cgi->param('show') ) {
+  @fields = grep $cgi->param("show_$_"), @fields;
+}
+
+my @header = map {
+                   if ( exists($header{$_}) ) {
+                     $header{$_};
+                   } else {
+                     my $header = $_;
+                     $header =~ s/\_/ /g; #//wtf
+                     ucfirst($header);
+                   }
+                 } @fields;
+
+my $date_sub_factory = sub {
+  my $column = shift;
+  sub {
+    #my $cdr = shift;
+    my $date = shift->$column();
+    $date ? time2str( '%Y-%m-%d %T', $date ) : ''; #config time2str format?
+  };
+};
+
+my %fields = (
+  #any other formatters?
+  map { $_ => &{ $date_sub_factory }($_) } qw( startdate answerdate enddate )
+);
+
+my %links = (
+  'svcnum' =>
+    sub { $_[0]->svcnum ? [ $p.'view/svc_phone.cgi?', 'svcnum' ] : ''; },
+);
+
+@fields = map { exists($fields{$_}) ? $fields{$_} : $_ } @fields;
+
+              #checkbox column
+my @links = ( '', map { exists($links{$_}) ? $links{$_} : '' } @fields );
 
 </%init>

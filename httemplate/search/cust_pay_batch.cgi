@@ -132,6 +132,9 @@ if ( $pay_batch ) {
        || ( $pay_batch->status eq 'I'
             && $FS::CurrentUser::CurrentUser->access_right('Reprocess batches')
           ) 
+       || ( $pay_batch->status eq 'R'
+            && $FS::CurrentUser::CurrentUser->access_right('Redownload resolved batches')
+          ) 
   ) {
     $html_init .= qq!<FORM ACTION="$p/misc/download-batch.cgi" METHOD="POST">!;
     if ( $fixed ) {
@@ -144,6 +147,7 @@ if ( $pay_batch ) {
                     qq!<OPTION VALUE="PAP">80 byte file for TD Canada Trust PAP Batch</OPTION>!.
                     qq!<OPTION VALUE="BoM">Bank of Montreal ECA batch</OPTION>!.
                     qq!<OPTION VALUE="ach-spiritone">Spiritone ACH batch</OPTION>!.
+                    qq!<OPTION VALUE="paymentech">Chase Paymentech</OPTION>!.
                     qq!</SELECT>!;
     }
     $html_init .= qq!<INPUT TYPE="hidden" NAME="batchnum" VALUE="$batchnum"><INPUT TYPE="submit" VALUE="Download"></FORM><BR>!;
@@ -168,6 +172,7 @@ if ( $pay_batch ) {
                     qq!<OPTION VALUE="PAP">264 byte results for TD Canada Trust PAP Batch</OPTION>!.
                     qq!<OPTION VALUE="BoM">Bank of Montreal ECA results</OPTION>!.
                     qq!<OPTION VALUE="ach-spiritone">Spiritone ACH batch</OPTION>!.
+                    qq!<OPTION VALUE="paymentech">Chase Paymentech</OPTION>!.
                     qq!</SELECT><BR>!;
     }
     $html_init .= qq!<INPUT TYPE="hidden" NAME="batchnum" VALUE="$batchnum">!;

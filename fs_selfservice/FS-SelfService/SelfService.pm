@@ -35,13 +35,17 @@ $socket .= '.'.$tag if defined $tag && length($tag);
   'list_invoices'             => 'MyAccount/list_invoices', #?
   'cancel'                    => 'MyAccount/cancel',        #add to ss cgi!
   'payment_info'              => 'MyAccount/payment_info',
+  'payment_info_renew_info'   => 'MyAccount/payment_info_renew_info',
   'process_payment'           => 'MyAccount/process_payment',
   'process_payment_order_pkg' => 'MyAccount/process_payment_order_pkg',
+  'process_payment_change_pkg' => 'MyAccount/process_payment_change_pkg',
   'process_payment_order_renew' => 'MyAccount/process_payment_order_renew',
   'process_prepay'            => 'MyAccount/process_prepay',
+  'realtime_collect'          => 'MyAccount/realtime_collect',
   'list_pkgs'                 => 'MyAccount/list_pkgs',     #add to ss (added?)
   'list_svcs'                 => 'MyAccount/list_svcs',     #add to ss (added?)
   'list_svc_usage'            => 'MyAccount/list_svc_usage',   
+  'list_cdr_usage'            => 'MyAccount/list_cdr_usage',   
   'list_support_usage'        => 'MyAccount/list_support_usage',   
   'order_pkg'                 => 'MyAccount/order_pkg',     #add to ss cgi!
   'change_pkg'                => 'MyAccount/change_pkg', 
@@ -56,8 +60,11 @@ $socket .= '.'.$tag if defined $tag && length($tag);
   'unprovision_svc'           => 'MyAccount/unprovision_svc',
   'myaccount_passwd'          => 'MyAccount/myaccount_passwd',
   'signup_info'               => 'Signup/signup_info',
+  'skin_info'                 => 'MyAccount/skin_info',
+  'access_info'               => 'MyAccount/access_info',
   'domain_select_hash'        => 'Signup/domain_select_hash',  # expose?
   'new_customer'              => 'Signup/new_customer',
+  'capture_payment'           => 'Signup/capture_payment',
   'agent_login'               => 'Agent/agent_login',
   'agent_logout'              => 'Agent/agent_logout',
   'agent_info'                => 'Agent/agent_info',
@@ -66,11 +73,27 @@ $socket .= '.'.$tag if defined $tag && length($tag);
   'call_time'                 => 'PrepaidPhone/call_time',
   'call_time_nanpa'           => 'PrepaidPhone/call_time_nanpa',
   'phonenum_balance'          => 'PrepaidPhone/phonenum_balance',
+  'bulk_processrow'           => 'Bulk/processrow',
+  'check_username'            => 'Bulk/check_username',
+  #sg
+  'ping'                      => 'SGNG/ping',
+  'decompify_pkgs'            => 'SGNG/decompify_pkgs',
+  'previous_payment_info'     => 'SGNG/previous_payment_info',
+  'previous_payment_info_renew_info'
+                              => 'SGNG/previous_payment_info_renew_info',
+  'previous_process_payment'  => 'SGNG/previous_process_payment',
+  'previous_process_payment_order_pkg'
+                              => 'SGNG/previous_process_payment_order_pkg',
+  'previous_process_payment_change_pkg'
+                              => 'SGNG/previous_process_payment_change_pkg',
+  'previous_process_payment_order_renew'
+                              => 'SGNG/previous_process_payment_order_renew',
 );
 @EXPORT_OK = (
   keys(%autoload),
-  qw( regionselector regionselector_hashref
-      expselect popselector domainselector didselector )
+  qw( regionselector regionselector_hashref location_form
+      expselect popselector domainselector didselector
+    )
 );
 
 $ENV{'PATH'} ='/usr/bin:/usr/ucb:/bin';
@@ -533,6 +556,10 @@ State
 
 Zip or postal code
 
+=item country
+
+Two-letter country code
+
 =item payinfo
 
 Card number
@@ -567,6 +594,16 @@ as parameter with the keys of both methods.
 
 Returns a hash reference with a single key, B<error>, empty on success, or an
 error message on errors.
+
+=item process_payment_change_pkg
+
+Combines the B<process_payment> and B<change_pkg> functions in one step.  If the
+payment processes sucessfully, the package is ordered.  Takes a hash reference
+as parameter with the keys of both methods.
+
+Returns a hash reference with a single key, B<error>, empty on success, or an
+error message on errors.
+
 
 =item process_payment_order_renew
 
@@ -849,6 +886,31 @@ Returns a hash reference with a single key, B<error>, empty on success, or an
 error message on errors.  The special error '_decline' is returned for
 declined transactions.
 
+=item change_pkg
+
+Changes a package for this customer.
+
+Takes a hash reference as parameter with the following keys:
+
+=over 4
+
+=item session_id
+
+Session identifier
+
+=item pkgnum
+
+Existing customer package.
+
+=item pkgpart
+
+New package to order (see L<FS::part_pkg>).
+
+=back
+
+Returns a hash reference with a single key, B<error>, empty on success, or an
+error message on errors.  
+
 =item renew_info
 
 Provides useful info for early renewals.
@@ -895,6 +957,20 @@ Specified as a integer UNIX timestamp.
 
 Renewal date as a human-readable string.  (Convenience for display;
 subject to change, so best not to parse for the date.)
+
+=item pkgnum
+
+Package that will be renewed.
+
+=item expire_date
+
+Expiration date of the package that will be renewed.
+
+=item expire_date_pretty
+
+Expiration date of the package that will be renewed, as a human-readable
+string.  (Convenience for display; subject to change, so best not to parse for
+the date.)
 
 =back
 
@@ -1370,6 +1446,52 @@ sub regionselector_hashref {
   };
 }
 
+=item location_form HASHREF | LIST
+
+Takes as input a hashref or list of key/value pairs with the following keys:
+
+=over 4
+
+=item session_id
+
+Current customer session_id
+
+=item no_asterisks
+
+Omit red asterisks from required fields.
+
+=item address1_label
+
+Label for first address line.
+
+=back
+
+Returns an HTML fragment for a location form (address, city, state, zip,
+country)
+
+=cut
+
+sub location_form {
+  my $param;
+  if ( ref($_[0]) ) {
+    $param = shift;
+  } else {
+    $param = { @_ };
+  }
+
+  my $session_id = delete $param->{'session_id'};
+
+  my $rv = mason_comp( 'session_id' => $session_id,
+                       'comp'       => '/elements/location.html',
+                       'args'       => [ %$param ],
+                     );
+
+  #hmm.
+  $rv->{'error'} || $rv->{'output'};
+
+}
+
+
 #=item expselect HASHREF | LIST
 #
 #Takes as input a hashref or list of key/value pairs with the following keys:
@@ -1536,6 +1658,8 @@ END
 
 
   $text .= "}\n</SCRIPT>\n";
+
+  $param->{'acstate'} = '' unless defined($param->{'acstate'});
 
   $text .=
     qq!<TABLE CELLPADDING="0"><TR><TD><SELECT NAME="acstate"! .

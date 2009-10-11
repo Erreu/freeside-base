@@ -19,6 +19,8 @@ my $DEBUG = 0;
 die "access denied"
   unless $FS::CurrentUser::CurrentUser->access_right('Edit customer');
 
+my $conf = new FS::Conf;
+
 my $error = '';
 
 #unmunge stuff
@@ -27,8 +29,7 @@ $cgi->param('tax','') unless defined $cgi->param('tax');
 
 $cgi->param('refnum', (split(/:/, ($cgi->param('refnum'))[0] ))[0] );
 
-#my $payby = $cgi->param('payby');
-my $payby = $cgi->param('select'); # XXX key
+my $payby = $cgi->param('payby');
 
 my %noauto = (
   'CARD' => 'DCRD',
@@ -72,55 +73,83 @@ if ( defined($cgi->param('same')) && $cgi->param('same') eq "Y" ) {
   );
 }
 
-if ( $cgi->param('birthdate') && $cgi->param('birthdate') =~ /^([ 0-9\-\/]{0,10})$/) {
-  my $conf = new FS::Conf;
-  my $format = $conf->config('date_format') || "%m/%d/%Y";
-  my $parser = DateTime::Format::Strptime->new(pattern => $format,
-                                               time_zone => 'floating',
-                                              );
-  my $dt =  $parser->parse_datetime($1);
-  if ($dt) {
-    $new->setfield('birthdate', $dt->epoch);
-    $cgi->param('birthdate', $dt->epoch);
-  } else {
-#    $error ||= $cgi->param('birthdate') . " is an invalid birthdate:" . $parser->errmsg;
-    $error ||= "Invalid birthdate: " . $cgi->param('birthdate') . ".";
-    $cgi->param('birthdate', '');
+my %usedatetime = ( 'birthdate' => 1 );
+
+foreach my $dfield (qw( birthdate signupdate )) {
+
+  if ( $cgi->param($dfield) && $cgi->param($dfield) =~ /^([ 0-9\-\/]{0,10})$/) {
+
+    my $value = $1;
+    my $parsed = '';
+
+    if ( exists $usedatetime{$dfield} && $usedatetime{$dfield} ) {
+
+      my $format = $conf->config('date_format') || "%m/%d/%Y";
+      my $parser = DateTime::Format::Strptime->new( pattern   => $format,
+                                                    time_zone => 'floating',
+                                                  );
+      my $dt = $parser->parse_datetime($value);
+      if ( $dt ) {
+        $parsed = $dt->epoch;
+      } else {
+    #    $error ||= $cgi->param('birthdate') . " is an invalid birthdate:" . $parser->errmsg;
+        $error ||= "Invalid $dfield: $value";
+      }
+
+    } else {
+
+      $parsed = str2time($value)
+        or $error ||= "Invalid $dfield: $value";
+
+    }
+
+    $new->setfield( $dfield, $parsed );
+    $cgi->param(    $dfield, $parsed );
+
   }
+
 }
 
 $new->setfield('paid', $cgi->param('paid') )
   if $cgi->param('paid');
 
+my @exempt_groups = grep /\S/, $conf->config('tax-cust_exempt-groups');
+my @tax_exempt = grep { $cgi->param("tax_$_") eq 'Y' } @exempt_groups;
+
 #perhaps this stuff should go to cust_main.pm
-my $cust_pkg = '';
-my $svc_acct = '';
 if ( $new->custnum eq '' ) {
 
+  my $cust_pkg = '';
+  my $svc;
+
   if ( $cgi->param('pkgpart_svcpart') ) {
+
     my $x = $cgi->param('pkgpart_svcpart');
     $x =~ /^(\d+)_(\d+)$/ or die "illegal pkgpart_svcpart $x\n";
     my($pkgpart, $svcpart) = ($1, $2);
+    my $part_pkg = qsearchs('part_pkg', { 'pkgpart' => $pkgpart } );
     #false laziness: copied from FS::cust_pkg::order (which should become a
     #FS::cust_main method)
     my(%part_pkg);
     # generate %part_pkg
     # $part_pkg{$pkgpart} is true iff $custnum may purchase $pkgpart
     my $agent = qsearchs('agent',{'agentnum'=> $new->agentnum });
-    	#my($type_pkgs);
-    	#foreach $type_pkgs ( qsearch('type_pkgs',{'typenum'=> $agent->typenum }) ) {
-    	#  my($pkgpart)=$type_pkgs->pkgpart;
-    	#  $part_pkg{$pkgpart}++;
-    	#}
-    # $pkgpart_href->{PKGPART} is true iff $custnum may purchase $pkgpart
-    my $pkgpart_href = $agent->pkgpart_hashref;
-    #eslaf
 
-    # this should wind up in FS::cust_pkg!
-    $error ||= "Agent ". $new->agentnum. " (type ". $agent->typenum. ") can't ".
-               "purchase pkgpart ". $pkgpart
-      #unless $part_pkg{ $pkgpart };
-      unless $pkgpart_href->{ $pkgpart };
+    if ( $agent ) {
+      # $pkgpart_href->{PKGPART} is true iff $custnum may purchase $pkgpart
+      my $pkgpart_href = $agent->pkgpart_hashref
+        if $agent;
+      #eslaf
+
+      # this should wind up in FS::cust_pkg!
+      $error ||= "Agent ". $new->agentnum. " (type ". $agent->typenum.
+                 ") can't purchase pkgpart ". $pkgpart
+        #unless $part_pkg{ $pkgpart };
+        unless $pkgpart_href->{ $pkgpart }
+            || $agent->agentnum == $part_pkg->agentnum;
+    } else {
+      $error = 'Select agent';
+    }
 
     $cust_pkg = new FS::cust_pkg ( {
       #later         'custnum' => $custnum,
@@ -132,33 +161,52 @@ if ( $new->custnum eq '' ) {
 
     #$error ||= $cust_svc->check;
 
-    my %svc_acct = (
-                     'svcpart'   => $svcpart,
-                     'username'  => $cgi->param('username'),
-                     '_password' => $cgi->param('_password'),
-                     'popnum'    => $cgi->param('popnum'),
-                   );
-    $svc_acct{'domsvc'} = $cgi->param('domsvc')
-      if $cgi->param('domsvc');
+    my $part_svc = qsearchs('part_svc', { 'svcpart' => $svcpart } );
+    my $svcdb = $part_svc->svcdb;
 
-    $svc_acct = new FS::svc_acct \%svc_acct;
+    if ( $svcdb eq 'svc_acct' ) {
 
-    #and just in case you were silly
-    $svc_acct->svcpart($svcpart);
-    $svc_acct->username($cgi->param('username'));
-    $svc_acct->_password($cgi->param('_password'));
-    $svc_acct->popnum($cgi->param('popnum'));
+      my %svc_acct = (
+                       'svcpart'   => $svcpart,
+                       'username'  => scalar($cgi->param('username')),
+                       '_password' => scalar($cgi->param('_password')),
+                       'popnum'    => scalar($cgi->param('popnum')),
+                     );
+      $svc_acct{'domsvc'} = $cgi->param('domsvc')
+        if $cgi->param('domsvc');
+
+      $svc = new FS::svc_acct \%svc_acct;
+
+      #and just in case you were silly
+      $svc->svcpart($svcpart);
+      $svc->username($cgi->param('username'));
+      $svc->_password($cgi->param('_password'));
+      $svc->popnum($cgi->param('popnum'));
+
+    } elsif ( $svcdb eq 'svc_phone' ) {
+
+      my %svc_phone = (
+                        'svcpart' => $svcpart,
+                        map { $_ => scalar($cgi->param($_)) }
+                          qw( countrycode phonenum sip_password pin phone_name )
+                      );
+
+      $svc = new FS::svc_phone \%svc_phone;
+
+    } else {
+      die "$svcdb not handled on new customer yet";
+    }
 
     #$error ||= $svc_acct->check;
 
-  } elsif ( $cgi->param('username') ) { #good thing to catch
-    $error = "Can't assign username without a package!";
   }
 
   use Tie::RefHash;
   tie my %hash, 'Tie::RefHash';
-  %hash = ( $cust_pkg => [ $svc_acct ] ) if $cust_pkg;
-  $error ||= $new->insert( \%hash, \@invoicing_list );
+  %hash = ( $cust_pkg => [ $svc ] ) if $cust_pkg;
+  $error ||= $new->insert( \%hash, \@invoicing_list,
+                           'tax_exemption' => \@tax_exempt,
+                         );
 
   my $conf = new FS::Conf;
   if ( $conf->exists('backend-realtime') && ! $error ) {
@@ -201,7 +249,9 @@ if ( $new->custnum eq '' ) {
   local($FS::cust_main::DEBUG) = $DEBUG if $DEBUG;
   local($FS::Record::DEBUG)    = $DEBUG if $DEBUG;
 
-  $error ||= $new->replace($old, \@invoicing_list);
+  $error ||= $new->replace( $old, \@invoicing_list,
+                            'tax_exemption' => \@tax_exempt,
+                          );
 
   warn "$me returned from replace" if $DEBUG;
   

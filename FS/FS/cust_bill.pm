@@ -16,6 +16,7 @@ use FS::Misc qw( send_email send_fax generate_ps generate_pdf do_print );
 use FS::Record qw( qsearch qsearchs dbh );
 use FS::cust_main_Mixin;
 use FS::cust_main;
+use FS::cust_statement;
 use FS::cust_bill_pkg;
 use FS::cust_bill_pkg_display;
 use FS::cust_credit;
@@ -82,6 +83,8 @@ owes you money.  The specific charges are itemized as B<cust_bill_pkg> records
 (see L<FS::cust_bill_pkg>).  FS::cust_bill inherits from FS::Record.  The
 following fields are currently supported:
 
+Regular fields
+
 =over 4
 
 =item invnum - primary key (assigned automatically for new invoices)
@@ -93,9 +96,37 @@ L<Time::Local> and L<Date::Parse> for conversion functions.
 
 =item charged - amount of this invoice
 
+=item invoice_terms - optional terms override for this specific invoice
+
+=back
+
+Customer info at invoice generation time
+
+=over 4
+
+=item previous_balance
+
+=item billing_balance
+
+=back
+
+Deprecated
+
+=over 4
+
 =item printed - deprecated
 
+=back
+
+Specific use cases
+
+=over 4
+
 =item closed - books closed flag, empty or `Y'
+
+=item statementnum - invoice aggregation (see L<FS::cust_statement>)
+
+=item agent_invid - legacy invoice number
 
 =back
 
@@ -141,7 +172,50 @@ Really, don't use it.
 sub delete {
   my $self = shift;
   return "Can't delete closed invoice" if $self->closed =~ /^Y/i;
-  $self->SUPER::delete(@_);
+
+  local $SIG{HUP} = 'IGNORE';
+  local $SIG{INT} = 'IGNORE';
+  local $SIG{QUIT} = 'IGNORE';
+  local $SIG{TERM} = 'IGNORE';
+  local $SIG{TSTP} = 'IGNORE';
+  local $SIG{PIPE} = 'IGNORE';
+
+  my $oldAutoCommit = $FS::UID::AutoCommit;
+  local $FS::UID::AutoCommit = 0;
+  my $dbh = dbh;
+
+  foreach my $table (qw(
+    cust_bill_event
+    cust_event
+    cust_credit_bill
+    cust_bill_pay
+    cust_bill_pay
+    cust_credit_bill
+    cust_pay_batch
+    cust_bill_pay_batch
+    cust_bill_pkg
+  )) {
+
+    foreach my $linked ( $self->$table() ) {
+      my $error = $linked->delete;
+      if ( $error ) {
+        $dbh->rollback if $oldAutoCommit;
+        return $error;
+      }
+    }
+
+  }
+
+  my $error = $self->SUPER::delete(@_);
+  if ( $error ) {
+    $dbh->rollback if $oldAutoCommit;
+    return $error;
+  }
+
+  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
+
+  '';
+
 }
 
 =item replace OLD_RECORD
@@ -183,22 +257,37 @@ sub check {
 
   my $error =
     $self->ut_numbern('invnum')
-    || $self->ut_number('custnum')
+    || $self->ut_foreign_key('custnum', 'cust_main', 'custnum' )
     || $self->ut_numbern('_date')
     || $self->ut_money('charged')
     || $self->ut_numbern('printed')
     || $self->ut_enum('closed', [ '', 'Y' ])
+    || $self->ut_foreign_keyn('statementnum', 'cust_statement', 'statementnum' )
+    || $self->ut_numbern('agent_invid') #varchar?
   ;
   return $error if $error;
-
-  return "Unknown customer"
-    unless qsearchs( 'cust_main', { 'custnum' => $self->custnum } );
 
   $self->_date(time) unless $self->_date;
 
   $self->printed(0) if $self->printed eq '';
 
   $self->SUPER::check;
+}
+
+=item display_invnum
+
+Returns the displayed invoice number for this invoice: agent_invid if
+cust_bill-default_agent_invid is set and it has a value, invnum otherwise.
+
+=cut
+
+sub display_invnum {
+  my $self = shift;
+  if ( $conf->exists('cust_bill-default_agent_invid') && $self->agent_invid ){
+    return $self->agent_invid;
+  } else {
+    return $self->invnum;
+  }
 }
 
 =item previous
@@ -230,6 +319,25 @@ sub cust_bill_pkg {
   qsearch(
     { 'table'    => 'cust_bill_pkg',
       'hashref'  => { 'invnum' => $self->invnum },
+      'order_by' => 'ORDER BY billpkgnum',
+    }
+  );
+}
+
+=item cust_bill_pkg_pkgnum PKGNUM
+
+Returns the line items (see L<FS::cust_bill_pkg>) for this invoice and
+specified pkgnum.
+
+=cut
+
+sub cust_bill_pkg_pkgnum {
+  my( $self, $pkgnum ) = @_;
+  qsearch(
+    { 'table'    => 'cust_bill_pkg',
+      'hashref'  => { 'invnum' => $self->invnum,
+                      'pkgnum' => $pkgnum,
+                    },
       'order_by' => 'ORDER BY billpkgnum',
     }
   );
@@ -407,6 +515,16 @@ sub cust_pay {
   #;
 }
 
+sub cust_pay_batch {
+  my $self = shift;
+  qsearch('cust_pay_batch', { 'invnum' => $self->invnum } );
+}
+
+sub cust_bill_pay_batch {
+  my $self = shift;
+  qsearch('cust_bill_pay_batch', { 'invnum' => $self->invnum } );
+}
+
 =item cust_bill_pay
 
 Returns all payment applications (see L<FS::cust_bill_pay>) for this invoice.
@@ -415,11 +533,14 @@ Returns all payment applications (see L<FS::cust_bill_pay>) for this invoice.
 
 sub cust_bill_pay {
   my $self = shift;
+  map { $_ } #return $self->num_cust_bill_pay unless wantarray;
   sort { $a->_date <=> $b->_date }
     qsearch( 'cust_bill_pay', { 'invnum' => $self->invnum } );
 }
 
 =item cust_credited
+
+=item cust_credit_bill
 
 Returns all applied credits (see L<FS::cust_credit_bill>) for this invoice.
 
@@ -427,9 +548,54 @@ Returns all applied credits (see L<FS::cust_credit_bill>) for this invoice.
 
 sub cust_credited {
   my $self = shift;
+  map { $_ } #return $self->num_cust_credit_bill unless wantarray;
   sort { $a->_date <=> $b->_date }
     qsearch( 'cust_credit_bill', { 'invnum' => $self->invnum } )
   ;
+}
+
+sub cust_credit_bill {
+  shift->cust_credited(@_);
+}
+
+=item cust_bill_pay_pkgnum PKGNUM
+
+Returns all payment applications (see L<FS::cust_bill_pay>) for this invoice
+with matching pkgnum.
+
+=cut
+
+sub cust_bill_pay_pkgnum {
+  my( $self, $pkgnum ) = @_;
+  map { $_ } #return $self->num_cust_bill_pay_pkgnum($pkgnum) unless wantarray;
+  sort { $a->_date <=> $b->_date }
+    qsearch( 'cust_bill_pay', { 'invnum' => $self->invnum,
+                                'pkgnum' => $pkgnum,
+                              }
+           );
+}
+
+=item cust_credited_pkgnum PKGNUM
+
+=item cust_credit_bill_pkgnum PKGNUM
+
+Returns all applied credits (see L<FS::cust_credit_bill>) for this invoice
+with matching pkgnum.
+
+=cut
+
+sub cust_credited_pkgnum {
+  my( $self, $pkgnum ) = @_;
+  map { $_ } #return $self->num_cust_credit_bill_pkgnum($pkgnum) unless wantarray;
+  sort { $a->_date <=> $b->_date }
+    qsearch( 'cust_credit_bill', { 'invnum' => $self->invnum,
+                                   'pkgnum' => $pkgnum,
+                                 }
+           );
+}
+
+sub cust_credit_bill_pkgnum {
+  shift->cust_credited_pkgnum(@_);
 }
 
 =item tax
@@ -465,12 +631,35 @@ sub owed {
   $balance;
 }
 
-=item apply_payments_and_credits
+sub owed_pkgnum {
+  my( $self, $pkgnum ) = @_;
+
+  #my $balance = $self->charged;
+  my $balance = 0;
+  $balance += $_->setup + $_->recur for $self->cust_bill_pkg_pkgnum($pkgnum);
+
+  $balance -= $_->amount            for $self->cust_bill_pay_pkgnum($pkgnum);
+  $balance -= $_->amount            for $self->cust_credited_pkgnum($pkgnum);
+
+  $balance = sprintf( "%.2f", $balance);
+  $balance =~ s/^\-0\.00$/0.00/; #yay ieee fp
+  $balance;
+}
+
+=item apply_payments_and_credits [ OPTION => VALUE ... ]
+
+Applies unapplied payments and credits to this invoice.
+
+A hash of optional arguments may be passed.  Currently "manual" is supported.
+If true, a payment receipt is sent instead of a statement when
+'payment_receipt_email' configuration option is set.
+
+If there is an error, returns the error, otherwise returns false.
 
 =cut
 
 sub apply_payments_and_credits {
-  my $self = shift;
+  my( $self, %options ) = @_;
 
   local $SIG{HUP} = 'IGNORE';
   local $SIG{INT} = 'IGNORE';
@@ -487,6 +676,13 @@ sub apply_payments_and_credits {
 
   my @payments = grep { $_->unapplied > 0 } $self->cust_main->cust_pay;
   my @credits  = grep { $_->credited > 0 } $self->cust_main->cust_credit;
+
+  if ( $conf->exists('pkg-balances') ) {
+    # limit @payments & @credits to those w/ a pkgnum grepped from $self
+    my %pkgnums = map { $_ => 1 } map $_->pkgnum, $self->cust_bill_pkg;
+    @payments = grep { ! $_->pkgnum || $pkgnums{$_->pkgnum} } @payments;
+    @credits  = grep { ! $_->pkgnum || $pkgnums{$_->pkgnum} } @credits;
+  }
 
   while ( $self->owed > 0 and ( @payments || @credits ) ) {
 
@@ -525,31 +721,42 @@ sub apply_payments_and_credits {
       die "guru meditation #12 and 35";
     }
 
+    my $unapp_amount;
     if ( $app eq 'pay' ) {
 
       my $payment = shift @payments;
-
-      $app = new FS::cust_bill_pay {
-        'paynum'  => $payment->paynum,
-	'amount'  => sprintf('%.2f', min( $payment->unapplied, $self->owed ) ),
-      };
+      $unapp_amount = $payment->unapplied;
+      $app = new FS::cust_bill_pay { 'paynum'  => $payment->paynum };
+      $app->pkgnum( $payment->pkgnum )
+        if $conf->exists('pkg-balances') && $payment->pkgnum;
 
     } elsif ( $app eq 'credit' ) {
 
       my $credit = shift @credits;
-
-      $app = new FS::cust_credit_bill {
-        'crednum' => $credit->crednum,
-	'amount'  => sprintf('%.2f', min( $credit->credited, $self->owed ) ),
-      };
+      $unapp_amount = $credit->credited;
+      $app = new FS::cust_credit_bill { 'crednum' => $credit->crednum };
+      $app->pkgnum( $credit->pkgnum )
+        if $conf->exists('pkg-balances') && $credit->pkgnum;
 
     } else {
       die "guru meditation #12 and 35";
     }
 
+    my $owed;
+    if ( $conf->exists('pkg-balances') && $app->pkgnum ) {
+      warn "owed_pkgnum ". $app->pkgnum;
+      $owed = $self->owed_pkgnum($app->pkgnum);
+    } else {
+      $owed = $self->owed;
+    }
+    next unless $owed > 0;
+
+    warn "min ( $unapp_amount, $owed )\n" if $DEBUG;
+    $app->amount( sprintf('%.2f', min( $unapp_amount, $owed ) ) );
+
     $app->invnum( $self->invnum );
 
-    my $error = $app->insert;
+    my $error = $app->insert(%options);
     if ( $error ) {
       $dbh->rollback if $oldAutoCommit;
       return "Error inserting ". $app->table. " record: $error";
@@ -585,6 +792,10 @@ text attachment arrayref, optional
 
 email subject, optional
 
+=item notice_name
+
+notice name instead of "Invoice", optional
+
 =back
 
 Returns an argument list to be passed to L<FS::Misc::send_email>.
@@ -605,11 +816,19 @@ sub generate_email {
     'subject'   => (($args{'subject'}) ? $args{'subject'} : 'Invoice'),
   );
 
+  my %opt = (
+    'unsquelch_cdr' => $conf->exists('voip-cdr_email'),
+    'template'      => $args{'template'},
+    'notice_name'   => ( $args{'notice_name'} || 'Invoice' ),
+  );
+
+  my $cust_main = $self->cust_main;
+
   if (ref($args{'to'}) eq 'ARRAY') {
     $return{'to'} = $args{'to'};
   } else {
     $return{'to'} = [ grep { $_ !~ /^(POST|FAX)$/ }
-                           $self->cust_main->invoicing_list
+                           $cust_main->invoicing_list
                     ];
   }
 
@@ -643,7 +862,7 @@ sub generate_email {
       if ( ref($args{'print_text'}) eq 'ARRAY' ) {
         $data = $args{'print_text'};
       } else {
-        $data = [ $self->print_text('', $args{'template'}) ];
+        $data = [ $self->print_text(\%opt) ];
       }
 
     }
@@ -660,21 +879,22 @@ sub generate_email {
     my $from = $1 || 'example.com';
     my $content_id = join('.', rand()*(2**32), $$, time). "\@$from";
 
-    my $path = "$FS::UID::conf_dir/conf.$FS::UID::datasrc";
-    my $file;
+    my $logo;
+    my $agentnum = $cust_main->agentnum;
     if ( defined($args{'template'}) && length($args{'template'})
-         && -e "$path/logo_". $args{'template'}. ".png"
+         && $conf->exists( 'logo_'. $args{'template'}. '.png', $agentnum )
        )
     {
-      $file = "$path/logo_". $args{'template'}. ".png";
+      $logo = 'logo_'. $args{'template'}. '.png';
     } else {
-      $file = "$path/logo.png";
+      $logo = "logo.png";
     }
+    my $image_data = $conf->config_binary( $logo, $agentnum);
 
     my $image = build MIME::Entity
       'Type'       => 'image/png',
       'Encoding'   => 'base64',
-      'Path'       => $file,
+      'Data'       => $image_data,
       'Filename'   => 'logo.png',
       'Content-ID' => "<$content_id>",
     ;
@@ -689,13 +909,28 @@ sub generate_email {
                          '    </title>',
                          '  </head>',
                          '  <body bgcolor="#e8e8e8">',
-                         $self->print_html('', $args{'template'}, $content_id),
+                         $self->print_html({ 'cid'=>$content_id, %opt }),
                          '  </body>',
                          '</html>',
                        ],
       'Disposition' => 'inline',
       #'Filename'    => 'invoice.pdf',
     );
+
+    my @otherparts = ();
+    if ( $cust_main->email_csv_cdr ) {
+
+      push @otherparts, build MIME::Entity
+        'Type'        => 'text/csv',
+        'Encoding'    => '7bit',
+        'Data'        => [ map { "$_\n" }
+                             $self->call_details('prepend_billed_number' => 1)
+                         ],
+        'Disposition' => 'attachment',
+        'Filename'    => 'usage-'. $self->invnum. '.csv',
+      ;
+
+    }
 
     if ( $conf->exists('invoice_email_pdf') ) {
 
@@ -722,9 +957,9 @@ sub generate_email {
 
       $related->add_part($image);
 
-      my $pdf = build MIME::Entity $self->mimebuild_pdf('', $args{'template'});
+      my $pdf = build MIME::Entity $self->mimebuild_pdf(\%opt);
 
-      $return{'mimeparts'} = [ $related, $pdf ];
+      $return{'mimeparts'} = [ $related, $pdf, @otherparts ];
 
     } else {
 
@@ -736,7 +971,7 @@ sub generate_email {
       #   image/png
 
       $return{'content-type'} = 'multipart/related';
-      $return{'mimeparts'} = [ $alternative, $image ];
+      $return{'mimeparts'} = [ $alternative, $image, @otherparts ];
       $return{'type'} = 'multipart/alternative'; #Content-Type of first part...
       #$return{'disposition'} = 'inline';
 
@@ -750,7 +985,7 @@ sub generate_email {
 
       #mime parts arguments a la MIME::Entity->build().
       $return{'mimeparts'} = [
-        { $self->mimebuild_pdf('', $args{'template'}) }
+        { $self->mimebuild_pdf(\%opt) }
       ];
     }
   
@@ -770,7 +1005,7 @@ sub generate_email {
       if ( ref($args{'print_text'}) eq 'ARRAY' ) {
         $return{'body'} = $args{'print_text'};
       } else {
-        $return{'body'} = [ $self->print_text('', $args{'template'}) ];
+        $return{'body'} = [ $self->print_text(\%opt) ];
       }
 
     }
@@ -795,25 +1030,30 @@ sub mimebuild_pdf {
     'Encoding'    => 'base64',
     'Data'        => [ $self->print_pdf(@_) ],
     'Disposition' => 'attachment',
-    'Filename'    => 'invoice.pdf',
+    'Filename'    => 'invoice-'. $self->invnum. '.pdf',
   );
 }
 
-=item send [ TEMPLATENAME [ , AGENTNUM [ , INVOICE_FROM ] ] ]
+=item send HASHREF | [ TEMPLATE [ , AGENTNUM [ , INVOICE_FROM [ , AMOUNT ] ] ] ]
 
 Sends this invoice to the destinations configured for this customer: sends
 email, prints and/or faxes.  See L<FS::cust_main_invoice>.
 
-TEMPLATENAME, if specified, is the name of a suffix for alternate invoices.
+Options can be passed as a hashref (recommended) or as a list of up to 
+four values for templatename, agentnum, invoice_from and amount.
 
-AGENTNUM, if specified, means that this invoice will only be sent for customers
+I<template>, if specified, is the name of a suffix for alternate invoices.
+
+I<agentnum>, if specified, means that this invoice will only be sent for customers
 of the specified agent or agent(s).  AGENTNUM can be a scalar agentnum (for a
 single agent) or an arrayref of agentnums.
 
-INVOICE_FROM, if specified, overrides the default email invoice From: address.
+I<invoice_from>, if specified, overrides the default email invoice From: address.
 
-AMOUNT, if specified, only sends the invoice if the total amount owed on this
+I<amount>, if specified, only sends the invoice if the total amount owed on this
 invoice and all older invoices is greater than the specified amount.
+
+I<notice_name>, if specified, overrides "Invoice" as the name of the sent document (templates from 10/2009 or newer required)
 
 =cut
 
@@ -834,48 +1074,73 @@ sub queueable_send {
 
 sub send {
   my $self = shift;
-  my $template = scalar(@_) ? shift : '';
-  if ( scalar(@_) && $_[0]  ) {
-    my $agentnums = ref($_[0]) ? shift : [ shift ];
-    return 'N/A' unless grep { $_ == $self->cust_main->agentnum } @$agentnums;
+
+  my( $template, $invoice_from, $notice_name );
+  my $agentnums = '';
+  my $balance_over = 0;
+
+  if ( ref($_[0]) ) {
+    my $opt = shift;
+    $template = $opt->{'template'} || '';
+    if ( $agentnums = $opt->{'agentnum'} ) {
+      $agentnums = [ $agentnums ] unless ref($agentnums);
+    }
+    $invoice_from = $opt->{'invoice_from'};
+    $balance_over = $opt->{'balance_over'} if $opt->{'balance_over'};
+    $notice_name = $opt->{'notice_name'};
+  } else {
+    $template = scalar(@_) ? shift : '';
+    if ( scalar(@_) && $_[0]  ) {
+      $agentnums = ref($_[0]) ? shift : [ shift ];
+    }
+    $invoice_from = shift if scalar(@_);
+    $balance_over = shift if scalar(@_) && $_[0] !~ /^\s*$/;
   }
 
-  my $invoice_from =
-    scalar(@_)
-      ? shift
-      : ( $self->_agent_invoice_from ||    #XXX should go away
-          $conf->config('invoice_from', $self->cust_main->agentnum )
-        );
-
-  my $balance_over = ( scalar(@_) && $_[0] !~ /^\s*$/ ) ? shift : 0;
+  return 'N/A' unless ! $agentnums
+                   or grep { $_ == $self->cust_main->agentnum } @$agentnums;
 
   return ''
     unless $self->cust_main->total_owed_date($self->_date) > $balance_over;
 
+  $invoice_from ||= $self->_agent_invoice_from ||    #XXX should go away
+                    $conf->config('invoice_from', $self->cust_main->agentnum );
+
+  my %opt = (
+    'template'     => $template,
+    'invoice_from' => $invoice_from,
+    'notice_name'  => ( $notice_name || 'Invoice' ),
+  );
+
   my @invoicing_list = $self->cust_main->invoicing_list;
 
-  #$self->email_invoice($template, $invoice_from)
-  $self->email($template, $invoice_from)
+  #$self->email_invoice(\%opt)
+  $self->email(\%opt)
     if grep { $_ !~ /^(POST|FAX)$/ } @invoicing_list or !@invoicing_list;
 
-  #$self->print_invoice($template)
-  $self->print($template)
+  #$self->print_invoice(\%opt)
+  $self->print(\%opt)
     if grep { $_ eq 'POST' } @invoicing_list; #postal
 
-  $self->fax_invoice($template)
+  $self->fax_invoice(\%opt)
     if grep { $_ eq 'FAX' } @invoicing_list; #fax
 
   '';
 
 }
 
-=item email [ TEMPLATENAME  [ , INVOICE_FROM ] ] 
+=item email HASHREF | [ TEMPLATE [ , INVOICE_FROM ] ] 
 
 Emails this invoice.
 
-TEMPLATENAME, if specified, is the name of a suffix for alternate invoices.
+Options can be passed as a hashref (recommended) or as a list of up to 
+two values for templatename and invoice_from.
 
-INVOICE_FROM, if specified, overrides the default email invoice From: address.
+I<template>, if specified, is the name of a suffix for alternate invoices.
+
+I<invoice_from>, if specified, overrides the default email invoice From: address.
+
+I<notice_name>, if specified, overrides "Invoice" as the name of the sent document (templates from 10/2009 or newer required)
 
 =cut
 
@@ -897,14 +1162,21 @@ sub queueable_email {
 #sub email_invoice {
 sub email {
   my $self = shift;
-  my $template = scalar(@_) ? shift : '';
-  my $invoice_from =
-    scalar(@_)
-      ? shift
-      : ( $self->_agent_invoice_from ||    #XXX should go away
-          $conf->config('invoice_from', $self->cust_main->agentnum )
-        );
 
+  my( $template, $invoice_from, $notice_name );
+  if ( ref($_[0]) ) {
+    my $opt = shift;
+    $template = $opt->{'template'} || '';
+    $invoice_from = $opt->{'invoice_from'};
+    $notice_name = $opt->{'notice_name'} || 'Invoice';
+  } else {
+    $template = scalar(@_) ? shift : '';
+    $invoice_from = shift if scalar(@_);
+    $notice_name = 'Invoice';
+  }
+
+  $invoice_from ||= $self->_agent_invoice_from ||    #XXX should go away
+                    $conf->config('invoice_from', $self->cust_main->agentnum );
 
   my @invoicing_list = grep { $_ !~ /^(POST|FAX)$/ } 
                             $self->cust_main->invoicing_list;
@@ -916,10 +1188,11 @@ sub email {
 
   my $error = send_email(
     $self->generate_email(
-      'from'       => $invoice_from,
-      'to'         => [ grep { $_ !~ /^(POST|FAX)$/ } @invoicing_list ],
-      'subject'    => $subject,
-      'template'   => $template,
+      'from'        => $invoice_from,
+      'to'          => [ grep { $_ !~ /^(POST|FAX)$/ } @invoicing_list ],
+      'subject'     => $subject,
+      'template'    => $template,
+      'notice_name' => $notice_name,
     )
   );
   die "can't email invoice: $error\n" if $error;
@@ -945,48 +1218,98 @@ sub email_subject {
   eval qq("$subject");
 }
 
-=item lpr_data [ TEMPLATENAME ]
+=item lpr_data HASHREF | [ TEMPLATE ]
 
 Returns the postscript or plaintext for this invoice as an arrayref.
 
-TEMPLATENAME, if specified, is the name of a suffix for alternate invoices.
+Options can be passed as a hashref (recommended) or as a single optional value
+for template.
+
+I<template>, if specified, is the name of a suffix for alternate invoices.
+
+I<notice_name>, if specified, overrides "Invoice" as the name of the sent document (templates from 10/2009 or newer required)
 
 =cut
 
 sub lpr_data {
-  my( $self, $template) = @_;
-  $conf->exists('invoice_latex')
-    ? [ $self->print_ps('', $template) ]
-    : [ $self->print_text('', $template) ];
+  my $self = shift;
+  my( $template, $notice_name );
+  if ( ref($_[0]) ) {
+    my $opt = shift;
+    $template = $opt->{'template'} || '';
+    $notice_name = $opt->{'notice_name'} || 'Invoice';
+  } else {
+    $template = scalar(@_) ? shift : '';
+    $notice_name = 'Invoice';
+  }
+
+  my %opt = (
+    'template'    => $template,
+    'notice_name' => $notice_name,
+  );
+
+  my $method = $conf->exists('invoice_latex') ? 'print_ps' : 'print_text';
+  [ $self->$method( \%opt ) ];
 }
 
-=item print [ TEMPLATENAME ]
+=item print HASHREF | [ TEMPLATE ]
 
 Prints this invoice.
 
-TEMPLATENAME, if specified, is the name of a suffix for alternate invoices.
+Options can be passed as a hashref (recommended) or as a single optional
+value for template.
+
+I<template>, if specified, is the name of a suffix for alternate invoices.
+
+I<notice_name>, if specified, overrides "Invoice" as the name of the sent document (templates from 10/2009 or newer required)
 
 =cut
 
 #sub print_invoice {
 sub print {
   my $self = shift;
-  my $template = scalar(@_) ? shift : '';
+  my( $template, $notice_name );
+  if ( ref($_[0]) ) {
+    my $opt = shift;
+    $template = $opt->{'template'} || '';
+    $notice_name = $opt->{'notice_name'} || 'Invoice';
+  } else {
+    $template = scalar(@_) ? shift : '';
+    $notice_name = 'Invoice';
+  }
 
-  do_print $self->lpr_data($template);
+  my %opt = (
+    'template'    => $template,
+    'notice_name' => $notice_name,
+  );
+
+  do_print $self->lpr_data(\%opt);
 }
 
-=item fax_invoice [ TEMPLATENAME ] 
+=item fax_invoice HASHREF | [ TEMPLATE ] 
 
 Faxes this invoice.
 
-TEMPLATENAME, if specified, is the name of a suffix for alternate invoices.
+Options can be passed as a hashref (recommended) or as a single optional
+value for template.
+
+I<template>, if specified, is the name of a suffix for alternate invoices.
+
+I<notice_name>, if specified, overrides "Invoice" as the name of the sent document (templates from 10/2009 or newer required)
 
 =cut
 
 sub fax_invoice {
   my $self = shift;
-  my $template = scalar(@_) ? shift : '';
+  my( $template, $notice_name );
+  if ( ref($_[0]) ) {
+    my $opt = shift;
+    $template = $opt->{'template'} || '';
+    $notice_name = $opt->{'notice_name'} || 'Invoice';
+  } else {
+    $template = scalar(@_) ? shift : '';
+    $notice_name = 'Invoice';
+  }
 
   die 'FAX invoice destination not (yet?) supported with plain text invoices.'
     unless $conf->exists('invoice_latex');
@@ -994,7 +1317,12 @@ sub fax_invoice {
   my $dialstring = $self->cust_main->getfield('fax');
   #Check $dialstring?
 
-  my $error = send_fax( 'docdata'    => $self->lpr_data($template),
+  my %opt = (
+    'template'    => $template,
+    'notice_name' => $notice_name,
+  );
+
+  my $error = send_fax( 'docdata'    => $self->lpr_data(\%opt),
                         'dialstring' => $dialstring,
                       );
   die $error if $error;
@@ -1456,11 +1784,9 @@ sub print_csv {
   
       } else { #pkgnum tax
         next unless $cust_bill_pkg->setup != 0;
-        my $itemdesc = defined $cust_bill_pkg->dbdef_table->column('itemdesc')
-                         ? ( $cust_bill_pkg->itemdesc || 'Tax' )
-                         : 'Tax';
-        ($pkg, $setup, $recur, $sdate, $edate) =
-          ( $itemdesc, sprintf("%10.2f",$cust_bill_pkg->setup), '', '', '' );
+        $pkg = $cust_bill_pkg->desc;
+        $setup = sprintf('%10.2f', $cust_bill_pkg->setup );
+        ( $sdate, $edate ) = ( '', '' );
       }
   
       $csv->combine(
@@ -1600,28 +1926,45 @@ sub _agent_invoice_from {
   $self->cust_main->agent_invoice_from;
 }
 
-=item print_text [ TIME [ , TEMPLATE ] ]
+=item print_text HASHREF | [ TIME [ , TEMPLATE [ , OPTION => VALUE ... ] ] ]
 
 Returns an text invoice, as a list of lines.
 
-TIME an optional value used to control the printing of overdue messages.  The
+Options can be passed as a hashref (recommended) or as a list of time, template
+and then any key/value pairs for any other options.
+
+I<time>, if specified, is used to control the printing of overdue messages.  The
 default is now.  It isn't the date of the invoice; that's the `_date' field.
 It is specified as a UNIX timestamp; see L<perlfunc/"time">.  Also see
 L<Time::Local> and L<Date::Parse> for conversion functions.
 
+I<template>, if specified, is the name of a suffix for alternate invoices.
+
+I<notice_name>, if specified, overrides "Invoice" as the name of the sent document (templates from 10/2009 or newer required)
+
 =cut
 
 sub print_text {
-  my( $self, $today, $template ) = @_;
+  my $self = shift;
+  my( $today, $template, %opt );
+  if ( ref($_[0]) ) {
+    %opt = %{ shift() };
+    $today = delete($opt{'time'}) || '';
+    $template = delete($opt{template}) || '';
+  } else {
+    ( $today, $template, %opt ) = @_;
+  }
 
   my %params = ( 'format' => 'template' );
   $params{'time'} = $today if $today;
   $params{'template'} = $template if $template;
+  $params{$_} = $opt{$_} 
+    foreach grep $opt{$_}, qw( unsquealch_cdr notice_name );
 
   $self->print_generic( %params );
 }
 
-=item print_latex [ TIME [ , TEMPLATE ] ]
+=item print_latex HASHREF | [ TIME [ , TEMPLATE [ , OPTION => VALUE ... ] ] ]
 
 Internal method - returns a filename of a filled-in LaTeX template for this
 invoice (Note: add ".tex" to get the actual filename), and a filename of
@@ -1629,19 +1972,36 @@ an associated logo (with the .eps extension included).
 
 See print_ps and print_pdf for methods that return PostScript and PDF output.
 
-TIME an optional value used to control the printing of overdue messages.  The
+Options can be passed as a hashref (recommended) or as a list of time, template
+and then any key/value pairs for any other options.
+
+I<time>, if specified, is used to control the printing of overdue messages.  The
 default is now.  It isn't the date of the invoice; that's the `_date' field.
 It is specified as a UNIX timestamp; see L<perlfunc/"time">.  Also see
 L<Time::Local> and L<Date::Parse> for conversion functions.
 
+I<template>, if specified, is the name of a suffix for alternate invoices.
+
+I<notice_name>, if specified, overrides "Invoice" as the name of the sent document (templates from 10/2009 or newer required)
+
 =cut
 
 sub print_latex {
-  my( $self, $today, $template ) = @_;
+  my $self = shift;
+  my( $today, $template, %opt );
+  if ( ref($_[0]) ) {
+    %opt = %{ shift() };
+    $today = delete($opt{'time'}) || '';
+    $template = delete($opt{template}) || '';
+  } else {
+    ( $today, $template, %opt ) = @_;
+  }
 
   my %params = ( 'format' => 'latex' );
   $params{'time'} = $today if $today;
   $params{'template'} = $template if $template;
+  $params{$_} = $opt{$_} 
+    foreach grep $opt{$_}, qw( unsquealch_cdr notice_name );
 
   $template ||= $self->_agent_template;
 
@@ -1679,7 +2039,7 @@ sub print_latex {
 
 }
 
-=item print_generic OPTIONS_HASH
+=item print_generic OPTION => VALUE ...
 
 Internal method - returns a filled-in template for this invoice as a scalar.
 
@@ -1701,15 +2061,17 @@ cid -
 
 unsquelch_cdr - overrides any per customer cdr squelching when true
 
+notice_name - overrides "Invoice" as the name of the sent document (templates from 10/2009 or newer required)
+
 =cut
 
 #what's with all the sprintf('%10.2f')'s in here?  will it cause any
-# (alignment?) problems to change them all to '%.2f' ?
+# (alignment in text invoice?) problems to change them all to '%.2f' ?
 sub print_generic {
 
   my( $self, %params ) = @_;
   my $today = $params{today} ? $params{today} : time;
-  warn "FS::cust_bill::print_generic called on $self with suffix $params{template}\n"
+  warn "$me print_generic called on $self with suffix $params{template}\n"
     if $DEBUG;
 
   my $format = $params{format};
@@ -1761,6 +2123,7 @@ sub print_generic {
                  'smallfooter'   => sub { map "$_", @_ },
                  'returnaddress' => sub { map "$_", @_ },
                  'coupon'        => sub { map "$_", @_ },
+                 'summary'       => sub { map "$_", @_ },
                },
     'html'  => {
                  'notes' =>
@@ -1794,6 +2157,7 @@ sub print_generic {
                      }  @_
                    },
                  'coupon'        => sub { "" },
+                 'summary'       => sub { "" },
                },
     'template' => {
                  'notes' =>
@@ -1824,6 +2188,7 @@ sub print_generic {
                      }  @_
                    },
                  'coupon'        => sub { "" },
+                 'summary'       => sub { "" },
                },
   );
 
@@ -1909,36 +2274,52 @@ sub print_generic {
   }
 
   my %invoice_data = (
+
+    #invoice from info
     'company_name'    => scalar( $conf->config('company_name', $self->cust_main->agentnum) ),
     'company_address' => join("\n", $conf->config('company_address', $self->cust_main->agentnum) ). "\n",
-    'custnum'         => $cust_main->display_custnum,
+    'returnaddress'   => $returnaddress,
+    'agent'           => &$escape_function($cust_main->agent->agent),
+
+    #invoice info
     'invnum'          => $self->invnum,
     'date'            => time2str($date_format, $self->_date),
     'today'           => time2str('%b %o, %Y', $today),
-    'agent'           => &$escape_function($cust_main->agent->agent),
-    'agent_custid'    => &$escape_function($cust_main->agent_custid),
-    'payname'         => &$escape_function($cust_main->payname),
-    'company'         => &$escape_function($cust_main->company),
-    'address1'        => &$escape_function($cust_main->address1),
-    'address2'        => &$escape_function($cust_main->address2),
-    'city'            => &$escape_function($cust_main->city),
-    'state'           => &$escape_function($cust_main->state),
-    'zip'             => &$escape_function($cust_main->zip),
-    'fax'             => &$escape_function($cust_main->fax),
-    'returnaddress'   => $returnaddress,
-    #'quantity'        => 1,
     'terms'           => $self->terms,
     'template'        => $template, #params{'template'},
-    #'notes'           => join("\n", $conf->config('invoice_latexnotes') ),
-    # better hang on to conf_dir for a while
-    'conf_dir'        => "$FS::UID::conf_dir/conf.$FS::UID::datasrc",
-    'page'            => 1,
-    'total_pages'     => 1,
+    'notice_name'     => ($params{'notice_name'} || 'Invoice'),#escape_function?
     'current_charges' => sprintf("%.2f", $self->charged),
     'duedate'         => $self->due_date2str('%m/%d/%Y'), #date_format?
+
+    #customer info
+    'custnum'         => $cust_main->display_custnum,
+    'agent_custid'    => &$escape_function($cust_main->agent_custid),
+    ( map { $_ => &$escape_function($cust_main->$_()) } qw(
+      payname company address1 address2 city state zip fax
+    )),
+
+    #global config
     'ship_enable'     => $conf->exists('invoice-ship_address'),
     'unitprices'      => $conf->exists('invoice-unitprice'),
+    'smallernotes'    => $conf->exists('invoice-smallernotes'),
+    'smallerfooter'   => $conf->exists('invoice-smallerfooter'),
+   
+    # better hang on to conf_dir for a while (for old templates)
+    'conf_dir'        => "$FS::UID::conf_dir/conf.$FS::UID::datasrc",
+
+    #these are only used when doing paged plaintext
+    'page'            => 1,
+    'total_pages'     => 1,
+
   );
+
+  $invoice_data{finance_section} = '';
+  if ( $conf->config('finance_pkgclass') ) {
+    my $pkg_class =
+      qsearchs('pkg_class', { classnum => $conf->config('finance_pkgclass') });
+    $invoice_data{finance_section} = $pkg_class->categoryname;
+  } 
+ $invoice_data{finance_amount} = '0.00';
 
   my $countrydefault = $conf->config('countrydefault') || 'US';
   my $prefix = $cust_main->has_ship_address ? 'ship_' : '';
@@ -1986,8 +2367,18 @@ sub print_generic {
 #  my( $cr_total, @cr_cust_credit ) = $self->cust_credit; #credits
   #my $balance_due = $self->owed + $pr_total - $cr_total;
   my $balance_due = $self->owed + $pr_total;
+  $invoice_data{'true_previous_balance'} = sprintf("%.2f", ($self->previous_balance || 0) );
+  $invoice_data{'balance_adjustments'} = sprintf("%.2f", ($self->previous_balance || 0) - ($self->billing_balance || 0) );
   $invoice_data{'previous_balance'} = sprintf("%.2f", $pr_total);
   $invoice_data{'balance'} = sprintf("%.2f", $balance_due);
+
+  my $agentnum = $self->cust_main->agentnum;
+
+  my $summarypage = '';
+  if ( $conf->exists('invoice_usesummary', $agentnum) ) {
+    $summarypage = 1;
+  }
+  $invoice_data{'summarypage'} = $summarypage;
 
   #do variable substitution in notes, footer, smallfooter
   foreach my $include (qw( notes footer smallfooter coupon )) {
@@ -1995,9 +2386,10 @@ sub print_generic {
     my $inc_file = $conf->key_orbase("invoice_${format}$include", $template);
     my @inc_src;
 
-    if ( $conf->exists($inc_file) && length( $conf->config($inc_file) ) ) {
+    if ( $conf->exists($inc_file, $agentnum)
+         && length( $conf->config($inc_file, $agentnum) ) ) {
 
-      @inc_src = $conf->config($inc_file);
+      @inc_src = $conf->config($inc_file, $agentnum);
 
     } else {
 
@@ -2009,7 +2401,7 @@ sub print_generic {
                        s/--\@\]/$delimiters{$format}[1]/g;
                        $_;
                      } 
-                 &$convert_map( $conf->config($inc_file) );
+                 &$convert_map( $conf->config($inc_file, $agentnum) );
 
     }
 
@@ -2047,6 +2439,7 @@ sub print_generic {
                             'template' => '',
                           );
   my $other_money_char = $other_money_chars{$format};
+  $invoice_data{'dollar'} = $other_money_char;
 
   my @detail_items = ();
   my @total_items = ();
@@ -2057,56 +2450,66 @@ sub print_generic {
   $invoice_data{'total_items'} = \@total_items;
   $invoice_data{'buf'} = \@buf;
   $invoice_data{'sections'} = \@sections;
-  
+
   my $previous_section = { 'description' => 'Previous Charges',
                            'subtotal'    => $other_money_char.
                                             sprintf('%.2f', $pr_total),
+                           'summarized'  => $summarypage ? 'Y' : '',
                          };
 
   my $taxtotal = 0;
   my $tax_section = { 'description' => 'Taxes, Surcharges, and Fees',
-                      'subtotal'    => $taxtotal }; # adjusted below
+                      'subtotal'    => $taxtotal,   # adjusted below
+                      'summarized'  => $summarypage ? 'Y' : '',
+                    };
 
   my $adjusttotal = 0;
   my $adjust_section = { 'description' => 'Credits, Payments, and Adjustments',
-                         'subtotal'    => 0 }; # adjusted below
+                         'subtotal'    => 0,   # adjusted below
+                         'summarized'  => $summarypage ? 'Y' : '',
+                       };
 
   my $unsquelched = $params{unsquelch_cdr} || $cust_main->squelch_cdr ne 'Y';
   my $multisection = $conf->exists('invoice_sections', $cust_main->agentnum);
   my $late_sections = [];
   if ( $multisection ) {
-    push @sections, $self->_items_sections( $late_sections );
+    push @sections,
+      $self->_items_sections( $late_sections, $summarypage, $escape_function );
   }else{
     push @sections, { 'description' => '', 'subtotal' => '' };
   }
 
-  foreach my $line_item ( $conf->exists('disable_previous_balance') 
-                            ? ()
-                            : $self->_items_previous
-                        )
+  unless (    $conf->exists('disable_previous_balance')
+           || $conf->exists('previous_balance-summary_only')
+         )
   {
-    my $detail = {
-      ext_description => [],
-    };
-    $detail->{'ref'} = $line_item->{'pkgnum'};
-    $detail->{'quantity'} = 1;
-    $detail->{'section'} = $previous_section;
-    $detail->{'description'} = &$escape_function($line_item->{'description'});
-    if ( exists $line_item->{'ext_description'} ) {
-      @{$detail->{'ext_description'}} = map {
-        &$escape_function($_);
-      } @{$line_item->{'ext_description'}};
+
+    foreach my $line_item ( $self->_items_previous ) {
+
+      my $detail = {
+        ext_description => [],
+      };
+      $detail->{'ref'} = $line_item->{'pkgnum'};
+      $detail->{'quantity'} = 1;
+      $detail->{'section'} = $previous_section;
+      $detail->{'description'} = &$escape_function($line_item->{'description'});
+      if ( exists $line_item->{'ext_description'} ) {
+        @{$detail->{'ext_description'}} = map {
+          &$escape_function($_);
+        } @{$line_item->{'ext_description'}};
+      }
+      $detail->{'amount'} = ( $old_latex ? '' : $money_char).
+                            $line_item->{'amount'};
+      $detail->{'product_code'} = $line_item->{'pkgpart'} || 'N/A';
+
+      push @detail_items, $detail;
+      push @buf, [ $detail->{'description'},
+                   $money_char. sprintf("%10.2f", $line_item->{'amount'}),
+                 ];
     }
-    $detail->{'amount'} = ( $old_latex ? '' : $money_char).
-                          $line_item->{'amount'};
-    $detail->{'product_code'} = $line_item->{'pkgpart'} || 'N/A';
-  
-    push @detail_items, $detail;
-    push @buf, [ $detail->{'description'},
-                 $money_char. sprintf("%10.2f", $line_item->{'amount'}),
-               ];
+
   }
-  
+
   if ( @pr_cust_bill && !$conf->exists('disable_previous_balance') ) {
     push @buf, ['','-----------'];
     push @buf, [ 'Total Previous Balance',
@@ -2115,6 +2518,10 @@ sub print_generic {
   }
 
   foreach my $section (@sections, @$late_sections) {
+
+    $invoice_data{finance_amount} = sprintf('%.2f', $section->{'subtotal'} )
+      if ( $invoice_data{finance_section} &&
+           $section->{'description'} eq $invoice_data{finance_section} );
 
     $section->{'subtotal'} = $other_money_char.
                              sprintf('%.2f', $section->{'subtotal'})
@@ -2132,6 +2539,7 @@ sub print_generic {
     $options{'escape_function'} = $escape_function;
     $options{'format_function'} = sub { () } unless $unsquelched;
     $options{'unsquelched'} = $unsquelched;
+    $options{'summary_page'} = $summarypage;
 
     foreach my $line_item ( $self->_items_pkg(%options) ) {
       my $detail = {
@@ -2170,6 +2578,9 @@ sub print_generic {
   
   }
   
+  $invoice_data{current_less_finance} =
+    sprintf('%.2f', $self->charged - $invoice_data{finance_amount} );
+
   if ( $multisection && !$conf->exists('disable_previous_balance') ) {
     unshift @sections, $previous_section if $pr_total;
   }
@@ -2226,7 +2637,7 @@ sub print_generic {
     }
   }
   $invoice_data{'taxtotal'} = sprintf('%.2f', $taxtotal);
-  
+
   push @buf,['','-----------'];
   push @buf,[( $conf->exists('disable_previous_balance') 
                ? 'Total Charges'
@@ -2272,7 +2683,8 @@ sub print_generic {
   
     # credits
     my $credittotal = 0;
-    foreach my $credit ( $self->_items_credits ) {
+    foreach my $credit ( $self->_items_credits('trim_len'=>60) ) {
+
       my $total;
       $total->{'total_item'} = &$escape_function($credit->{'description'});
       $credittotal += $credit->{'amount'};
@@ -2289,24 +2701,16 @@ sub print_generic {
           product_code => '',
           section      => $adjust_section,
         };
-      }else{
+      } else {
         push @total_items, $total;
       }
+
     }
     $invoice_data{'credittotal'} = sprintf('%.2f', $credittotal);
-  
-    # credits (again)
-    foreach ( $self->cust_credited ) {
-  
-      #something more elaborate if $_->amount ne $_->cust_credit->credited ?
 
-      my $reason = substr($_->cust_credit->reason,0,32);
-      $reason .= '...' if length($reason) < length($_->cust_credit->reason);
-      $reason = " ($reason) " if $reason;
-      push @buf,[
-        "Credit #". $_->crednum. " (". time2str("%x",$_->cust_credit->_date) .")".        $reason,
-        $money_char. sprintf("%10.2f",$_->amount)
-      ];
+    #credits (again)
+    foreach my $credit ( $self->_items_credits('trim_len'=>32) ) {
+      push @buf, [ $credit->{'description'}, $money_char.$credit->{'amount'} ];
     }
 
     # payments
@@ -2348,7 +2752,11 @@ sub print_generic {
       $total->{'total_item'} = &$embolden_function($self->balance_due_msg);
       $total->{'total_amount'} =
         &$embolden_function(
-          $other_money_char. sprintf('%.2f', $self->owed + $pr_total )
+          $other_money_char. sprintf('%.2f', $summarypage 
+                                               ? $self->charged +
+                                                 $self->billing_balance
+                                               : $self->owed + $pr_total
+                                    )
         );
       if ( $multisection ) {
         $adjust_section->{'posttotal'} = $total->{'total_item'}. ' '.
@@ -2365,6 +2773,49 @@ sub print_generic {
   if ( $multisection ) {
     push @sections, @$late_sections
       if $unsquelched;
+  }
+
+  my @includelist = ();
+  push @includelist, 'summary' if $summarypage;
+  foreach my $include ( @includelist ) {
+
+    my $inc_file = $conf->key_orbase("invoice_${format}$include", $template);
+    my @inc_src;
+
+    if ( length( $conf->config($inc_file, $agentnum) ) ) {
+
+      @inc_src = $conf->config($inc_file, $agentnum);
+
+    } else {
+
+      $inc_file = $conf->key_orbase("invoice_latex$include", $template);
+
+      my $convert_map = $convert_maps{$format}{$include};
+
+      @inc_src = map { s/\[\@--/$delimiters{$format}[0]/g;
+                       s/--\@\]/$delimiters{$format}[1]/g;
+                       $_;
+                     } 
+                 &$convert_map( $conf->config($inc_file, $agentnum) );
+
+    }
+
+    my $inc_tt = new Text::Template (
+      TYPE       => 'ARRAY',
+      SOURCE     => [ map "$_\n", @inc_src ],
+      DELIMITERS => $delimiters{$format},
+    ) or die "Can't create new Text::Template object: $Text::Template::ERROR";
+
+    unless ( $inc_tt->compile() ) {
+      my $error = "Can't compile $inc_file template: $Text::Template::ERROR\n";
+      warn $error. "Template:\n". join('', map "$_\n", @inc_src);
+      die $error;
+    }
+
+    $invoice_data{$include} = $inc_tt->fill_in( HASH => \%invoice_data );
+
+    $invoice_data{$include} =~ s/\n+$//
+      if ($format eq 'latex');
   }
 
   $invoice_lines = 0;
@@ -2417,14 +2868,19 @@ sub print_generic {
   }
 }
 
-=item print_ps [ TIME [ , TEMPLATE ] ]
+=item print_ps HASHREF | [ TIME [ , TEMPLATE ] ]
 
 Returns an postscript invoice, as a scalar.
 
-TIME an optional value used to control the printing of overdue messages.  The
+Options can be passed as a hashref (recommended) or as a list of time, template
+and then any key/value pairs for any other options.
+
+I<time> an optional value used to control the printing of overdue messages.  The
 default is now.  It isn't the date of the invoice; that's the `_date' field.
 It is specified as a UNIX timestamp; see L<perlfunc/"time">.  Also see
 L<Time::Local> and L<Date::Parse> for conversion functions.
+
+I<notice_name>, if specified, overrides "Invoice" as the name of the sent document (templates from 10/2009 or newer required)
 
 =cut
 
@@ -2438,14 +2894,21 @@ sub print_ps {
   $ps;
 }
 
-=item print_pdf [ TIME [ , TEMPLATE ] ]
+=item print_pdf HASHREF | [ TIME [ , TEMPLATE ] ]
 
 Returns an PDF invoice, as a scalar.
 
-TIME an optional value used to control the printing of overdue messages.  The
+Options can be passed as a hashref (recommended) or as a list of time, template
+and then any key/value pairs for any other options.
+
+I<time> an optional value used to control the printing of overdue messages.  The
 default is now.  It isn't the date of the invoice; that's the `_date' field.
 It is specified as a UNIX timestamp; see L<perlfunc/"time">.  Also see
 L<Time::Local> and L<Date::Parse> for conversion functions.
+
+I<template>, if specified, is the name of a suffix for alternate invoices.
+
+I<notice_name>, if specified, overrides "Invoice" as the name of the sent document (templates from 10/2009 or newer required)
 
 =cut
 
@@ -2459,16 +2922,20 @@ sub print_pdf {
   $pdf;
 }
 
-=item print_html [ TIME [ , TEMPLATE [ , CID ] ] ]
+=item print_html HASHREF | [ TIME [ , TEMPLATE [ , CID ] ] ]
 
 Returns an HTML invoice, as a scalar.
 
-TIME an optional value used to control the printing of overdue messages.  The
+I<time> an optional value used to control the printing of overdue messages.  The
 default is now.  It isn't the date of the invoice; that's the `_date' field.
 It is specified as a UNIX timestamp; see L<perlfunc/"time">.  Also see
 L<Time::Local> and L<Date::Parse> for conversion functions.
 
-CID is a MIME Content-ID used to create a "cid:" URL for the logo image, used
+I<template>, if specified, is the name of a suffix for alternate invoices.
+
+I<notice_name>, if specified, overrides "Invoice" as the name of the sent document (templates from 10/2009 or newer required)
+
+I<cid> is a MIME Content-ID used to create a "cid:" URL for the logo image, used
 when emailing the invoice as part of a multipart/related MIME email.
 
 =cut
@@ -2476,7 +2943,7 @@ when emailing the invoice as part of a multipart/related MIME email.
 sub print_html {
   my $self = shift;
   my %params;
-  if ( ref $_[0]  ) {
+  if ( ref($_[0]) ) {
     %params = %{ shift() }; 
   }else{
     $params{'time'} = shift;
@@ -2534,10 +3001,10 @@ sub _translate_old_latex_format {
         $line_item_line =~ s/\$(\w+)/'. \$_tr_line->{$1}. '/g;
         push @template, "    \$OUT .= '$line_item_line';";
       }
-  
+
       push @template, '}',
                       '--@]';
-
+      #' doh, gvim
     } elsif ( $line =~ /^%%TotalDetails\s*$/ ) {
 
       push @template, '[@--',
@@ -2571,14 +3038,15 @@ sub _translate_old_latex_format {
 sub terms {
   my $self = shift;
 
-  #check for an invoice- specific override (eventually)
+  #check for an invoice-specific override
+  return $self->invoice_terms if $self->invoice_terms;
   
   #check for a customer- specific override
-  return $self->cust_main->invoice_terms
-    if $self->cust_main->invoice_terms;
+  my $cust_main = $self->cust_main;
+  return $cust_main->invoice_terms if $cust_main->invoice_terms;
 
-  #use configured default or default default
-  $conf->config('invoice_default_terms') || 'Payable upon receipt';
+  #use configured default
+  $conf->config('invoice_default_terms') || '';
 }
 
 sub due_date {
@@ -2643,21 +3111,30 @@ sub _date_pretty {
 sub _items_sections {
   my $self = shift;
   my $late = shift;
+  my $summarypage = shift;
+  my $escape = shift;
 
   my %s = ();
   my %l = ();
+  my %not_tax = ();
 
   foreach my $cust_bill_pkg ( $self->cust_bill_pkg )
   {
 
-    if ( $cust_bill_pkg->pkgnum > 0 ) {
+
       my $usage = $cust_bill_pkg->usage;
 
       foreach my $display ($cust_bill_pkg->cust_bill_pkg_display) {
+        next if ( $display->summary && $summarypage );
+
         my $desc = $display->section;
         my $type = $display->type;
 
-        if ( $display->post_total ) {
+        if ( $cust_bill_pkg->pkgnum > 0 ) {
+          $not_tax{$desc} = 1;
+        }
+
+        if ( $display->post_total && !$summarypage ) {
           if (! $type || $type eq 'S') {
             $l{$desc} += $cust_bill_pkg->setup
               if ( $cust_bill_pkg->setup != 0 );
@@ -2701,16 +3178,29 @@ sub _items_sections {
 
       }
 
-    }
-
   }
 
-  push @$late, map { { 'description' => $_,
+  my %cache = map { $_->categoryname => $_ }
+              qsearch( 'pkg_category', {disabled => 'Y'} );
+  $cache{$_->categoryname} = $_
+    foreach qsearch( 'pkg_category', {disabled => ''} );
+
+  push @$late, map { { 'description' => &{$escape}($_),
                        'subtotal'    => $l{$_},
                        'post_total'  => 1,
-                   } } sort keys %l;
+                   } }
+                 sort { $cache{$a}->weight <=> $cache{$b}->weight } keys %l;
 
-  map { {'description' => $_, 'subtotal' => $s{$_}} } sort keys %s;
+  map { { 'description' => &{$escape}($_),
+          'subtotal'    => $s{$_},
+          'summarized'  => $not_tax{$_} ? '' : 'Y',
+          'tax_section' => $not_tax{$_} ? '' : 'Y',
+      } }
+    sort { $cache{$a}->weight <=> $cache{$b}->weight }
+    ( $summarypage
+        ? ( grep { exists($s{$_}) || !$cache{$_}->disabled } keys %cache )
+        : ( keys %s )
+    );
 
 }
 
@@ -2792,21 +3282,32 @@ sub _items_cust_bill_pkg {
   my $format_function = $opt{format_function} || '';
   my $unsquelched = $opt{unsquelched} || '';
   my $section = $opt{section}->{description} if $opt{section};
+  my $summary_page = $opt{summary_page} || '';
 
   my @b = ();
+  my ($s, $r, $u) = ( undef, undef, undef );
   foreach my $cust_bill_pkg ( @$cust_bill_pkg )
   {
+
+    foreach ( $s, $r, $u ) {
+      if ( $_ && !$cust_bill_pkg->hidden ) {
+        $_->{amount}      = sprintf( "%.2f", $_->{amount} ),
+        $_->{unit_amount} = sprintf( "%.2f", $_->{unit_amount} ),
+        push @b, { %$_ };
+        $_ = undef;
+      }
+    }
+
     foreach my $display ( grep { defined($section)
                                  ? $_->section eq $section
                                  : 1
                                }
+                          grep { $_->summary || !$summary_page }
                           $cust_bill_pkg->cust_bill_pkg_display
                         )
     {
 
       my $type = $display->type;
-
-      my $cust_pkg = $cust_bill_pkg->cust_pkg;
 
       my $desc = $cust_bill_pkg->desc;
       $desc = substr($desc, 0, 50). '...'
@@ -2819,24 +3320,35 @@ sub _items_cust_bill_pkg {
 
       if ( $cust_bill_pkg->pkgnum > 0 ) {
 
+        my $cust_pkg = $cust_bill_pkg->cust_pkg;
+
         if ( $cust_bill_pkg->setup != 0 && (!$type || $type eq 'S') ) {
 
           my $description = $desc;
           $description .= ' Setup' if $cust_bill_pkg->recur != 0;
 
-          my @d = map &{$escape_function}($_),
-                         $cust_pkg->h_labels_short($self->_date);
+          my @d = ();
+          push @d, map &{$escape_function}($_),
+                       $cust_pkg->h_labels_short($self->_date)
+            unless $cust_pkg->part_pkg->hide_svc_detail
+                || $cust_bill_pkg->hidden;
           push @d, $cust_bill_pkg->details(%details_opt)
             if $cust_bill_pkg->recur == 0;
 
-          push @b, {
-            description     => $description,
-            #pkgpart         => $part_pkg->pkgpart,
-            pkgnum          => $cust_bill_pkg->pkgnum,
-            amount          => sprintf("%.2f", $cust_bill_pkg->setup),
-            unit_amount     => sprintf("%.2f", $cust_bill_pkg->unitsetup),
-            quantity        => $cust_bill_pkg->quantity,
-            ext_description => \@d,
+          if ( $cust_bill_pkg->hidden ) {
+            $s->{amount}      += $cust_bill_pkg->setup;
+            $s->{unit_amount} += $cust_bill_pkg->unitsetup;
+            push @{ $s->{ext_description} }, @d;
+          } else {
+            $s = {
+              description     => $description,
+              #pkgpart         => $part_pkg->pkgpart,
+              pkgnum          => $cust_bill_pkg->pkgnum,
+              amount          => $cust_bill_pkg->setup,
+              unit_amount     => $cust_bill_pkg->unitsetup,
+              quantity        => $cust_bill_pkg->quantity,
+              ext_description => \@d,
+            };
           };
 
         }
@@ -2847,23 +3359,31 @@ sub _items_cust_bill_pkg {
         {
 
           my $is_summary = $display->summary;
-          my $description = $is_summary ? "Usage charges" : $desc;
+          my $description = ($is_summary && $type && $type eq 'U')
+                            ? "Usage charges" : $desc;
 
           unless ( $conf->exists('disable_line_item_date_ranges') ) {
             $description .= " (" . time2str("%x", $cust_bill_pkg->sdate).
                             " - ". time2str("%x", $cust_bill_pkg->edate). ")";
           }
 
+          my @d = ();
+
           #at least until cust_bill_pkg has "past" ranges in addition to
           #the "future" sdate/edate ones... see #3032
-          my @d = ();
+          my @dates = ( $self->_date );
+          my $prev = $cust_bill_pkg->previous_cust_bill_pkg;
+          push @dates, $prev->sdate if $prev;
+
           push @d, map &{$escape_function}($_),
-                         $cust_pkg->h_labels_short($self->_date)
-                                                #$cust_bill_pkg->edate,
-                                                #$cust_bill_pkg->sdate),
-            ;
-  
-          @d = () if ($cust_bill_pkg->itemdesc || $is_summary);
+                       $cust_pkg->h_labels_short(@dates)
+                                                 #$cust_bill_pkg->edate,
+                                                 #$cust_bill_pkg->sdate)
+            unless $cust_pkg->part_pkg->hide_svc_detail
+                || $cust_bill_pkg->itemdesc
+                || $cust_bill_pkg->hidden
+                || $is_summary && $type && $type eq 'U';
+
           push @d, $cust_bill_pkg->details(%details_opt)
             unless ($is_summary || $type && $type eq 'R');
   
@@ -2876,17 +3396,45 @@ sub _items_cust_bill_pkg {
             $amount = $cust_bill_pkg->usage;
           }
   
-          push @b, {
-            description     => $description,
-            #pkgpart         => $part_pkg->pkgpart,
-            pkgnum          => $cust_bill_pkg->pkgnum,
-            amount          => sprintf("%.2f", $amount),
-            unit_amount     => sprintf("%.2f", $cust_bill_pkg->unitrecur),
-            quantity        => $cust_bill_pkg->quantity,
-            ext_description => \@d,
-          } unless ( $type eq 'U' && ! $amount );
+          if ( !$type || $type eq 'R' ) {
 
-        }
+            if ( $cust_bill_pkg->hidden ) {
+              $r->{amount}      += $amount;
+              $r->{unit_amount} += $cust_bill_pkg->unitrecur;
+              push @{ $r->{ext_description} }, @d;
+            } else {
+              $r = {
+                description     => $description,
+                #pkgpart         => $part_pkg->pkgpart,
+                pkgnum          => $cust_bill_pkg->pkgnum,
+                amount          => $amount,
+                unit_amount     => $cust_bill_pkg->unitrecur,
+                quantity        => $cust_bill_pkg->quantity,
+                ext_description => \@d,
+              };
+            }
+
+          } elsif ( $amount ) {  # && $type eq 'U'
+
+            if ( $cust_bill_pkg->hidden ) {
+              $u->{amount}      += $amount;
+              $u->{unit_amount} += $cust_bill_pkg->unitrecur;
+              push @{ $u->{ext_description} }, @d;
+            } else {
+              $u = {
+                description     => $description,
+                #pkgpart         => $part_pkg->pkgpart,
+                pkgnum          => $cust_bill_pkg->pkgnum,
+                amount          => $amount,
+                unit_amount     => $cust_bill_pkg->unitrecur,
+                quantity        => $cust_bill_pkg->quantity,
+                ext_description => \@d,
+              };
+            }
+
+          }
+
+        } # recurring or usage with recurring charge
 
       } else { #pkgnum tax or one-shot line item (??)
 
@@ -2911,12 +3459,21 @@ sub _items_cust_bill_pkg {
 
   }
 
+  foreach ( $s, $r, $u ) {
+    if ( $_ ) {
+      $_->{amount}      = sprintf( "%.2f", $_->{amount} ),
+      $_->{unit_amount} = sprintf( "%.2f", $_->{unit_amount} ),
+      push @b, { %$_ };
+    }
+  }
+
   @b;
 
 }
 
 sub _items_credits {
-  my $self = shift;
+  my( $self, %opt ) = @_;
+  my $trim_len = $opt{'trim_len'} || 60;
 
   my @b;
   #credits
@@ -2924,10 +3481,10 @@ sub _items_credits {
 
     #something more elaborate if $_->amount ne $_->cust_credit->credited ?
 
-    my $reason = $_->cust_credit->reason;
-    #my $reason = substr($_->cust_credit->reason,0,32);
-    #$reason .= '...' if length($reason) < length($_->cust_credit->reason);
+    my $reason = substr($_->cust_credit->reason, 0, $trim_len);
+    $reason .= '...' if length($reason) < length($_->cust_credit->reason);
     $reason = " ($reason) " if $reason;
+
     push @b, {
       #'description' => 'Credit ref\#'. $_->crednum.
       #                 " (". time2str("%x",$_->cust_credit->_date) .")".
@@ -2937,12 +3494,6 @@ sub _items_credits {
       'amount'      => sprintf("%.2f",$_->amount),
     };
   }
-  #foreach ( @cr_cust_credit ) {
-  #  push @buf,[
-  #    "Credit #". $_->crednum. " (" . time2str("%x",$_->_date) .")",
-  #    $money_char. sprintf("%10.2f",$_->credited)
-  #  ];
-  #}
 
   @b;
 
@@ -2966,6 +3517,38 @@ sub _items_payments {
 
   @b;
 
+}
+
+=item call_details [ OPTION => VALUE ... ]
+
+Returns an array of CSV strings representing the call details for this invoice
+The only option available is the boolean prepend_billed_number
+
+=cut
+
+sub call_details {
+  my ($self, %opt) = @_;
+
+  my $format_function = sub { shift };
+
+  if ($opt{prepend_billed_number}) {
+    $format_function = sub {
+      my $detail = shift;
+      my $row = shift;
+
+      $row->amount ? $row->phonenum. ",". $detail : '"Billed number",'. $detail;
+      
+    };
+  }
+
+  my @details = map { $_->details( 'format_function' => $format_function,
+                                   'escape_function' => sub{ return() },
+                                 )
+                    }
+                  grep { $_->pkgnum }
+                  $self->cust_bill_pkg;
+  my $header = $details[0];
+  ( $header, grep { $_ ne $header } @details );
 }
 
 

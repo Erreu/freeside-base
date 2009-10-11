@@ -6,20 +6,22 @@ use Date::Format;
 use Tie::IxHash;
 use FS::Conf;
 use FS::Record qw(qsearchs qsearch);
-use FS::part_pkg::flat;
+use FS::part_pkg::recur_Common;
 use FS::cdr;
 use FS::rate;
 use FS::rate_prefix;
 use FS::rate_detail;
+use FS::part_pkg::recur_Common;
 
-@ISA = qw(FS::part_pkg::flat);
+@ISA = qw(FS::part_pkg::recur_Common);
 
 $DEBUG = 0;
 
 tie my %rating_method, 'Tie::IxHash',
   'prefix' => 'Rate calls by using destination prefix to look up a region and rate according to the internal prefix and rate tables',
-  'upstream' => 'Rate calls based on upstream data: If the call type is "1", map the upstream rate ID directly to an internal rate (rate_detail), otherwise, pass the upstream price through directly.',
+#  'upstream' => 'Rate calls based on upstream data: If the call type is "1", map the upstream rate ID directly to an internal rate (rate_detail), otherwise, pass the upstream price through directly.',
   'upstream_simple' => 'Simply pass through and charge the "upstream_price" amount.',
+  'single_price' => 'A single price per minute for all calls.',
 ;
 
 #tie my %cdr_location, 'Tie::IxHash',
@@ -32,6 +34,8 @@ tie my %temporalities, 'Tie::IxHash',
   'upcoming'  => "Upcoming (future)",
   'preceding' => "Preceding (past)",
 ;
+
+tie my %granularity, 'Tie::IxHash', FS::rate_detail::granularities();
 
 %info = (
   'name' => 'VoIP rating by plan of CDR records in an internal (or external) SQL table',
@@ -55,7 +59,19 @@ tie my %temporalities, 'Tie::IxHash',
                          'type' => 'checkbox',
                        },
 
-    'rating_method' => { 'name' => 'Region rating method',
+    'cutoff_day'    => { 'name' => 'Billing Day (1 - 28) for prorating or '.
+                                   'subscription',
+                         'default' => '1',
+                       },
+
+    'recur_method'  => { 'name' => 'Recurring fee method',
+                         #'type' => 'radio',
+                         #'options' => \%recur_method,
+                         'type' => 'select',
+                         'select_options' => \%FS::part_pkg::recur_Common::recur_method,
+                       },
+
+    'rating_method' => { 'name' => 'Rating method',
                          'type' => 'radio',
                          'options' => \%rating_method,
                        },
@@ -66,6 +82,14 @@ tie my %temporalities, 'Tie::IxHash',
                      'select_key'   => 'ratenum',
                      'select_label' => 'ratename',
                    },
+
+    'min_charge' => { 'name' => 'Charge per minute when using "single price per minute" rating method',
+                    },
+
+    'sec_granularity' => { 'name' => 'Granularity when using "single price per minute" rating method',
+                           'type' => 'select',
+                           'select_options' => \%granularity,
+                         },
 
     'ignore_unrateable' => { 'name' => 'Ignore calls without a rate in the rate tables.  By default, the system will throw a fatal error upon encountering unrateable calls.',
                              'type' => 'checkbox',
@@ -119,6 +143,12 @@ tie my %temporalities, 'Tie::IxHash',
     'skip_dstchannel_prefix' => { 'name' => 'Do not charge for CDRs where the dstchannel starts with:',
                                 },
 
+    'skip_dst_length_less' => { 'name' => 'Do not charge for CDRs where the destination is less than this many digits:',
+                              },
+
+    'skip_lastapp' => { 'name' => 'Do not charge for CDRs where the lastapp matches this value',
+                      },
+
     'use_duration'   => { 'name' => 'Calculate usage based on the duration field instead of the billsec field',
                           'type' => 'checkbox',
                         },
@@ -126,20 +156,30 @@ tie my %temporalities, 'Tie::IxHash',
     '411_rewrite' => { 'name' => 'Rewrite these (comma-separated) destination numbers to 411 for rating purposes (also ignore any carrierid check): ',
                       },
 
+    #false laziness w/cdr_termination.pm
     'output_format' => { 'name' => 'CDR invoice display format',
                          'type' => 'select',
                          'select_options' => { FS::cdr::invoice_formats() },
                          'default'        => 'default', #XXX test
                        },
 
-    'usage_section' => { 'name' => 'Section in which to place separate usage charges',
+    'usage_section' => { 'name' => 'Section in which to place usage charges (whether separated or not)',
                        },
 
     'summarize_usage' => { 'name' => 'Include usage summary with recurring charges when usage is in separate section',
                           'type' => 'checkbox',
                         },
 
+    'usage_mandate' => { 'name' => 'Always put usage details in separate section',
+                          'type' => 'checkbox',
+                       },
+    #eofalse
+
     'bill_every_call' => { 'name' => 'Generate an invoice immediately for every call.  Useful for prepaid.',
+                           'type' => 'checkbox',
+                         },
+
+    'count_available_phones' => { 'name' => 'Consider for tax purposes the number of lines to be svc_phones that may be provisioned rather than those that actually are.',
                            'type' => 'checkbox',
                          },
 
@@ -169,7 +209,9 @@ tie my %temporalities, 'Tie::IxHash',
   },
   'fieldorder' => [qw(
                        setup_fee recur_fee recur_temporality unused_credit
-                       rating_method ratenum ignore_unrateable
+                       recur_method cutoff_day
+                       rating_method ratenum min_charge sec_granularity
+                       ignore_unrateable
                        default_prefix
                        disable_src
                        domestic_prefix international_prefix
@@ -177,10 +219,12 @@ tie my %temporalities, 'Tie::IxHash',
                        use_amaflags use_disposition
                        use_disposition_taqua use_carrierid use_cdrtypenum
                        skip_dcontext skip_dstchannel_prefix
+                       skip_dst_length_less skip_lastapp
                        use_duration
                        411_rewrite
-                       output_format summarize_usage usage_section
+                       output_format usage_mandate summarize_usage usage_section
                        bill_every_call
+                       count_available_phones
                      )
                   ],
   'weight' => 40,
@@ -191,15 +235,38 @@ sub calc_setup {
   $self->option('setup_fee');
 }
 
-#false laziness w/voip_sqlradacct calc_recur resolve it if that one ever gets used again
 sub calc_recur {
-  my($self, $cust_pkg, $sdate, $details, $param ) = @_;
+  my $self = shift;
+  my($cust_pkg, $sdate, $details, $param ) = @_;
+
+  my $charges = 0;
+
+  $charges += $self->calc_usage(@_);
+  $charges += $self->calc_recur_Common(@_);
+
+  $charges;
+
+}
+
+sub calc_cancel {
+  my $self = shift;
+  my($cust_pkg, $sdate, $details, $param ) = @_;
+
+  $self->calc_usage(@_);
+}
+
+#false laziness w/voip_sqlradacct calc_recur resolve it if that one ever gets used again
+
+sub calc_usage {
+  my $self = shift;
+  my($cust_pkg, $sdate, $details, $param ) = @_;
 
   #my $last_bill = $cust_pkg->last_bill;
   my $last_bill = $cust_pkg->get('last_bill'); #->last_bill falls back to setup
 
   return 0
-    if $self->option('recur_temporality', 1) eq 'preceding' && $last_bill == 0;
+    if $self->option('recur_temporality', 1) eq 'preceding'
+    && ( $last_bill eq '' || $last_bill == 0 );
 
   my $ratenum = $cust_pkg->part_pkg->option('ratenum');
 
@@ -209,7 +276,7 @@ sub calc_recur {
 
   my $charges = 0;
 
-  my $downstream_cdr = '';
+#  my $downstream_cdr = '';
 
   my $rating_method     = $self->option('rating_method') || 'prefix';
   my $intl              = $self->option('international_prefix') || '011';
@@ -285,9 +352,7 @@ sub calc_recur {
           ###
 
           my( $to_or_from, $number );
-          if ( $cdr->dst =~ /^(\+?1)?8([02-8])\1/
-               && ! $disable_tollfree
-              )
+          if ( $cdr->is_tollfree && ! $disable_tollfree )
           { #tollfree call
             $to_or_from = 'from';
             $number = $cdr->src;
@@ -364,36 +429,36 @@ sub calc_recur {
 
         }
 
-      } elsif ( $rating_method eq 'upstream' ) { #XXX this was convergent, not currently used.  very much becoming the odd one out. remove?
-
-        if ( $cdr->cdrtypenum == 1 ) { #rate based on upstream rateid
-
-          $rate_detail = $cdr->cdr_upstream_rate->rate_detail;
-
-          $regionnum = $rate_detail->dest_regionnum;
-          $rate_region = $rate_detail->dest_region;
-
-          $pretty_destnum = $cdr->dst;
-
-          warn "  found rate for regionnum $regionnum and ".
-               "rate detail $rate_detail\n"
-            if $DEBUG;
-
-        } else { #pass upstream price through
-
-          $charge = sprintf('%.2f', $cdr->upstream_price);
-          $charges += $charge;
- 
-          @call_details = (
-            #time2str("%Y %b %d - %r", $cdr->calldate_unix ),
-            time2str("%c", $cdr->calldate_unix),  #XXX this should probably be a config option dropdown so they can select US vs- rest of world dates or whatnot
-            'N/A', #minutes...
-            '$'.$charge,
-            #$pretty_destnum,
-            $cdr->description, #$rate_region->regionname,
-          );
-
-        }
+#      } elsif ( $rating_method eq 'upstream' ) { #XXX this was convergent, not currently used.  very much becoming the odd one out. remove?
+#
+#        if ( $cdr->cdrtypenum == 1 ) { #rate based on upstream rateid
+#
+#          $rate_detail = $cdr->cdr_upstream_rate->rate_detail;
+#
+#          $regionnum = $rate_detail->dest_regionnum;
+#          $rate_region = $rate_detail->dest_region;
+#
+#          $pretty_destnum = $cdr->dst;
+#
+#          warn "  found rate for regionnum $regionnum and ".
+#               "rate detail $rate_detail\n"
+#            if $DEBUG;
+#
+#        } else { #pass upstream price through
+#
+#          $charge = sprintf('%.2f', $cdr->upstream_price);
+#          $charges += $charge;
+# 
+#          @call_details = (
+#            #time2str("%Y %b %d - %r", $cdr->calldate_unix ),
+#            time2str("%c", $cdr->calldate_unix),  #XXX this should probably be a config option dropdown so they can select US vs- rest of world dates or whatnot
+#            'N/A', #minutes...
+#            '$'.$charge,
+#            #$pretty_destnum,
+#            $cdr->description, #$rate_region->regionname,
+#          );
+#
+#        }
 
       } elsif ( $rating_method eq 'upstream_simple' ) {
 
@@ -406,6 +471,36 @@ sub calc_recur {
                                              )
                         );
         $classnum = $cdr->calltypenum;
+
+      } elsif ( $rating_method eq 'single_price' ) {
+
+        # a little false laziness w/below
+
+        my $granularity = length($self->option('sec_granularity'))
+                            ? $self->option('sec_granularity')
+                            : 60;
+
+                    # length($cdr->billsec) ? $cdr->billsec : $cdr->duration;
+        my $seconds = $use_duration ? $cdr->duration : $cdr->billsec;
+
+        $seconds += $granularity - ( $seconds % $granularity )
+          if $seconds      # don't granular-ize 0 billsec calls (bills them)
+          && $granularity; # 0 is per call
+        my $minutes = $seconds / 60; # sprintf("%.1f", 
+        #$minutes =~ s/\.0$// if $granularity == 60;
+
+        # XXX config?
+        #$charge = sprintf('%.2f', ( $self->option('min_charge') * $minutes )
+                                  #+ 0.00000001 ); #so 1.005 rounds to 1.01
+        $charge = sprintf('%.4f', ( $self->option('min_charge') * $minutes )
+                                  + 0.0000000001 ); #so 1.00005 rounds to 1.0001
+
+        $charges += $charge;
+
+        @call_details = ($cdr->downstream_csv( 'format' => $output_format,
+                                               'charge' => $charge,
+                                             )
+                        );
 
       } else {
         die "don't know how to rate CDRs using method: $rating_method\n";
@@ -449,9 +544,11 @@ sub calc_recur {
           $included_min{$regionnum} -= $minutes;
 
           if ( $included_min{$regionnum} < 0 ) {
-            my $charge_min = 0 - $included_min{$regionnum};
+            my $charge_min = 0 - $included_min{$regionnum}; #XXX should preserve
+                                                            #(display?) this
             $included_min{$regionnum} = 0;
-            $charge = sprintf('%.2f', $rate_detail->min_charge * $charge_min );
+            $charge = sprintf('%.2f', ( $rate_detail->min_charge * $charge_min )
+                                      + 0.00000001 ); #so 1.005 rounds to 1.01
             $charges += $charge;
           }
 
@@ -475,13 +572,16 @@ sub calc_recur {
         if ( $charge > 0 ) {
           #just use FS::cust_bill_pkg_detail objects?
           my $call_details;
+          my $phonenum = $cust_svc->svc_x->phonenum;
 
           #if ( $self->option('rating_method') eq 'upstream_simple' ) {
           if ( scalar(@call_details) == 1 ) {
-            $call_details = [ 'C', $call_details[0], $charge, $classnum ];
+            $call_details =
+              [ 'C', $call_details[0], $charge, $classnum, $phonenum ];
           } else { #only used for $rating_method eq 'upstream' now
             $csv->combine(@call_details);
-            $call_details = [ 'C', $csv->string, $charge, $classnum ];
+            $call_details =
+              [ 'C', $csv->string, $charge, $classnum, $phonenum ];
           }
           warn "  adding details on charge to invoice: [ ".
               join(', ', @{$call_details} ). " ]"
@@ -492,10 +592,13 @@ sub calc_recur {
         # if the customer flag is on, call "downstream_csv" or something
         # like it to export the call downstream!
         # XXX price plan option to pick format, or something...
-        $downstream_cdr .= $cdr->downstream_csv( 'format' => 'convergent' )
-          if $spool_cdr;
+        #$downstream_cdr .= $cdr->downstream_csv( 'format' => 'XXX format' )
+        #  if $spool_cdr;
 
-        my $error = $cdr->set_status_and_rated_price('done', $charge);
+        my $error = $cdr->set_status_and_rated_price( 'done',
+                                                      $charge,
+                                                      $cust_svc->svcnum,
+                                                    );
         die $error if $error;
 
       }
@@ -507,35 +610,32 @@ sub calc_recur {
   unshift @$details, [ 'C', FS::cdr::invoice_header($output_format) ]
     if @$details && $rating_method ne 'upstream';
 
-  if ( $spool_cdr && length($downstream_cdr) ) {
-
-    use FS::UID qw(datasrc);
-    my $dir = '/usr/local/etc/freeside/export.'. datasrc. '/cdr';
-    mkdir $dir, 0700 unless -d $dir;
-    $dir .= '/'. $cust_pkg->custnum.
-    mkdir $dir, 0700 unless -d $dir;
-    my $filename = time2str("$dir/CDR%Y%m%d-spool.CSV", time); #XXX invoice date instead?  would require changing the order things are generated in cust_main::bill insert cust_bill first - with transactions it could be done though
-
-    push @{ $param->{'precommit_hooks'} },
-         sub {
-               #lock the downstream spool file and append the records 
-               use Fcntl qw(:flock);
-               use IO::File;
-               my $spool = new IO::File ">>$filename"
-                 or die "can't open $filename: $!\n";
-               flock( $spool, LOCK_EX)
-                 or die "can't lock $filename: $!\n";
-               seek($spool, 0, 2)
-                 or die "can't seek to end of $filename: $!\n";
-               print $spool $downstream_cdr;
-               flock( $spool, LOCK_UN );
-               close $spool;
-             };
-
-  } #if ( $spool_cdr && length($downstream_cdr) )
-
-  $charges += $self->option('recur_fee')
-    if $param->{'increment_next_bill'};
+#  if ( $spool_cdr && length($downstream_cdr) ) {
+#
+#    use FS::UID qw(datasrc);
+#    my $dir = '/usr/local/etc/freeside/export.'. datasrc. '/cdr';
+#    mkdir $dir, 0700 unless -d $dir;
+#    $dir .= '/'. $cust_pkg->custnum.
+#    mkdir $dir, 0700 unless -d $dir;
+#    my $filename = time2str("$dir/CDR%Y%m%d-spool.CSV", time); #XXX invoice date instead?  would require changing the order things are generated in cust_main::bill insert cust_bill first - with transactions it could be done though
+#
+#    push @{ $param->{'precommit_hooks'} },
+#         sub {
+#               #lock the downstream spool file and append the records 
+#               use Fcntl qw(:flock);
+#               use IO::File;
+#               my $spool = new IO::File ">>$filename"
+#                 or die "can't open $filename: $!\n";
+#               flock( $spool, LOCK_EX)
+#                 or die "can't lock $filename: $!\n";
+#               seek($spool, 0, 2)
+#                 or die "can't seek to end of $filename: $!\n";
+#               print $spool $downstream_cdr;
+#               flock( $spool, LOCK_UN );
+#               close $spool;
+#             };
+#
+#  } #if ( $spool_cdr && length($downstream_cdr) )
 
   $charges;
 }
@@ -554,10 +654,12 @@ sub check_chargable {
     use_carrierid
     use_cdrtypenum
     skip_dcontext
-    skip_dstchannel_prefix;
+    skip_dstchannel_prefix
+    skip_dst_length_less
+    skip_lastapp
   );
   foreach my $opt (grep !exists($flags{option_cache}->{$_}), @opt ) {
-    $flags{option_cache}->{$opt} = $self->option($opt);
+    $flags{option_cache}->{$opt} = $self->option($opt, 1);
   }
   my %opt = %{ $flags{option_cache} };
 
@@ -583,10 +685,17 @@ sub check_chargable {
     if $opt{'skip_dcontext'} =~ /\S/
     && grep { $cdr->dcontext eq $_ } split(/\s*,\s*/, $opt{'skip_dcontext'});
 
-  my $len = length($opt{'skip_dstchannel_prefix'});
+  my $len_prefix = length($opt{'skip_dstchannel_prefix'});
   return "dstchannel starts with $opt{'skip_dstchannel_prefix'}"
-    if $len
-    && substr($cdr->dstchannel, 0, $len) eq $opt{'skip_dstchannel_prefix'};
+    if $len_prefix
+    && substr($cdr->dstchannel,0,$len_prefix) eq $opt{'skip_dstchannel_prefix'};
+
+  my $dst_length = $opt{'skip_dst_length_less'};
+  return "destination less than $dst_length digits"
+    if $dst_length && length($cdr->dst) < $dst_length;
+
+  return "lastapp is $opt{'skip_lastapp'}"
+    if length($opt{'skip_lastapp'}) && $cdr->lastapp eq $opt{'skip_lastapp'};
 
   #all right then, rate it
   '';
@@ -596,16 +705,20 @@ sub is_free {
   0;
 }
 
-sub base_recur {
-  my($self, $cust_pkg) = @_;
-  $self->option('recur_fee');
-}
-
 #  This equates svc_phone records; perhaps svc_phone should have a field
 #  to indicate it represents a line
 sub calc_units {    
   my($self, $cust_pkg ) = @_;
-  scalar(grep { $_->part_svc->svcdb eq 'svc_phone' } $cust_pkg->cust_svc);
+  my $count = 0;
+  if ( $self->option('count_available_phones', 1)) {
+    map { $count += ( $_->quantity || 0 ) }
+      grep { $_->part_svc->svcdb eq 'svc_phone' }
+      $cust_pkg->part_pkg->pkg_svc;
+  } else {
+    $count = 
+      scalar(grep { $_->part_svc->svcdb eq 'svc_phone' } $cust_pkg->cust_svc);
+  }
+  $count;
 }
 
 1;

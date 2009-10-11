@@ -121,10 +121,10 @@ RT_PATH = /opt/rt3
 
 #only used for dev kludge now, not a big deal
 FREESIDE_PATH = `pwd`
-PERL_INC_DEV_KLUDGE = /usr/local/share/perl/5.8.8/
+PERL_INC_DEV_KLUDGE = /usr/local/share/perl/5.10.0/
 
-VERSION=1.9.0cvs
-TAG=freeside_1_9_0
+VERSION=1.9.1
+TAG=freeside_1_9_1
 
 DEBVERSION = `echo ${VERSION} | perl -pe 's/(\d)([a-z])/\1~\2/'`-1
 
@@ -140,7 +140,7 @@ help:
 	@echo
 	@echo "                   install-docs install-perl-modules"
 	@echo "                   install-init install-apache"
-	@echo "                   install-rt"
+	@echo "                   install-rt install-texmf"
 	@echo "                   install-selfservice update-selfservice"
 	@echo
 	@echo "                   dev dev-docs dev-perl-modules"
@@ -198,7 +198,13 @@ perl-modules:
 	  s'%%%MASONDATA%%%'${MASONDATA}'g;\
 	" blib/lib/FS/*.pm;\
 	perl -p -i -e "\
+	  s/%%%SELFSERVICE_USER%%%/${SELFSERVICE_USER}/g;\
+	  s/%%%SELFSERVICE_MACHINES%%%/${SELFSERVICE_MACHINES}/g;\
 	  s|%%%FREESIDE_EXPORT%%%|${FREESIDE_EXPORT}|g;\
+	" blib/lib/FS/Cron/*.pm;\
+	perl -p -i -e "\
+	  s|%%%FREESIDE_EXPORT%%%|${FREESIDE_EXPORT}|g;\
+	  s|%%%FREESIDE_LOG%%%|${FREESIDE_LOG}|g;\
 	" blib/lib/FS/part_export/*.pm;\
 	perl -p -i -e "\
 	  s|%%%FREESIDE_CACHE%%%|${FREESIDE_CACHE}|g;\
@@ -383,12 +389,13 @@ clean:
 .PHONY: release
 release:
 	# Update the changelog
-	./CVS2CL
+	./bin/cvs2cl
 	cvs commit -m "Updated for ${VERSION}" ChangeLog
 
 	# Update the RPM specfile
 	cvs edit ${RPM_SPECFILE}
 	perl -p -i -e "s/\d+[^\}]+/${VERSION}/ if /%define\s+version\s+(\d+[^\}]+)\}/;" ${RPM_SPECFILE}
+	perl -p -i -e "s/\d+[^\}]+/1/ if /%define\s+release\s+(\d+[^\}]+)\}/;" ${RPM_SPECFILE}
 	cvs commit -m "Updated for ${VERSION}" ${RPM_SPECFILE}
 
 	# Update the Debian changelog

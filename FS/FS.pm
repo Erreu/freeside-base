@@ -102,6 +102,8 @@ L<FS::cust_main_county> - Locale (tax rate) class
 
 L<FS::cust_tax_exempt> - Tax exemption record class
 
+L<FS::cust_tax_adjustment> - Tax adjustment record class
+
 L<FS::cust_tax_exempt_pkg> - Line-item specific tax exemption record class
 
 L<FS::svc_Common> - Service base class
@@ -136,6 +138,10 @@ L<FS::part_virtual_field> - Broadband virtual field class
 
 L<FS::svc_phone> - Phone service class
 
+L<FS::phone_device> - Phone device class
+
+L<FS::part_device> - Device definition class
+
 L<FS::phone_avail> - Phone number availability cache
 
 L<FS::cdr> - Call Detail Record class
@@ -143,8 +149,6 @@ L<FS::cdr> - Call Detail Record class
 L<FS::cdr_calltype> - CDR calltype class
 
 L<FS::cdr_carrier> - CDR carrier class
-
-L<FS::cdr_upstream_rate> - CDR upstream rate class
 
 L<FS::cdr_type> - CDR type class
 
@@ -165,7 +169,7 @@ L<FS::part_export> - External provisioning export class
 
 L<FS::part_export_option> - Export option class
 
-L<FS::pkg_category> - Package category class
+L<FS::pkg_category> - Package category class (invoice oriented)
 
 L<FS::pkg_class> - Package class class
 
@@ -176,6 +180,8 @@ L<FS::part_pkg_link> - Package definition link class
 L<FS::part_pkg_taxclass> - Tax class class
 
 L<FS::part_pkg_option> - Package definition option class
+
+L<FS::part_pkg_report_option> - Package reporting classification class
 
 L<FS::pkg_svc> - Class linking package definitions (see L<FS::part_pkg>) with
 service definitions (see L<FS::part_svc>)
@@ -228,11 +234,15 @@ L<FS::cust_main_Mixin> - Mixin class for records that contain fields from cust_m
 
 L<FS::cust_main_invoice> - Invoice destination class
 
+L<FS::cust_main_exemption> - Customer tax exemption class
+
 L<FS::cust_main_note> - Customer note class
 
 L<FS::banned_pay> - Banned payment information class
 
 L<FS::cust_bill> - Invoice class
+
+L<FS::cust_statement> - Informational statement class
 
 L<FS::cust_bill_pkg> - Invoice line item class
 

@@ -375,23 +375,34 @@ Usage example:
 
   my($label, $value, $svcdb) = $cust_svc->label;
 
+=item label_long
+
+Like the B<label> method, except the second item in the list ("meaningful
+identifier") may be longer - typically, a full name is included.
+
 =cut
 
-sub label {
+sub label      { shift->_label('svc_label',      @_); }
+sub label_long { shift->_label('svc_label_long', @_); }
+
+sub _label {
   my $self = shift;
-  carp "FS::cust_svc::label called on $self" if $DEBUG;
+  my $method = shift;
   my $svc_x = $self->svc_x
     or return "can't find ". $self->part_svc->svcdb. '.svcnum '. $self->svcnum;
 
-  $self->_svc_label($svc_x);
+  $self->$method($svc_x);
 }
 
+sub svc_label      { shift->_svc_label('label',      @_); }
+sub svc_label_long { shift->_svc_label('label_long', @_); }
+
 sub _svc_label {
-  my( $self, $svc_x ) = ( shift, shift );
+  my( $self, $method, $svc_x ) = ( shift, shift, shift );
 
   (
     $self->part_svc->svc,
-    $svc_x->label(@_),
+    $svc_x->$method(@_),
     $self->part_svc->svcdb,
     $self->svcnum
   );
@@ -629,7 +640,8 @@ sub attribute_since_sqlradacct {
     ) or die $dbh->errstr;
     $sth->execute($username, $start, $end) or die $sth->errstr;
 
-    $sum += $sth->fetchrow_arrayref->[0];
+    my $row = $sth->fetchrow_arrayref;
+    $sum += $row->[0] if defined($row->[0]);
 
     warn "$mes done SUMing sessions\n"
       if $DEBUG;
@@ -680,32 +692,57 @@ CDRs are associated with svc_phone services via svc_phone.phonenum
 =cut
 
 sub get_cdrs_for_update {
+  my $self = shift;
+  $self->get_cdrs( 'freesidestatus' => '',
+                   'for_update'     => 1,
+                   @_,
+                 );
+}
+
+sub get_cdrs {
   my($self, %options) = @_;
 
   my @fields = ( 'charged_party' );
   push @fields, 'src' unless $options{'disable_src'};
 
-  #CDRs are now associated with svc_phone services via svc_phone.phonenum
+  my $for_update = $options{'for_update'} ? 'FOR UPDATE' : '';
+
+  my %hash = ();
+  $hash{'freesidestatus'} = $options{'freesidestatus'}
+    if exists($options{'freesidestatus'});
+
+  #CDRs are associated with svc_phone services via svc_phone.phonenum
+
   #return () unless $self->svc_x->isa('FS::svc_phone');
   return () unless $self->part_svc->svcdb eq 'svc_phone';
   my $number = $self->svc_x->phonenum;
 
   my $prefix = $options{'default_prefix'};
 
-  my @where =  map " $_ = '$number'        ", @fields;
-  push @where, map " $_ = '$prefix$number' ", @fields
+  my @orwhere =  map " $_ = '$number'        ", @fields;
+  push @orwhere, map " $_ = '$prefix$number' ", @fields
     if length($prefix);
   if ( $prefix =~ /^\+(\d+)$/ ) {
-    push @where, map " $_ = '$1$number' ", @fields
+    push @orwhere, map " $_ = '$1$number' ", @fields
   }
 
-  my $extra_sql = ' AND ( '. join(' OR ', @where ). ' ) ';
+  my @where = ( ' ( '. join(' OR ', @orwhere ). ' ) ' );
+
+  if ( $options{'begin'} ) {
+    push @where, 'startdate >= '. $options{'begin'};
+  }
+  if ( $options{'end'} ) {
+    push @where, 'startdate < '.  $options{'end'};
+  }
+
+  my $extra_sql = ( keys(%hash) ? ' AND ' : ' WHERE ' ). join(' AND ', @where );
 
   my @cdrs =
     qsearch( {
       'table'      => 'cdr',
-      'hashref'    => { 'freesidestatus' => '', },
-      'extra_sql'  => "$extra_sql FOR UPDATE",
+      'hashref'    => \%hash,
+      'extra_sql'  => $extra_sql,
+      'order_by'   => "ORDER BY startdate $for_update",
     } );
 
   @cdrs;

@@ -54,8 +54,13 @@ FS::UID->install_callback( sub {
   $conf = FS::Conf->new; 
   $conf_encryption = $conf->exists('encryption');
   $File::CounterFile::DEFAULT_DIR = $conf->base_dir . "/counters.". datasrc;
+  if ( driver_name eq 'Pg' ) {
+    eval "use DBD::Pg ':pg_types'";
+    die $@ if $@;
+  } else {
+    eval "sub PG_BYTEA { die 'guru meditation #9: calling PG_BYTEA when not running Pg?'; }";
+  }
 } );
-
 
 =head1 NAME
 
@@ -215,28 +220,32 @@ objects.
 
 The preferred usage is to pass a hash reference of named parameters:
 
-  my @records = qsearch( {
-                           'table'     => 'table_name',
-                           'hashref'   => { 'field' => 'value'
-                                            'field' => { 'op'    => '<',
-                                                         'value' => '420',
-                                                       },
-                                          },
+  @records = qsearch( {
+                        'table'       => 'table_name',
+                        'hashref'     => { 'field' => 'value'
+                                           'field' => { 'op'    => '<',
+                                                        'value' => '420',
+                                                      },
+                                         },
 
-                           #these are optional...
-                           'select'    => '*',
-                           'extra_sql' => 'AND field ',
-                           'order_by'  => 'ORDER BY something',
-                           #'cache_obj' => '', #optional
-                           'addl_from' => 'LEFT JOIN othtable USING ( field )',
-                           'debug'     => 1,
-                         }
-                       );
+                        #these are optional...
+                        'select'      => '*',
+                        'extra_sql'   => 'AND field = ? AND intfield = ?',
+                        'extra_param' => [ 'value', [ 5, 'int' ] ],
+                        'order_by'    => 'ORDER BY something',
+                        #'cache_obj'   => '', #optional
+                        'addl_from'   => 'LEFT JOIN othtable USING ( field )',
+                        'debug'       => 1,
+                      }
+                    );
 
 Much code still uses old-style positional parameters, this is also probably
 fine in the common case where there are only two parameters:
 
   my @records = qsearch( 'table', { 'field' => 'value' } );
+
+Also possible is an experimental LISTREF of PARAMS_HASHREFs for a UNION of
+the individual PARAMS_HASHREF queries
 
 ###oops, argh, FS::Record::new only lets us create database fields.
 #Normal behaviour if SELECT is not specified is `*', as in
@@ -251,8 +260,40 @@ fine in the common case where there are only two parameters:
 
 my %TYPE = (); #for debugging
 
+sub _bind_type {
+  my($type, $value) = @_;
+
+  my $bind_type = { TYPE => SQL_VARCHAR };
+
+  if ( $type =~ /(big)?(int|serial)/i && $value =~ /^\d+(\.\d+)?$/ ) {
+
+    $bind_type = { TYPE => SQL_INTEGER };
+
+  } elsif ( $type =~ /^bytea$/i || $type =~ /(blob|varbinary)/i ) {
+
+    if ( driver_name eq 'Pg' ) {
+      no strict 'subs';
+      $bind_type = { pg_type => PG_BYTEA };
+    #} else {
+    #  $bind_type = ? #SQL_VARCHAR could be fine?
+    }
+
+  #DBD::Pg 1.49: Cannot bind ... unknown sql_type 6 with SQL_FLOAT
+  #fixed by DBD::Pg 2.11.8
+  #can change back to SQL_FLOAT in early-mid 2010, once everyone's upgraded
+  #(make a Tron test first)
+  } elsif ( _is_fs_float( $type, $value ) ) {
+
+    $bind_type = { TYPE => SQL_DECIMAL };
+
+  }
+
+  $bind_type;
+
+}
+
 sub _is_fs_float {
-  my ($type, $value) = @_;
+  my($type, $value) = @_;
   if ( ( $type =~ /(numeric)/i && $value =~ /^[+-]?\d+(\.\d+)?$/ ) ||
        ( $type =~ /(real|float4)/i && $value =~ /[-+]?\d*\.?\d+([eE][-+]?\d+)?/)
      ) {
@@ -262,101 +303,147 @@ sub _is_fs_float {
 }
 
 sub qsearch {
-  my($stable, $record, $select, $extra_sql, $order_by, $cache, $addl_from );
-  my $debug = '';
-  if ( ref($_[0]) ) { #hashref for now, eventually maybe accept a list too
+  my( @stable, @record, @cache );
+  my( @select, @extra_sql, @extra_param, @order_by, @addl_from );
+  my @debug = ();
+  my %union_options = ();
+  if ( ref($_[0]) eq 'ARRAY' ) {
+    my $optlist = shift;
+    %union_options = @_;
+    foreach my $href ( @$optlist ) {
+      push @stable,      ( $href->{'table'} or die "table name is required" );
+      push @record,      ( $href->{'hashref'}     || {} );
+      push @select,      ( $href->{'select'}      || '*' );
+      push @extra_sql,   ( $href->{'extra_sql'}   || '' );
+      push @extra_param, ( $href->{'extra_param'} || [] );
+      push @order_by,    ( $href->{'order_by'}    || '' );
+      push @cache,       ( $href->{'cache_obj'}   || '' );
+      push @addl_from,   ( $href->{'addl_from'}   || '' );
+      push @debug,       ( $href->{'debug'}       || '' );
+    }
+    die "at least one hashref is required" unless scalar(@stable);
+  } elsif ( ref($_[0]) eq 'HASH' ) {
     my $opt = shift;
-    $stable    = $opt->{'table'}     or die "table name is required";
-    $record    = $opt->{'hashref'}   || {};
-    $select    = $opt->{'select'}    || '*';
-    $extra_sql = $opt->{'extra_sql'} || '';
-    $order_by  = $opt->{'order_by'}  || '';
-    $cache     = $opt->{'cache_obj'} || '';
-    $addl_from = $opt->{'addl_from'} || '';
-    $debug     = $opt->{'debug'}     || '';
+    $stable[0]      = $opt->{'table'}       or die "table name is required";
+    $record[0]      = $opt->{'hashref'}     || {};
+    $select[0]      = $opt->{'select'}      || '*';
+    $extra_sql[0]   = $opt->{'extra_sql'}   || '';
+    $extra_param[0] = $opt->{'extra_param'} || [];
+    $order_by[0]    = $opt->{'order_by'}    || '';
+    $cache[0]       = $opt->{'cache_obj'}   || '';
+    $addl_from[0]   = $opt->{'addl_from'}   || '';
+    $debug[0]       = $opt->{'debug'}       || '';
   } else {
-    ($stable, $record, $select, $extra_sql, $cache, $addl_from ) = @_;
-    $select ||= '*';
+    ( $stable[0],
+      $record[0],
+      $select[0],
+      $extra_sql[0],
+      $cache[0],
+      $addl_from[0]
+    ) = @_;
+    $select[0] ||= '*';
   }
+  my $cache = $cache[0];
 
-  #$stable =~ /^([\w\_]+)$/ or die "Illegal table: $table";
-  #for jsearch
-  $stable =~ /^([\w\s\(\)\.\,\=]+)$/ or die "Illegal table: $stable";
-  $stable = $1;
+  my @statement = ();
+  my @value = ();
+  my @bind_type = ();
   my $dbh = dbh;
+  foreach my $stable ( @stable ) {
+    my $record      = shift @record;
+    my $select      = shift @select;
+    my $extra_sql   = shift @extra_sql;
+    my $extra_param = shift @extra_param;
+    my $order_by    = shift @order_by;
+    my $cache       = shift @cache;
+    my $addl_from   = shift @addl_from;
+    my $debug       = shift @debug;
 
-  my $table = $cache ? $cache->table : $stable;
-  my $dbdef_table = dbdef->table($table)
-    or die "No schema for table $table found - ".
-           "do you need to run freeside-upgrade?";
-  my $pkey = $dbdef_table->primary_key;
+    #$stable =~ /^([\w\_]+)$/ or die "Illegal table: $table";
+    #for jsearch
+    $stable =~ /^([\w\s\(\)\.\,\=]+)$/ or die "Illegal table: $stable";
+    $stable = $1;
 
-  my @real_fields = grep exists($record->{$_}), real_fields($table);
-  my @virtual_fields;
-  if ( eval 'scalar(@FS::'. $table. '::ISA);' ) {
-    @virtual_fields = grep exists($record->{$_}), "FS::$table"->virtual_fields;
-  } else {
-    cluck "warning: FS::$table not loaded; virtual fields not searchable"
-      unless $nowarn_classload;
-    @virtual_fields = ();
+    my $table = $cache ? $cache->table : $stable;
+    my $dbdef_table = dbdef->table($table)
+      or die "No schema for table $table found - ".
+             "do you need to run freeside-upgrade?";
+    my $pkey = $dbdef_table->primary_key;
+
+    my @real_fields = grep exists($record->{$_}), real_fields($table);
+    my @virtual_fields;
+    if ( eval 'scalar(@FS::'. $table. '::ISA);' ) {
+      @virtual_fields = grep exists($record->{$_}), "FS::$table"->virtual_fields;
+    } else {
+      cluck "warning: FS::$table not loaded; virtual fields not searchable"
+        unless $nowarn_classload;
+      @virtual_fields = ();
+    }
+
+    my $statement .= "SELECT $select FROM $stable";
+    $statement .= " $addl_from" if $addl_from;
+    if ( @real_fields or @virtual_fields ) {
+      $statement .= ' WHERE '. join(' AND ',
+        get_real_fields($table, $record, \@real_fields) ,
+        get_virtual_fields($table, $pkey, $record, \@virtual_fields),
+        );
+    }
+
+    $statement .= " $extra_sql" if defined($extra_sql);
+    $statement .= " $order_by"  if defined($order_by);
+
+    push @statement, $statement;
+
+    warn "[debug]$me $statement\n" if $DEBUG > 1 || $debug;
+ 
+
+    foreach my $field (
+      grep defined( $record->{$_} ) && $record->{$_} ne '', @real_fields
+    ) {
+
+      my $value = $record->{$field};
+      my $op = (ref($value) && $value->{op}) ? $value->{op} : '=';
+      $value = $value->{'value'} if ref($value);
+      my $type = dbdef->table($table)->column($field)->type;
+
+      my $bind_type = _bind_type($type, $value);
+
+      #if ( $DEBUG > 2 ) {
+      #  no strict 'refs';
+      #  %TYPE = map { &{"DBI::$_"}() => $_ } @{ $DBI::EXPORT_TAGS{sql_types} }
+      #    unless keys %TYPE;
+      #  warn "  bind_param $bind (for field $field), $value, TYPE $TYPE{$TYPE}\n";
+      #}
+
+      push @value, $value;
+      push @bind_type, $bind_type;
+
+    }
+
+    foreach my $param ( @$extra_param ) {
+      my $bind_type = { TYPE => SQL_VARCHAR };
+      my $value = $param;
+      if ( ref($param) ) {
+        $value = $param->[0];
+        my $type = $param->[1];
+        $bind_type = _bind_type($type, $value);
+      }
+      push @value, $value;
+      push @bind_type, $bind_type;
+    }
   }
 
-  my $statement = "SELECT $select FROM $stable";
-  $statement .= " $addl_from" if $addl_from;
-  if ( @real_fields or @virtual_fields ) {
-    $statement .= ' WHERE '. join(' AND ',
-      get_real_fields($table, $record, \@real_fields) ,
-      get_virtual_fields($table, $pkey, $record, \@virtual_fields),
-      );
-  }
+  my $statement = join( ' ) UNION ( ', @statement );
+  $statement = "( $statement )" if scalar(@statement) > 1;
+  $statement .= " $union_options{order_by}" if $union_options{order_by};
 
-  $statement .= " $extra_sql" if defined($extra_sql);
-  $statement .= " $order_by"  if defined($order_by);
-
-  warn "[debug]$me $statement\n" if $DEBUG > 1 || $debug;
   my $sth = $dbh->prepare($statement)
     or croak "$dbh->errstr doing $statement";
 
   my $bind = 1;
-
-  foreach my $field (
-    grep defined( $record->{$_} ) && $record->{$_} ne '', @real_fields
-  ) {
-
-    my $value = $record->{$field};
-    my $op = (ref($value) && $value->{op}) ? $value->{op} : '=';
-    $value = $value->{'value'} if ref($value);
-    my $type = dbdef->table($table)->column($field)->type;
-
-    my $TYPE = SQL_VARCHAR;
-    if ( $type =~ /(big)?(int|serial)/i && $value =~ /^\d+(\.\d+)?$/ ) {
-      $TYPE = SQL_INTEGER;
-
-    #DBD::Pg 1.49: Cannot bind ... unknown sql_type 6 with SQL_FLOAT
-    #fixed by DBD::Pg 2.11.8
-    #can change back to SQL_FLOAT in early-mid 2010, once everyone's upgraded
-    } elsif ( _is_fs_float( $type, $value ) ) {
-      $TYPE = SQL_DECIMAL;
-    }
-
-    if ( $DEBUG > 2 ) {
-      no strict 'refs';
-      %TYPE = map { &{"DBI::$_"}() => $_ } @{ $DBI::EXPORT_TAGS{sql_types} }
-        unless keys %TYPE;
-      warn "  bind_param $bind (for field $field), $value, TYPE $TYPE{$TYPE}\n";
-    }
-
-    #if this needs to be re-enabled, it needs to use a custom op like
-    #"APPROX=" or something (better name?, not '=', to avoid affecting other
-    # searches
-    #if ($TYPE eq SQL_DECIMAL && $op eq 'APPROX=' ) {
-    #  # these values are arbitrary; better (faster?) ones welcome
-    #  $sth->bind_param($bind++, $value*1.00001, { TYPE => $TYPE } );
-    #  $sth->bind_param($bind++, $value*.99999, { TYPE => $TYPE } );
-    #} else {
-      $sth->bind_param($bind++, $value, { TYPE => $TYPE } );
-    #}
-
+  foreach my $value ( @value ) {
+    my $bind_type = shift @bind_type;
+    $sth->bind_param($bind++, $value, $bind_type );
   }
 
 #  $sth->execute( map $record->{$_},
@@ -365,6 +452,13 @@ sub qsearch {
 
   $sth->execute or croak "Error executing \"$statement\": ". $sth->errstr;
 
+  # virtual fields and blessings are nonsense in a heterogeneous UNION, right?
+  my $table = $stable[0];
+  my $pkey = '';
+  $table = '' if grep { $_ ne $table } @stable;
+  $pkey = dbdef->table($table)->primary_key if $table;
+
+  my @virtual_fields = ();
   if ( eval 'scalar(@FS::'. $table. '::ISA);' ) {
     @virtual_fields = "FS::$table"->virtual_fields;
   } else {
@@ -1165,7 +1259,10 @@ sub replace {
   
   # Encrypt for replace
   my $saved = {};
-  if ($conf->exists('encryption') && defined(eval '@FS::'. $new->table . '::encrypted_fields')) {
+  if (    $conf->exists('encryption')
+       && defined(eval '@FS::'. $new->table . '::encrypted_fields')
+       && scalar( eval '@FS::'. $new->table . '::encrypted_fields')
+  ) {
     foreach my $field (eval '@FS::'. $new->table . '::encrypted_fields') {
       $saved->{$field} = $new->getfield($field);
       $new->setfield($field, $new->encrypt($new->getfield($field)));
@@ -1692,11 +1789,14 @@ sub batch_import {
 
     my $record = $class->new( \%hash );
 
+    my $param = {};
     while ( scalar(@later) ) {
       my $sub = shift @later;
       my $data = shift @later;
-      &{$sub}($record, $data, $conf);  # $record->&{$sub}($data, $conf); 
+      &{$sub}($record, $data, $conf, $param); # $record->&{$sub}($data, $conf);
+      last if exists( $param->{skiprow} );
     }
+    next if exists( $param->{skiprow} );
 
     my $error = $record->insert;
 
@@ -1728,16 +1828,18 @@ sub _h_statement {
 
   $time ||= time;
 
+  my %nohistory = map { $_=>1 } $self->nohistory_fields;
+
   my @fields =
-    grep { defined($self->getfield($_)) && $self->getfield($_) ne "" }
+    grep { defined($self->get($_)) && $self->get($_) ne "" && ! $nohistory{$_} }
     real_fields($self->table);
   ;
 
-  # If we're encrypting then don't ever store the payinfo or CVV2 in the history....
-  # You can see if it changed by the paymask...
-  if ($conf && $conf->exists('encryption') ) {
-    @fields = grep  $_ ne 'payinfo' && $_ ne 'cvv2', @fields;
+  # If we're encrypting then don't store the payinfo in the history
+  if ( $conf && $conf->exists('encryption') ) {
+    @fields = grep { $_ ne 'payinfo' } @fields;
   }
+
   my @values = map { _quote( $self->getfield($_), $self->table, $_) } @fields;
 
   "INSERT INTO h_". $self->table. " ( ".
@@ -1941,10 +2043,26 @@ sub ut_money {
   '';
 }
 
+=item ut_moneyn COLUMN
+
+Check/untaint monetary numbers.  May be negative.  If there
+is an error, returns the error, otherwise returns false.
+
+=cut
+
+sub ut_moneyn {
+  my($self,$field)=@_;
+  if ($self->getfield($field) eq '') {
+    $self->setfield($field, '');
+    return '';
+  }
+  $self->ut_money($field);
+}
+
 =item ut_text COLUMN
 
 Check/untaint text.  Alphanumerics, spaces, and the following punctuation
-symbols are currently permitted: ! @ # $ % & ( ) - + ; : ' " , . ? / = [ ]
+symbols are currently permitted: ! @ # $ % & ( ) - + ; : ' " , . ? / = [ ] < >
 May not be null.  If there is an error, returns the error, otherwise returns
 false.
 
@@ -1956,7 +2074,7 @@ sub ut_text {
   #warn "notexist ". \&notexist. "\n";
   #warn "AUTOLOAD ". \&AUTOLOAD. "\n";
   $self->getfield($field)
-    =~ /^([\w \!\@\#\$\%\&\(\)\-\+\;\:\'\"\,\.\?\/\=\[\]]+)$/
+    =~ /^([\w \!\@\#\$\%\&\(\)\-\+\;\:\'\"\,\.\?\/\=\[\]\<\>]+)$/
       or return gettext('illegal_or_empty_text'). " $field: ".
                  $self->getfield($field);
   $self->setfield($field,$1);
@@ -2086,12 +2204,14 @@ sub ut_hexn {
 }
 =item ut_ip COLUMN
 
-Check/untaint ip addresses.  IPv4 only for now.
+Check/untaint ip addresses.  IPv4 only for now, though ::1 is auto-translated
+to 127.0.0.1.
 
 =cut
 
 sub ut_ip {
   my( $self, $field ) = @_;
+  $self->setfield($field, '127.0.0.1') if $self->getfield($field) eq '::1';
   $self->getfield($field) =~ /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/
     or return "Illegal (IP address) $field: ". $self->getfield($field);
   for ( $1, $2, $3, $4 ) { return "Illegal (IP address) $field" if $_ > 255; }
@@ -2101,7 +2221,8 @@ sub ut_ip {
 
 =item ut_ipn COLUMN
 
-Check/untaint ip addresses.  IPv4 only for now.  May be null.
+Check/untaint ip addresses.  IPv4 only for now, though ::1 is auto-translated
+to 127.0.0.1.  May be null.
 
 =cut
 
@@ -2321,7 +2442,7 @@ sub ut_enum {
   my( $self, $field, $choices ) = @_;
   foreach my $choice ( @$choices ) {
     if ( $self->getfield($field) eq $choice ) {
-      $self->setfield($choice);
+      $self->setfield($field, $choice);
       return '';
     }
   }
@@ -2657,7 +2778,7 @@ sub _quote {
        ")\n" if $DEBUG > 2;
 
   if ( $value eq '' && $nullable ) {
-    'NULL'
+    'NULL';
   } elsif ( $value eq '' && $column_type =~ /^(int|numeric)/ ) {
     cluck "WARNING: Attempting to set non-null integer $table.$column null; ".
           "using 0 instead";
@@ -2665,6 +2786,15 @@ sub _quote {
   } elsif ( $value =~ /^\d+(\.\d+)?$/ && 
             ! $column_type =~ /(char|binary|text)$/i ) {
     $value;
+  } elsif (( $column_type =~ /^bytea$/i || $column_type =~ /(blob|varbinary)/i )
+           && driver_name eq 'Pg'
+          )
+  {
+    no strict 'subs';
+#    dbh->quote($value, { pg_type => PG_BYTEA() }); # doesn't work right
+    # Pg binary string quoting: convert each character to 3-digit octal prefixed with \\, 
+    # single-quote the whole mess, and put an "E" in front.
+    return ("E'" . join('', map { sprintf('\\\\%03o', ord($_)) } split(//, $value) ) . "'");
   } else {
     dbh->quote($value);
   }

@@ -156,14 +156,16 @@ sub _from_customer {
   }
 
   my $sql = "
-                    FROM Tickets
-                    JOIN Queues ON ( Tickets.Queue = Queues.id       )
-                    JOIN Links  ON ( Tickets.id    = Links.LocalBase )
-                    JOIN Users  ON ( Tickets.Owner = Users.id        )
-                    $join 
-       WHERE ( ". join(' OR ', map "Status = '$_'", $self->statuses ). " )
-         AND Target = 'freeside://freeside/cust_main/$custnum'
-         $where
+    FROM Tickets
+      JOIN Queues ON ( Tickets.Queue = Queues.id )
+      JOIN Users  ON ( Tickets.Owner = Users.id  )
+      JOIN Links  ON ( Tickets.id    = Links.LocalBase
+                       AND Links.Base LIKE '%/ticket/' || Tickets.id )
+      $join 
+
+    WHERE ( ". join(' OR ', map "Status = '$_'", $self->statuses ). " )
+      AND Target = 'freeside://freeside/cust_main/$custnum'
+      $where
   ";
 
   ( $sql, @param );
@@ -347,6 +349,11 @@ sub transaction_status {
             "Tickets.id WHERE Transactions.id = ".  $transaction_id;
   
   $self->_retrieve_single_value($sql);
+}
+
+sub access_right {
+  warn "WARNING: no access rights available w/ external RT";
+  0;
 }
 
 1;

@@ -10,6 +10,8 @@
                                      'Package',
                                      'Class',
                                      'Status',
+                                     'Setup',
+                                     'Base Recur',
                                      'Freq.',
                                      'Setup',
                                      'Last bill',
@@ -33,6 +35,15 @@
                         },
                     'classname',
                     sub { ucfirst(shift->status); },
+                    sub { sprintf( $money_char.'%.2f',
+                                   shift->part_pkg->option('setup_fee'),
+                                 );
+                        },
+                    sub { my $c = shift;
+                          sprintf( $money_char.'%.2f',
+                                   $c->part_pkg->base_recur($c)
+                                 );
+                        },
                     sub { #shift->part_pkg->freq_pretty;
 
                           #my $part_pkg = $part_pkg{shift->pkgpart};
@@ -99,17 +110,21 @@
                     '',
                     '',
                     '',
+                    '',
+                    '',
                     FS::UI::Web::cust_colors(),
                     '',
                   ],
-                  'style' => [ '', '', '', '', 'b', '', '', '', '', '', '', '', '', '',
+                  'style' => [ '', '', '', '', 'b', '', '', '', '', '', '', '', '', '', '', '',
                                FS::UI::Web::cust_styles() ],
                   'size'  => [ '', '', '', '', '-1' ],
-                  'align' => 'rrlcclrrrrrrrl'. FS::UI::Web::cust_aligns(). 'r',
+                  'align' => 'rrlccrrlrrrrrrrl'. FS::UI::Web::cust_aligns(). 'r',
                   'links' => [
                     $link,
                     $link,
                     $link,
+                    '',
+                    '',
                     '',
                     '',
                     '',
@@ -133,19 +148,36 @@
 %>
 <%init>
 
+my $curuser = $FS::CurrentUser::CurrentUser;
+
 die "access denied"
-  unless $FS::CurrentUser::CurrentUser->access_right('List packages');
+  unless $curuser->access_right('List packages');
+
+my $conf = new FS::Conf;
+my $money_char = $conf->config('money_char') || '$';
 
 # my %part_pkg = map { $_->pkgpart => $_ } qsearch('part_pkg', {});
 
-  my %search_hash = ();
+my %search_hash = ();
+
+#some false laziness w/misc/bulk_change_pkg.cgi
   
-  $search_hash{'query'} = $cgi->keywords;
+$search_hash{'query'} = $cgi->keywords;
   
-  for my $param (qw(agentnum magic status classnum pkgpart)) {
-    $search_hash{$param} = $cgi->param($param)
-      if $cgi->param($param);
-  }
+for (qw( agentnum magic status classnum custom )) {
+  $search_hash{$_} = $cgi->param($_) if $cgi->param($_);
+}
+
+$search_hash{'pkgpart'} = [ $cgi->param('pkgpart') ];
+
+for my $param ( qw(censustract) ) {
+  $search_hash{$param} = $cgi->param($param) || ''
+    if ( grep { /$param/ } $cgi->param );
+}
+
+my @report_option = $cgi->param('report_option')
+  if $cgi->param('report_option');
+$search_hash{report_option} = join(',', @report_option) if @report_option;
 
 ###
 # parse dates
@@ -175,8 +207,17 @@ foreach my $field (qw( setup last_bill bill adjourn susp expire cancel )) {
 my $sql_query = FS::cust_pkg->search_sql(\%search_hash);
 my $count_query = delete($sql_query->{'count_query'});
 
+my $show = $curuser->default_customer_view =~ /^(jumbo|packages)$/
+             ? ''
+             : ';show=packages';
+
 my $link = sub {
-  [ "${p}view/cust_main.cgi?".shift->custnum.'#cust_pkg', 'pkgnum' ];
+  my $self = shift;
+  my $frag = 'cust_pkg'. $self->pkgnum; #hack for IE ignoring real #fragment
+  [ "${p}view/cust_main.cgi?custnum=".$self->custnum.
+                           "$show;fragment=$frag#cust_pkg",
+    'pkgnum'
+  ];
 };
 
 my $clink = sub {

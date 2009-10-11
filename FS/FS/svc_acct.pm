@@ -6,7 +6,7 @@ use vars qw( @ISA $DEBUG $me $conf $skip_fuzzyfiles
              $usernamemax $passwordmin $passwordmax
              $username_ampersand $username_letter $username_letterfirst
              $username_noperiod $username_nounderscore $username_nodash
-             $username_uppercase $username_percent
+             $username_uppercase $username_percent $username_colon
              $password_noampersand $password_noexclamation
              $warning_template $warning_from $warning_subject $warning_mimetype
              $warning_cc
@@ -15,17 +15,20 @@ use vars qw( @ISA $DEBUG $me $conf $skip_fuzzyfiles
              $dirhash
              @saltset @pw_set );
 use Scalar::Util qw( blessed );
+use Math::BigInt;
 use Carp;
 use Fcntl qw(:flock);
 use Date::Format;
 use Crypt::PasswdMD5 1.2;
 use Data::Dumper;
+use Text::Template;
 use Authen::Passphrase;
 use FS::UID qw( datasrc driver_name );
 use FS::Conf;
 use FS::Record qw( qsearch qsearchs fields dbh dbdef );
 use FS::Msgcat qw(gettext);
 use FS::UI::bytecount;
+use FS::part_pkg;
 use FS::svc_Common;
 use FS::cust_svc;
 use FS::part_svc;
@@ -53,7 +56,11 @@ FS::UID->install_callback( sub {
   @shells = $conf->config('shells');
   $usernamemin = $conf->config('usernamemin') || 2;
   $usernamemax = $conf->config('usernamemax');
-  $passwordmin = $conf->config('passwordmin') || 6;
+  $passwordmin = $conf->config('passwordmin'); # || 6;
+  #blank->6, keep 0
+  $passwordmin = ( defined($passwordmin) && $passwordmin =~ /\d+/ )
+                   ? $passwordmin
+                   : 6;
   $passwordmax = $conf->config('passwordmax') || 8;
   $username_letter = $conf->exists('username-letter');
   $username_letterfirst = $conf->exists('username-letterfirst');
@@ -63,6 +70,7 @@ FS::UID->install_callback( sub {
   $username_uppercase = $conf->exists('username-uppercase');
   $username_ampersand = $conf->exists('username-ampersand');
   $username_percent = $conf->exists('username-percent');
+  $username_colon = $conf->exists('username-colon');
   $password_noampersand = $conf->exists('password-noexclamation');
   $password_noexclamation = $conf->exists('password-noexclamation');
   $dirhash = $conf->config('dirhash') || 0;
@@ -212,9 +220,9 @@ sub table_info {
     'fields' => {
         'dir'       => 'Home directory',
         'uid'       => {
-                         label     => 'UID',
-		         def_label => 'UID (set to fixed and blank for no UIDs)',
-		         type      => 'text',
+                         label    => 'UID',
+		         def_info => 'set to fixed and blank for no UIDs',
+		         type     => 'text',
 		       },
         'slipip'    => 'IP address',
     #    'popnum'    => qq!<A HREF="$p/browse/svc_acct_pop.cgi/">POP number</A>!,
@@ -241,24 +249,22 @@ sub table_info {
                        },
         '_password' => 'Password',
         'gid'       => {
-                         label     => 'GID',
-		         def_label => 'GID (when blank, defaults to UID)',
-		         type      => 'text',
+                         label    => 'GID',
+		         def_info => 'when blank, defaults to UID',
+		         type     => 'text',
 		       },
         'shell'     => {
-                         #desc =>'Shell (all service definitions should have a default or fixed shell that is present in the <b>shells</b> configuration file, set to blank for no shell tracking)',
 		         label    => 'Shell',
-                         def_label=> 'Shell (set to blank for no shell tracking)',
-                         type     =>'select',
+                         def_info => 'set to blank for no shell tracking',
+                         type     => 'select',
                          #select_list => [ $conf->config('shells') ],
                          select_list => [ $conf ? $conf->config('shells') : () ],
                          disable_inventory => 1,
                          disable_select => 1,
                        },
-        'finger'    => 'Real name (GECOS)',
+        'finger'    => 'Real name', # (GECOS)',
         'domsvc'    => {
                          label     => 'Domain',
-                         #def_label => 'svcnum from svc_domain',
                          type      => 'select',
                          select_table => 'svc_domain',
                          select_key   => 'svcnum',
@@ -277,6 +283,7 @@ sub table_info {
                          type  => 'text',
                          disable_inventory => 1,
                          disable_select => 1,
+                         disable_part_svc_column => 1,
                        },
         'upbytes'   => { label => 'Upload',
                          type  => 'text',
@@ -284,6 +291,7 @@ sub table_info {
                          disable_select => 1,
                          'format' => \&FS::UI::bytecount::display_bytecount,
                          'parse' => \&FS::UI::bytecount::parse_bytecount,
+                         disable_part_svc_column => 1,
                        },
         'downbytes' => { label => 'Download',
                          type  => 'text',
@@ -291,6 +299,7 @@ sub table_info {
                          disable_select => 1,
                          'format' => \&FS::UI::bytecount::display_bytecount,
                          'parse' => \&FS::UI::bytecount::parse_bytecount,
+                         disable_part_svc_column => 1,
                        },
         'totalbytes'=> { label => 'Total up and download',
                          type  => 'text',
@@ -298,11 +307,13 @@ sub table_info {
                          disable_select => 1,
                          'format' => \&FS::UI::bytecount::display_bytecount,
                          'parse' => \&FS::UI::bytecount::parse_bytecount,
+                         disable_part_svc_column => 1,
                        },
         'seconds_threshold'   => { label => 'Seconds threshold',
                                    type  => 'text',
                                    disable_inventory => 1,
                                    disable_select => 1,
+                                   disable_part_svc_column => 1,
                                  },
         'upbytes_threshold'   => { label => 'Upload threshold',
                                    type  => 'text',
@@ -310,6 +321,7 @@ sub table_info {
                                    disable_select => 1,
                                    'format' => \&FS::UI::bytecount::display_bytecount,
                                    'parse' => \&FS::UI::bytecount::parse_bytecount,
+                                   disable_part_svc_column => 1,
                                  },
         'downbytes_threshold' => { label => 'Download threshold',
                                    type  => 'text',
@@ -317,6 +329,7 @@ sub table_info {
                                    disable_select => 1,
                                    'format' => \&FS::UI::bytecount::display_bytecount,
                                    'parse' => \&FS::UI::bytecount::parse_bytecount,
+                                   disable_part_svc_column => 1,
                                  },
         'totalbytes_threshold'=> { label => 'Total up and download threshold',
                                    type  => 'text',
@@ -324,6 +337,7 @@ sub table_info {
                                    disable_select => 1,
                                    'format' => \&FS::UI::bytecount::display_bytecount,
                                    'parse' => \&FS::UI::bytecount::parse_bytecount,
+                                   disable_part_svc_column => 1,
                                  },
         'last_login'=>           {
                                    label     => 'Last login',
@@ -419,7 +433,13 @@ sub search_sql {
       $class->search_sql_field('username', $string ).
     ' ) ';
   } else {
-    $class->search_sql_field('username', $string);
+    ' ( '.
+      $class->search_sql_field('username', $string).
+      ( $string =~ /^\d+$/
+          ? 'OR '. $class->search_sql_field('svcnum', $string)
+          : ''
+      ).
+    ' ) ';
   }
 }
 
@@ -437,7 +457,25 @@ sub label {
   $self->email(@_);
 }
 
+=item label_long [ END_TIMESTAMP [ START_TIMESTAMP ] ]
+
+Returns a longer string label for this acccount ("Real Name <username@domain>"
+if available, or "username@domain").
+
+END_TIMESTAMP and START_TIMESTAMP can optionally be passed when dealing with
+history records.
+
 =cut
+
+sub label_long {
+  my $self = shift;
+  my $label = $self->label(@_);
+  my $finger = $self->finger;
+  return $label unless $finger =~ /\S/;
+  my $maxlen = 40 - length($label) - length($self->cust_svc->part_svc->svc);
+  $finger = substr($finger, 0, $maxlen-3).'...' if length($finger) > $maxlen;
+  "$finger <$label>";
+}
 
 =item insert [ , OPTION => VALUE ... ]
 
@@ -501,6 +539,27 @@ sub insert {
     }
     $self->pkgnum($cust_svc->pkgnum);
     $self->svcpart($cust_svc->svcpart);
+  }
+
+  # set usage fields and thresholds if unset but set in a package def
+  if ( $self->pkgnum ) {
+    my $cust_pkg = qsearchs( 'cust_pkg', { 'pkgnum' => $self->pkgnum } );
+    my $part_pkg = $cust_pkg->part_pkg if $cust_pkg;
+    if ( $part_pkg && $part_pkg->can('usage_valuehash') ) {
+
+      my %values = $part_pkg->usage_valuehash;
+      my $multiplier = $conf->exists('svc_acct-usage_threshold') 
+                         ? 1 - $conf->config('svc_acct-usage_threshold')/100
+                         : 0.20; #doesn't matter
+
+      foreach ( keys %values ) {
+        next if $self->getfield($_);
+        $self->setfield( $_, $values{$_} );
+        $self->setfield( $_. '_threshold', int( $values{$_} * $multiplier ) )
+          if $conf->exists('svc_acct-usage_threshold');
+      }
+
+    }
   }
 
   my @jobnums;
@@ -976,13 +1035,28 @@ sub check {
   ;
   return $error if $error;
 
+  my $cust_pkg;
+  local $username_letter = $username_letter;
+  if ($self->svcnum) {
+    my $cust_svc = $self->cust_svc
+      or return "no cust_svc record found for svcnum ". $self->svcnum;
+    my $cust_pkg = $cust_svc->cust_pkg;
+  }
+  if ($self->pkgnum) {
+    $cust_pkg = qsearchs('cust_pkg', { 'pkgnum' => $self->pkgnum } );#complain?
+  }
+  if ($cust_pkg) {
+    $username_letter =
+      $conf->exists('username-letter', $cust_pkg->cust_main->agentnum);
+  }
+
   my $ulen = $usernamemax || $self->dbdef_table->column('username')->length;
   if ( $username_uppercase ) {
-    $recref->{username} =~ /^([a-z0-9_\-\.\&\%]{$usernamemin,$ulen})$/i
+    $recref->{username} =~ /^([a-z0-9_\-\.\&\%\:]{$usernamemin,$ulen})$/i
       or return gettext('illegal_username'). " ($usernamemin-$ulen): ". $recref->{username};
     $recref->{username} = $1;
   } else {
-    $recref->{username} =~ /^([a-z0-9_\-\.\&\%]{$usernamemin,$ulen})$/
+    $recref->{username} =~ /^([a-z0-9_\-\.\&\%\:]{$usernamemin,$ulen})$/
       or return gettext('illegal_username'). " ($usernamemin-$ulen): ". $recref->{username};
     $recref->{username} = $1;
   }
@@ -1006,6 +1080,9 @@ sub check {
   }
   unless ( $username_percent ) {
     $recref->{username} =~ /\%/ and return gettext('illegal_username');
+  }
+  unless ( $username_colon ) {
+    $recref->{username} =~ /\:/ and return gettext('illegal_username');
   }
 
   $recref->{popnum} =~ /^(\d*)$/ or return "Illegal popnum: ".$recref->{popnum};
@@ -1158,7 +1235,7 @@ sub check {
     #carp "warning: _password_encoding unspecified\n";
 
     #generate a password if it is blank
-    unless ( length( $recref->{_password} ) ) {
+    unless ( length($recref->{_password}) || ! $passwordmin ) {
 
       $recref->{_password} =
         join('',map($pw_set[ int(rand $#pw_set) ], (0..7) ) );
@@ -1374,6 +1451,29 @@ sub radius_reply {
     $reply{'Session-Timeout'} = $self->seconds;
   }
 
+  if ( $conf->exists('radius-chillispot-max') ) {
+    #http://dev.coova.org/svn/coova-chilli/doc/dictionary.chillispot
+
+    #hmm.  just because sqlradius.pm says so?
+    my %whatis = (
+      'input'  => 'up',
+      'output' => 'down',
+      'total'  => 'total',
+    );
+
+    foreach my $what (qw( input output total )) {
+      my $is = $whatis{$what}.'bytes';
+      if ( $self->$is() =~ /\d/ ) {
+        my $big = new Math::BigInt $self->$is();
+        $big = new Math::BigInt '0' if $big->is_neg();
+        my $att = "Chillispot-Max-\u$what";
+        $reply{"$att-Octets"}    = $big->copy->band(0xffffffff)->bstr;
+        $reply{"$att-Gigawords"} = $big->copy->brsft(32)->bstr;
+      }
+    }
+
+  }
+
   %reply;
 }
 
@@ -1407,11 +1507,15 @@ sub radius_check {
   $check{$pw_attrib} = $password;
 
   my $cust_svc = $self->cust_svc;
-  die "FATAL: no cust_svc record for svc_acct.svcnum ". $self->svcnum. "\n"
-    unless $cust_svc;
-  my $cust_pkg = $cust_svc->cust_pkg;
-  if ( $cust_pkg && $cust_pkg->part_pkg->is_prepaid && $cust_pkg->bill ) {
-    $check{'Expiration'} = time2str('%B %e %Y %T', $cust_pkg->bill ); #http://lists.cistron.nl/pipermail/freeradius-users/2005-January/040184.html
+  if ( $cust_svc ) {
+    my $cust_pkg = $cust_svc->cust_pkg;
+    if ( $cust_pkg && $cust_pkg->part_pkg->is_prepaid && $cust_pkg->bill ) {
+      $check{'Expiration'} = time2str('%B %e %Y %T', $cust_pkg->bill ); #http://lists.cistron.nl/pipermail/freeradius-users/2005-January/040184.html
+    }
+  } else {
+    warn "WARNING: no cust_svc record for svc_acct.svcnum ". $self->svcnum.
+         "; can't set Expiration\n"
+      unless $cust_svc;
   }
 
   %check;
@@ -1659,7 +1763,7 @@ my %op2condition = (
                $self->$column - $amount <= 0;
              },
   '+' => sub { my($self, $column, $amount) = @_;
-               $self->$column + $amount > 0;
+               ($self->$column || 0) + $amount > 0;
              },
 );
 my %op2warncondition = (
@@ -1668,7 +1772,7 @@ my %op2warncondition = (
                $self->$column - $amount <= $self->$threshold + 0;
              },
   '+' => sub { my($self, $column, $amount) = @_;
-               $self->$column + $amount > 0;
+               ($self->$column || 0) + $amount > 0;
              },
 );
 
@@ -1705,6 +1809,38 @@ sub _op_usage {
     unless defined($rv);
   die "Can't update $column for svcnum". $self->svcnum
     if $rv == 0;
+
+  #$self->snapshot; #not necessary, we retain the old values
+  #create an object with the updated usage values
+  my $new = qsearchs('svc_acct', { 'svcnum' => $self->svcnum });
+  #call exports
+  my $error = $new->replace($self);
+  if ( $error ) {
+    $dbh->rollback if $oldAutoCommit;
+    return "Error replacing: $error";
+  }
+
+  #overlimit_action eq 'cancel' handling
+  my $cust_pkg = $self->cust_svc->cust_pkg;
+  if ( $cust_pkg
+       && $cust_pkg->part_pkg->option('overlimit_action', 1) eq 'cancel' 
+       && $op eq '-' && &{$op2condition{$op}}($self, $column, $amount)
+     )
+  {
+
+    my $error = $cust_pkg->cancel; #XXX should have a reason
+    if ( $error ) {
+      $dbh->rollback if $oldAutoCommit;
+      return "Error cancelling: $error";
+    }
+
+    #nothing else is relevant if we're cancelling, so commit & return success
+    warn "$me update successful; committing\n"
+      if $DEBUG;
+    $dbh->commit or die $dbh->errstr if $oldAutoCommit;
+    return '';
+
+  }
 
   my $action = $op2action{$op};
 
@@ -1777,7 +1913,7 @@ sub _op_usage {
 }
 
 sub set_usage {
-  my( $self, $valueref ) = @_;
+  my( $self, $valueref, %options ) = @_;
 
   warn "$me set_usage called for svcnum ". $self->svcnum.
        ' ('. $self->email. "): ".
@@ -1798,6 +1934,11 @@ sub set_usage {
 
   my $reset = 0;
   my %handyhash = ();
+  if ( $options{null} ) { 
+    %handyhash = ( map { ( $_ => 'NULL', $_."_threshold" => 'NULL' ) }
+                   qw( seconds upbytes downbytes totalbytes )
+                 );
+  }
   foreach my $field (keys %$valueref){
     $reset = 1 if $valueref->{$field};
     $self->setfield($field, $valueref->{$field});
@@ -1816,8 +1957,8 @@ sub set_usage {
   #die $error if $error;         #services not explicity changed via the UI
 
   my $sql = "UPDATE svc_acct SET " .
-    join (',', map { "$_ =  ?" } (keys %handyhash) ).
-    " WHERE svcnum = ?";
+    join (',', map { "$_ =  $handyhash{$_}" } (keys %handyhash) ).
+    " WHERE svcnum = ". $self->svcnum;
 
   warn "$me $sql\n"
     if $DEBUG;
@@ -1825,11 +1966,21 @@ sub set_usage {
   if (scalar(keys %handyhash)) {
     my $sth = $dbh->prepare( $sql )
       or die "Error preparing $sql: ". $dbh->errstr;
-    my $rv = $sth->execute((values %handyhash), $self->svcnum);
+    my $rv = $sth->execute();
     die "Error executing $sql: ". $sth->errstr
       unless defined($rv);
     die "Can't update usage for svcnum ". $self->svcnum
       if $rv == 0;
+  }
+
+  #$self->snapshot; #not necessary, we retain the old values
+  #create an object with the updated usage values
+  my $new = qsearchs('svc_acct', { 'svcnum' => $self->svcnum });
+  #call exports
+  my $error = $new->replace($self);
+  if ( $error ) {
+    $dbh->rollback if $oldAutoCommit;
+    return "Error replacing: $error";
   }
 
   if ( $reset ) {
@@ -2612,6 +2763,8 @@ probably live somewhere else...
 
 insertion of RADIUS group stuff in insert could be done with child_objects now
 (would probably clean up export of them too)
+
+_op_usage and set_usage bypass the history... maybe they shouldn't
 
 =head1 SEE ALSO
 

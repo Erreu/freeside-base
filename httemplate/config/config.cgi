@@ -84,11 +84,9 @@ Setting <b><% $key %></b>
 %         '' => '', map { $_ => $_ } @{ $config_item->select_enum };
 %     } elsif ( $config_item->select_hash ) {
 %       if ( ref($config_item->select_hash) eq 'ARRAY' ) {
-%         tie %hash, 'Tie::IxHash',
-%           '' => '', @{ $config_item->select_hash };
+%         tie %hash, 'Tie::IxHash', '' => '', @{ $config_item->select_hash };
 %       } else {
-%         tie %hash, 'Tie::IxHash',
-%           '' => '', %{ $config_item->select_hash };
+%         tie %hash, 'Tie::IxHash', '' => '', %{ $config_item->select_hash };
 %       }
 %     } else {
 %       %hash = ( '' => 'WARNING: neither select_enum nor select_hash specified in Conf.pm for configuration option "'. $key. '"' );
@@ -269,9 +267,24 @@ Setting <b><% $key %></b>
     <td><input type="button" value="add" onClick="doadd<% "$key$n" %>(this.form)"></td>
   </tr></table>
 
+%   } elsif ( $element_types{$type} ) {
+%
+%     my %opt = ( 'element_name' => "$key$n",
+%                 'empty_label'  => ' ',
+%               );
+%     if ( $config_item->multiple ) {
+%       $opt{'multiple'} = 1 if $config_item->multiple;
+%       $opt{'curr_value'} = [ $conf->config($key, $agentnum) ];
+%     } else {
+%       $opt{'curr_value'} = 
+%         $conf->exists($key, $agentnum) ? $conf->config($key, $agentnum) : '';
+%     }
+
+      <% include("/elements/$type.html", %opt ) %>
+
 %   } else {
 
-  <font color="#ff0000">unknown type <% $type %></font>
+      <font color="#ff0000">unknown type <% $type %></font>
 
 %   }
 % $n++;
@@ -291,9 +304,12 @@ Setting <b><% $key %></b>
 <%once>
 
 my $conf = new FS::Conf;
-my @config_items = grep { $_->key != ~/^invoice_(html|latex|template)/ }
-                        $conf->config_items; 
+my @config_items = $conf->config_items; 
 my %confitems = map { $_->key => $_ } @config_items;
+
+my %element_types = map { $_ => 1 } qw(
+  select-part_svc select-part_pkg
+);
 
 </%once>
 <%init>

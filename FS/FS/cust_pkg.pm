@@ -2,9 +2,11 @@ package FS::cust_pkg;
 
 use strict;
 use vars qw(@ISA $disable_agentcheck $DEBUG);
+use Carp qw(cluck);
 use Scalar::Util qw( blessed );
 use List::Util qw(max);
 use Tie::IxHash;
+use MIME::Entity;
 use FS::UID qw( getotaker dbh );
 use FS::Misc qw( send_email );
 use FS::Record qw( qsearch qsearchs );
@@ -120,6 +122,10 @@ Billing item definition (see L<FS::part_pkg>)
 
 Optional link to package location (see L<FS::location>)
 
+=item start_date
+
+date
+
 =item setup
 
 date
@@ -228,6 +234,14 @@ If set true, supresses any referral credit to a referring customer.
 
 cust_pkg_option records will be created
 
+=item ticket_subject
+
+a ticket will be added to this customer with this subject
+
+=item ticket_queue
+
+an optional queue name for ticket additions
+
 =back
 
 =cut
@@ -269,6 +283,29 @@ sub insert {
   #}
 
   my $conf = new FS::Conf;
+
+  if ( $conf->config('ticket_system') && $options{ticket_subject} ) {
+    eval '
+      use lib ( "/opt/rt3/local/lib", "/opt/rt3/lib" );
+      use RT;
+    ';
+    die $@ if $@;
+
+    RT::LoadConfig();
+    RT::Init();
+    my $q = new RT::Queue($RT::SystemUser);
+    $q->Load($options{ticket_queue}) if $options{ticket_queue};
+    my $t = new RT::Ticket($RT::SystemUser);
+    my $mime = new MIME::Entity;
+    $mime->build( Type => 'text/plain', Data => $options{ticket_subject} );
+    $t->Create( $options{ticket_queue} ? (Queue => $q) : (),
+                Subject => $options{ticket_subject},
+                MIMEObj => $mime,
+              );
+    $t->AddLink( Type   => 'MemberOf',
+                 Target => 'freeside://freeside/cust_main/'. $self->custnum,
+               );
+  }
 
   if ($conf->config('welcome_letter') && $self->cust_main->num_pkgs == 1) {
     my $queue = new FS::queue {
@@ -439,15 +476,14 @@ replace methods.
 sub check {
   my $self = shift;
 
-  $self->locationnum('')
-    if defined($self->locationnum) && length($self->locationnum)
-    && ( $self->locationnum == 0 || $self->locationnum == -1 );
+  $self->locationnum('') if !$self->locationnum || $self->locationnum == -1;
 
   my $error = 
     $self->ut_numbern('pkgnum')
     || $self->ut_foreign_key('custnum', 'cust_main', 'custnum')
     || $self->ut_numbern('pkgpart')
     || $self->ut_foreign_keyn('locationnum', 'cust_location', 'locationnum')
+    || $self->ut_numbern('start_date')
     || $self->ut_numbern('setup')
     || $self->ut_numbern('bill')
     || $self->ut_numbern('susp')
@@ -481,10 +517,10 @@ sub check {
     unless ( $disable_agentcheck ) {
       my $agent =
         qsearchs( 'agent', { 'agentnum' => $self->cust_main->agentnum } );
-      my $pkgpart_href = $agent->pkgpart_hashref;
-      return "agent ". $agent->agentnum.
+      return "agent ". $agent->agentnum. ':'. $agent->agent.
              " can't purchase pkgpart ". $self->pkgpart
-        unless $pkgpart_href->{ $self->pkgpart };
+        unless $agent->pkgpart_hashref->{ $self->pkgpart }
+            || $agent->agentnum == $self->part_pkg->agentnum;
     }
 
     $error = $self->ut_foreign_key('pkgpart', 'part_pkg', 'pkgpart' );
@@ -524,6 +560,8 @@ Available options are:
 
 =item date - can be set to a unix style timestamp to specify when to cancel (expire)
 
+=item nobill - can be set true to skip billing if it might otherwise be done.
+
 =back
 
 If there is an error, returns the error, otherwise returns false.
@@ -533,6 +571,8 @@ If there is an error, returns the error, otherwise returns false.
 sub cancel {
   my( $self, %options ) = @_;
   my $error;
+
+  my $conf = new FS::Conf;
 
   warn "cust_pkg::cancel called with options".
        join(', ', map { "$_: $options{$_}" } keys %options ). "\n"
@@ -558,6 +598,20 @@ sub cancel {
 
   my $date = $options{date} if $options{date}; # expire/cancel later
   $date = '' if ($date && $date <= time);      # complain instead?
+
+  #race condition: usage could be ongoing until unprovisioned
+  #resolved by performing a change package instead (which unprovisions) and
+  #later cancelling
+  if ( !$options{nobill} && !$date && $conf->exists('bill_usage_on_cancel') ) {
+      my $copy = $self->new({$self->hash});
+      my $error =
+        $copy->cust_main->bill( pkg_list => [ $copy ], cancel => 1 );
+      warn "Error billing during cancel, custnum ".
+        #$self->cust_main->custnum. ": $error"
+        ": $error"
+        if $error;
+  }
+
 
   my $cancel_time = $options{'time'} || time;
 
@@ -594,7 +648,6 @@ sub cancel {
     # Add a credit for remaining service
     my $remaining_value = $self->calc_remain(time=>$cancel_time);
     if ( $remaining_value > 0 && !$options{'no_credit'} ) {
-      my $conf = new FS::Conf;
       my $error = $self->cust_main->credit(
         $remaining_value,
         'Credit for unused time on '. $self->part_pkg->pkg,
@@ -620,10 +673,8 @@ sub cancel {
   $dbh->commit or die $dbh->errstr if $oldAutoCommit;
   return '' if $date; #no errors
 
-  my $conf = new FS::Conf;
   my @invoicing_list = grep { $_ !~ /^(POST|FAX)$/ } $self->cust_main->invoicing_list;
   if ( !$options{'quiet'} && $conf->exists('emailcancel') && @invoicing_list ) {
-    my $conf = new FS::Conf;
     my $error = send_email(
       'from'    => $conf->config('invoice_from', $self->cust_main->agentnum),
       'to'      => \@invoicing_list,
@@ -1137,6 +1188,22 @@ sub change {
     return "Unable to transfer all services from package ". $self->pkgnum;
   }
 
+  #reset usage if changing pkgpart
+  # AND usage rollover is off (otherwise adds twice, now and at package bill)
+  if ($self->pkgpart != $cust_pkg->pkgpart) {
+    my $part_pkg = $cust_pkg->part_pkg;
+    $error = $part_pkg->reset_usage($cust_pkg, $part_pkg->is_prepaid
+                                                 ? ()
+                                                 : ( 'null' => 1 )
+                                   )
+      if $part_pkg->can('reset_usage') && ! $part_pkg->option('usage_rollover');
+
+    if ($error) {
+      $dbh->rollback if $oldAutoCommit;
+      return "Error setting usage values: $error";
+    }
+  }
+
   #Good to go, cancel old package.
   $error = $self->cancel( quiet=>1 );
   if ($error) {
@@ -1209,10 +1276,9 @@ L<FS::part_pkg>).
 
 sub part_pkg {
   my $self = shift;
-  #exists( $self->{'_pkgpart'} )
-  $self->{'_pkgpart'}
-    ? $self->{'_pkgpart'}
-    : qsearchs( 'part_pkg', { 'pkgpart' => $self->pkgpart } );
+  return $self->{'_pkgpart'} if $self->{'_pkgpart'};
+  cluck "cust_pkg->part_pkg called" if $DEBUG > 1;
+  qsearchs( 'part_pkg', { 'pkgpart' => $self->pkgpart } );
 }
 
 =item old_cust_pkg
@@ -1402,10 +1468,14 @@ services.
 sub cust_svc {
   my $self = shift;
 
+  return () unless $self->num_cust_svc(@_);
+
   if ( @_ ) {
     return qsearch( 'cust_svc', { 'pkgnum'  => $self->pkgnum,
                                   'svcpart' => shift,          } );
   }
+
+  cluck "cust_pkg->cust_svc called" if $DEBUG > 2;
 
   #if ( $self->{'_svcnum'} ) {
   #  values %{ $self->{'_svcnum'}->cache };
@@ -1427,7 +1497,8 @@ is specified, return only the matching services.
 
 sub overlimit {
   my $self = shift;
-  grep { $_->overlimit } $self->cust_svc;
+  return () unless $self->num_cust_svc(@_);
+  grep { $_->overlimit } $self->cust_svc(@_);
 }
 
 =item h_cust_svc END_TIMESTAMP [ START_TIMESTAMP ] 
@@ -1476,9 +1547,19 @@ specified, counts only the matching services.
 
 sub num_cust_svc {
   my $self = shift;
+
+  return $self->{'_num_cust_svc'}
+    if !scalar(@_)
+       && exists($self->{'_num_cust_svc'})
+       && $self->{'_num_cust_svc'} =~ /\d/;
+
+  cluck "cust_pkg->num_cust_svc called, _num_cust_svc:".$self->{'_num_cust_svc'}
+    if $DEBUG > 2;
+
   my $sql = 'SELECT COUNT(*) FROM cust_svc WHERE pkgnum = ?';
   $sql .= ' AND svcpart = ?' if @_;
-  my $sth = dbh->prepare($sql) or die dbh->errstr;
+
+  my $sth = dbh->prepare($sql)     or die  dbh->errstr;
   $sth->execute($self->pkgnum, @_) or die $sth->errstr;
   $sth->fetchrow_arrayref->[0];
 }
@@ -1535,7 +1616,8 @@ sub part_svc {
     $part_svc->{'Hash'}{'num_cust_svc'} = $num_cust_svc; #more evil
     $part_svc->{'Hash'}{'num_avail'}    =
       max( 0, $pkg_svc->quantity - $num_cust_svc );
-    $part_svc->{'Hash'}{'cust_pkg_svc'} = [ $self->cust_svc($part_svc->svcpart) ];
+    $part_svc->{'Hash'}{'cust_pkg_svc'} =
+      $num_cust_svc ? [ $self->cust_svc($part_svc->svcpart) ] : [];
     $part_svc;
   } $self->part_pkg->pkg_svc;
 
@@ -1545,7 +1627,8 @@ sub part_svc {
     my $num_cust_svc = $self->num_cust_svc($part_svc->svcpart);
     $part_svc->{'Hash'}{'num_cust_svc'} = $num_cust_svc; #speak no evail
     $part_svc->{'Hash'}{'num_avail'}    = 0; #0-$num_cust_svc ?
-    $part_svc->{'Hash'}{'cust_pkg_svc'} = [ $self->cust_svc($part_svc->svcpart) ];
+    $part_svc->{'Hash'}{'cust_pkg_svc'} =
+      $num_cust_svc ? [ $self->cust_svc($part_svc->svcpart) ] : [];
     $part_svc;
   } $self->extra_part_svc;
 
@@ -1567,20 +1650,38 @@ sub extra_part_svc {
   my $pkgnum  = $self->pkgnum;
   my $pkgpart = $self->pkgpart;
 
+#  qsearch( {
+#    'table'     => 'part_svc',
+#    'hashref'   => {},
+#    'extra_sql' =>
+#      "WHERE 0 = ( SELECT COUNT(*) FROM pkg_svc 
+#                     WHERE pkg_svc.svcpart = part_svc.svcpart 
+#                       AND pkg_svc.pkgpart = ?
+#                       AND quantity > 0 
+#                 )
+#	 AND 0 < ( SELECT COUNT(*) FROM cust_svc
+#                       LEFT JOIN cust_pkg USING ( pkgnum )
+#                     WHERE cust_svc.svcpart = part_svc.svcpart
+#                       AND pkgnum = ?
+#                 )",
+#    'extra_param' => [ [$self->pkgpart=>'int'], [$self->pkgnum=>'int'] ],
+#  } );
+
+#seems to benchmark slightly faster...
   qsearch( {
-    'table'     => 'part_svc',
-    'hashref'   => {},
-    'extra_sql' => "WHERE 0 = ( SELECT COUNT(*) FROM pkg_svc 
-                                  WHERE pkg_svc.svcpart = part_svc.svcpart 
-				    AND pkg_svc.pkgpart = $pkgpart
-				    AND quantity > 0 
-			      )
-	              AND 0 < ( SELECT count(*)
-		                  FROM cust_svc
-		                    LEFT JOIN cust_pkg using ( pkgnum )
-				  WHERE cust_svc.svcpart = part_svc.svcpart
-				    AND pkgnum = $pkgnum
-			      )",
+    'select'      => 'DISTINCT ON (svcpart) part_svc.*',
+    'table'       => 'part_svc',
+    'addl_from'   =>
+      'LEFT JOIN pkg_svc  ON (     pkg_svc.svcpart   = part_svc.svcpart 
+                               AND pkg_svc.pkgpart   = ?
+                               AND quantity > 0
+                             )
+       LEFT JOIN cust_svc ON (     cust_svc.svcpart = part_svc.svcpart )
+       LEFT JOIN cust_pkg USING ( pkgnum )
+      ',
+    'hashref'     => {},
+    'extra_sql'   => "WHERE pkgsvcnum IS NULL AND cust_pkg.pkgnum = ? ",
+    'extra_param' => [ [$self->pkgpart=>'int'], [$self->pkgnum=>'int'] ],
   } );
 }
 
@@ -1635,8 +1736,8 @@ tie my %statuscolor, 'Tie::IxHash',
 
 sub statuses {
   my $self = shift; #could be class...
-  grep { $_ !~ /^(not yet billed)$/ } #this is a dumb status anyway
-                                      # mayble split btw one-time vs. recur
+  #grep { $_ !~ /^(not yet billed)$/ } #this is a dumb status anyway
+  #                                    # mayble split btw one-time vs. recur
     keys %statuscolor;
 }
 
@@ -1649,6 +1750,63 @@ Returns a hex triplet color string for this package's status.
 sub statuscolor {
   my $self = shift;
   $statuscolor{$self->status};
+}
+
+=item pkg_label
+
+Returns a label for this package.  (Currently "pkgnum: pkg - comment" or
+"pkg-comment" depending on user preference).
+
+=cut
+
+sub pkg_label {
+  my $self = shift;
+  my $label = $self->part_pkg->pkg_comment( 'nopkgpart' => 1 );
+  $label = $self->pkgnum. ": $label"
+    if $FS::CurrentUser::CurrentUser->option('show_pkgnum');
+  $label;
+}
+
+=item pkg_label_long
+
+Returns a long label for this package, adding the primary service's label to
+pkg_label.
+
+=cut
+
+sub pkg_label_long {
+  my $self = shift;
+  my $label = $self->pkg_label;
+  my $cust_svc = $self->primary_cust_svc;
+  $label .= ' ('. ($cust_svc->label)[1]. ')' if $cust_svc;
+  $label;
+}
+
+=item primary_cust_svc
+
+Returns a primary service (as FS::cust_svc object) if one can be identified.
+
+=cut
+
+#for labeling purposes - might not 100% match up with part_pkg->svcpart's idea
+
+sub primary_cust_svc {
+  my $self = shift;
+
+  my @cust_svc = $self->cust_svc;
+
+  return '' unless @cust_svc; #no serivces - irrelevant then
+  
+  return $cust_svc[0] if scalar(@cust_svc) == 1; #always return a single service
+
+  # primary service as specified in the package definition
+  # or exactly one service definition with quantity one
+  my $svcpart = $self->part_pkg->svcpart;
+  @cust_svc = grep { $_->svcpart == $svcpart } @cust_svc;
+  return $cust_svc[0] if scalar(@cust_svc) == 1;
+
+  #couldn't identify one thing..
+  return '';
 }
 
 =item labels
@@ -1679,6 +1837,19 @@ sub h_labels {
   map { [ $_->label(@_) ] } $self->h_cust_svc(@_);
 }
 
+=item labels_short
+
+Like labels, except returns a simple flat list, and shortens long
+(currently >5 or the cust_bill-max_same_services configuration value) lists of
+identical services to one line that lists the service label and the number of
+individual services rather than individual items.
+
+=cut
+
+sub labels_short {
+  shift->_labels_short( 'labels', @_ );
+}
+
 =item h_labels_short END_TIMESTAMP [ START_TIMESTAMP ]
 
 Like h_labels, except returns a simple flat list, and shortens long
@@ -1689,7 +1860,11 @@ individual services rather than individual items.
 =cut
 
 sub h_labels_short {
-  my $self = shift;
+  shift->_labels_short( 'h_labels', @_ );
+}
+
+sub _labels_short {
+  my( $self, $method ) = ( shift, shift );
 
   my $conf = new FS::Conf;
   my $max_same_services = $conf->config('cust_bill-max_same_services') || 5;
@@ -2039,6 +2214,18 @@ sub active_sql { "
   AND ( cust_pkg.susp   IS NULL OR cust_pkg.susp   = 0 )
 "; }
 
+=item not_yet_billed_sql
+
+Returns an SQL expression identifying packages which have not yet been billed.
+
+=cut
+
+sub not_yet_billed_sql { "
+      ( cust_pkg.setup  IS NULL OR cust_pkg.setup  = 0 )
+  AND ( cust_pkg.cancel IS NULL OR cust_pkg.cancel = 0 )
+  AND ( cust_pkg.susp   IS NULL OR cust_pkg.susp   = 0 )
+"; }
+
 =item inactive_sql
 
 Returns an SQL expression identifying inactive packages (one-time packages
@@ -2048,6 +2235,7 @@ that are otherwise unsuspended/uncancelled).
 
 sub inactive_sql { "
   ". $_[0]->onetime_sql(). "
+  AND cust_pkg.setup IS NOT NULL AND cust_pkg.setup != 0
   AND ( cust_pkg.cancel IS NULL OR cust_pkg.cancel = 0 )
   AND ( cust_pkg.susp   IS NULL OR cust_pkg.susp   = 0 )
 "; }
@@ -2100,11 +2288,15 @@ active, inactive, suspended, cancel (or cancelled)
 
 active, inactive, suspended, one-time charge, inactive, cancel (or cancelled)
 
+=item custom
+
+ boolean selects custom packages
+
 =item classnum
 
 =item pkgpart
 
-list specified how?
+pkgpart or arrayref or hashref of pkgparts
 
 =item setup
 
@@ -2172,8 +2364,13 @@ sub search_sql {
 
     push @where, FS::cust_pkg->active_sql();
 
-  } elsif (    $params->{'magic'}  eq 'inactive'
-            || $params->{'status'} eq 'inactive' ) {
+  } elsif (    $params->{'magic'}  eq 'not yet billed'
+            || $params->{'status'} eq 'not yet billed' ) {
+
+    push @where, FS::cust_pkg->not_yet_billed_sql();
+
+  } elsif (    $params->{'magic'}  =~ /^(one-time charge|inactive)/
+            || $params->{'status'} =~ /^(one-time charge|inactive)/ ) {
 
     push @where, FS::cust_pkg->inactive_sql();
 
@@ -2186,10 +2383,6 @@ sub search_sql {
             || $params->{'status'} =~ /^cancell?ed$/ ) {
 
     push @where, FS::cust_pkg->cancelled_sql();
-
-  } elsif ( $params->{'status'} =~ /^(one-time charge|inactive)$/ ) {
-
-    push @where, FS::cust_pkg->inactive_sql();
 
   }
 
@@ -2227,12 +2420,68 @@ sub search_sql {
   #eslaf
 
   ###
+  # parse package report options
+  ###
+
+  my @report_option = ();
+  if ( exists($params->{'report_option'})
+       && $params->{'report_option'} =~ /^([,\d]*)$/
+     )
+  {
+    @report_option = split(',', $1);
+  }
+
+  if (@report_option) {
+    # this will result in the empty set for the dangling comma case as it should
+    push @where, 
+      map{ "0 < ( SELECT count(*) FROM part_pkg_option
+                    WHERE part_pkg_option.pkgpart = part_pkg.pkgpart
+                    AND optionname = 'report_option_$_'
+                    AND optionvalue = '1' )"
+         } @report_option;
+  }
+
+  #eslaf
+
+  ###
+  # parse custom
+  ###
+
+  push @where,  "part_pkg.custom = 'Y'" if $params->{custom};
+
+  ###
+  # parse censustract
+  ###
+
+  if ( exists($params->{'censustract'}) ) {
+    $params->{'censustract'} =~ /^([.\d]*)$/;
+    my $censustract = "cust_main.censustract = '$1'";
+    $censustract .= ' OR cust_main.censustract is NULL' unless $1;
+    push @where,  "( $censustract )";
+  }
+
+  ###
   # parse part_pkg
   ###
 
-  my $pkgpart = join (' OR pkgpart=',
-                      grep {$_} map { /^(\d+)$/; } ($params->{'pkgpart'}));
-  push @where,  '(pkgpart=' . $pkgpart . ')' if $pkgpart;
+  if ( ref($params->{'pkgpart'}) ) {
+
+    my @pkgpart = ();
+    if ( ref($params->{'pkgpart'}) eq 'HASH' ) {
+      @pkgpart = grep $params->{'pkgpart'}{$_}, keys %{ $params->{'pkgpart'} };
+    } elsif ( ref($params->{'pkgpart'}) eq 'ARRAY' ) {
+      @pkgpart = @{ $params->{'pkgpart'} };
+    } else {
+      die 'unhandled pkgpart ref '. $params->{'pkgpart'};
+    }
+
+    @pkgpart = grep /^(\d+)$/, @pkgpart;
+
+    push @where, 'pkgpart IN ('. join(',', @pkgpart). ')' if scalar(@pkgpart);
+
+  } elsif ( $params->{'pkgpart'} =~ /^(\d+)$/ ) {
+    push @where, "pkgpart = $1";
+  } 
 
   ###
   # parse dates
@@ -2714,11 +2963,11 @@ All svc_accts which are part of this package have their values reset.
 =cut
 
 sub set_usage {
-  my ($self, $valueref) = @_;
+  my ($self, $valueref, %opt) = @_;
 
   foreach my $cust_svc ($self->cust_svc){
     my $svc_x = $cust_svc->svc_x;
-    $svc_x->set_usage($valueref)
+    $svc_x->set_usage($valueref, %opt)
       if $svc_x->can("set_usage");
   }
 }

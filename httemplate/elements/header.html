@@ -1,4 +1,26 @@
+<%doc>
+
+Example:
+
+  include( '/elements/header.html',
+           {
+             'title'   => 'Title',
+             'menubar' => \@menubar,
+             'etc'     => '', #included in <BODY> tag, for things like onLoad=
+             'head'    => '', #included before closing </HEAD> tag
+             'nobr'    => 0,  #1 for no <BR><BR> after the title
+           }
+         );
+
+  #old-style
+  include( '/elements/header.html', 'Title', $menubar, $etc, $head);
+
+
+</%doc>
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+%#<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+%# above is what RT declares, should we switch now? hopefully no glitches result
+%# or just fuck it, XHTML died anyway, HTML 5 or bust?
 <HTML>
   <HEAD>
     <TITLE>
@@ -10,6 +32,7 @@
 
     <% include('menu.html', 'freeside_baseurl' => $fsurl,
                             'position'         => $menu_position,
+                            'nocss'            => $nocss,
               ) |n
     %>
 
@@ -17,7 +40,7 @@
 
     <SCRIPT TYPE="text/javascript">
       function clearhint_search_cust (what) {
-        if ( what.value == '(cust #, name, company or phone)' )
+        if ( what.value == '(cust #, name, company or contact phone)' )
           what.value = '';
       }
 
@@ -32,7 +55,7 @@
       }
 
       function clearhint_search_svc (what) {
-        if ( what.value == '(user, email, ip, mac, or domain)' )
+        if ( what.value == '(user, email, ip, mac, domain or service phone)' )
           what.value = '';
       }
 
@@ -48,49 +71,16 @@
   <BODY <% $menu_position eq 'left' ? qq( BACKGROUND="${fsurl}images/background-cheat.png" ) : ' BGCOLOR="#e8e8e8" ' %> <% $etc |n %> STYLE="margin-top:0; margin-bottom:0; margin-left:0; margin-right:0">
     <table width="100%" CELLPADDING=0 CELLSPACING=0 STYLE="padding-left:0; padding-right:4">
       <tr>
-        <td rowspan=2 BGCOLOR="#ffffff"><IMG BORDER=0 ALT="freeside" SRC="<%$fsurl%>view/REAL_logo.cgi"></td>
-        <td align=left rowspan=2 BGCOLOR="#ffffff"> <!-- valign="top" -->
+        <td BGCOLOR="#ffffff"><IMG BORDER=0 ALT="freeside" HEIGHT="36" SRC="<%$fsurl%>view/REAL_logo.cgi"></td>
+        <td align=left BGCOLOR="#ffffff"> <!-- valign="top" -->
           <font size=6><% $company_name || 'ExampleCo' %></font>
         </td>
-        <td align=right valign=top BGCOLOR="#ffffff"><FONT SIZE="-1">Logged in as <b><% getotaker %>&nbsp;</b><br></FONT><FONT SIZE="-2"><a href="<%$fsurl%>pref/pref.html">Preferences</a>&nbsp;<BR></FONT>
-        </td>
-      </tr>
-      <tr>
-        <td align=right valign=bottom BGCOLOR="#ffffff">
-  
-          <table>
-            <tr>
-              <td align=right BGCOLOR="#ffffff">
-                <FONT SIZE="-2">
-                  <% include('/elements/popup_link.html',
-                               'action'      => $fsurl.'docs/about.html',
-                               'label'       => 'Freeside',
-                               'actionlabel' => 'About',
-                               'width'       => 300,
-                               'height'      => 360,
-                               'color'       => '#7e0079',
-                               'scrolling'   => 'no',
-                            ) |n
-                 %>&nbsp;v<% $FS::VERSION %><BR>
-                 <A HREF="<% $conf->config('support-key') ? "http://www.freeside.biz/mediawiki/index.php/Supported:Documentation" : "http://www.freeside.biz/mediawiki/index.php/Freeside:1.9:Documentation" %>" TARGET="_blank">Documentation</A><BR>
-                </FONT>
-              </td>
-% if ( $conf->config('ticket_system') eq 'RT_Internal' ) { 
-% eval "use RT;"; 
-
-                <td bgcolor=#000000></td>
-                <td align=left>
-                  <FONT SIZE="-2">
-                   <A HREF="http://www.bestpractical.com/rt" TARGET="_blank">RT<A>&nbsp;v<% $RT::VERSION %><BR>
-                   <A HREF="http://wiki.bestpractical.com/" TARGET="_blank">Documentation</A><BR>
-                  </FONT>
-                </td>
-% } 
-
-  
-            </tr>
-          </table>
-  
+        <td align=right valign=top BGCOLOR="#ffffff"><FONT SIZE="-1">Logged in as <b><% getotaker %>&nbsp;</b><br></FONT><FONT SIZE="-2"><a href="<%$fsurl%>pref/pref.html" STYLE="color: #000000">Preferences</a>
+%         if ( $conf->config("ticket_system")
+%              && FS::TicketSystem->access_right(\%session, 'ModifySelf') ) {
+            | <a href="<%$fsurl%>rt/User/Prefs.html" STYLE="color: #000000">Ticketing preferences</a>
+%         }
+          <BR></FONT>
         </td>
       </tr>
     </table>
@@ -104,9 +94,16 @@ input.fsblackbutton {
 	 border-left-color:#cccccc;
 	 border-right-color:#aaaaaa;
 	 border-bottom-color:#aaaaaa;
+         font-family: Arial, Verdana, Helvetica, sans-serif;
 	 font-weight:bold;
 	 padding-left:12px;
 	 padding-right:12px;
+         padding-top:0px;
+         padding-bottom:0px;
+         margin-left:0px;
+         margin-right:0px;
+         margin-top:2px;
+         margin-bottom:0px;
 	 overflow:visible;
 	 filter:progid:DXImageTransform.Microsoft.Gradient(GradientType=0,StartColorStr='#ff333333',EndColorStr='#ff666666')
 }
@@ -119,12 +116,40 @@ input.fsblackbuttonselected {
 	 border-left-color:#cccccc;
 	 border-right-color:#aaaaaa;
 	 border-bottom-color:#aaaaaa;
+         font-family: Arial, Verdana, Helvetica, sans-serif;
 	 font-weight:bold;
 	 padding-left:12px;
 	 padding-right:12px;
+         padding-top:0px;
+         padding-bottom:0px;
+         margin-left:0px;
+         margin-right:0px;
+         margin-top:2px;
+         margin-bottom:0px;
 	 overflow:visible;
 	 filter:progid:DXImageTransform.Microsoft.Gradient(GradientType=0,StartColorStr='#ff330033',EndColorStr='#ff7e0079')
 }
+
+input.fstext {
+         border: 2px inset #eee;
+	 /*border-top-color:#aaaaaa;
+	 border-left-color:#aaaaaa;
+	 border-right-color:#cccccc;
+	 border-bottom-color:#cccccc;
+         */
+         vertical-align:bottom;
+         text-align:right;
+         font-family: Arial,Verdana,Helvetica,sans-serif;
+         padding-left: 0px;
+         padding-right: 0px;
+         padding-top: 0px;
+         padding-bottom: 0px;
+         margin-left:0px;
+         margin-right:0px;
+         margin-top:0px;
+         margin-bottom:1px;
+}
+
 </style>
 
     <TABLE WIDTH="100%" CELLSPACING=0 CELLPADDING=0>
@@ -136,10 +161,20 @@ input.fsblackbuttonselected {
 
       <TR>
 
-        <TD COLSPAN="6" WIDTH="100%" STYLE="padding:0">
+        <TD COLSPAN="4" WIDTH="100%" STYLE="padding:0" BGCOLOR="#000000">
           <SCRIPT TYPE="text/javascript">
             document.write(myBar);
           </SCRIPT>
+        </TD>
+
+
+        <TD COLSPAN="2" ALIGN="right" STYLE="padding:0px 8px 0px 0px" BGCOLOR="#000000">
+          <TABLE CELLSPACING=0 CELLPADDING=0 BGCOLOR="#000000" BORDER=0>
+            <TR>
+              <TD ALIGN="right" STYLE="padding-right:3px;padding-bottom:1px;border-right:1px solid #999999"><% include('/elements/about_freeside.html') |n %></TD>
+              <TD ALIGN="left" STYLE="padding-left:3px;padding-bottom:1px"><% include('/elements/about_rt.html') |n %></TD>
+            </TR>
+          </TABLE>
         </TD>
 
       </TR>
@@ -159,17 +194,11 @@ input.fsblackbuttonselected {
       <TR>
 
         <TD COLSPAN=1 BGCOLOR="#000000" ALIGN="right">
-          <FORM ACTION="<%$fsurl%>edit/cust_main.cgi" METHOD="GET" STYLE="margin:0">
-            <INPUT TYPE="submit" VALUE="New customer" CLASS="fsblackbutton" onMouseOver="this.className='fsblackbuttonselected'; return true;" onMouseOut="this.className='fsblackbutton'; return true;" STYLE="vertical-align:bottom; font-size:100%">
-          </FORM>
-        </TD>
-
-        <TD COLSPAN=1 BGCOLOR="#000000" ALIGN="right">
 % if ( $curuser->access_right('List customers') ) {
           <FORM ACTION="<%$fsurl%>search/cust_main.cgi" METHOD="GET" STYLE="margin:0">
-            <INPUT NAME="search_cust" TYPE="text" VALUE="(cust #, name, company or phone)" SIZE="28" onFocus="clearhint_search_cust(this);" onClick="clearhint_search_cust(this);" STYLE="vertical-align:bottom;text-align:right"><BR>
-            <A HREF="<%$fsurl%>search/report_cust_main.html" STYLE="color: #ffffff; font-size: 70%">Advanced</A>
-            <INPUT TYPE="submit" VALUE="Search customers" CLASS="fsblackbutton" onMouseOver="this.className='fsblackbuttonselected'; return true;" onMouseOut="this.className='fsblackbutton'; return true;" STYLE="font-size:70%">
+            <INPUT NAME="search_cust" TYPE="text" VALUE="(cust #, name, company or contact phone)" SIZE="37" onFocus="clearhint_search_cust(this);" onClick="clearhint_search_cust(this);" CLASS="fstext"><BR>
+            <A HREF="<%$fsurl%>search/report_cust_main.html" STYLE="color: #ffffff; font-size: 11px">Advanced</A>
+            <INPUT TYPE="submit" VALUE="Search customers" CLASS="fsblackbutton" onMouseOver="this.className='fsblackbuttonselected'; return true;" onMouseOut="this.className='fsblackbutton'; return true;" STYLE="font-size:11px">
           </FORM>
 % }
         </TD>
@@ -178,9 +207,9 @@ input.fsblackbuttonselected {
 % if ( $conf->exists('address2-search') ) { 
             <FORM ACTION="<%$fsurl%>search/cust_main.cgi" METHOD="GET" STYLE="margin:0;display:inline">
               <INPUT TYPE="hidden" NAME="address2_on" VALUE="1">
-              <INPUT NAME="address2_text" TYPE="text" VALUE="(Unit #)" SIZE="4" onFocus="clearhint_search_address2(this);" onClick="clearhint_search_address2(this);" STYLE="vertical-align:bottom;text-align:right;margin-bottom:1px">
+              <INPUT NAME="address2_text" TYPE="text" VALUE="(Unit #)" SIZE="4" onFocus="clearhint_search_address2(this);" onClick="clearhint_search_address2(this);" CLASS="fstext">
               <BR>
-              <INPUT TYPE="submit" VALUE="Search units" CLASS="fsblackbutton" onMouseOver="this.className='fsblackbuttonselected'; return true;" onMouseOut="this.className='fsblackbutton'; return true;" STYLE="font-size:70%;padding-left:2px;padding-right:2px">
+              <INPUT TYPE="submit" VALUE="Search units" CLASS="fsblackbutton" onMouseOver="this.className='fsblackbuttonselected'; return true;" onMouseOut="this.className='fsblackbutton'; return true;" STYLE="font-size:11px;padding-left:2px;padding-right:2px">
             </FORM>
 % } 
         </TD>
@@ -189,32 +218,32 @@ input.fsblackbuttonselected {
 % if ( $curuser->access_right('View invoices') ) { 
 
             <FORM ACTION="<%$fsurl%>search/cust_bill.html" METHOD="GET" STYLE="margin:0;display:inline">
-              <INPUT NAME="invnum" TYPE="text" VALUE="(inv #)" SIZE="4" onFocus="clearhint_search_invoice(this);" onClick="clearhint_search_invoice(this);" STYLE="vertical-align:bottom;text-align:right;margin-bottom:1px">
+              <INPUT NAME="invnum" TYPE="text" VALUE="(inv #)" SIZE="5" onFocus="clearhint_search_invoice(this);" onClick="clearhint_search_invoice(this);" CLASS="fstext">
 %   if ( $curuser->access_right('List invoices') ) { 
-
-                <A HREF="<%$fsurl%>search/report_cust_bill.html" STYLE="color: #ffffff; font-size: 70%">Advanced</A>
+                <A HREF="<%$fsurl%>search/report_cust_bill.html" STYLE="color: #ffffff; font-size: 11px">Adv</A>
 %   } 
-
               <BR>
-              <INPUT TYPE="submit" VALUE="Search invoices" CLASS="fsblackbutton" onMouseOver="this.className='fsblackbuttonselected'; return true;" onMouseOut="this.className='fsblackbutton'; return true;" STYLE="font-size:70%">
+              <INPUT TYPE="submit" VALUE="Search invoices" CLASS="fsblackbutton" onMouseOver="this.className='fsblackbuttonselected'; return true;" onMouseOut="this.className='fsblackbutton'; return true;" STYLE="font-size:11px;padding-left:1px;padding-right:1px">
             </FORM>
 % } 
         </TD>
 
         <TD COLSPAN=1 BGCOLOR="#000000" ALIGN="right">
+% if ( $curuser->access_right('View customer services') ) {
           <FORM ACTION="<%$fsurl%>search/cust_svc.html" METHOD="GET" STYLE="margin:0">
-            <INPUT NAME="search_svc" TYPE="text" VALUE="(user, email, ip, mac, or domain)" SIZE="26" onFocus="clearhint_search_svc(this);" onClick="clearhint_search_svc(this);" STYLE="vertical-align:bottom;text-align:right"><BR>
-            <A NOTYET="<%$fsurl%>search/svc_Smarter.html" STYLE="color: #000000; font-size: 70%">Advanced</A>
-            <INPUT TYPE="submit" VALUE="Search services" CLASS="fsblackbutton" onMouseOver="this.className='fsblackbuttonselected'; return true;" onMouseOut="this.className='fsblackbutton'; return true;" STYLE="font-size:70%">
+            <INPUT NAME="search_svc" TYPE="text" VALUE="(user, email, ip, mac, domain or service phone)" SIZE="41" onFocus="clearhint_search_svc(this);" onClick="clearhint_search_svc(this);" CLASS="fstext"><BR>
+            <A NOTYET="<%$fsurl%>search/svc_Smarter.html" STYLE="color: #000000; font-size:11px">Advanced</A>
+            <INPUT TYPE="submit" VALUE="Search services" CLASS="fsblackbutton" onMouseOver="this.className='fsblackbuttonselected'; return true;" onMouseOut="this.className='fsblackbutton'; return true;" STYLE="font-size:11px">
           </FORM>
+% }
         </TD>
 
-        <TD COLSPAN=1 BGCOLOR="#000000" ALIGN="right" STYLE="padding-right:4px">
+        <TD COLSPAN=1 BGCOLOR="#000000" ALIGN="right" STYLE="padding-left:4px;padding-right:4px">
 % if ( $conf->config("ticket_system") ) { 
           <FORM ACTION="<% FS::TicketSystem->baseurl %>index.html" METHOD="GET" STYLE="margin:0">
-            <INPUT NAME="q" TYPE="text" VALUE="(ticket #, subject, email or fulltext:text)" onFocus="clearhint_search_ticket(this);" onClick="clearhint_search_ticket(this);" STYLE="vertical-align:bottom;text-align:right"><BR>
-            <A HREF="<% FS::TicketSystem->baseurl %>Search/Build.html" STYLE="color: #ffffff; font-size: 70%">Advanced</A>
-            <INPUT TYPE="submit" VALUE="Search tickets" CLASS="fsblackbutton" onMouseOver="this.className='fsblackbuttonselected'; return true;" onMouseOut="this.className='fsblackbutton'; return true;" STYLE="font-size:70%;padding-left:2px;padding-right:2px">
+            <INPUT NAME="q" TYPE="text" VALUE="(ticket #, subject, email or fulltext:text)" SIZE=33 onFocus="clearhint_search_ticket(this);" onClick="clearhint_search_ticket(this);" CLASS="fstext"><BR>
+            <A HREF="<% FS::TicketSystem->baseurl %>Search/Build.html" STYLE="color: #ffffff; font-size:11px">Advanced</A>
+            <INPUT TYPE="submit" VALUE="Search tickets" CLASS="fsblackbutton" onMouseOver="this.className='fsblackbuttonselected'; return true;" onMouseOut="this.className='fsblackbutton'; return true;" STYLE="font-size:11px">
           </FORM>
 % }
         </TD>
@@ -248,6 +277,15 @@ input.fsblackbuttonselected {
           <BR>
           <IMG SRC="<%$fsurl%>images/32clear.gif" HEIGHT="1" WIDTH="154">
 
+          <TABLE CELLSPACING=0 CELLPADDING=0 BGCOLOR="#000000" WIDTH="100%">
+            <TR>
+              <TD ALIGN="left" STYLE="padding-bottom:1px;border-bottom:1px solid #999999"><% include('/elements/about_freeside.html') |n %></TD>
+            </TR>
+            <TR>
+              <TD ALIGN="right" STYLE="padding-bottom:1px"><% include('/elements/about_rt.html') |n %></TD>
+            </TR>
+          </TABLE>
+
         </TD>
         <TD STYLE="padding:0" HEIGHT="100%" WIDTH=13 VALIGN="top"><IMG WIDTH="13" HEIGHT="100%" BORDER=0 ALT="" SRC="<%$fsurl%>images/black-gray-side.png"></TD>
 
@@ -267,7 +305,7 @@ input.fsblackbuttonselected {
 <%init>
 
 my( $title, $menubar, $etc, $head ) = ( '', '', '', '' );
-my( $nobr ) = ( 0 );
+my( $nobr, $nocss ) = ( 0, 0 );
 if ( ref($_[0]) ) {
   my $opt = shift;
   $title   = $opt->{title};
@@ -275,6 +313,7 @@ if ( ref($_[0]) ) {
   $etc     = $opt->{etc};
   $head    = $opt->{head};
   $nobr    = $opt->{nobr};
+  $nocss   = $opt->{nocss};
 } else {
   ($title, $menubar) = ( shift, shift );
   $etc = @_ ? shift : ''; #$etc is for things like onLoad= etc.

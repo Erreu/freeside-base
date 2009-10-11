@@ -72,6 +72,20 @@
                )
     %>
 
+%   if ( scalar( qsearch( 'part_pkg_report_option', { 'disabled' => '' } ) ) ) {
+
+    <% include( '/elements/tr-select-table.html',
+                   'label'        => 'Report classes',
+                   'table'        => 'part_pkg_report_option',
+                   'name_col'     => 'name',
+                   'hashref'      => { 'disabled' => '' },
+                   'element_name' => 'report_option',
+                   'multiple'     => 'multiple',
+               )
+    %>
+
+%   }
+
 %   foreach my $field (qw( setup last_bill bill adjourn susp expire cancel )) {
 
       <TR>
@@ -89,6 +103,34 @@
 
 %   }
     
+    <SCRIPT TYPE="text/javascript">
+  
+      function custom_changed(what) {
+
+        if ( what.checked  ) {
+
+          what.form.pkgpart.disabled = true;
+          what.form.pkgpart.style.backgroundColor = '#dddddd';
+
+        } else {
+
+          what.form.pkgpart.disabled = false;
+          what.form.pkgpart.style.backgroundColor = '#ffffff';
+
+        }
+
+      }
+
+    </SCRIPT>
+
+    <% include( '/elements/tr-checkbox.html',
+                'label' => 'Custom packages',
+                'field' => 'custom',
+                'value' => 1,
+                'onchange' => 'custom_changed(this);',
+              )
+    %> 
+
     <% include( '/elements/tr-selectmultiple-part_pkg.html' ) %> 
 
     <TR>
@@ -129,6 +171,7 @@ my %label = (
 #false laziness w/cust_pkg.cgi
 my %disable = (
   'all'             => {},
+  'not yet billed'  => { 'setup'=>1, 'last_bill'=>1, 'bill'=>1, 'adjourn'=>1, 'susp'=>1, 'expire'=>1, 'cancel'=>1, },
   'one-time charge' => { 'last_bill'=>1, 'bill'=>1, 'adjourn'=>1, 'susp'=>1, 'expire'=>1, 'cancel'=>1, },
   'active'          => { 'susp'=>1, 'cancel'=>1 },
   'suspended'       => { 'cancel' => 1 },

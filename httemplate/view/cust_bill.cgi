@@ -2,10 +2,32 @@
   "View this customer (#$display_custnum)" => "${p}view/cust_main.cgi?$custnum",
 )) %>
 
+% if ( $conf->exists('deleteinvoices')
+%      && $curuser->access_right('Delete invoices' )
+%    )
+% {
+
+    <SCRIPT TYPE="text/javascript">
+    function areyousure(href, message) {
+      if (confirm(message) == true)
+        window.location.href = href;
+    }
+    </SCRIPT>
+
+    <A HREF  = "javascript:areyousure(
+                  '<%$p%>misc/delete-cust_bill.html?<% $invnum %>',
+                  'Are you sure you want to delete this invoice?'
+               )"
+       TITLE = "Delete this invoice from the database completely"
+    >Delete this invoice</A>
+    <BR><BR>
+
+% }
 
 % if ( $cust_bill->owed > 0
 %      && scalar( grep $payby{$_}, qw(BILL CASH WEST MCRD) )
-%      && $FS::CurrentUser::CurrentUser->access_right('Post payment')
+%      && $curuser->access_right('Post payment')
+%      && ! $conf->exists('pkg-balances')
 %    )
 % {
 %     my $s = 0;
@@ -36,27 +58,25 @@
 
 % } 
 
+% if ( $curuser->access_right('Resend invoices') ) {
 
-% if ( $FS::CurrentUser::CurrentUser->access_right('Resend invoices') ) {
-
-    <A HREF="<% $p %>misc/print-invoice.cgi?<% $link %>">Re-print this invoice</A>
+    <A HREF="<% $p %>misc/send-invoice.cgi?method=print;<% $link %>">Re-print this invoice</A>
 
 %   if ( grep { $_ ne 'POST' } $cust_bill->cust_main->invoicing_list ) { 
-        | <A HREF="<% $p %>misc/email-invoice.cgi?<% $link %>">Re-email this invoice</A>
+        | <A HREF="<% $p %>misc/send-invoice.cgi?method=email;<% $link %>">Re-email this invoice</A>
 %   } 
 
 %   if ( $conf->exists('hylafax') && length($cust_bill->cust_main->fax) ) { 
-        | <A HREF="<% $p %>misc/fax-invoice.cgi?<% $link %>">Re-fax this invoice</A>
+        | <A HREF="<% $p %>misc/send-invoice.cgi?method=fax;<% $link %>">Re-fax this invoice</A>
 %   } 
 
     <BR><BR>
 
 % } 
 
-
 % if ( $conf->exists('invoice_latex') ) { 
 
-  <A HREF="<% $p %>view/cust_bill-pdf.cgi?<% $link %>.pdf">View typeset invoice</A>
+  <A HREF="<% $p %>view/cust_bill-pdf.cgi?<% $link %>">View typeset invoice PDF</A>
   <BR><BR>
 % } 
 
@@ -72,24 +92,35 @@
 <% $br ? '<BR><BR>' : '' %>
 
 % if ( $conf->exists('invoice_html') ) { 
-
-  <% join('', $cust_bill->print_html('', $templatename) ) %>
+  <% join('', $cust_bill->print_html(\%opt) ) %>
 % } else { 
-
-  <PRE><% join('', $cust_bill->print_text('', $templatename) ) %></PRE>
+  <PRE><% join('', $cust_bill->print_text(\%opt) ) %></PRE>
 % } 
 
 <% include('/elements/footer.html') %>
 <%init>
 
-die "access denied"
-  unless $FS::CurrentUser::CurrentUser->access_right('View invoices');
+my $curuser = $FS::CurrentUser::CurrentUser;
 
-#untaint invnum
+die "access denied"
+  unless $curuser->access_right('View invoices');
+
+my( $invnum, $template, $notice_name );
 my($query) = $cgi->keywords;
-$query =~ /^((.+)-)?(\d+)$/;
-my $templatename = $2;
-my $invnum = $3;
+if ( $query =~ /^((.+)-)?(\d+)$/ ) {
+  $template = $2;
+  $invnum = $3;
+  $notice_name = 'Invoice';
+} else {
+  $invnum = $cgi->param('invnum');
+  $template = $cgi->param('template');
+  $notice_name = $cgi->param('notice_name');
+}
+
+my %opt = (
+  'template'    => $template,
+  'notice_name' => $notice_name,
+);
 
 my $conf = new FS::Conf;
 
@@ -104,7 +135,7 @@ my $cust_bill = qsearchs({
   'table'     => 'cust_bill',
   'addl_from' => 'LEFT JOIN cust_main USING ( custnum )',
   'hashref'   => { 'invnum' => $invnum },
-  'extra_sql' => ' AND '. $FS::CurrentUser::CurrentUser->agentnums_sql,
+  'extra_sql' => ' AND '. $curuser->agentnums_sql,
 });
 die "Invoice #$invnum not found!" unless $cust_bill;
 
@@ -113,8 +144,8 @@ my $display_custnum = $cust_bill->cust_main->display_custnum;
 
 #my $printed = $cust_bill->printed;
 
-my $link = $templatename ? "$templatename-$invnum" : $invnum;
+my $link = "invnum=$invnum";
+$link .= ';template='. uri_escape($template) if $template;
+$link .= ';notice_name='. $notice_name if $notice_name;
 
 </%init>
-
-

@@ -93,6 +93,7 @@ my $args_callback = sub {
           }
           ( $optionname => $value );
         }
+        grep { $_ !~ /^report_option_/ }
         @options;
 
   foreach ( split(',', $cgi->param('taxproductnums') ) ) {
@@ -100,6 +101,11 @@ my $args_callback = sub {
     $error ||= "Illegal taxproductnum_$_: $value"
       unless ( $value =~ /^\d*$/  );
     $options{"usage_taxproductnum_$_"} = $value;
+  }
+
+  foreach ( $cgi->param('report_option') ) {
+    $error ||= "Illegal optional report class: $_" unless ( $_ =~ /^\d*$/  );
+    $options{"report_option_$_"} = 1;
   }
 
   $options{$_} = scalar( $cgi->param($_) )
@@ -134,7 +140,13 @@ my $args_callback = sub {
 my $redirect_callback = sub {
   #my( $cgi, $new ) = @_;
   return '' unless $custnum;
-  popurl(3). "view/cust_main.cgi?keywords=$custnum;dummy=";
+  my $show = $curuser->default_customer_view =~ /^(jumbo|packages)$/
+               ? ''
+               : ';show=packages';
+  #my $frag = "cust_pkg$pkgnum"; #hack for IE ignoring real #fragment
+ 
+  #can we link back to the specific customized package?  it would be nice...
+  popurl(3). "view/cust_main.cgi?custnum=$custnum$show;dummy=";
 };
 
 #these should probably move to @args above and be processed by part_pkg.pm...
@@ -152,16 +164,28 @@ my @process_m2m = (
     'target_table' => 'part_pkg',
     'base_field'   => 'src_pkgpart',
     'target_field' => 'dst_pkgpart',
-    'hashref'      => { 'link_type' => 'bill' },
-    'params'       => [ map $cgi->param($_), grep /^bill_dst_pkgpart/, $cgi->param ],
+    'hashref'      => { 'link_type' => 'svc', 'hidden' => '' },
+    'params'       => [ map $cgi->param($_),
+                        grep /^svc_dst_pkgpart/, $cgi->param
+                      ],
   },
-  { 'link_table'   => 'part_pkg_link',
-    'target_table' => 'part_pkg',
-    'base_field'   => 'src_pkgpart',
-    'target_field' => 'dst_pkgpart',
-    'hashref'      => { 'link_type' => 'svc' },
-    'params'       => [ map $cgi->param($_), grep /^svc_dst_pkgpart/, $cgi->param ],
-  },
+  map { 
+    my $hidden = $_;
+    { 'link_table'   => 'part_pkg_link',
+      'target_table' => 'part_pkg',
+      'base_field'   => 'src_pkgpart',
+      'target_field' => 'dst_pkgpart',
+      'hashref'      => { 'link_type' => 'bill', 'hidden' => $hidden },
+      'params'       => [ map { $cgi->param($_) }
+                          grep { my $param = "bill_dst_pkgpart__hidden";
+                                 my $digit = '';
+                                 (($digit) = /^bill_dst_pkgpart(\d+)/ ) &&
+                                 $cgi->param("$param$digit") eq $hidden;
+                               }
+                          $cgi->param
+                        ],
+    },
+  } ( '', 'Y' ),
 );
 
 foreach my $override_class ($cgi->param) {

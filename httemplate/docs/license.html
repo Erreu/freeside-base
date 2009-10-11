@@ -1,12 +1,12 @@
-<% include('/elements/header-popup.html', 'Freeside') %>
+<% include('/elements/header-popup.html', { title=>'Freeside', nobr=>1 } ) %>
 <CENTER>
-<IMG SRC="<%$fsurl%>images/small-logo.png" BORDER=0"><BR>
+<IMG SRC="<%$fsurl%>images/small-logo.png" BORDER="0"><BR>
 <H3>version <% $FS::VERSION %></H3>
 </CENTER>
 
 <P>
 
-Copyright &copy; 2005-2008 Freeside Internet Services, Inc.<BR>
+Copyright &copy; 2005-2009 Freeside Internet Services, Inc.<BR>
 Copyright &copy; 2000-2005 Ivan Kohler<BR>
 Copyright &copy; 1999 Silicon Interactive Software Design<BR>
 All rights reserved<BR>
@@ -99,6 +99,10 @@ XMLHttpRequest implementation based on the SAJAX toolkit, licensed under the
 terms of the BSD license.<BR>
 &copy; 2005 modernmethod, inc<BR>
 Perl backend version &copy; 2005 Nathan Schmidt
+
+<P>
+Contains code derived from eps2png by Johan Vromans, licensed under the same
+terms as Perl (GPL/Artistic).
 
 <!-- artwork -->
 

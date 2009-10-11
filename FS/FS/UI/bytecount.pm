@@ -1,9 +1,14 @@
 package FS::UI::bytecount;
 
 use strict;
-use vars qw($DEBUG $me);
+use vars qw($DEBUG $me @ISA @EXPORT_OK);
+use Exporter;
 use FS::Conf;
 use Number::Format 1.50;
+
+@ISA = qw( Exporter );
+
+@EXPORT_OK = qw( bytecount_unexact parse_bytecount display_bytecount );
 
 $DEBUG = 0;
 $me = '[FS::UID::bytecount]';
@@ -32,9 +37,9 @@ sub bytecount_unexact {
   return("$bc bytes")
     if ($bc < 1000);
   return(sprintf("%.2f Kbytes", $bc/1024))
-    if ($bc < 1000000);
+    if ($bc < 1048576);
   return(sprintf("%.2f Mbytes", $bc/1048576))
-    if ($bc < 1000000000);
+    if ($bc < 1073741824);
   return(sprintf("%.2f Gbytes", $bc/1073741824));
 }
 

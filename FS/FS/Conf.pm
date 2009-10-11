@@ -8,6 +8,7 @@ use MIME::Base64;
 use FS::ConfItem;
 use FS::ConfDefaults;
 use FS::Conf_compat17;
+use FS::payby;
 use FS::conf;
 use FS::Record qw(qsearch qsearchs);
 use FS::UID qw(dbh datasrc use_confcompat);
@@ -75,11 +76,23 @@ sub base_dir {
   $1;
 }
 
-=item config KEY [ AGENTNUM ]
+=item conf KEY [ AGENTNUM [ NODEFAULT ] ]
+
+Returns the L<FS::conf> record for the key and agent.
+
+=cut
+
+sub conf {
+  my $self = shift;
+  $self->_config(@_);
+}
+
+=item config KEY [ AGENTNUM [ NODEFAULT ] ]
 
 Returns the configuration value or values (depending on context) for key.
 The optional agent number selects an agent specific value instead of the
-global default if one is present.
+global default if one is present.  If NODEFAULT is true only the agent
+specific value(s) is returned.
 
 =cut
 
@@ -92,12 +105,12 @@ sub _usecompat {
 }
 
 sub _config {
-  my($self,$name,$agentnum)=@_;
+  my($self,$name,$agentnum,$agentonly)=@_;
   my $hashref = { 'name' => $name };
   $hashref->{agentnum} = $agentnum;
   local $FS::Record::conf = undef;  # XXX evil hack prevents recursion
   my $cv = FS::Record::qsearchs('conf', $hashref);
-  if (!$cv && defined($agentnum) && $agentnum) {
+  if (!$agentonly && !$cv && defined($agentnum) && $agentnum) {
     $hashref->{agentnum} = '';
     $cv = FS::Record::qsearchs('conf', $hashref);
   }
@@ -108,12 +121,10 @@ sub config {
   my $self = shift;
   return $self->_usecompat('config', @_) if use_confcompat;
 
-  my($name, $agentnum)=@_;
-
-  carp "FS::Conf->config($name, $agentnum) called"
+  carp "FS::Conf->config(". join(', ', @_). ") called"
     if $DEBUG > 1;
 
-  my $cv = $self->_config($name, $agentnum) or return;
+  my $cv = $self->_config(@_) or return;
 
   if ( wantarray ) {
     my $v = $cv->value;
@@ -124,7 +135,7 @@ sub config {
   }
 }
 
-=item config_binary KEY [ AGENTNUM ]
+=item config_binary KEY [ AGENTNUM [ NODEFAULT ] ]
 
 Returns the exact scalar value for key.
 
@@ -134,12 +145,11 @@ sub config_binary {
   my $self = shift;
   return $self->_usecompat('config_binary', @_) if use_confcompat;
 
-  my($name,$agentnum)=@_;
-  my $cv = $self->_config($name, $agentnum) or return;
+  my $cv = $self->_config(@_) or return;
   decode_base64($cv->value);
 }
 
-=item exists KEY [ AGENTNUM ]
+=item exists KEY [ AGENTNUM [ NODEFAULT ] ]
 
 Returns true if the specified key exists, even if the corresponding value
 is undefined.
@@ -152,10 +162,10 @@ sub exists {
 
   my($name, $agentnum)=@_;
 
-  carp "FS::Conf->exists($name, $agentnum) called"
+  carp "FS::Conf->exists(". join(', ', @_). ") called"
     if $DEBUG > 1;
 
-  defined($self->_config($name, $agentnum));
+  defined($self->_config(@_));
 }
 
 =item config_orbase KEY SUFFIX
@@ -450,11 +460,12 @@ sub _orbase_items {
           die "don't know about $base items" unless $proto->key eq $base;
 
           map { new FS::ConfItem { 
-                                   'key' => $_,
-                                   'section' => $proto->section,
-                                   'description' => 'Alternate ' . $proto->description . '  See the <a href="http://www.freeside.biz/mediawiki/index.php/Freeside:1.7:Documentation:Administration#Invoice_templates">billing documentation</a> for details.',
-                                   'type' => $proto->type,
-                                 };
+                  'key'         => $_,
+                  'base_key'    => $proto->key,
+                  'section'     => $proto->section,
+                  'description' => 'Alternate ' . $proto->description . '  See the <a href="http://www.freeside.biz/mediawiki/index.php/Freeside:1.7:Documentation:Administration#Invoice_templates">billing documentation</a> for details.',
+                  'type'        => $proto->type,
+                };
               } &$listmaker($base);
         } @base_items,
   );
@@ -563,17 +574,28 @@ worry that config_items is freeside-specific and icky.
   },
 
   {
+    'key'         => 'alert_expiration',
+    'section'     => 'billing',
+    'description' => 'Enable alerts about billing method expiration.',
+    'type'        => 'checkbox',
+    'per_agent'   => 1,
+  },
+
+  {
     'key'         => 'alerter_template',
     'section'     => 'billing',
     'description' => 'Template file for billing method expiration alerts.  See the <a href="http://www.freeside.biz/mediawiki/index.php/Freeside:1.7:Documentation:Administration#Credit_cards_and_Electronic_checks">billing documentation</a> for details.',
     'type'        => 'textarea',
-    'per-agent'   => 1,
+    'per_agent'   => 1,
   },
 
   {
     'key'         => 'apacheip',
-    'section'     => 'deprecated',
-    'description' => '<b>DEPRECATED</b>, add an <i>apache</i> <a href="../browse/part_export.cgi">export</a> instead.  Used to be the current IP address to assign to new virtual hosts',
+    #not actually deprecated yet
+    #'section'     => 'deprecated',
+    #'description' => '<b>DEPRECATED</b>, add an <i>apache</i> <a href="../browse/part_export.cgi">export</a> instead.  Used to be the current IP address to assign to new virtual hosts',
+    'section'     => '',
+    'description' => 'IP address to assign to new virtual hosts',
     'type'        => 'text',
   },
 
@@ -606,6 +628,40 @@ worry that config_items is freeside-specific and icky.
   },
 
   {
+    'key'         => 'billco-url',
+    'section'     => 'billing',
+    'description' => 'The url to use for performing uploads to the invoice mailing service.',
+    'type'        => 'text',
+    'per_agent'   => 1,
+  },
+
+  {
+    'key'         => 'billco-username',
+    'section'     => 'billing',
+    'description' => 'The login name to use for uploads to the invoice mailing service.',
+    'type'        => 'text',
+    'per_agent'   => 1,
+    'agentonly'   => 1,
+  },
+
+  {
+    'key'         => 'billco-password',
+    'section'     => 'billing',
+    'description' => 'The password to use for uploads to the invoice mailing service.',
+    'type'        => 'text',
+    'per_agent'   => 1,
+    'agentonly'   => 1,
+  },
+
+  {
+    'key'         => 'billco-clicode',
+    'section'     => 'billing',
+    'description' => 'The clicode to use for uploads to the invoice mailing service.',
+    'type'        => 'text',
+    'per_agent'   => 1,
+  },
+
+  {
     'key'         => 'business-onlinepayment',
     'section'     => 'billing',
     'description' => '<a href="http://search.cpan.org/search?mode=module&query=Business%3A%3AOnlinePayment">Business::OnlinePayment</a> support, at least three lines: processor, login, and password.  An optional fourth line specifies the action or actions (multiple actions are separated with `,\': for example: `Authorization Only, Post Authorization\').    Optional additional lines are passed to Business::OnlinePayment as %processor_options.',
@@ -617,6 +673,17 @@ worry that config_items is freeside-specific and icky.
     'section'     => 'billing',
     'description' => 'Alternate <a href="http://search.cpan.org/search?mode=module&query=Business%3A%3AOnlinePayment">Business::OnlinePayment</a> support for ACH transactions (defaults to regular <b>business-onlinepayment</b>).  At least three lines: processor, login, and password.  An optional fourth line specifies the action or actions (multiple actions are separated with `,\': for example: `Authorization Only, Post Authorization\').    Optional additional lines are passed to Business::OnlinePayment as %processor_options.',
     'type'        => 'textarea',
+  },
+
+  {
+    'key'         => 'business-onlinepayment-namespace',
+    'section'     => 'billing',
+    'description' => 'Specifies which perl module namespace (which group of collection routines) is used by default.',
+    'type'        => 'select',
+    'select_hash' => [
+                       'Business::OnlinePayment' => 'Direct API (Business::OnlinePayment)',
+		       'Business::OnlineThirdPartyPayment' => 'Web API (Business::ThirdPartyPayment)',
+                     ],
   },
 
   {
@@ -661,7 +728,14 @@ worry that config_items is freeside-specific and icky.
   {
     'key'         => 'deletecustomers',
     'section'     => 'UI',
-    'description' => 'Enable customer deletions.  Be very careful!  Deleting a customer will remove all traces that this customer ever existed!  It should probably only be used when auditing a legacy database.  Normally, you cancel all of a customers\' packages if they cancel service.',
+    'description' => 'Enable customer deletions.  Be very careful!  Deleting a customer will remove all traces that the customer ever existed!  It should probably only be used when auditing a legacy database.  Normally, you cancel all of a customers\' packages if they cancel service.',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'deleteinvoices',
+    'section'     => 'UI',
+    'description' => 'Enable invoices deletions.  Be very careful!  Deleting an invoice will remove all traces that the invoice ever existed!  Normally, you would apply a credit against the invoice instead.',  #invoice voiding?
     'type'        => 'checkbox',
   },
 
@@ -674,8 +748,11 @@ worry that config_items is freeside-specific and icky.
 
   {
     'key'         => 'deletecredits',
-    'section'     => 'deprecated',
-    'description' => '<B>DEPRECATED</B>, now controlled by ACLs.  Used to enable deletion of unclosed credits.  Be very careful!  Only delete credits that were data-entry errors, not adjustments.  Optionally specify one or more comma-separated email addresses to be notified when a credit is deleted.',
+    #not actually deprecated yet
+    #'section'     => 'deprecated',
+    #'description' => '<B>DEPRECATED</B>, now controlled by ACLs.  Used to enable deletion of unclosed credits.  Be very careful!  Only delete credits that were data-entry errors, not adjustments.  Optionally specify one or more comma-separated email addresses to be notified when a credit is deleted.',
+    'section'     => '',
+    'description' => 'One or more comma-separated email addresses to be notified when a credit is deleted.',
     'type'        => [qw( checkbox text )],
   },
 
@@ -687,9 +764,37 @@ worry that config_items is freeside-specific and icky.
   },
 
   {
+    'key'         => 'unapplypayments',
+    'section'     => 'deprecated',
+    'description' => '<B>DEPRECATED</B>, now controlled by ACLs.  Used to enable "unapplication" of unclosed payments.',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'unapplycredits',
+    'section'     => 'deprecated',
+    'description' => '<B>DEPRECATED</B>, now controlled by ACLs.  Used to nable "unapplication" of unclosed credits.',
+    'type'        => 'checkbox',
+  },
+
+  {
     'key'         => 'dirhash',
     'section'     => 'shell',
     'description' => 'Optional numeric value to control directory hashing.  If positive, hashes directories for the specified number of levels from the front of the username.  If negative, hashes directories for the specified number of levels from the end of the username.  Some examples: <ul><li>1: user -> <a href="#home">/home</a>/u/user<li>2: user -> <a href="#home">/home</a>/u/s/user<li>-1: user -> <a href="#home">/home</a>/r/user<li>-2: user -> <a href="#home">home</a>/r/e/user</ul>',
+    'type'        => 'text',
+  },
+
+  {
+    'key'         => 'disable_cust_attachment',
+    'section'     => '',
+    'description' => 'Disable customer file attachments',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'max_attachment_size',
+    'section'     => '',
+    'description' => 'Maximum size for customer file attachments (leave blank for unlimited)',
     'type'        => 'text',
   },
 
@@ -787,6 +892,13 @@ worry that config_items is freeside-specific and icky.
   },
 
   {
+    'key'         => 'invoice_usesummary',
+    'section'     => 'billing',
+    'description' => 'Indicates that html and latex invoices should be in summary style and make use of invoice_latexsummary.',
+    'type'        => 'checkbox',
+  },
+
+  {
     'key'         => 'invoice_template',
     'section'     => 'billing',
     'description' => 'Text template file for invoices.  Used if no invoice_html template is defined, and also seen by users using non-HTML capable mail clients.  See the <a href="http://www.freeside.biz/mediawiki/index.php/Freeside:1.7:Documentation:Administration#Plaintext_invoice_templates">billing documentation</a> for details.',
@@ -806,6 +918,7 @@ worry that config_items is freeside-specific and icky.
     'section'     => 'billing',
     'description' => 'Notes section for HTML invoices.  Defaults to the same data in invoice_latexnotes if not specified.',
     'type'        => 'textarea',
+    'per_agent'   => 1,
   },
 
   {
@@ -813,6 +926,15 @@ worry that config_items is freeside-specific and icky.
     'section'     => 'billing',
     'description' => 'Footer for HTML invoices.  Defaults to the same data in invoice_latexfooter if not specified.',
     'type'        => 'textarea',
+    'per_agent'   => 1,
+  },
+
+  {
+    'key'         => 'invoice_htmlsummary',
+    'section'     => 'billing',
+    'description' => 'Summary initial page for HTML invoices.',
+    'type'        => 'textarea',
+    'per_agent'   => 1,
   },
 
   {
@@ -834,6 +956,7 @@ worry that config_items is freeside-specific and icky.
     'section'     => 'billing',
     'description' => 'Notes section for LaTeX typeset PostScript invoices.',
     'type'        => 'textarea',
+    'per_agent'   => 1,
   },
 
   {
@@ -841,6 +964,15 @@ worry that config_items is freeside-specific and icky.
     'section'     => 'billing',
     'description' => 'Footer for LaTeX typeset PostScript invoices.',
     'type'        => 'textarea',
+    'per_agent'   => 1,
+  },
+
+  {
+    'key'         => 'invoice_latexsummary',
+    'section'     => 'billing',
+    'description' => 'Summary initial page for LaTeX typeset PostScript invoices.',
+    'type'        => 'textarea',
+    'per_agent'   => 1,
   },
 
   {
@@ -848,6 +980,7 @@ worry that config_items is freeside-specific and icky.
     'section'     => 'billing',
     'description' => 'Remittance coupon for LaTeX typeset PostScript invoices.',
     'type'        => 'textarea',
+    'per_agent'   => 1,
   },
 
   {
@@ -862,6 +995,7 @@ worry that config_items is freeside-specific and icky.
     'section'     => 'billing',
     'description' => 'Optional small footer for multi-page LaTeX typeset PostScript invoices.',
     'type'        => 'textarea',
+    'per_agent'   => 1,
   },
 
   {
@@ -890,8 +1024,27 @@ worry that config_items is freeside-specific and icky.
   { 
     'key'         => 'invoice_sections',
     'section'     => 'billing',
-    'description' => 'Split invoice into sections and label according to package class when enabled.',
+    'description' => 'Split invoice into sections and label according to package category when enabled.',
     'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'finance_pkgclass',
+    'section'     => 'billing',
+    'description' => 'The package class for finance charges',
+    'type'        => 'select-sub',
+    'options_sub' => sub { require FS::Record;
+                           require FS::pkg_class;
+                           map { $_->classnum => $_->classname }
+                               FS::Record::qsearch('pkg_class', {} );
+		         },
+    'option_sub'  => sub { require FS::Record;
+                           require FS::pkg_class;
+                           my $pkg_class = FS::Record::qsearchs(
+			     'pkg_class', { 'classnum'=>shift }
+			   );
+                           $pkg_class ? $pkg_class->classname : '';
+			 },
   },
 
   { 
@@ -902,10 +1055,28 @@ worry that config_items is freeside-specific and icky.
   },
 
   {
+    'key'         => 'invoice_send_receipts',
+    'section'     => 'deprecated',
+    'description' => '<b>DEPRECATED</b>, this used to send an invoice copy on payments and credits.  See the payment_receipt_email and XXXX instead.',
+    'type'        => 'checkbox',
+  },
+
+  {
     'key'         => 'payment_receipt_email',
     'section'     => 'billing',
-    'description' => 'Template file for payment receipts.  Payment receipts are sent to the customer email invoice destination(s) when a payment is received.  See the <a href="http://search.cpan.org/dist/Text-Template/lib/Text/Template.pm">Text::Template</a> documentation for details on the template substitution language.  The following variables are available: <ul><li><code>$date</code> <li><code>$name</code> <li><code>$paynum</code> - Freeside payment number <li><code>$paid</code> - Amount of payment <li><code>$payby</code> - Payment type (Card, Check, Electronic check, etc.) <li><code>$payinfo</code> - Masked credit card number or check number <li><code>$balance</code> - New balance</ul>',
+    'description' => 'Template file for payment receipts.  Payment receipts are sent to the customer email invoice destination(s) when a payment is received.  See the <a href="http://search.cpan.org/dist/Text-Template/lib/Text/Template.pm">Text::Template</a> documentation for details on the template substitution language.  The following variables are available: <ul><li><code>$date</code> <li><code>$name</code> <li><code>$paynum</code> - Freeside payment number <li><code>$paid</code> - Amount of payment <li><code>$payby</code> - Payment type (Card, Check, Electronic check, etc.) <li><code>$payinfo</code> - Masked credit card number or check number <li><code>$balance</code> - New balance<li><code>$pkg</code> - Package (requires payment_receipt-trigger set to "when payment is applied".)</ul>',
     'type'        => [qw( checkbox textarea )],
+  },
+
+  {
+    'key'         => 'payment_receipt-trigger',
+    'section'     => 'billing',
+    'description' => 'When payment receipts are triggered.  Defaults to when payment is made.',
+    'type'        => 'select',
+    'select_hash' => [
+                       'cust_pay'          => 'When payment is made.',
+                       'cust_bill_pay_pkg' => 'When payment is applied.',
+                     ],
   },
 
   {
@@ -988,6 +1159,13 @@ worry that config_items is freeside-specific and icky.
 #    'section'     => 'required',
 #    'description' => 'Directory which contains domain registry information.  Each registry is a directory.',
 #  },
+
+  {
+    'key'         => 'report_template',
+    'section'     => 'deprecated',
+    'description' => 'Deprecated template file for reports.',
+    'type'        => 'textarea',
+  },
 
   {
     'key'         => 'maxsearchrecordsperpage',
@@ -1127,6 +1305,7 @@ worry that config_items is freeside-specific and icky.
     'section'     => 'username',
     'description' => 'Usernames must contain at least one letter',
     'type'        => 'checkbox',
+    'per_agent'   => 1,
   },
 
   {
@@ -1168,6 +1347,13 @@ worry that config_items is freeside-specific and icky.
     'key'         => 'username-percent',
     'section'     => 'username',
     'description' => 'Allow the percent character (%) in usernames.',
+    'type'        => 'checkbox',
+  },
+
+  { 
+    'key'         => 'username-colon',
+    'section'     => 'username',
+    'description' => 'Allow the colon character (:) in usernames.',
     'type'        => 'checkbox',
   },
 
@@ -1293,44 +1479,29 @@ worry that config_items is freeside-specific and icky.
     'key'         => 'signup_server-default_pkgpart',
     'section'     => '',
     'description' => 'Default package for the signup server',
-    'type'        => 'select-sub',
-    'options_sub' => sub { require FS::Record;
-                           require FS::part_pkg;
-                           map { $_->pkgpart => $_->pkg.' - '.$_->comment }
-                               FS::Record::qsearch( 'part_pkg',
-			                            { 'disabled' => ''}
-						  );
-			 },
-    'option_sub'  => sub { require FS::Record;
-                           require FS::part_pkg;
-                           my $part_pkg = FS::Record::qsearchs(
-			     'part_pkg', { 'pkgpart'=>shift }
-			   );
-                           $part_pkg
-			     ? $part_pkg->pkg.' - '.$part_pkg->comment
-			     : '';
-			 },
+    'type'        => 'select-part_pkg',
   },
 
   {
     'key'         => 'signup_server-default_svcpart',
     'section'     => '',
-    'description' => 'Default svcpart for the signup server - only necessary for services that trigger special provisioning widgets (such as DID provisioning).',
-    'type'        => 'select-sub',
-    'options_sub' => sub { require FS::Record;
-                           require FS::part_svc;
-                           map { $_->svcpart => $_->svc }
-                               FS::Record::qsearch( 'part_svc',
-			                            { 'disabled' => ''}
-						  );
-			 },
-    'option_sub'  => sub { require FS::Record;
-                           require FS::part_svc;
-                           my $part_svc = FS::Record::qsearchs(
-			     'part_svc', { 'svcpart'=>shift }
-			   );
-                           $part_svc ? $part_svc->svc : '';
-			 },
+    'description' => 'Default service definition for the signup server - only necessary for services that trigger special provisioning widgets (such as DID provisioning).',
+    'type'        => 'select-part_svc',
+  },
+
+  {
+    'key'         => 'signup_server-mac_addr_svcparts',
+    'section'     => '',
+    'description' => 'Service definitions which can receive mac addresses (current mapped to username for svc_acct).',
+    'type'        => 'select-part_svc',
+    'multiple'    => 1,
+  },
+
+  {
+    'key'         => 'signup_server-nomadix',
+    'section'     => '',
+    'description' => 'Signup page Nomadix integration',
+    'type'        => 'checkbox',
   },
 
   {
@@ -1347,7 +1518,7 @@ worry that config_items is freeside-specific and icky.
   {
     'key'         => 'selfservice_server-base_url',
     'section'     => '',
-    'description' => 'Base URL for the self-service web interface - necessary for special provisioning widgets to find their way.',
+    'description' => 'Base URL for the self-service web interface - necessary for some widgets to find their way, including retrieval of non-US state information and phone number provisioning.',
     'type'        => 'text',
   },
 
@@ -1452,6 +1623,13 @@ worry that config_items is freeside-specific and icky.
   },
 
   {
+    'key'         => 'bill_usage_on_cancel',
+    'section'     => 'billing',
+    'description' => 'Enable automatic generation of an invoice for usage when a package is cancelled.  Not all packages can do this.  Usage data must already be available.',
+    'type'        => 'checkbox',
+  },
+
+  {
     'key'         => 'require_cardname',
     'section'     => 'billing',
     'description' => 'Require an "Exact name on card" to be entered explicitly; don\'t default to using the first and last name.',
@@ -1475,7 +1653,14 @@ worry that config_items is freeside-specific and icky.
   {
     'key'         => 'enable_taxproducts',
     'section'     => 'billing',
-    'description' => 'Enable per-package mapping to new style tax classes',
+    'description' => 'Enable per-package mapping to vendor tax data from CCH or elsewhere.',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'taxdatadirectdownload',
+    'section'     => 'billing',  #well
+    'description' => 'Enable downloading tax data directly from the vendor site',
     'type'        => 'checkbox',
   },
 
@@ -1608,6 +1793,14 @@ worry that config_items is freeside-specific and icky.
     'select_enum' => [ 'Framed-IP-Address', 'Framed-Address' ],
   },
 
+  #http://dev.coova.org/svn/coova-chilli/doc/dictionary.chillispot
+  {
+    'key'         => 'radius-chillispot-max',
+    'section'     => '',
+    'description' => 'Enable ChilliSpot (and CoovaChilli) Max attributes, specifically ChilliSpot-Max-{Input,Output,Total}-{Octets,Gigawords}.',
+    'type'        => 'checkbox',
+  },
+
   {
     'key'         => 'svc_acct-alldomains',
     'section'     => '',
@@ -1630,11 +1823,61 @@ worry that config_items is freeside-specific and icky.
   },
 
   {
+    'key'         => 'users-allow_comp',
+    'section'     => 'deprecated',
+    'description' => '<b>DEPRECATED</b>, enable the <i>Complimentary customer</i> access right instead.  Was: Usernames (Freeside users, created with <a href="../docs/man/bin/freeside-adduser.html">freeside-adduser</a>) which can create complimentary customers, one per line.  If no usernames are entered, all users can create complimentary accounts.',
+    'type'        => 'textarea',
+  },
+
+  {
+    'key'         => 'credit_card-recurring_billing_flag',
+    'section'     => 'billing',
+    'description' => 'This controls when the system passes the "recurring_billing" flag on credit card transactions.  If supported by your processor (and the Business::OnlinePayment processor module), passing the flag indicates this is a recurring transaction and may turn off the CVV requirement. ',
+    'type'        => 'select',
+    'select_hash' => [
+                       'actual_oncard' => 'Default/classic behavior: set the flag if a customer has actual previous charges on the card.',
+		       'transaction_is_recur' => 'Set the flag if the transaction itself is recurring, irregardless of previous charges on the card.',
+                     ],
+  },
+
+  {
+    'key'         => 'credit_card-recurring_billing_acct_code',
+    'section'     => 'billing',
+    'description' => 'When the "recurring billing" flag is set, also set the "acct_code" to "rebill".  Useful for reporting purposes with supported gateways (PlugNPay, others?)',
+    'type'        => 'checkbox',
+  },
+
+  {
     'key'         => 'cvv-save',
     'section'     => 'billing',
     'description' => 'Save CVV2 information after the initial transaction for the selected credit card types.  Enabling this option may be in violation of your merchant agreement(s), so please check them carefully before enabling this option for any credit card types.',
     'type'        => 'selectmultiple',
     'select_enum' => \@card_types,
+  },
+
+  {
+    'key'         => 'manual_process-pkgpart',
+    'section'     => 'billing',
+    'description' => 'Package to add to each manual credit card and ACH payments entered from the backend.  Enabling this option may be in violation of your merchant agreement(s), so please check them carefully before enabling this option.',
+    'type'        => 'select-part_pkg',
+  },
+
+  {
+    'key'         => 'manual_process-display',
+    'section'     => 'billing',
+    'description' => 'When using manual_process-pkgpart, add the fee to the amount entered (default), or subtract the fee from the amount entered.',
+    'type'        => 'select',
+    'select_hash' => [
+                       'add'      => 'Add fee to amount entered',
+                       'subtract' => 'Subtract fee from amount entered',
+                     ],
+  },
+
+  {
+    'key'         => 'manual_process-skip_first',
+    'section'     => 'billing',
+    'description' => "When using manual_process-pkgpart, omit the fee if it is the customer's first payment.",
+    'type'        => 'checkbox',
   },
 
   {
@@ -1682,7 +1925,8 @@ worry that config_items is freeside-specific and icky.
     'key'         => 'svc_www-usersvc_svcpart',
     'section'     => '',
     'description' => 'Allowable service definition svcparts for virtual hosts, one per line.',
-    'type'        => 'textarea',
+    'type'        => 'select-part_svc',
+    'multiple'    => 1,
   },
 
   {
@@ -1847,6 +2091,27 @@ worry that config_items is freeside-specific and icky.
   },
 
   {
+    'key'         => 'echeck-void',
+    'section'     => 'deprecated',
+    'description' => '<B>DEPRECATED</B>, now controlled by ACLs.  Used to enable local-only voiding of echeck payments in addition to refunds against the payment gateway',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'cc-void',
+    'section'     => 'deprecated',
+    'description' => '<B>DEPRECATED</B>, now controlled by ACLs.  Used to enable local-only voiding of credit card payments in addition to refunds against the payment gateway',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'unvoid',
+    'section'     => 'deprecated',
+    'description' => '<B>DEPRECATED</B>, now controlled by ACLs.  Used to enable unvoiding of voided payments',
+    'type'        => 'checkbox',
+  },
+
+  {
     'key'         => 'address2-search',
     'section'     => 'UI',
     'description' => 'Enable a "Unit" search box which searches the second address field.  Useful for multi-tenant applications.  See also: cust_main-require_address2',
@@ -1955,7 +2220,7 @@ worry that config_items is freeside-specific and icky.
   {
     'key'         => 'svc_acct-usage_threshold',
     'section'     => 'billing',
-    'description' => 'The threshold (expressed as percentage) of acct.seconds or acct.up|down|totalbytes at which a warning message is sent to a service holder.  Typically used in conjunction with prepaid packages and freeside-sqlradius-radacctd.  Defaults to 80.',
+    'description' => 'The threshold (expressed as percentage) of acct.seconds or acct.up|down|totalbytes at which a warning message is sent to a service holder.  Typically used in conjunction with prepaid packages and freeside-sqlradius-radacctd.',
     'type'        => 'text',
   },
 
@@ -2024,6 +2289,20 @@ worry that config_items is freeside-specific and icky.
   },
 
   {
+    'key'         => 'voip-cdr_email',
+    'section'     => '',
+    'description' => 'Include the call details on emailed invoices even if the customer is configured for not printing them on the invoices.',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'voip-cust_email_csv_cdr',
+    'section'     => '',
+    'description' => 'Enable the per-customer option for including CDR information as a CSV attachment on emailed invoices.',
+    'type'        => 'checkbox',
+  },
+
+  {
     'key'         => 'svc_forward-arbitrary_dst',
     'section'     => '',
     'description' => "Allow forwards to point to arbitrary strings that don't necessarily look like email addresses.  Only used when using forwards for weird, non-email things.",
@@ -2040,21 +2319,35 @@ worry that config_items is freeside-specific and icky.
   {
     'key'         => 'tax-pkg_address',
     'section'     => 'billing',
-    'description' => 'By default, tax calculations are done based on the billing address.  Enable this switch to calculate tax based on the package address instead (when present).',
+    'description' => 'By default, tax calculations are done based on the billing address.  Enable this switch to calculate tax based on the package address instead (when present).  Note that this option is currently incompatible with vendor data taxation enabled by enable_taxproducts.',
     'type'        => 'checkbox',
   },
 
   {
     'key'         => 'invoice-ship_address',
     'section'     => 'billing',
-    'description' => 'Enable this switch to include the ship address on the invoice.',
+    'description' => 'Include the shipping address on invoices.',
     'type'        => 'checkbox',
   },
 
   {
     'key'         => 'invoice-unitprice',
     'section'     => 'billing',
-    'description' => 'This switch enables unit pricing on the invoice.',
+    'description' => 'Enable unit pricing on invoices.',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'invoice-smallernotes',
+    'section'     => 'billing',
+    'description' => 'Display the notes section in a smaller font on invoices.',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'invoice-smallerfooter',
+    'section'     => 'billing',
+    'description' => 'Display footers in a smaller font on invoices.',
     'type'        => 'checkbox',
   },
 
@@ -2062,19 +2355,7 @@ worry that config_items is freeside-specific and icky.
     'key'         => 'postal_invoice-fee_pkgpart',
     'section'     => 'billing',
     'description' => 'This allows selection of a package to insert on invoices for customers with postal invoices selected.',
-    'type'        => 'select-sub',
-    'options_sub' => sub { require FS::Record;
-                           require FS::part_pkg;
-			   map { $_->pkgpart => $_->pkg }
-                               FS::Record::qsearch('part_pkg', { disabled=>'' } );
-			 },
-    'option_sub'  => sub { require FS::Record;
-                           require FS::part_pkg;
-			   my $part_pkg = FS::Record::qsearchs(
-			     'part_pkg', { 'pkgpart'=>shift }
-			   );
-                           $part_pkg ? $part_pkg->pkg : '';
-			 },
+    'type'        => 'select-part_pkg',
   },
 
   {
@@ -2167,9 +2448,30 @@ worry that config_items is freeside-specific and icky.
   },
 
   {
+    'key'         => 'batchconfig-paymentech',
+    'section'     => 'billing',
+    'description' => 'Configuration for Chase Paymentech batching, four lines: 1. BIN, 2. Terminal ID, 3. Merchant ID, 4. Username',
+    'type'        => 'textarea',
+  },
+
+  {
     'key'         => 'payment_history-years',
     'section'     => 'UI',
     'description' => 'Number of years of payment history to show by default.  Currently defaults to 2.',
+    'type'        => 'text',
+  },
+
+  {
+    'key'         => 'change_history-years',
+    'section'     => 'UI',
+    'description' => 'Number of years of change history to show by default.  Currently defaults to 0.5.',
+    'type'        => 'text',
+  },
+
+  {
+    'key'         => 'cust_main-packages-years',
+    'section'     => 'UI',
+    'description' => 'Number of years to show old (cancelled and one-time charge) packages by default.  Currently defaults to 2.',
     'type'        => 'text',
   },
 
@@ -2265,6 +2567,14 @@ worry that config_items is freeside-specific and icky.
   },
 
   {
+    'key'         => 'dashboard-install_welcome',
+    'section'     => 'UI',
+    'description' => 'New install welcome screen.',
+    'type'        => 'select',
+    'select_enum' => [ '', 'ITSP_fsinc_hosted', ],
+  },
+
+  {
     'key'         => 'dashboard-toplist',
     'section'     => 'UI',
     'description' => 'List of items to display on the top of the front page',
@@ -2292,7 +2602,7 @@ worry that config_items is freeside-specific and icky.
     'key'         => 'logo.eps',
     'section'     => 'billing',  #? 
     'description' => 'Company logo for printed and PDF invoices, in EPS format.',
-    'type'        => 'binary',
+    'type'        => 'image',
     'per_agent'   => 1, #XXX as above, kinda
   },
 
@@ -2357,7 +2667,8 @@ worry that config_items is freeside-specific and icky.
     'key'         => 'support_packages',
     'section'     => '',
     'description' => 'A list of packages eligible for RT ticket time transfer, one pkgpart per line.', #this should really be a select multiple, or specified in the packages themselves...
-    'type'        => 'textarea',
+    'type'        => 'select-part_pkg',
+    'multiple'    => 1,
   },
 
   {
@@ -2474,6 +2785,13 @@ worry that config_items is freeside-specific and icky.
   },
 
   {
+    'key'         => 'previous_balance-summary_only',
+    'section'     => 'billing',
+    'description' => 'Only show a single line summarizing the total previous balance rather than one line per invoice.',
+    'type'        => 'checkbox',
+  },
+
+  {
     'key'         => 'usps_webtools-userid',
     'section'     => 'UI',
     'description' => 'Production UserID for USPS web tools.   Enables USPS address standardization.  See the <a href="http://www.usps.com/webtools/">USPS website</a>, register and agree not to use the tools for batch purposes.',
@@ -2495,6 +2813,35 @@ worry that config_items is freeside-specific and icky.
   },
 
   {
+    'key'         => 'cust_main-require_censustract',
+    'section'     => 'UI',
+    'description' => 'Customer is required to have a census tract.  Useful for FCC form 477 reports. See also: cust_main-auto_standardize_address',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'census_year',
+    'section'     => 'UI',
+    'description' => 'The year to use in census tract lookups',
+    'type'        => 'select',
+    'select_enum' => [ qw( 2009 2008 2007 2006 ) ],
+  },
+
+  {
+    'key'         => 'company_latitude',
+    'section'     => 'UI',
+    'description' => 'Your company latitude (-90 through 90)',
+    'type'        => 'text',
+  },
+
+  {
+    'key'         => 'company_longitude',
+    'section'     => 'UI',
+    'description' => 'Your company longitude (-180 thru 180)',
+    'type'        => 'text',
+  },
+
+  {
     'key'         => 'disable_acl_changes',
     'section'     => '',
     'description' => 'Disable all ACL changes, for demos.',
@@ -2511,7 +2858,14 @@ worry that config_items is freeside-specific and icky.
   {
     'key'         => 'cust_main-default_agent_custid',
     'section'     => 'UI',
-    'description' => 'Display the agent_custid field instead of the custnum field.',
+    'description' => 'Display the agent_custid field when available instead of the custnum field.',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'cust_bill-default_agent_invid',
+    'section'     => 'UI',
+    'description' => 'Display the agent_invid field when available instead of the invnum field.',
     'type'        => 'checkbox',
   },
 
@@ -2536,7 +2890,7 @@ worry that config_items is freeside-specific and icky.
     'key'         => 'mcp_svcpart',
     'section'     => '',
     'description' => 'Master Control Program svcpart.  Leave this blank.',
-    'type'        => 'text',
+    'type'        => 'text', #select-part_svc
   },
 
   {
@@ -2598,6 +2952,23 @@ worry that config_items is freeside-specific and icky.
   },
 
   {
+    'key'         => 'selfservice-bulk_format',
+    'section'     => '',
+    'description' => 'Parameter arrangement for selfservice bulk features',
+    'type'        => 'select',
+    'select_enum' => [ '', 'izoom-soap', 'izoom-ftp' ],
+    'per_agent'   => 1,
+  },
+
+  {
+    'key'         => 'selfservice-bulk_ftp_dir',
+    'section'     => '',
+    'description' => 'Enable bulk ftp provisioning in this folder',
+    'type'        => 'text',
+    'per_agent'   => 1,
+  },
+
+  {
     'key'         => 'signup-no_company',
     'section'     => '',
     'description' => "Don't display a field for company name on signup.",
@@ -2647,9 +3018,30 @@ worry that config_items is freeside-specific and icky.
   },
 
   {
+    'key'         => 'cdr-charged_party-accountcode-trim_leading_0s',
+    'section'     => '',
+    'description' => 'When setting the charged_party field of CDRs to the accountcode, trim any leading zeros.',
+    'type'        => 'checkbox',
+  },
+
+#  {
+#    'key'         => 'cdr-charged_party-truncate_prefix',
+#    'section'     => '',
+#    'description' => 'If the charged_party field has this prefix, truncate it to the length in cdr-charged_party-truncate_length.',
+#    'type'        => 'text',
+#  },
+#
+#  {
+#    'key'         => 'cdr-charged_party-truncate_length',
+#    'section'     => '',
+#    'description' => 'If the charged_party field has the prefix in cdr-charged_party-truncate_prefix, truncate it to this length.',
+#    'type'        => 'text',
+#  },
+
+  {
     'key'         => 'cdr-charged_party_rewrite',
     'section'     => '',
-    'description' => 'Do charged party rewriting in the freeside-cdrrewrited daemon; useful if CDRs are being dropped off directly in the database and require special charged_party processing such as cdr-charged_party-accountcode.',
+    'description' => 'Do charged party rewriting in the freeside-cdrrewrited daemon; useful if CDRs are being dropped off directly in the database and require special charged_party processing such as cdr-charged_party-accountcode or cdr-charged_party-truncate*.',
     'type'        => 'checkbox',
   },
 
@@ -2674,6 +3066,186 @@ worry that config_items is freeside-specific and icky.
     'type'        => 'checkbox',
   },
 
+  {
+    'key'         => 'sg-multicustomer_hack',
+    'section'     => '',
+    'description' => "Don't use this.",
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'sg-ping_username',
+    'section'     => '',
+    'description' => "Don't use this.",
+    'type'        => 'text',
+  },
+
+  {
+    'key'         => 'sg-ping_password',
+    'section'     => '',
+    'description' => "Don't use this.",
+    'type'        => 'text',
+  },
+
+  {
+    'key'         => 'sg-login_username',
+    'section'     => '',
+    'description' => "Don't use this.",
+    'type'        => 'text',
+  },
+
+  {
+    'key'         => 'disable-cust-pkg_class',
+    'section'     => 'UI',
+    'description' => 'Disable the two-step dropdown for selecting package class and package, and return to the classic single dropdown.',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'queued-max_kids',
+    'section'     => '',
+    'description' => 'Maximum number of queued processes.  Defaults to 10.',
+    'type'        => 'text',
+  },
+
+  {
+    'key'         => 'cancelled_cust-noevents',
+    'section'     => 'billing',
+    'description' => "Don't run events for cancelled customers",
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'agent-invoice_template',
+    'section'     => 'billing',
+    'description' => 'Enable display/edit of old-style per-agent invoice template selection',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'svc_broadband-manage_link',
+    'section'     => 'UI',
+    'description' => 'URL for svc_broadband "Manage Device" link.  The following substitutions are available: $ip_addr.',
+    'type'        => 'text',
+  },
+
+  #more fine-grained, service def-level control could be useful eventually?
+  {
+    'key'         => 'svc_broadband-allow_null_ip_addr',
+    'section'     => '',
+    'description' => '',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'tax-report_groups',
+    'section'     => '',
+    'description' => 'List of grouping possibilities for tax names on reports, one per line, "label op value" (op can be = or !=).',
+    'type'        => 'textarea',
+  },
+
+  {
+    'key'         => 'tax-cust_exempt-groups',
+    'section'     => '',
+    'description' => 'List of grouping possibilities for tax names, for per-customer exemption purposes, one tax name per line.  For example, "GST" would indicate the ability to exempt customers individually from taxes named "GST" (but not other taxes).',
+    'type'        => 'textarea',
+  },
+
+  {
+    'key'         => 'cust_main-default_view',
+    'section'     => 'UI',
+    'description' => 'Default customer view, for users who have not selected a default view in their preferences.',
+    'type'        => 'select',
+    'select_hash' => [
+      #false laziness w/view/cust_main.cgi and pref/pref.html
+      'basics'          => 'Basics',
+      'notes'           => 'Notes',
+      'tickets'         => 'Tickets',
+      'packages'        => 'Packages',
+      'payment_history' => 'Payment History',
+      'change_history'  => 'Change History',
+      'jumbo'           => 'Jumbo',
+    ],
+  },
+
+  {
+    'key'         => 'enable_tax_adjustments',
+    'section'     => 'billing',
+    'description' => 'Enable the ability to add manual tax adjustments.',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'rt-crontool',
+    'section'     => '',
+    'description' => 'Enable the RT CronTool extension.',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'pkg-balances',
+    'section'     => 'billing',
+    'description' => 'Enable experimental package balances.  Not recommended for general use.',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'cust_main-edit_signupdate',
+    'section'     => 'UI',
+    'descritpion' => 'Enable manual editing of the signup date.',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'svc_acct-disable_access_number',
+    'section'     => 'UI',
+    'descritpion' => 'Disable access number selection.',
+    'type'        => 'checkbox',
+  },
+
+  { key => "apacheroot", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "apachemachine", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "apachemachines", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "bindprimary", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "bindsecondaries", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "bsdshellmachines", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "cyrus", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "cp_app", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "erpcdmachines", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "icradiusmachines", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "icradius_mysqldest", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "icradius_mysqlsource", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "icradius_secrets", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "maildisablecatchall", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "mxmachines", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "nsmachines", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "arecords", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "cnamerecords", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "nismachines", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "qmailmachines", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "radiusmachines", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "sendmailconfigpath", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "sendmailmachines", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "sendmailrestart", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "shellmachine", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "shellmachine-useradd", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "shellmachine-userdel", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "shellmachine-usermod", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "shellmachines", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "radiusprepend", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "textradiusprepend", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "username_policy", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "vpopmailmachines", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "vpopmailrestart", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "safe-part_pkg", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "selfservice_server-quiet", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "signup_server-quiet", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "signup_server-email", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "vonage-username", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "vonage-password", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+  { key => "vonage-fromnumber", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
+
 );
 
 1;
+

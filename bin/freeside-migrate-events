@@ -1,13 +1,16 @@
 #!/usr/bin/perl -w
 
 use strict;
-
-use FS::UID qw(adminsuidsetup);
+#use Getopt::Std;
+use FS::UID qw( adminsuidsetup dbh );
 use FS::Record qw( qsearch );
 use FS::part_bill_event;
 use FS::part_event;
 use FS::cust_bill_event;
 use FS::cust_event;
+
+#use vars qw( $opt_m );
+#getopts('m');
 
 my $user = shift or die &usage;
 adminsuidsetup($user);
@@ -16,20 +19,20 @@ my %plan2action = (
   'fee'                    => 'fee',
   'fee_percent'            => 'NOTYET', #XXX need fee_percent action
   'suspend'                => 'suspend',
-  'suspend-if-balance'     => 'NOTYET', #XXX "if balance" becomes a balance condition
+  'suspend-if-balance'     => 'suspend', #"if balance" becomes the balance cond
   'suspend-if-pkgpart'     => 'suspend_if_pkgpart',
   'suspend-unless-pkgpart' => 'suspend_unless_pkgpart',
   'cancel'                 => 'cancel',
   'addpost'                => 'addpost',
   'comp'                   => 'NOTYET', #XXX or N/A or something
-  'credit'                 => 'NOTYET',
+  'credit'                 => 'writeoff',
   'realtime-card'          => 'cust_bill_realtime_card',
   'realtime-check'         => 'cust_bill_realtime_check',
   'realtime-lec'           => 'cust_bill_realtime_lec',
   'batch-card'             => 'cust_bill_batch',
   #?'retriable'             =>
   'send'                   => 'cust_bill_send',
-  'send_email'             => 'NOTYET', 
+  'send_email'             => 'cust_bill_email',
   'send_alternate'         => 'cust_bill_send_alternate',
   'send_if_newest'         => 'cust_bill_send_if_newest',
   'send_agent'             => 'cust_bill_send_agent',
@@ -64,7 +67,15 @@ foreach my $part_bill_event (
   my %plandata = map { /^(\w+) (.*)$/; ($1, $2); }
                      split(/\n/, $part_bill_event->plandata);
 
-  #XXX may need to fudge some plandata2option names!!!
+  #XXX may need to fudge some other plandata2option names
+
+  my $balanceover = 0;
+  my $honor_dundate = 0;
+
+  if ( $part_bill_event->plan eq 'suspend-if-balance' ) {
+    $balanceover = delete $plandata{'balanceover'};
+    $honor_dundate = ( (delete $plandata{'balance_honor_dundate'}) =~ /1/ );
+  }
 
   my $part_event = new FS::part_event {
     'event'      => $part_bill_event->event,
@@ -86,12 +97,12 @@ foreach my $part_bill_event (
   };
   $error = $once->insert;
   die $error if $error;
-  
+
   my $balance = new FS::part_event_condition {
     'eventpart'     => $part_event->eventpart,
     'conditionname' => 'balance'
   };
-  $error = $balance->insert( 'balance' => 0 );
+  $error = $balance->insert( 'balance' => $balanceover );
   die $error if $error;
 
   my $cust_bill_owed = new FS::part_event_condition {
@@ -118,35 +129,59 @@ foreach my $part_bill_event (
     die $error if $error;
 
   }
+
+  if ( $honor_dundate ) { 
+    my $dundate = new FS::part_event_condition {
+      'eventpart'     => $part_event->eventpart,
+      'conditionname' => 'dundate'
+    };
+    $error = $dundate->insert();
+    die $error if $error;
+  }
   
   #my $derror = $part_bill_event->delete;
   #die "error removing part_bill_event: $derror\n" if $derror;
 
-  foreach my $cust_bill_event (
-    qsearch({
-      'table'     => 'cust_bill_event',
-      'hashref'   => { 'eventpart' => $part_bill_event->eventpart, },
-    })
-  ) {
+#  if ( $opt_m ) {
 
-    my $cust_event = new FS::cust_event {
-      'eventpart'  => $part_event->eventpart,
-      'tablenum'   => $cust_bill_event->invnum,
-      '_date'      => $cust_bill_event->_date,
-      'status'     => $cust_bill_event->status,
-      'statustext' => $cust_bill_event->statustext,
-    };
+    my $sth = dbh->prepare('
+      INSERT INTO cust_event ( eventpart, tablenum, _date, status, statustext )
+                       SELECT     ?     ,  invnum , _date, status, statustext
+                         FROM cust_bill_event WHERE eventpart = ?
+    ') or die dbh->errstr;
 
-    my $cerror = $cust_event->insert;
-    #die "error inserting cust_event: $cerror\n" if $cerror;
-    warn "error inserting cust_event: $cerror\n" if $cerror;
-  
-    #my $dcerror = $cust_bill_event->delete;
-    #die "error removing cust_bill_event: $dcerror\n" if $dcerror;
+    $sth->execute( $part_event->eventpart, $part_bill_event->eventpart )
+      or die $sth->errstr;
 
-    print ".";
-
-  }
+#  } else {
+#
+#    foreach my $cust_bill_event (
+#      qsearch({
+#        'table'     => 'cust_bill_event',
+#        'hashref'   => { 'eventpart' => $part_bill_event->eventpart, },
+#      })
+#    ) {
+#
+#      my $cust_event = new FS::cust_event {
+#        'eventpart'  => $part_event->eventpart,
+#        'tablenum'   => $cust_bill_event->invnum,
+#        '_date'      => $cust_bill_event->_date,
+#        'status'     => $cust_bill_event->status,
+#        'statustext' => $cust_bill_event->statustext,
+#      };
+#
+#      my $cerror = $cust_event->insert;
+#      #die "error inserting cust_event: $cerror\n" if $cerror;
+#      warn "error inserting cust_event: $cerror\n" if $cerror;
+#    
+#      #my $dcerror = $cust_bill_event->delete;
+#      #die "error removing cust_bill_event: $dcerror\n" if $dcerror;
+#
+#      print ".";
+#
+#    }
+#
+#  }
 
   print "\n";
 
@@ -180,6 +215,8 @@ Doesn't migrate reasons.
 
 Doesn't delete the old events (which is not a big deal, since the new code
 won't run them...)
+
+Can take lots of memory for large databases.
 
 =head1 SEE ALSO
 

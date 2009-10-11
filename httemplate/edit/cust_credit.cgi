@@ -40,6 +40,16 @@ Credit
     <TD><SELECT NAME="apply"><OPTION VALUE="yes" SELECTED>yes<OPTION>no</SELECT></TD>
   </TR>
 
+% if ( $conf->exists('pkg-balances') ) {
+  <% include('/elements/tr-select-cust_pkg-balances.html',
+               'custnum' => $custnum,
+               'cgi'     => $cgi
+            )
+  %>
+% } else {
+  <INPUT TYPE="hidden" NAME="pkgnum" VALUE="">
+% }
+
 </TABLE>
 
 <BR>

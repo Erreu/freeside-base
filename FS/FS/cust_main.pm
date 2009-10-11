@@ -9,6 +9,7 @@ use Safe;
 use Carp;
 use Exporter;
 use Scalar::Util qw( blessed );
+use List::Util qw( min );
 use Time::Local qw(timelocal);
 use Data::Dumper;
 use Tie::IxHash;
@@ -23,12 +24,14 @@ use FS::UID qw( getotaker dbh driver_name );
 use FS::Record qw( qsearchs qsearch dbdef );
 use FS::Misc qw( generate_email send_email generate_ps do_print );
 use FS::Msgcat qw(gettext);
+use FS::payby;
 use FS::cust_pkg;
 use FS::cust_svc;
 use FS::cust_bill;
 use FS::cust_bill_pkg;
 use FS::cust_bill_pkg_display;
 use FS::cust_bill_pkg_tax_location;
+use FS::cust_bill_pkg_tax_rate_location;
 use FS::cust_pay;
 use FS::cust_pay_pending;
 use FS::cust_pay_void;
@@ -38,7 +41,10 @@ use FS::cust_refund;
 use FS::part_referral;
 use FS::cust_main_county;
 use FS::cust_location;
+use FS::cust_main_exemption;
+use FS::cust_tax_adjustment;
 use FS::tax_rate;
+use FS::tax_rate_location;
 use FS::cust_tax_location;
 use FS::part_pkg_taxrate;
 use FS::agent;
@@ -75,6 +81,8 @@ $skip_fuzzyfiles = 0;
 $ignore_expired_card = 0;
 
 @encrypted_fields = ('payinfo', 'paycvv');
+sub nohistory_fields { ('paycvv'); }
+
 @paytypes = ('', 'Personal checking', 'Personal savings', 'Business checking', 'Business savings');
 
 #ask FS::UID to run this stuff for us later
@@ -358,7 +366,7 @@ invoicing_list destination to the newly-created svc_acct.  Here's an example:
 
   $cust_main->insert( {}, [ $email, 'POST' ] );
 
-Currently available options are: I<depend_jobnum> and I<noexport>.
+Currently available options are: I<depend_jobnum>, I<noexport> and I<tax_exemption>.
 
 If I<depend_jobnum> is set, all provisioning jobs will have a dependancy
 on the supplied jobnum (they will not run until the specific job completes).
@@ -368,6 +376,9 @@ as running the customer's credit card successfully).
 The I<noexport> option is deprecated.  If I<noexport> is set true, no
 provisioning jobs (exports) are scheduled.  (You can schedule them later with
 the B<reexport> method.)
+
+The I<tax_exemption> option can be set to an arrayref of tax names.
+FS::cust_main_exemption records will be created and inserted.
 
 =cut
 
@@ -392,7 +403,7 @@ sub insert {
   my $dbh = dbh;
 
   my $prepay_identifier = '';
-  my( $amount, $seconds ) = ( 0, 0 );
+  my( $amount, $seconds, $upbytes, $downbytes, $totalbytes ) = (0, 0, 0, 0, 0);
   my $payby = '';
   if ( $self->payby eq 'PREPAY' ) {
 
@@ -403,7 +414,13 @@ sub insert {
     warn "  looking up prepaid card $prepay_identifier\n"
       if $DEBUG > 1;
 
-    my $error = $self->get_prepay($prepay_identifier, \$amount, \$seconds);
+    my $error = $self->get_prepay( $prepay_identifier,
+                                   'amount_ref'     => \$amount,
+                                   'seconds_ref'    => \$seconds,
+                                   'upbytes_ref'    => \$upbytes,
+                                   'downbytes_ref'  => \$downbytes,
+                                   'totalbytes_ref' => \$totalbytes,
+                                 );
     if ( $error ) {
       $dbh->rollback if $oldAutoCommit;
       #return "error applying prepaid card (transaction rolled back): $error";
@@ -448,6 +465,24 @@ sub insert {
     $self->invoicing_list( $invoicing_list );
   }
 
+  warn "  setting cust_main_exemption\n"
+    if $DEBUG > 1;
+
+  my $tax_exemption = delete $options{'tax_exemption'};
+  if ( $tax_exemption ) {
+    foreach my $taxname ( @$tax_exemption ) {
+      my $cust_main_exemption = new FS::cust_main_exemption {
+        'custnum' => $self->custnum,
+        'taxname' => $taxname,
+      };
+      my $error = $cust_main_exemption->insert;
+      if ( $error ) {
+        $dbh->rollback if $oldAutoCommit;
+        return "inserting cust_main_exemption (transaction rolled back): $error";
+      }
+    }
+  }
+
   if (    $conf->config('cust_main-skeleton_tables')
        && $conf->config('cust_main-skeleton_custnum') ) {
 
@@ -465,7 +500,13 @@ sub insert {
   warn "  ordering packages\n"
     if $DEBUG > 1;
 
-  $error = $self->order_pkgs($cust_pkgs, \$seconds, %options);
+  $error = $self->order_pkgs( $cust_pkgs,
+                              %options,
+                              'seconds_ref'    => \$seconds,
+                              'upbytes_ref'    => \$upbytes,
+                              'downbytes_ref'  => \$downbytes,
+                              'totalbytes_ref' => \$totalbytes,
+                            );
   if ( $error ) {
     $dbh->rollback if $oldAutoCommit;
     return $error;
@@ -474,6 +515,10 @@ sub insert {
   if ( $seconds ) {
     $dbh->rollback if $oldAutoCommit;
     return "No svc_acct record to apply pre-paid time";
+  }
+  if ( $upbytes || $downbytes || $totalbytes ) {
+    $dbh->rollback if $oldAutoCommit;
+    return "No svc_acct record to apply pre-paid data";
   }
 
   if ( $amount ) {
@@ -688,6 +733,14 @@ jobs will have a dependancy on the supplied job (they will not run until the
 specific job completes).  This can be used to defer provisioning until some
 action completes (such as running the customer's credit card successfully).
 
+=item ticket_subject
+
+Optional subject for a ticket created and attached to this customer
+
+=item ticket_subject
+
+Optional queue name for ticket additions
+
 =back
 
 =cut
@@ -701,12 +754,14 @@ sub order_pkg {
     if $DEBUG;
 
   my $cust_pkg = $opt->{'cust_pkg'};
-  my $seconds  = $opt->{'seconds'};
   my $svcs     = $opt->{'svcs'} || [];
 
   my %svc_options = ();
   $svc_options{'depend_jobnum'} = $opt->{'depend_jobnum'}
     if exists($opt->{'depend_jobnum'}) && $opt->{'depend_jobnum'};
+
+  my %insert_params = map { $opt->{$_} ? ( $_ => $opt->{$_} ) : () }
+                          qw( ticket_subject ticket_queue );
 
   local $SIG{HUP} = 'IGNORE';
   local $SIG{INT} = 'IGNORE';
@@ -731,7 +786,7 @@ sub order_pkg {
 
   $cust_pkg->custnum( $self->custnum );
 
-  my $error = $cust_pkg->insert;
+  my $error = $cust_pkg->insert( %insert_params );
   if ( $error ) {
     $dbh->rollback if $oldAutoCommit;
     return "inserting cust_pkg (transaction rolled back): $error";
@@ -745,9 +800,12 @@ sub order_pkg {
       $error = $new_cust_svc->replace($old_cust_svc);
     } else {
       $svc_something->pkgnum( $cust_pkg->pkgnum );
-      if ( $seconds && $$seconds && $svc_something->isa('FS::svc_acct') ) {
-        $svc_something->seconds( $svc_something->seconds + $$seconds );
-        $$seconds = 0;
+      if ( $svc_something->isa('FS::svc_acct') ) {
+        foreach ( grep { $opt->{$_.'_ref'} && ${ $opt->{$_.'_ref'} } }
+                       qw( seconds upbytes downbytes totalbytes )      ) {
+          $svc_something->$_( $svc_something->$_() + ${ $opt->{$_.'_ref'} } );
+          ${ $opt->{$_.'_ref'} } = 0;
+        }
       }
       $error = $svc_something->insert(%svc_options);
     }
@@ -762,7 +820,8 @@ sub order_pkg {
 
 }
 
-=item order_pkgs HASHREF, [ SECONDSREF, [ , OPTION => VALUE ... ] ]
+#deprecated #=item order_pkgs HASHREF [ , SECONDSREF ] [ , OPTION => VALUE ... ]
+=item order_pkgs HASHREF [ , OPTION => VALUE ... ]
 
 Like the insert method on an existing record, this method orders multiple
 packages and included services atomicaly.  Pass a Tie::RefHash data structure
@@ -776,12 +835,13 @@ example:
     $cust_pkg => [ $svc_acct ],
     ...
   );
-  $cust_main->order_pkgs( \%hash, \'0', 'noexport'=>1 );
+  $cust_main->order_pkgs( \%hash, 'noexport'=>1 );
 
 Services can be new, in which case they are inserted, or existing unaudited
 services, in which case they are linked to the newly-created package.
 
-Currently available options are: I<depend_jobnum> and I<noexport>.
+Currently available options are: I<depend_jobnum>, I<noexport>, I<seconds_ref>,
+I<upbytes_ref>, I<downbytes_ref>, and I<totalbytes_ref>.
 
 If I<depend_jobnum> is set, all provisioning jobs will have a dependancy
 on the supplied jobnum (they will not run until the specific job completes).
@@ -794,13 +854,18 @@ the B<reexport> method for each cust_pkg object.  Using the B<reexport> method
 on the cust_main object is not recommended, as existing services will also be
 reexported.)
 
+If I<seconds_ref>, I<upbytes_ref>, I<downbytes_ref>, or I<totalbytes_ref> is
+provided, the scalars (provided by references) will be incremented by the
+values of the prepaid card.`
+
 =cut
 
 sub order_pkgs {
   my $self = shift;
   my $cust_pkgs = shift;
-  my $seconds = shift;
+  my $seconds_ref = ref($_[0]) ? shift : ''; #deprecated
   my %options = @_;
+  $seconds_ref ||= $options{'seconds_ref'};
 
   warn "$me order_pkgs called with options ".
        join(', ', map { "$_: $options{$_}" } keys %options ). "\n"
@@ -821,11 +886,14 @@ sub order_pkgs {
 
   foreach my $cust_pkg ( keys %$cust_pkgs ) {
 
-    my $error = $self->order_pkg( 'cust_pkg'      => $cust_pkg,
-                                  'svcs'          => $cust_pkgs->{$cust_pkg},
-                                  'seconds'       => $seconds,
-                                  'depend_jobnum' => $options{'depend_jobnum'},
-                                );
+    my $error = $self->order_pkg(
+      'cust_pkg'     => $cust_pkg,
+      'svcs'         => $cust_pkgs->{$cust_pkg},
+      'seconds_ref'  => $seconds_ref,
+      map { $_ => $options{$_} } qw( upbytes_ref downbytes_ref totalbytes_ref
+                                     depend_jobnum
+                                   )
+    );
     if ( $error ) {
       $dbh->rollback if $oldAutoCommit;
       return $error;
@@ -844,13 +912,14 @@ L<FS::prepay_credit>), specified either by I<identifier> or as an
 FS::prepay_credit object.  If there is an error, returns the error, otherwise
 returns false.
 
-Optionally, four scalar references can be passed as well.  They will have their
-values filled in with the amount, number of seconds, and number of upload and
-download bytes applied by this prepaid
-card.
+Optionally, five scalar references can be passed as well.  They will have their
+values filled in with the amount, number of seconds, and number of upload,
+download, and total bytes applied by this prepaid card.
 
 =cut
 
+#the ref bullshit here should be refactored like get_prepay.  MyAccount.pm is
+#the only place that uses these args
 sub recharge_prepay { 
   my( $self, $prepay_credit, $amountref, $secondsref, 
       $upbytesref, $downbytesref, $totalbytesref ) = @_;
@@ -868,8 +937,13 @@ sub recharge_prepay {
 
   my( $amount, $seconds, $upbytes, $downbytes, $totalbytes) = ( 0, 0, 0, 0, 0 );
 
-  my $error = $self->get_prepay($prepay_credit, \$amount,
-                                \$seconds, \$upbytes, \$downbytes, \$totalbytes)
+  my $error = $self->get_prepay( $prepay_credit,
+                                 'amount_ref'     => \$amount,
+                                 'seconds_ref'    => \$seconds,
+                                 'upbytes_ref'    => \$upbytes,
+                                 'downbytes_ref'  => \$downbytes,
+                                 'totalbytes_ref' => \$totalbytes,
+                               )
            || $self->increment_seconds($seconds)
            || $self->increment_upbytes($upbytes)
            || $self->increment_downbytes($downbytes)
@@ -896,13 +970,13 @@ sub recharge_prepay {
 
 }
 
-=item get_prepay IDENTIFIER | PREPAY_CREDIT_OBJ , AMOUNTREF, SECONDSREF
+=item get_prepay IDENTIFIER | PREPAY_CREDIT_OBJ [ , OPTION => VALUE ... ]
 
 Looks up and deletes a prepaid card (see L<FS::prepay_credit>),
 specified either by I<identifier> or as an FS::prepay_credit object.
 
-References to I<amount> and I<seconds> scalars should be passed as arguments
-and will be incremented by the values of the prepaid card.
+Available options are: I<amount_ref>, I<seconds_ref>, I<upbytes_ref>, I<downbytes_ref>, and I<totalbytes_ref>.  The scalars (provided by references) will be
+incremented by the values of the prepaid card.
 
 If the prepaid card specifies an I<agentnum> (see L<FS::agent>), it is used to
 check or set this customer's I<agentnum>.
@@ -913,8 +987,7 @@ If there is an error, returns the error, otherwise returns false.
 
 
 sub get_prepay {
-  my( $self, $prepay_credit, $amountref, $secondsref,
-      $upref, $downref, $totalref) = @_;
+  my( $self, $prepay_credit, %opt ) = @_;
 
   local $SIG{HUP} = 'IGNORE';
   local $SIG{INT} = 'IGNORE';
@@ -959,11 +1032,8 @@ sub get_prepay {
     return "removing prepay_credit (transaction rolled back): $error";
   }
 
-  $$amountref  += $prepay_credit->amount;
-  $$secondsref += $prepay_credit->seconds;
-  $$upref      += $prepay_credit->upbytes;
-  $$downref    += $prepay_credit->downbytes;
-  $$totalref   += $prepay_credit->totalbytes;
+  ${ $opt{$_.'_ref'} } += $prepay_credit->$_()
+    for grep $opt{$_.'_ref'}, qw( amount seconds upbytes downbytes totalbytes );
 
   $dbh->commit or die $dbh->errstr if $oldAutoCommit;
   '';
@@ -1249,6 +1319,16 @@ sub delete {
     }
   }
 
+  foreach my $cust_main_exemption (
+    qsearch( 'cust_main_exemption', { 'custnum' => $self->custnum } )
+  ) {
+    my $error = $cust_main_exemption->delete;
+    if ( $error ) {
+      $dbh->rollback if $oldAutoCommit;
+      return $error;
+    }
+  }
+
   my $error = $self->SUPER::delete;
   if ( $error ) {
     $dbh->rollback if $oldAutoCommit;
@@ -1260,7 +1340,8 @@ sub delete {
 
 }
 
-=item replace [ OLD_RECORD ] [ INVOICING_LIST_ARYREF ]
+=item replace [ OLD_RECORD ] [ INVOICING_LIST_ARYREF ] [ , OPTION => VALUE ... ] ]
+
 
 Replaces the OLD_RECORD with this one in the database.  If there is an error,
 returns the error, otherwise returns false.
@@ -1271,6 +1352,11 @@ expected and rollback the entire transaction; it is not necessary to call
 check_invoicing_list first.  Here's an example:
 
   $new_cust_main->replace( $old_cust_main, [ $email, 'POST' ] );
+
+Currently available options are: I<tax_exemption>.
+
+The I<tax_exemption> option can be set to an arrayref of tax names.
+FS::cust_main_exemption records will be deleted and inserted as appropriate.
 
 =cut
 
@@ -1318,7 +1404,7 @@ sub replace {
     return $error;
   }
 
-  if ( @param ) { # INVOICING_LIST_ARYREF
+  if ( @param && ref($param[0]) eq 'ARRAY' ) { # INVOICING_LIST_ARYREF
     my $invoicing_list = shift @param;
     $error = $self->check_invoicing_list( $invoicing_list );
     if ( $error ) {
@@ -1326,6 +1412,40 @@ sub replace {
       return $error;
     }
     $self->invoicing_list( $invoicing_list );
+  }
+
+  my %options = @param;
+
+  my $tax_exemption = delete $options{'tax_exemption'};
+  if ( $tax_exemption ) {
+
+    my %cust_main_exemption =
+      map { $_->taxname => $_ }
+          qsearch('cust_main_exemption', { 'custnum' => $old->custnum } );
+
+    foreach my $taxname ( @$tax_exemption ) {
+
+      next if delete $cust_main_exemption{$taxname};
+
+      my $cust_main_exemption = new FS::cust_main_exemption {
+        'custnum' => $self->custnum,
+        'taxname' => $taxname,
+      };
+      my $error = $cust_main_exemption->insert;
+      if ( $error ) {
+        $dbh->rollback if $oldAutoCommit;
+        return "inserting cust_main_exemption (transaction rolled back): $error";
+      }
+    }
+
+    foreach my $cust_main_exemption ( values %cust_main_exemption ) {
+      my $error = $cust_main_exemption->delete;
+      if ( $error ) {
+        $dbh->rollback if $oldAutoCommit;
+        return "deleting cust_main_exemption (transaction rolled back): $error";
+      }
+    }
+
   }
 
   if ( $self->payby =~ /^(CARD|CHEK|LECB)$/ &&
@@ -1433,6 +1553,7 @@ sub check {
     || $self->ut_textn('stateid_state')
     || $self->ut_textn('invoice_terms')
     || $self->ut_alphan('geocode')
+    || $self->ut_floatn('cdr_termination_percentage')
   ;
 
   #barf.  need message catalogs.  i18n.  etc.
@@ -1449,6 +1570,13 @@ sub check {
   return "Unknown referring custnum: ". $self->referral_custnum
     unless ! $self->referral_custnum 
            || qsearchs( 'cust_main', { 'custnum' => $self->referral_custnum } );
+
+  if ( $self->censustract ne '' ) {
+    $self->censustract =~ /^\s*(\d{9})\.?(\d{2})\s*$/
+      or return "Illegal census tract: ". $self->censustract;
+    
+    $self->censustract("$1.$2");
+  }
 
   if ( $self->ss eq '' ) {
     $self->ss('');
@@ -1717,6 +1845,8 @@ sub check {
     my( $m, $y );
     if ( $self->paydate =~ /^(\d{1,2})[\/\-](\d{2}(\d{2})?)$/ ) {
       ( $m, $y ) = ( $1, length($2) == 4 ? $2 : "20$2" );
+    } elsif ( $self->paydate =~ /^19(\d{2})[\/\-](\d{1,2})[\/\-]\d+$/ ) {
+      ( $m, $y ) = ( $2, "19$1" );
     } elsif ( $self->paydate =~ /^(20)?(\d{2})[\/\-](\d{1,2})[\/\-]\d+$/ ) {
       ( $m, $y ) = ( $3, "20$2" );
     } else {
@@ -1741,7 +1871,7 @@ sub check {
     $self->payname($1);
   }
 
-  foreach my $flag (qw( tax spool_cdr squelch_cdr )) {
+  foreach my $flag (qw( tax spool_cdr squelch_cdr archived email_csv_cdr )) {
     $self->$flag() =~ /^(Y?)$/ or return "Illegal $flag: ". $self->$flag();
     $self->$flag($1);
   }
@@ -1778,7 +1908,7 @@ sub has_ship_address {
   scalar( grep { $self->getfield("ship_$_") ne '' } $self->addr_fields );
 }
 
-=item all_pkgs
+=item all_pkgs [ EXTRA_QSEARCH_PARAMS_HASHREF ]
 
 Returns all packages (see L<FS::cust_pkg>) for this customer.
 
@@ -1786,14 +1916,15 @@ Returns all packages (see L<FS::cust_pkg>) for this customer.
 
 sub all_pkgs {
   my $self = shift;
+  my $extra_qsearch = ref($_[0]) ? shift : {};
 
-  return $self->num_pkgs unless wantarray;
+  return $self->num_pkgs unless wantarray || keys(%$extra_qsearch);
 
   my @cust_pkg = ();
   if ( $self->{'_pkgnum'} ) {
     @cust_pkg = values %{ $self->{'_pkgnum'}->cache };
   } else {
-    @cust_pkg = qsearch( 'cust_pkg', { 'custnum' => $self->custnum });
+    @cust_pkg = $self->_cust_pkg($extra_qsearch);
   }
 
   sort sort_packages @cust_pkg;
@@ -1820,7 +1951,7 @@ sub cust_location {
   qsearch('cust_location', { 'custnum' => $self->custnum } );
 }
 
-=item ncancelled_pkgs
+=item ncancelled_pkgs [ EXTRA_QSEARCH_PARAMS_HASHREF ]
 
 Returns all non-cancelled packages (see L<FS::cust_pkg>) for this customer.
 
@@ -1828,6 +1959,7 @@ Returns all non-cancelled packages (see L<FS::cust_pkg>) for this customer.
 
 sub ncancelled_pkgs {
   my $self = shift;
+  my $extra_qsearch = ref($_[0]) ? shift : {};
 
   return $self->num_ncancelled_pkgs unless wantarray;
 
@@ -1846,33 +1978,56 @@ sub ncancelled_pkgs {
          $self->custnum. "\n"
       if $DEBUG > 1;
 
-    @cust_pkg =
-      qsearch( 'cust_pkg', {
-                             'custnum' => $self->custnum,
-                             'cancel'  => '',
-                           });
-    push @cust_pkg,
-      qsearch( 'cust_pkg', {
-                             'custnum' => $self->custnum,
-                             'cancel'  => 0,
-                           });
+    $extra_qsearch->{'extra_sql'} .= ' AND ( cancel IS NULL OR cancel = 0 ) ';
+
+    @cust_pkg = $self->_cust_pkg($extra_qsearch);
+
   }
 
   sort sort_packages @cust_pkg;
 
 }
 
+sub _cust_pkg {
+  my $self = shift;
+  my $extra_qsearch = ref($_[0]) ? shift : {};
+
+  $extra_qsearch->{'select'} ||= '*';
+  $extra_qsearch->{'select'} .=
+   ',( SELECT COUNT(*) FROM cust_svc WHERE cust_pkg.pkgnum = cust_svc.pkgnum )
+     AS _num_cust_svc';
+
+  map {
+        $_->{'_num_cust_svc'} = $_->get('_num_cust_svc');
+        $_;
+      }
+  qsearch({
+    %$extra_qsearch,
+    'table'   => 'cust_pkg',
+    'hashref' => { 'custnum' => $self->custnum },
+  });
+
+}
+
 # This should be generalized to use config options to determine order.
 sub sort_packages {
-  if ( $a->get('cancel') and $b->get('cancel') ) {
-    $a->pkgnum <=> $b->pkgnum;
-  } elsif ( $a->get('cancel') or $b->get('cancel') ) {
+  
+  if ( $a->get('cancel') xor $b->get('cancel') ) {
     return -1 if $b->get('cancel');
     return  1 if $a->get('cancel');
+    #shouldn't get here...
     return 0;
   } else {
-    $a->pkgnum <=> $b->pkgnum;
+    my $a_num_cust_svc = $a->num_cust_svc;
+    my $b_num_cust_svc = $b->num_cust_svc;
+    return 0  if !$a_num_cust_svc && !$b_num_cust_svc;
+    return -1 if  $a_num_cust_svc && !$b_num_cust_svc;
+    return 1  if !$a_num_cust_svc &&  $b_num_cust_svc;
+    my @a_cust_svc = $a->cust_svc;
+    my @b_cust_svc = $b->cust_svc;
+    $a_cust_svc[0]->svc_x->label cmp $b_cust_svc[0]->svc_x->label;
   }
+
 }
 
 =item suspended_pkgs
@@ -1910,6 +2065,18 @@ this customer.
 sub unsuspended_pkgs {
   my $self = shift;
   grep { ! $_->susp } $self->ncancelled_pkgs;
+}
+
+=item next_bill_date
+
+Returns the next date this customer will be billed, as a UNIX timestamp, or
+undef if no active package has a next bill date.
+
+=cut
+
+sub next_bill_date {
+  my $self = shift;
+  min( map $_->get('bill'), grep $_->get('bill'), $self->unsuspended_pkgs );
 }
 
 =item num_cancelled_pkgs
@@ -2043,11 +2210,15 @@ Available options are:
 
 =item ban - can be set true to ban this customer's credit card or ACH information, if present.
 
+=item nobill - can be set true to skip billing if it might otherwise be done.
+
 =back
 
 Always returns a list: an empty list on success or a list of errors.
 
 =cut
+
+# nb that dates are not specified as valid options to this method
 
 sub cancel {
   my( $self, %opt ) = @_;
@@ -2073,6 +2244,13 @@ sub cancel {
   }
 
   my @pkgs = $self->ncancelled_pkgs;
+
+  if ( !$opt{nobill} && $conf->exists('bill_usage_on_cancel') ) {
+    $opt{nobill} = 1;
+    my $error = $self->bill( pkg_list => [ @pkgs ], cancel => 1 );
+    warn "Error billing during cancel, custnum ". $self->custnum. ": $error"
+      if $error;
+  }
 
   warn "$me cancelling ". scalar($self->ncancelled_pkgs). "/".
        scalar(@pkgs). " packages for customer ". $self->custnum. "\n"
@@ -2162,23 +2340,45 @@ Debugging level.  Default is 0 (no debugging), or can be set to 1 (passed-in opt
 
 =back
 
+Options are passed to the B<bill> and B<collect> methods verbatim, so all
+options of those methods are also available.
+
 =cut
 
 sub bill_and_collect {
   my( $self, %options ) = @_;
 
-  ###
-  # cancel packages
-  ###
-
   #$options{actual_time} not $options{time} because freeside-daily -d is for
   #pre-printing invoices
-  my @cancel_pkgs = grep { $_->expire && $_->expire <= $options{actual_time} }
-                         $self->ncancelled_pkgs;
+  $self->cancel_expired_pkgs(    $options{actual_time} );
+  $self->suspend_adjourned_pkgs( $options{actual_time} );
+
+  my $error = $self->bill( %options );
+  warn "Error billing, custnum ". $self->custnum. ": $error" if $error;
+
+  $self->apply_payments_and_credits;
+
+  unless ( $conf->exists('cancelled_cust-noevents')
+           && ! $self->num_ncancelled_pkgs
+  ) {
+
+    $error = $self->collect( %options );
+    warn "Error collecting, custnum". $self->custnum. ": $error" if $error;
+
+  }
+
+}
+
+sub cancel_expired_pkgs {
+  my ( $self, $time ) = @_;
+
+  my @cancel_pkgs = $self->ncancelled_pkgs( { 
+    'extra_sql' => " AND expire IS NOT NULL AND expire > 0 AND expire <= $time "
+  } );
 
   foreach my $cust_pkg ( @cancel_pkgs ) {
     my $cpr = $cust_pkg->last_cust_pkg_reason('expire');
-    my $error = $cust_pkg->cancel($cpr ? ( 'reason' => $cpr->reasonnum,
+    my $error = $cust_pkg->cancel($cpr ? ( 'reason'        => $cpr->reasonnum,
                                            'reason_otaker' => $cpr->otaker
                                          )
                                        : ()
@@ -2188,24 +2388,32 @@ sub bill_and_collect {
       if $error;
   }
 
-  ###
-  # suspend packages
-  ###
+}
 
-  #$options{actual_time} not $options{time} because freeside-daily -d is for
-  #pre-printing invoices
-  my @susp_pkgs = 
-    grep { ! $_->susp
-           && (    (    $_->part_pkg->is_prepaid
-                     && $_->bill
-                     && $_->bill < $options{actual_time}
-                   )
-                || (    $_->adjourn
-                    && $_->adjourn <= $options{actual_time}
-                  )
-              )
+sub suspend_adjourned_pkgs {
+  my ( $self, $time ) = @_;
+
+  my @susp_pkgs = $self->ncancelled_pkgs( {
+    'extra_sql' =>
+      " AND ( susp IS NULL OR susp = 0 )
+        AND (    ( bill    IS NOT NULL AND bill    != 0 AND bill    <  $time )
+              OR ( adjourn IS NOT NULL AND adjourn != 0 AND adjourn <= $time )
+            )
+      ",
+  } );
+
+  #only because there's no SQL test for is_prepaid :/
+  @susp_pkgs = 
+    grep {     (    $_->part_pkg->is_prepaid
+                 && $_->bill
+                 && $_->bill < $time
+               )
+            || (    $_->adjourn
+                 && $_->adjourn <= $time
+               )
+           
          }
-         $self->ncancelled_pkgs;
+         @susp_pkgs;
 
   foreach my $cust_pkg ( @susp_pkgs ) {
     my $cpr = $cust_pkg->last_cust_pkg_reason('adjourn')
@@ -2220,18 +2428,6 @@ sub bill_and_collect {
          " for custnum ". $self->custnum. ": $error"
       if $error;
   }
-
-  ###
-  # bill and collect
-  ###
-
-  my $error = $self->bill( %options );
-  warn "Error billing, custnum ". $self->custnum. ": $error" if $error;
-
-  $self->apply_payments_and_credits;
-
-  $error = $self->collect( %options );
-  warn "Error collecting, custnum". $self->custnum. ": $error" if $error;
 
 }
 
@@ -2264,9 +2460,25 @@ An array ref of specific packages (objects) to attempt billing, instead trying a
 
  $cust_main->bill( pkg_list => [$pkg1, $pkg2] );
 
+=item not_pkgpart
+
+A hashref of pkgparts to exclude from this billing run (can also be specified as a comma-separated scalar).
+
 =item invoice_time
 
 Used in conjunction with the I<time> option, this option specifies the date of for the generated invoices.  Other calculations, such as whether or not to generate the invoice in the first place, are not affected.
+
+=item cancel
+
+This boolean value informs the us that the package is being cancelled.  This
+typically might mean not charging the normal recurring fee but only usage
+fees since the last billing. Setup charges may be charged.  Not all package
+plans support this feature (they tend to charge 0).
+
+=item invoice_terms
+
+Options terms to be printed on this invocice.  Otherwise, customer-specific
+terms or the default terms are used.
 
 =back
 
@@ -2281,7 +2493,12 @@ sub bill {
   my $time = $options{'time'} || time;
   my $invoice_time = $options{'invoice_time'} || $time;
 
-  #put below somehow?
+  $options{'not_pkgpart'} ||= {};
+  $options{'not_pkgpart'} = { map { $_ => 1 }
+                                  split(/\s*,\s*/, $options{'not_pkgpart'})
+                            }
+    unless ref($options{'not_pkgpart'});
+
   local $SIG{HUP} = 'IGNORE';
   local $SIG{INT} = 'IGNORE';
   local $SIG{QUIT} = 'IGNORE';
@@ -2295,6 +2512,17 @@ sub bill {
 
   $self->select_for_update; #mutex
 
+  my $error = $self->do_cust_event(
+    'debug'      => ( $options{'debug'} || 0 ),
+    'time'       => $invoice_time,
+    'check_freq' => $options{'check_freq'},
+    'stage'      => 'pre-bill',
+  );
+  if ( $error ) {
+    $dbh->rollback if $oldAutoCommit;
+    return $error;
+  }
+
   my @cust_bill_pkg = ();
 
   ###
@@ -2306,11 +2534,10 @@ sub bill {
   my %taxlisthash;
   my @precommit_hooks = ();
 
-  my @cust_pkgs = qsearch('cust_pkg', { 'custnum' => $self->custnum } );
-  foreach my $cust_pkg (@cust_pkgs) {
+  $options{'pkg_list'} ||= [ $self->ncancelled_pkgs ];  #param checks?
+  foreach my $cust_pkg ( @{ $options{'pkg_list'} } ) {
 
-    #NO!! next if $cust_pkg->cancel;  
-    next if $cust_pkg->getfield('cancel');  
+    next if $options{'not_pkgpart'}->{$cust_pkg->pkgpart};
 
     warn "  bill package ". $cust_pkg->pkgnum. "\n" if $DEBUG > 1;
 
@@ -2336,6 +2563,7 @@ sub bill {
                             'recur'               => \$total_recur,
                             'tax_matrix'          => \%taxlisthash,
                             'time'                => $time,
+                            'real_pkgpart'        => $real_pkgpart,
                             'options'             => \%options,
                           );
       if ($error) {
@@ -2353,35 +2581,44 @@ sub bill {
     return '';
   }
 
-  my $postal_pkg = $self->charge_postal_fee();
-  if ( $postal_pkg && !ref( $postal_pkg ) ) {
-    $dbh->rollback if $oldAutoCommit;
-    return "can't charge postal invoice fee for customer ".
-      $self->custnum. ": $postal_pkg";
-  }
-  if ( $postal_pkg &&
-       ( scalar( grep { $_->recur && $_->recur > 0 } @cust_bill_pkg) ||
+  if ( scalar( grep { $_->recur && $_->recur > 0 } @cust_bill_pkg) ||
          !$conf->exists('postal_invoice-recurring_only')
-       )
      )
   {
-    foreach my $part_pkg ( $postal_pkg->part_pkg->self_and_bill_linked ) {
-      my $error =
-        $self->_make_lines( 'part_pkg'            => $part_pkg,
-                            'cust_pkg'            => $postal_pkg,
-                            'precommit_hooks'     => \@precommit_hooks,
-                            'line_items'          => \@cust_bill_pkg,
-                            'setup'               => \$total_setup,
-                            'recur'               => \$total_recur,
-                            'tax_matrix'          => \%taxlisthash,
-                            'time'                => $time,
-                            'options'             => \%options,
-                          );
-      if ($error) {
-        $dbh->rollback if $oldAutoCommit;
-        return $error;
+
+    my $postal_pkg = $self->charge_postal_fee();
+    if ( $postal_pkg && !ref( $postal_pkg ) ) {
+
+      $dbh->rollback if $oldAutoCommit;
+      return "can't charge postal invoice fee for customer ".
+        $self->custnum. ": $postal_pkg";
+
+    } elsif ( $postal_pkg ) {
+
+      my $real_pkgpart = $postal_pkg->pkgpart;
+      foreach my $part_pkg ( $postal_pkg->part_pkg->self_and_bill_linked ) {
+        my %postal_options = %options;
+        delete $postal_options{cancel};
+        my $error =
+          $self->_make_lines( 'part_pkg'            => $part_pkg,
+                              'cust_pkg'            => $postal_pkg,
+                              'precommit_hooks'     => \@precommit_hooks,
+                              'line_items'          => \@cust_bill_pkg,
+                              'setup'               => \$total_setup,
+                              'recur'               => \$total_recur,
+                              'tax_matrix'          => \%taxlisthash,
+                              'time'                => $time,
+                              'real_pkgpart'        => $real_pkgpart,
+                              'options'             => \%postal_options,
+                            );
+        if ($error) {
+          $dbh->rollback if $oldAutoCommit;
+          return $error;
+        }
       }
+
     }
+
   }
 
   warn "having a look at the taxes we found...\n" if $DEBUG > 2;
@@ -2398,9 +2635,14 @@ sub bill {
   # values are listrefs of cust_bill_pkg_tax_location hashrefs
   my %tax_location = ();
 
+  # keys are taxlisthash keys (internal identifiers)
+  # values are listrefs of cust_bill_pkg_tax_rate_location hashrefs
+  my %tax_rate_location = ();
+
   foreach my $tax ( keys %taxlisthash ) {
     my $tax_object = shift @{ $taxlisthash{$tax} };
     warn "found ". $tax_object->taxname. " as $tax\n" if $DEBUG > 2;
+    warn " ". join('/', @{ $taxlisthash{$tax} } ). "\n" if $DEBUG > 2;
     my $hashref_or_error =
       $tax_object->taxline( $taxlisthash{$tax},
                             'custnum'      => $self->custnum,
@@ -2433,72 +2675,40 @@ sub bill {
         };
     }
 
+    $tax_rate_location{ $tax } ||= [];
+    if ( ref($tax_object) eq 'FS::tax_rate' ) {
+      my $taxratelocationnum =
+        $tax_object->tax_rate_location->taxratelocationnum;
+      push @{ $tax_rate_location{ $tax }  },
+        {
+          'taxnum'             => $tax_object->taxnum, 
+          'taxtype'            => ref($tax_object),
+          'amount'             => sprintf('%.2f', $amount ),
+          'locationtaxid'      => $tax_object->location,
+          'taxratelocationnum' => $taxratelocationnum,
+        };
+    }
+
   }
 
   #move the cust_tax_exempt_pkg records to the cust_bill_pkgs we will commit
   my %packagemap = map { $_->pkgnum => $_ } @cust_bill_pkg;
   foreach my $tax ( keys %taxlisthash ) {
     foreach ( @{ $taxlisthash{$tax} }[1 ... scalar(@{ $taxlisthash{$tax} })] ) {
-      next unless ref($_) eq 'FS::cust_bill_pkg'; # shouldn't happen
+      next unless ref($_) eq 'FS::cust_bill_pkg';
 
       push @{ $packagemap{$_->pkgnum}->_cust_tax_exempt_pkg }, 
         splice( @{ $_->_cust_tax_exempt_pkg } );
     }
   }
 
-  #some taxes are taxed
-  my %totlisthash;
-  
-  warn "finding taxed taxes...\n" if $DEBUG > 2;
-  foreach my $tax ( keys %taxlisthash ) {
-    my $tax_object = shift @{ $taxlisthash{$tax} };
-    warn "found possible taxed tax ". $tax_object->taxname. " we call $tax\n"
-      if $DEBUG > 2;
-    next unless $tax_object->can('tax_on_tax');
-
-    foreach my $tot ( $tax_object->tax_on_tax( $self ) ) {
-      my $totname = ref( $tot ). ' '. $tot->taxnum;
-
-      warn "checking $totname which we call ". $tot->taxname. " as applicable\n"
-        if $DEBUG > 2;
-      next unless exists( $taxlisthash{ $totname } ); # only increase
-                                                      # existing taxes
-      warn "adding $totname to taxed taxes\n" if $DEBUG > 2;
-      if ( exists( $totlisthash{ $totname } ) ) {
-        push @{ $totlisthash{ $totname  } }, $tax{ $tax };
-      }else{
-        $totlisthash{ $totname } = [ $tot, $tax{ $tax } ];
-      }
-    }
-  }
-
-  warn "having a look at taxed taxes...\n" if $DEBUG > 2;
-  foreach my $tax ( keys %totlisthash ) {
-    my $tax_object = shift @{ $totlisthash{$tax} };
-    warn "found previously found taxed tax ". $tax_object->taxname. "\n"
-      if $DEBUG > 2;
-    my $listref_or_error =
-      $tax_object->taxline( $totlisthash{$tax},
-                            'custnum'      => $self->custnum,
-                            'invoice_time' => $invoice_time
-                          );
-    unless (ref($listref_or_error)) {
-      $dbh->rollback if $oldAutoCommit;
-      return $listref_or_error;
-    }
-
-    warn "adding taxed tax amount ". $listref_or_error->[1].
-         " as ". $tax_object->taxname. "\n"
-      if $DEBUG;
-    $tax{ $tax } += $listref_or_error->[1];
-  }
-  
   #consolidate and create tax line items
   warn "consolidating and generating...\n" if $DEBUG > 2;
   foreach my $taxname ( keys %taxname ) {
     my $tax = 0;
     my %seen = ();
     my @cust_bill_pkg_tax_location = ();
+    my @cust_bill_pkg_tax_rate_location = ();
     warn "adding $taxname\n" if $DEBUG > 1;
     foreach my $taxitem ( @{ $taxname{$taxname} } ) {
       next if $seen{$taxitem}++;
@@ -2507,12 +2717,32 @@ sub bill {
       push @cust_bill_pkg_tax_location,
         map { new FS::cust_bill_pkg_tax_location $_ }
             @{ $tax_location{ $taxitem } };
+      push @cust_bill_pkg_tax_rate_location,
+        map { new FS::cust_bill_pkg_tax_rate_location $_ }
+            @{ $tax_rate_location{ $taxitem } };
     }
     next unless $tax;
 
     $tax = sprintf('%.2f', $tax );
     $total_setup = sprintf('%.2f', $total_setup+$tax );
   
+    my $pkg_category = qsearchs( 'pkg_category', { 'categoryname' => $taxname,
+                                                   'disabled'     => '',
+                                                 },
+                               );
+
+    my @display = ();
+    if ( $pkg_category and
+         $conf->config('invoice_latexsummary') ||
+         $conf->config('invoice_htmlsummary')
+       )
+    {
+
+      my %hash = (  'section' => $pkg_category->categoryname );
+      push @display, new FS::cust_bill_pkg_display { type => 'S', %hash };
+
+    }
+
     push @cust_bill_pkg, new FS::cust_bill_pkg {
       'pkgnum'   => 0,
       'setup'    => $tax,
@@ -2520,20 +2750,65 @@ sub bill {
       'sdate'    => '',
       'edate'    => '',
       'itemdesc' => $taxname,
+      'display'  => \@display,
       'cust_bill_pkg_tax_location' => \@cust_bill_pkg_tax_location,
+      'cust_bill_pkg_tax_rate_location' => \@cust_bill_pkg_tax_rate_location,
+    };
+
+  }
+
+  #add tax adjustments
+  warn "adding tax adjustments...\n" if $DEBUG > 2;
+  foreach my $cust_tax_adjustment (
+    qsearch('cust_tax_adjustment', { 'custnum'    => $self->custnum,
+                                     'billpkgnum' => '',
+                                   }
+           )
+  ) {
+
+    my $tax = sprintf('%.2f', $cust_tax_adjustment->amount );
+    $total_setup = sprintf('%.2f', $total_setup+$tax );
+
+    my $itemdesc = $cust_tax_adjustment->taxname;
+    $itemdesc = '' if $itemdesc eq 'Tax';
+
+    push @cust_bill_pkg, new FS::cust_bill_pkg {
+      'pkgnum'      => 0,
+      'setup'       => $tax,
+      'recur'       => 0,
+      'sdate'       => '',
+      'edate'       => '',
+      'itemdesc'    => $itemdesc,
+      'itemcomment' => $cust_tax_adjustment->comment,
+      'cust_tax_adjustment' => $cust_tax_adjustment,
+      #'cust_bill_pkg_tax_location' => \@cust_bill_pkg_tax_location,
     };
 
   }
 
   my $charged = sprintf('%.2f', $total_setup + $total_recur );
 
+  my @cust_bill = $self->cust_bill;
+  my $balance = $self->balance;
+  my $previous_balance = scalar(@cust_bill)
+                           ? ( $cust_bill[$#cust_bill]->billing_balance || 0 )
+                           : 0;
+
+  $previous_balance += $cust_bill[$#cust_bill]->charged
+    if scalar(@cust_bill);
+  #my $balance_adjustments =
+  #  sprintf('%.2f', $balance - $prior_prior_balance - $prior_charged);
+
   #create the new invoice
   my $cust_bill = new FS::cust_bill ( {
-    'custnum' => $self->custnum,
-    '_date'   => ( $invoice_time ),
-    'charged' => $charged,
+    'custnum'             => $self->custnum,
+    '_date'               => ( $invoice_time ),
+    'charged'             => $charged,
+    'billing_balance'     => $balance,
+    'previous_balance'    => $previous_balance,
+    'invoice_terms'       => $options{'invoice_terms'},
   } );
-  my $error = $cust_bill->insert;
+  $error = $cust_bill->insert;
   if ( $error ) {
     $dbh->rollback if $oldAutoCommit;
     return "can't create invoice for customer #". $self->custnum. ": $error";
@@ -2575,10 +2850,10 @@ sub _make_lines {
   my $total_recur = $params{recur} or die "no recur accumulator specified";
   my $taxlisthash = $params{tax_matrix} or die "no tax accumulator specified";
   my $time = $params{'time'} or die "no time specified";
-  my (%options) = %{$params{options}};  #hmmm  only for 'resetup'
+  my (%options) = %{$params{options}};
 
   my $dbh = dbh;
-  my $real_pkgpart = $cust_pkg->pkgpart;
+  my $real_pkgpart = $params{real_pkgpart};
   my %hash = $cust_pkg->hash;
   my $old_cust_pkg = new FS::cust_pkg \%hash;
 
@@ -2594,14 +2869,19 @@ sub _make_lines {
 
   my $setup = 0;
   my $unitsetup = 0;
-  if ( ! $cust_pkg->setup &&
-       (
-         ( $conf->exists('disable_setup_suspended_pkgs') &&
-          ! $cust_pkg->getfield('susp')
-        ) || ! $conf->exists('disable_setup_suspended_pkgs')
-       )
-    || $options{'resetup'}
-  ) {
+  if ( $options{'resetup'}
+       || ( ! $cust_pkg->setup
+            && ( ! $cust_pkg->start_date
+                 || $cust_pkg->start_date <= $time
+               )
+            && ( ! $conf->exists('disable_setup_suspended_pkgs')
+                 || ( $conf->exists('disable_setup_suspended_pkgs') &&
+                      ! $cust_pkg->getfield('susp')
+                    )
+               )
+          )
+    )
+  {
     
     warn "    bill setup\n" if $DEBUG > 1;
     $lineitems++;
@@ -2617,6 +2897,9 @@ sub _make_lines {
           #do need it, but it won't get written to the db
           #|| $cust_pkg->pkgpart != $real_pkgpart;
 
+    $cust_pkg->setfield('start_date', '')
+      if $cust_pkg->start_date;
+
   }
 
   ###
@@ -2627,13 +2910,15 @@ sub _make_lines {
   my $recur = 0;
   my $unitrecur = 0;
   my $sdate;
-  if ( ! $cust_pkg->getfield('susp') and
-           ( $part_pkg->getfield('freq') ne '0' &&
-             ( $cust_pkg->getfield('bill') || 0 ) <= $time
+  if (     ! $cust_pkg->get('susp')
+       and ! $cust_pkg->get('start_date')
+       and ( $part_pkg->getfield('freq') ne '0'
+             && ( $cust_pkg->getfield('bill') || 0 ) <= $time
            )
         || ( $part_pkg->plan eq 'voip_cdr'
               && $part_pkg->option('bill_every_call')
            )
+        || ( $options{cancel} )
   ) {
 
     # XXX should this be a package event?  probably.  events are called
@@ -2647,18 +2932,22 @@ sub _make_lines {
     $lineitems++;
 
     # XXX shared with $recur_prog
-    $sdate = $cust_pkg->bill || $cust_pkg->setup || $time;
+    $sdate = ( $options{cancel} ? $cust_pkg->last_bill : $cust_pkg->bill )
+             || $cust_pkg->setup
+             || $time;
 
     #over two params!  lets at least switch to a hashref for the rest...
     my $increment_next_bill = ( $part_pkg->freq ne '0'
                                 && ( $cust_pkg->getfield('bill') || 0 ) <= $time
+                                && !$options{cancel}
                               );
     my %param = ( 'precommit_hooks'     => $precommit_hooks,
                   'increment_next_bill' => $increment_next_bill,
                 );
 
-    $recur = eval { $cust_pkg->calc_recur( \$sdate, \@details, \%param ) };
-    return "$@ running calc_recur for $cust_pkg\n"
+    my $method = $options{cancel} ? 'calc_cancel' : 'calc_recur';
+    $recur = eval { $cust_pkg->$method( \$sdate, \@details, \%param ) };
+    return "$@ running $method for $cust_pkg\n"
       if ( $@ );
 
     if ( $increment_next_bill ) {
@@ -2733,14 +3022,17 @@ sub _make_lines {
         'unitrecur' => $unitrecur,
         'quantity'  => $cust_pkg->quantity,
         'details'   => \@details,
+        'hidden'    => $part_pkg->hidden,
       };
 
       if ( $part_pkg->option('recur_temporality', 1) eq 'preceding' ) {
         $cust_bill_pkg->sdate( $hash{last_bill} );
         $cust_bill_pkg->edate( $sdate - 86399   ); #60s*60m*24h-1
+        $cust_bill_pkg->edate( $time ) if $options{cancel};
       } else { #if ( $part_pkg->option('recur_temporality', 1) eq 'upcoming' ) {
         $cust_bill_pkg->sdate( $sdate );
         $cust_bill_pkg->edate( $cust_pkg->bill );
+        #$cust_bill_pkg->edate( $time ) if $options{cancel};
       }
 
       $cust_bill_pkg->pkgpart_override($part_pkg->pkgpart)
@@ -2754,7 +3046,7 @@ sub _make_lines {
       ###
 
       my $error = 
-        $self->_handle_taxes($part_pkg, $taxlisthash, $cust_bill_pkg, $cust_pkg);
+        $self->_handle_taxes($part_pkg, $taxlisthash, $cust_bill_pkg, $cust_pkg, $options{invoice_time}, $real_pkgpart, \%options);
       return $error if $error;
 
       push @$cust_bill_pkgs, $cust_bill_pkg;
@@ -2773,6 +3065,9 @@ sub _handle_taxes {
   my $taxlisthash = shift;
   my $cust_bill_pkg = shift;
   my $cust_pkg = shift;
+  my $invoice_time = shift;
+  my $real_pkgpart = shift;
+  my $options = shift;
 
   my %cust_bill_pkg = ();
   my %taxes = ();
@@ -2780,8 +3075,8 @@ sub _handle_taxes {
   my @classes;
   #push @classes, $cust_bill_pkg->usage_classes if $cust_bill_pkg->type eq 'U';
   push @classes, $cust_bill_pkg->usage_classes if $cust_bill_pkg->usage;
-  push @classes, 'setup' if $cust_bill_pkg->setup;
-  push @classes, 'recur' if $cust_bill_pkg->recur;
+  push @classes, 'setup' if ($cust_bill_pkg->setup && !$options->{cancel});
+  push @classes, 'recur' if ($cust_bill_pkg->recur && !$options->{cancel});
 
   if ( $self->tax !~ /Y/i && $self->payby ne 'COMP' ) {
 
@@ -2835,6 +3130,10 @@ sub _handle_taxes {
         @taxes = qsearch( 'cust_main_county', \%taxhash_elim );
       }
 
+      @taxes = grep { ! $_->taxname or ! $self->tax_exemption($_->taxname) }
+                    @taxes
+        if $self->cust_main_exemption; #just to be safe
+
       if ( $conf->exists('tax-pkg_address') && $cust_pkg->locationnum ) {
         foreach (@taxes) {
           $_->set('pkgnum',      $cust_pkg->pkgnum );
@@ -2847,32 +3146,53 @@ sub _handle_taxes {
       $taxes{'recur'} = [ @taxes ];
       $taxes{$_} = [ @taxes ] foreach (@classes);
 
-      # maybe eliminate this entirely, along with all the 0% records
-      unless ( @taxes ) {
-        return
-          "fatal: can't find tax rate for state/county/country/taxclass ".
-          join('/', map $taxhash{$_}, qw(state county country taxclass) );
-      }
+      # # maybe eliminate this entirely, along with all the 0% records
+      # unless ( @taxes ) {
+      #   return
+      #     "fatal: can't find tax rate for state/county/country/taxclass ".
+      #     join('/', map $taxhash{$_}, qw(state county country taxclass) );
+      # }
 
     } #if $conf->exists('enable_taxproducts') ...
 
   }
  
   my @display = ();
-  if ( $conf->exists('separate_usage') ) {
+  my $separate = $conf->exists('separate_usage');
+  my $usage_mandate = $cust_pkg->part_pkg->option('usage_mandate', 'Hush!');
+  if ( $separate || $cust_bill_pkg->hidden || $usage_mandate ) {
+
+    my $temp_pkg = new FS::cust_pkg { pkgpart => $real_pkgpart };
+    my %hash = $cust_bill_pkg->hidden  # maybe for all bill linked?
+               ? (  'section' => $temp_pkg->part_pkg->categoryname )
+               : ();
+
     my $section = $cust_pkg->part_pkg->option('usage_section', 'Hush!');
     my $summary = $cust_pkg->part_pkg->option('summarize_usage', 'Hush!');
-    push @display, new FS::cust_bill_pkg_display { type    => 'S' };
-    push @display, new FS::cust_bill_pkg_display { type    => 'R' };
-    push @display, new FS::cust_bill_pkg_display { type    => 'U',
-                                                   section => $section
-                                                 };
-    if ($section && $summary) {
-      $display[2]->post_total('Y');
+    if ( $separate ) {
+      push @display, new FS::cust_bill_pkg_display { type => 'S', %hash };
+      push @display, new FS::cust_bill_pkg_display { type => 'R', %hash };
+    } else {
+      push @display, new FS::cust_bill_pkg_display
+                       { type => '',
+                         %hash,
+                         ( ( $usage_mandate ) ? ( 'summary' => 'Y' ) : () ),
+                       };
+    }
+
+    if ($separate && $section && $summary) {
       push @display, new FS::cust_bill_pkg_display { type    => 'U',
                                                      summary => 'Y',
-                                                   }
+                                                     %hash,
+                                                   };
     }
+    if ($usage_mandate || $section && $summary) {
+      $hash{post_total} = 'Y';
+    }
+
+    $hash{section} = $section if ($separate || $usage_mandate);
+    push @display, new FS::cust_bill_pkg_display { type => 'U', %hash };
+
   }
   $cust_bill_pkg->set('display', \@display);
 
@@ -2881,19 +3201,51 @@ sub _handle_taxes {
     my @taxes = @{ $taxes{$key} || [] };
     my $tax_cust_bill_pkg = $tax_cust_bill_pkg{$key};
 
+    my %localtaxlisthash = ();
     foreach my $tax ( @taxes ) {
 
-      my $taxname = ref( $tax ). ' taxnum'. $tax->taxnum;
+      my $taxname = ref( $tax ). ' '. $tax->taxnum;
 #      $taxname .= ' pkgnum'. $cust_pkg->pkgnum.
 #                  ' locationnum'. $cust_pkg->locationnum
 #        if $conf->exists('tax-pkg_address') && $cust_pkg->locationnum;
 
-      if ( exists( $taxlisthash->{ $taxname } ) ) {
-        push @{ $taxlisthash->{ $taxname  } }, $tax_cust_bill_pkg;
-      }else{
-        $taxlisthash->{ $taxname } = [ $tax, $tax_cust_bill_pkg ];
+      $taxlisthash->{ $taxname } ||= [ $tax ];
+      push @{ $taxlisthash->{ $taxname  } }, $tax_cust_bill_pkg;
+
+      $localtaxlisthash{ $taxname } ||= [ $tax ];
+      push @{ $localtaxlisthash{ $taxname  } }, $tax_cust_bill_pkg;
+
+    }
+
+    warn "finding taxed taxes...\n" if $DEBUG > 2;
+    foreach my $tax ( keys %localtaxlisthash ) {
+      my $tax_object = shift @{ $localtaxlisthash{$tax} };
+      warn "found possible taxed tax ". $tax_object->taxname. " we call $tax\n"
+        if $DEBUG > 2;
+      next unless $tax_object->can('tax_on_tax');
+
+      foreach my $tot ( $tax_object->tax_on_tax( $self ) ) {
+        my $totname = ref( $tot ). ' '. $tot->taxnum;
+
+        warn "checking $totname which we call ". $tot->taxname. " as applicable\n"
+          if $DEBUG > 2;
+        next unless exists( $localtaxlisthash{ $totname } ); # only increase
+                                                             # existing taxes
+        warn "adding $totname to taxed taxes\n" if $DEBUG > 2;
+        my $hashref_or_error = 
+          $tax_object->taxline( $localtaxlisthash{$tax},
+                                'custnum'      => $self->custnum,
+                                'invoice_time' => $invoice_time,
+                              );
+        return $hashref_or_error
+          unless ref($hashref_or_error);
+        
+        $taxlisthash->{ $totname } ||= [ $tot ];
+        push @{ $taxlisthash->{ $totname  } }, $hashref_or_error->{amount};
+
       }
     }
+
   }
 
   '';
@@ -2912,6 +3264,7 @@ sub _gather_taxes {
 
   unless (@taxclassnums) {
     @taxclassnums = map { $_->taxclassnum }
+                    grep { $_->taxable eq 'Y' }
                     $part_pkg->part_pkg_taxrate('cch', $geocode, $class);
   }
   warn "Found taxclassnum values of ". join(',', @taxclassnums)
@@ -2935,7 +3288,7 @@ sub _gather_taxes {
 
 }
 
-=item collect OPTIONS
+=item collect [ HASHREF | OPTION => VALUE ... ]
 
 (Attempt to) collect money for this customer's outstanding invoices (see
 L<FS::cust_bill>).  Usually used after the bill method.
@@ -2960,24 +3313,23 @@ Use this time when deciding when to print invoices and late notices on those inv
 
 Retry card/echeck/LEC transactions even when not scheduled by invoice events.
 
-=item quiet
-
-set true to surpress email card/ACH decline notices.
-
 =item check_freq
 
 "1d" for the traditional, daily events (the default), or "1m" for the new monthly events (part_event.check_freq)
 
-=item payby
+=item quiet
 
-allows for one time override of normal customer billing method
+set true to surpress email card/ACH decline notices.
 
 =item debug
 
 Debugging level.  Default is 0 (no debugging), or can be set to 1 (passed-in options), 2 (traces progress), 3 (more information), or 4 (include full search queries)
 
-
 =back
+
+# =item payby
+#
+# allows for one time override of normal customer billing method
 
 =cut
 
@@ -3016,12 +3368,107 @@ sub collect {
     }
   }
 
+  my $error = $self->do_cust_event(
+    'debug'      => ( $options{'debug'} || 0 ),
+    'time'       => $invoice_time,
+    'check_freq' => $options{'check_freq'},
+    'stage'      => 'collect',
+  );
+  if ( $error ) {
+    $dbh->rollback if $oldAutoCommit;
+    return $error;
+  }
+
+  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
+  '';
+
+}
+
+=item do_cust_event [ HASHREF | OPTION => VALUE ... ]
+
+Runs billing events; see L<FS::part_event> and the billing events web
+interface.
+
+If there is an error, returns the error, otherwise returns false.
+
+Options are passed as name-value pairs.
+
+Currently available options are:
+
+=over 4
+
+=item time
+
+Use this time when deciding when to print invoices and late notices on those invoices.  The default is now.  It is specified as a UNIX timestamp; see L<perlfunc/"time">).  Also see L<Time::Local> and L<Date::Parse> for conversion functions.
+
+=item check_freq
+
+"1d" for the traditional, daily events (the default), or "1m" for the new monthly events (part_event.check_freq)
+
+=item stage
+
+"collect" (the default) or "pre-bill"
+
+=item quiet
+ 
+set true to surpress email card/ACH decline notices.
+
+=item debug
+
+Debugging level.  Default is 0 (no debugging), or can be set to 1 (passed-in options), 2 (traces progress), 3 (more information), or 4 (include full search queries)
+
+=cut
+
+# =item payby
+#
+# allows for one time override of normal customer billing method
+
+# =item retry
+#
+# Retry card/echeck/LEC transactions even when not scheduled by invoice events.
+
+sub do_cust_event {
+  my( $self, %options ) = @_;
+  my $time = $options{'time'} || time;
+
+  #put below somehow?
+  local $SIG{HUP} = 'IGNORE';
+  local $SIG{INT} = 'IGNORE';
+  local $SIG{QUIT} = 'IGNORE';
+  local $SIG{TERM} = 'IGNORE';
+  local $SIG{TSTP} = 'IGNORE';
+  local $SIG{PIPE} = 'IGNORE';
+
+  my $oldAutoCommit = $FS::UID::AutoCommit;
+  local $FS::UID::AutoCommit = 0;
+  my $dbh = dbh;
+
+  $self->select_for_update; #mutex
+
+  if ( $DEBUG ) {
+    my $balance = $self->balance;
+    warn "$me do_cust_event customer ". $self->custnum. ": balance $balance\n"
+  }
+
+#  if ( exists($options{'retry_card'}) ) {
+#    carp 'retry_card option passed to collect is deprecated; use retry';
+#    $options{'retry'} ||= $options{'retry_card'};
+#  }
+#  if ( exists($options{'retry'}) && $options{'retry'} ) {
+#    my $error = $self->retry_realtime;
+#    if ( $error ) {
+#      $dbh->rollback if $oldAutoCommit;
+#      return $error;
+#    }
+#  }
+
   # false laziness w/pay_batch::import_results
 
   my $due_cust_event = $self->due_cust_event(
     'debug'      => ( $options{'debug'} || 0 ),
-    'time'       => $invoice_time,
+    'time'       => $time,
     'check_freq' => $options{'check_freq'},
+    'stage'      => ( $options{'stage'} || 'collect' ),
   );
   unless( ref($due_cust_event) ) {
     $dbh->rollback if $oldAutoCommit;
@@ -3033,7 +3480,7 @@ sub collect {
     #XXX lock event
     
     #re-eval event conditions (a previous event could have changed things)
-    unless ( $cust_event->test_conditions( 'time' => $invoice_time ) ) {
+    unless ( $cust_event->test_conditions( 'time' => $time ) ) {
       #don't leave stray "new/locked" records around
       my $error = $cust_event->delete;
       if ( $error ) {
@@ -3085,6 +3532,10 @@ options are:
 =item check_freq
 
 Search only for events of this check frequency (how often events of this type are checked); currently "1d" (daily, the default) and "1m" (monthly) are recognized.
+
+=item stage
+
+"collect" (the default) or "pre-bill"
 
 =item time
 
@@ -3141,7 +3592,7 @@ sub due_cust_event {
     unless $opt{testonly};
 
   ###
-  # 1: find possible events (initial search)
+  # find possible events (initial search)
   ###
   
   my @cust_event = ();
@@ -3232,8 +3683,20 @@ sub due_cust_event {
        " total possible cust events found in initial search\n"
     if $DEBUG; # > 1;
 
+
   ##
-  # 2: test conditions
+  # test stage
+  ##
+
+  $opt{stage} ||= 'collect';
+  @cust_event =
+    grep { my $stage = $_->part_event->event_stage;
+           $opt{stage} eq $stage or ( ! $stage && $opt{stage} eq 'collect' )
+         }
+         @cust_event;
+
+  ##
+  # test conditions
   ##
   
   my %unsat = ();
@@ -3250,7 +3713,7 @@ sub due_cust_event {
     if $DEBUG; # > 1;
 
   ##
-  # 3: insert
+  # insert
   ##
 
   unless( $opt{testonly} ) {
@@ -3268,7 +3731,7 @@ sub due_cust_event {
   $dbh->commit or die $dbh->errstr if $oldAutoCommit;
 
   ##
-  # 4: return
+  # return
   ##
 
   warn "  returning events: ". Dumper(@cust_event). "\n"
@@ -3368,6 +3831,10 @@ sub retry_realtime {
 
 }
 
+# some horrid false laziness here to avoid refactor fallout
+# eventually realtime realtime_bop and realtime_refund_bop should go
+# away and be replaced by _new_realtime_bop and _new_realtime_refund_bop
+
 =item realtime_bop METHOD AMOUNT [ OPTION => VALUE ... ]
 
 Runs a realtime credit card, ACH (electronic check) or phone bill transaction
@@ -3401,7 +3868,12 @@ I<payunique> is a unique identifier for this payment.
 =cut
 
 sub realtime_bop {
-  my( $self, $method, $amount, %options ) = @_;
+  my $self = shift;
+
+  return $self->_new_realtime_bop(@_)
+    if $self->_new_bop_required();
+
+  my( $method, $amount, %options ) = @_;
   if ( $DEBUG ) {
     warn "$me realtime_bop: $method $amount\n";
     warn "  $_ => $options{$_}\n" foreach keys %options;
@@ -3435,23 +3907,34 @@ sub realtime_bop {
   return "Banned credit card" if $ban;
 
   ###
-  # select a gateway
+  # set taxclass and trans_is_recur based on invnum if there is one
   ###
 
   my $taxclass = '';
+  my $trans_is_recur = 0;
   if ( $options{'invnum'} ) {
+
     my $cust_bill = qsearchs('cust_bill', { 'invnum' => $options{'invnum'} } );
     die "invnum ". $options{'invnum'}. " not found" unless $cust_bill;
-    my @taxclasses =
-      map  { $_->part_pkg->taxclass }
+
+    my @part_pkg =
+      map  { $_->part_pkg }
       grep { $_ }
       map  { $_->cust_pkg }
       $cust_bill->cust_bill_pkg;
-    unless ( grep { $taxclasses[0] ne $_ } @taxclasses ) { #unless there are
-                                                           #different taxclasses
-      $taxclass = $taxclasses[0];
-    }
+
+    my @taxclasses = map $_->taxclass, @part_pkg;
+    $taxclass = $taxclasses[0]
+      unless grep { $taxclasses[0] ne $_ } @taxclasses; #unless there are
+                                                        #different taxclasses
+    $trans_is_recur = 1
+      if grep { $_->freq ne '0' } @part_pkg;
+
   }
+
+  ###
+  # select a gateway
+  ###
 
   #look for an agent gateway override first
   my $cardtype;
@@ -3580,16 +4063,15 @@ sub realtime_bop {
                            : $self->payissue;
     $content{issue_number} = $payissue if $payissue;
 
-    $content{recurring_billing} = 'YES'
-      if qsearch('cust_pay', { 'custnum' => $self->custnum,
-                               'payby'   => 'CARD',
-                               'payinfo' => $payinfo,
-                             } )
-      || qsearch('cust_pay', { 'custnum' => $self->custnum,
-                               'payby'   => 'CARD',
-                               'paymask' => $self->mask_payinfo('CARD', $payinfo),
-                             } );
-
+    if ( $self->_bop_recurring_billing( 'payinfo'        => $payinfo,
+                                        'trans_is_recur' => $trans_is_recur,
+                                      )
+       )
+    {
+      $content{recurring_billing} = 'YES';
+      $content{acct_code} = 'rebill'
+        if $conf->exists('credit_card-recurring_billing_acct_code');
+    }
 
   } elsif ( $method eq 'ECHECK' ) {
     ( $content{account_number}, $content{routing_code} ) =
@@ -3648,15 +4130,17 @@ sub realtime_bop {
   #okay, good to go, if we're a duplicate, cust_pay_pending will kick us out
 
   my $cust_pay_pending = new FS::cust_pay_pending {
-    'custnum'    => $self->custnum,
-    #'invnum'     => $options{'invnum'},
-    'paid'       => $amount,
-    '_date'      => '',
-    'payby'      => $method2payby{$method},
-    'payinfo'    => $payinfo,
-    'paydate'    => $paydate,
-    'status'     => 'new',
-    'gatewaynum' => ( $payment_gateway ? $payment_gateway->gatewaynum : '' ),
+    'custnum'           => $self->custnum,
+    #'invnum'            => $options{'invnum'},
+    'paid'              => $amount,
+    '_date'             => '',
+    'payby'             => $method2payby{$method},
+    'payinfo'           => $payinfo,
+    'paydate'           => $paydate,
+    'recurring_billing' => $content{recurring_billing},
+    'pkgnum'            => $options{'pkgnum'},
+    'status'            => 'new',
+    'gatewaynum'        => ( $payment_gateway ? $payment_gateway->gatewaynum : '' ),
   };
   $cust_pay_pending->payunique( $options{payunique} )
     if defined($options{payunique}) && length($options{payunique});
@@ -3810,6 +4294,7 @@ sub realtime_bop {
        'payinfo'  => $payinfo,
        'paybatch' => $paybatch,
        'paydate'  => $paydate,
+       'pkgnum'   => $options{'pkgnum'},
     } );
     #doesn't hurt to know, even though the dup check is in cust_pay_pending now
     $cust_pay->payunique( $options{payunique} )
@@ -3912,7 +4397,13 @@ sub realtime_bop {
       $template->compile()
         or return "($perror) can't compile template: $Text::Template::ERROR";
 
-      my $templ_hash = { error => $transaction->error_message };
+      my $templ_hash = {
+        'company_name'    =>
+          scalar( $conf->config('company_name', $self->agentnum ) ),
+        'company_address' =>
+          join("\n", $conf->config('company_address', $self->agentnum ) ),
+        'error'           => $transaction->error_message,
+      };
 
       my $error = send_email(
         'from'    => $conf->config('invoice_from', $self->agentnum ),
@@ -3942,118 +4433,33 @@ sub realtime_bop {
 
 }
 
-=item fake_bop
+sub _bop_recurring_billing {
+  my( $self, %opt ) = @_;
 
-=cut
+  my $method = $conf->config('credit_card-recurring_billing_flag');
 
-sub fake_bop {
-  my( $self, $method, $amount, %options ) = @_;
+  if ( $method eq 'transaction_is_recur' ) {
 
-  if ( $options{'fake_failure'} ) {
-     return "Error: No error; test failure requested with fake_failure";
+    return 1 if $opt{'trans_is_recur'};
+
+  } else {
+
+    my %hash = ( 'custnum' => $self->custnum,
+                 'payby'   => 'CARD',
+               );
+
+    return 1 
+      if qsearch('cust_pay', { %hash, 'payinfo' => $opt{'payinfo'} } )
+      || qsearch('cust_pay', { %hash, 'paymask' => $self->mask_payinfo('CARD',
+                                                               $opt{'payinfo'} )
+                             } );
+
   }
 
-  my %method2payby = (
-    'CC'     => 'CARD',
-    'ECHECK' => 'CHEK',
-    'LEC'    => 'LECB',
-  );
-
-  #my $paybatch = '';
-  #if ( $payment_gateway ) { # agent override
-  #  $paybatch = $payment_gateway->gatewaynum. '-';
-  #}
-  #
-  #$paybatch .= "$processor:". $transaction->authorization;
-  #
-  #$paybatch .= ':'. $transaction->order_number
-  #  if $transaction->can('order_number')
-  #  && length($transaction->order_number);
-
-  my $paybatch = 'FakeProcessor:54:32';
-
-  my $cust_pay = new FS::cust_pay ( {
-     'custnum'  => $self->custnum,
-     'invnum'   => $options{'invnum'},
-     'paid'     => $amount,
-     '_date'    => '',
-     'payby'    => $method2payby{$method},
-     #'payinfo'  => $payinfo,
-     'payinfo'  => '4111111111111111',
-     'paybatch' => $paybatch,
-     #'paydate'  => $paydate,
-     'paydate'  => '2012-05-01',
-  } );
-  $cust_pay->payunique( $options{payunique} ) if length($options{payunique});
-
-  my $error = $cust_pay->insert($options{'manual'} ? ( 'manual' => 1 ) : () );
-
-  if ( $error ) {
-    $cust_pay->invnum(''); #try again with no specific invnum
-    my $error2 = $cust_pay->insert( $options{'manual'} ?
-                                    ( 'manual' => 1 ) : ()
-                                  );
-    if ( $error2 ) {
-      # gah, even with transactions.
-      my $e = 'WARNING: Card/ACH debited but database not updated - '.
-              "error inserting (fake!) payment: $error2".
-              " (previously tried insert with invnum #$options{'invnum'}" .
-              ": $error )";
-      warn $e;
-      return $e;
-    }
-  }
-
-  if ( $options{'paynum_ref'} ) {
-    ${ $options{'paynum_ref'} } = $cust_pay->paynum;
-  }
-
-  return ''; #no error
+  return 0;
 
 }
 
-=item default_payment_gateway
-
-=cut
-
-sub default_payment_gateway {
-  my( $self, $method ) = @_;
-
-  die "Real-time processing not enabled\n"
-    unless $conf->exists('business-onlinepayment');
-
-  #load up config
-  my $bop_config = 'business-onlinepayment';
-  $bop_config .= '-ach'
-    if $method =~ /^(ECHECK|CHEK)$/ && $conf->exists($bop_config. '-ach');
-  my ( $processor, $login, $password, $action, @bop_options ) =
-    $conf->config($bop_config);
-  $action ||= 'normal authorization';
-  pop @bop_options if scalar(@bop_options) % 2 && $bop_options[-1] =~ /^\s*$/;
-  die "No real-time processor is enabled - ".
-      "did you set the business-onlinepayment configuration value?\n"
-    unless $processor;
-
-  ( $processor, $login, $password, $action, @bop_options )
-}
-
-=item remove_cvv
-
-Removes the I<paycvv> field from the database directly.
-
-If there is an error, returns the error, otherwise returns false.
-
-=cut
-
-sub remove_cvv {
-  my $self = shift;
-  my $sth = dbh->prepare("UPDATE cust_main SET paycvv = '' WHERE custnum = ?")
-    or return dbh->errstr;
-  $sth->execute($self->custnum)
-    or return $sth->errstr;
-  $self->paycvv('');
-  '';
-}
 
 =item realtime_refund_bop METHOD [ OPTION => VALUE ... ]
 
@@ -4094,7 +4500,12 @@ gateway is attempted.
 #some false laziness w/realtime_bop, not enough to make it worth merging
 #but some useful small subs should be pulled out
 sub realtime_refund_bop {
-  my( $self, $method, %options ) = @_;
+  my $self = shift;
+
+  return $self->_new_realtime_refund_bop(@_)
+    if $self->_new_bop_required();
+
+  my( $method, %options ) = @_;
   if ( $DEBUG ) {
     warn "$me realtime_refund_bop: $method refund\n";
     warn "  $_ => $options{$_}\n" foreach keys %options;
@@ -4373,6 +4784,1314 @@ sub realtime_refund_bop {
 
 }
 
+# does the configuration indicate the new bop routines are required?
+
+sub _new_bop_required {
+  my $self = shift;
+
+  my $botpp = 'Business::OnlineThirdPartyPayment';
+
+  return 1
+    if ( $conf->config('business-onlinepayment-namespace') eq $botpp ||
+         scalar( grep { $_->gateway_namespace eq $botpp } 
+                 qsearch( 'payment_gateway', { 'disabled' => '' } )
+               )
+       )
+  ;
+
+  '';
+}
+  
+
+=item realtime_collect [ OPTION => VALUE ... ]
+
+Runs a realtime credit card, ACH (electronic check) or phone bill transaction
+via a Business::OnlinePayment or Business::OnlineThirdPartyPayment realtime
+gateway.  See L<http://420.am/business-onlinepayment> and 
+L<http://420.am/business-onlinethirdpartypayment> for supported gateways.
+
+On failure returns an error message.
+
+Returns false or a hashref upon success.  The hashref contains keys popup_url reference, and collectitems.  The first is a URL to which a browser should be redirected for completion of collection.  The second is a reference id for the transaction suitable for the end user.  The collectitems is a reference to a list of name value pairs suitable for assigning to a html form and posted to popup_url.
+
+Available options are: I<method>, I<amount>, I<description>, I<invnum>, I<quiet>, I<paynum_ref>, I<payunique>, I<session_id>, I<pkgnum>
+
+I<method> is one of: I<CC>, I<ECHECK> and I<LEC>.  If none is specified
+then it is deduced from the customer record.
+
+If no I<amount> is specified, then the customer balance is used.
+
+The additional options I<payname>, I<address1>, I<address2>, I<city>, I<state>,
+I<zip>, I<payinfo> and I<paydate> are also available.  Any of these options,
+if set, will override the value from the customer record.
+
+I<description> is a free-text field passed to the gateway.  It defaults to
+"Internet services".
+
+If an I<invnum> is specified, this payment (if successful) is applied to the
+specified invoice.  If you don't specify an I<invnum> you might want to
+call the B<apply_payments> method.
+
+I<quiet> can be set true to surpress email decline notices.
+
+I<paynum_ref> can be set to a scalar reference.  It will be filled in with the
+resulting paynum, if any.
+
+I<payunique> is a unique identifier for this payment.
+
+I<session_id> is a session identifier associated with this payment.
+
+I<depend_jobnum> allows payment capture to unlock export jobs
+
+=cut
+
+sub realtime_collect {
+  my( $self, %options ) = @_;
+
+  if ( $DEBUG ) {
+    warn "$me realtime_collect:\n";
+    warn "  $_ => $options{$_}\n" foreach keys %options;
+  }
+
+  $options{amount} = $self->balance unless exists( $options{amount} );
+  $options{method} = FS::payby->payby2bop($self->payby)
+    unless exists( $options{method} );
+
+  return $self->realtime_bop({%options});
+
+}
+
+=item _realtime_bop { [ ARG => VALUE ... ] }
+
+Runs a realtime credit card, ACH (electronic check) or phone bill transaction
+via a Business::OnlinePayment realtime gateway.  See
+L<http://420.am/business-onlinepayment> for supported gateways.
+
+Required arguments in the hashref are I<method>, and I<amount>
+
+Available methods are: I<CC>, I<ECHECK> and I<LEC>
+
+Available optional arguments are: I<description>, I<invnum>, I<quiet>, I<paynum_ref>, I<payunique>, I<session_id>
+
+The additional options I<payname>, I<address1>, I<address2>, I<city>, I<state>,
+I<zip>, I<payinfo> and I<paydate> are also available.  Any of these options,
+if set, will override the value from the customer record.
+
+I<description> is a free-text field passed to the gateway.  It defaults to
+"Internet services".
+
+If an I<invnum> is specified, this payment (if successful) is applied to the
+specified invoice.  If you don't specify an I<invnum> you might want to
+call the B<apply_payments> method.
+
+I<quiet> can be set true to surpress email decline notices.
+
+I<paynum_ref> can be set to a scalar reference.  It will be filled in with the
+resulting paynum, if any.
+
+I<payunique> is a unique identifier for this payment.
+
+I<session_id> is a session identifier associated with this payment.
+
+I<depend_jobnum> allows payment capture to unlock export jobs
+
+(moved from cust_bill) (probably should get realtime_{card,ach,lec} here too)
+
+=cut
+
+# some helper routines
+sub _payment_gateway {
+  my ($self, $options) = @_;
+
+  $options->{payment_gateway} = $self->agent->payment_gateway( %$options )
+    unless exists($options->{payment_gateway});
+
+  $options->{payment_gateway};
+}
+
+sub _bop_auth {
+  my ($self, $options) = @_;
+
+  (
+    'login'    => $options->{payment_gateway}->gateway_username,
+    'password' => $options->{payment_gateway}->gateway_password,
+  );
+}
+
+sub _bop_options {
+  my ($self, $options) = @_;
+
+  $options->{payment_gateway}->gatewaynum
+    ? $options->{payment_gateway}->options
+    : @{ $options->{payment_gateway}->get('options') };
+}
+
+sub _bop_defaults {
+  my ($self, $options) = @_;
+
+  $options->{description} ||= 'Internet services';
+  $options->{payinfo} = $self->payinfo unless exists( $options->{payinfo} );
+  $options->{invnum} ||= '';
+  $options->{payname} = $self->payname unless exists( $options->{payname} );
+}
+
+sub _bop_content {
+  my ($self, $options) = @_;
+  my %content = ();
+
+  $content{address} = exists($options->{'address1'})
+                        ? $options->{'address1'}
+                        : $self->address1;
+  my $address2 = exists($options->{'address2'})
+                   ? $options->{'address2'}
+                   : $self->address2;
+  $content{address} .= ", ". $address2 if length($address2);
+
+  my $payip = exists($options->{'payip'}) ? $options->{'payip'} : $self->payip;
+  $content{customer_ip} = $payip if length($payip);
+
+  $content{invoice_number} = $options->{'invnum'}
+    if exists($options->{'invnum'}) && length($options->{'invnum'});
+
+  $content{email_customer} = 
+    (    $conf->exists('business-onlinepayment-email_customer')
+      || $conf->exists('business-onlinepayment-email-override') );
+      
+  $content{payfirst} = $self->getfield('first');
+  $content{paylast} = $self->getfield('last');
+
+  $content{account_name} = "$content{payfirst} $content{paylast}"
+    if $options->{method} eq 'ECHECK';
+
+  $content{name} = $options->{payname};
+  $content{name} = $content{account_name} if exists($content{account_name});
+
+  $content{city} = exists($options->{city})
+                     ? $options->{city}
+                     : $self->city;
+  $content{state} = exists($options->{state})
+                      ? $options->{state}
+                      : $self->state;
+  $content{zip} = exists($options->{zip})
+                    ? $options->{'zip'}
+                    : $self->zip;
+  $content{country} = exists($options->{country})
+                        ? $options->{country}
+                        : $self->country;
+  $content{referer} = 'http://cleanwhisker.420.am/'; #XXX fix referer :/
+  $content{phone} = $self->daytime || $self->night;
+
+  (%content);
+}
+
+my %bop_method2payby = (
+  'CC'     => 'CARD',
+  'ECHECK' => 'CHEK',
+  'LEC'    => 'LECB',
+);
+
+sub _new_realtime_bop {
+  my $self = shift;
+
+  my %options = ();
+  if (ref($_[0]) eq 'HASH') {
+    %options = %{$_[0]};
+  } else {
+    my ( $method, $amount ) = ( shift, shift );
+    %options = @_;
+    $options{method} = $method;
+    $options{amount} = $amount;
+  }
+  
+  if ( $DEBUG ) {
+    warn "$me realtime_bop (new): $options{method} $options{amount}\n";
+    warn "  $_ => $options{$_}\n" foreach keys %options;
+  }
+
+  return $self->fake_bop(%options) if $options{'fake'};
+
+  $self->_bop_defaults(\%options);
+
+  ###
+  # set trans_is_recur based on invnum if there is one
+  ###
+
+  my $trans_is_recur = 0;
+  if ( $options{'invnum'} ) {
+
+    my $cust_bill = qsearchs('cust_bill', { 'invnum' => $options{'invnum'} } );
+    die "invnum ". $options{'invnum'}. " not found" unless $cust_bill;
+
+    my @part_pkg =
+      map  { $_->part_pkg }
+      grep { $_ }
+      map  { $_->cust_pkg }
+      $cust_bill->cust_bill_pkg;
+
+    $trans_is_recur = 1
+      if grep { $_->freq ne '0' } @part_pkg;
+
+  }
+
+  ###
+  # select a gateway
+  ###
+
+  my $payment_gateway =  $self->_payment_gateway( \%options );
+  my $namespace = $payment_gateway->gateway_namespace;
+
+  eval "use $namespace";  
+  die $@ if $@;
+
+  ###
+  # check for banned credit card/ACH
+  ###
+
+  my $ban = qsearchs('banned_pay', {
+    'payby'   => $bop_method2payby{$options{method}},
+    'payinfo' => md5_base64($options{payinfo}),
+  } );
+  return "Banned credit card" if $ban;
+
+  ###
+  # massage data
+  ###
+
+  my (%bop_content) = $self->_bop_content(\%options);
+
+  if ( $options{method} ne 'ECHECK' ) {
+    $options{payname} =~ /^\s*([\w \,\.\-\']*)?\s+([\w\,\.\-\']+)\s*$/
+      or return "Illegal payname $options{payname}";
+    ($bop_content{payfirst}, $bop_content{paylast}) = ($1, $2);
+  }
+
+  my @invoicing_list = $self->invoicing_list_emailonly;
+  if ( $conf->exists('emailinvoiceautoalways')
+       || $conf->exists('emailinvoiceauto') && ! @invoicing_list
+       || ( $conf->exists('emailinvoiceonly') && ! @invoicing_list ) ) {
+    push @invoicing_list, $self->all_emails;
+  }
+
+  my $email = ($conf->exists('business-onlinepayment-email-override'))
+              ? $conf->config('business-onlinepayment-email-override')
+              : $invoicing_list[0];
+
+  my $paydate = '';
+  my %content = ();
+  if ( $namespace eq 'Business::OnlinePayment' && $options{method} eq 'CC' ) {
+
+    $content{card_number} = $options{payinfo};
+    $paydate = exists($options{'paydate'})
+                    ? $options{'paydate'}
+                    : $self->paydate;
+    $paydate =~ /^\d{2}(\d{2})[\/\-](\d+)[\/\-]\d+$/;
+    $content{expiration} = "$2/$1";
+
+    my $paycvv = exists($options{'paycvv'})
+                   ? $options{'paycvv'}
+                   : $self->paycvv;
+    $content{cvv2} = $paycvv
+      if length($paycvv);
+
+    my $paystart_month = exists($options{'paystart_month'})
+                           ? $options{'paystart_month'}
+                           : $self->paystart_month;
+
+    my $paystart_year  = exists($options{'paystart_year'})
+                           ? $options{'paystart_year'}
+                           : $self->paystart_year;
+
+    $content{card_start} = "$paystart_month/$paystart_year"
+      if $paystart_month && $paystart_year;
+
+    my $payissue       = exists($options{'payissue'})
+                           ? $options{'payissue'}
+                           : $self->payissue;
+    $content{issue_number} = $payissue if $payissue;
+
+    if ( $self->_bop_recurring_billing( 'payinfo'        => $options{'payinfo'},
+                                        'trans_is_recur' => $trans_is_recur,
+                                      )
+       )
+    {
+      $content{recurring_billing} = 'YES';
+      $content{acct_code} = 'rebill'
+        if $conf->exists('credit_card-recurring_billing_acct_code');
+    }
+
+  } elsif ( $namespace eq 'Business::OnlinePayment' && $options{method} eq 'ECHECK' ){
+    ( $content{account_number}, $content{routing_code} ) =
+      split('@', $options{payinfo});
+    $content{bank_name} = $options{payname};
+    $content{bank_state} = exists($options{'paystate'})
+                             ? $options{'paystate'}
+                             : $self->getfield('paystate');
+    $content{account_type} = exists($options{'paytype'})
+                               ? uc($options{'paytype'}) || 'CHECKING'
+                               : uc($self->getfield('paytype')) || 'CHECKING';
+    $content{customer_org} = $self->company ? 'B' : 'I';
+    $content{state_id}       = exists($options{'stateid'})
+                                 ? $options{'stateid'}
+                                 : $self->getfield('stateid');
+    $content{state_id_state} = exists($options{'stateid_state'})
+                                 ? $options{'stateid_state'}
+                                 : $self->getfield('stateid_state');
+    $content{customer_ssn} = exists($options{'ss'})
+                               ? $options{'ss'}
+                               : $self->ss;
+  } elsif ( $namespace eq 'Business::OnlinePayment' && $options{method} eq 'LEC' ) {
+    $content{phone} = $options{payinfo};
+  } elsif ( $namespace eq 'Business::OnlineThirdPartyPayment' ) {
+    #move along
+  } else {
+    #die an evil death
+  }
+
+  ###
+  # run transaction(s)
+  ###
+
+  my $balance = exists( $options{'balance'} )
+                  ? $options{'balance'}
+                  : $self->balance;
+
+  $self->select_for_update; #mutex ... just until we get our pending record in
+
+  #the checks here are intended to catch concurrent payments
+  #double-form-submission prevention is taken care of in cust_pay_pending::check
+
+  #check the balance
+  return "The customer's balance has changed; $options{method} transaction aborted."
+    if $self->balance < $balance;
+    #&& $self->balance < $options{amount}; #might as well anyway?
+
+  #also check and make sure there aren't *other* pending payments for this cust
+
+  my @pending = qsearch('cust_pay_pending', {
+    'custnum' => $self->custnum,
+    'status'  => { op=>'!=', value=>'done' } 
+  });
+  return "A payment is already being processed for this customer (".
+         join(', ', map 'paypendingnum '. $_->paypendingnum, @pending ).
+         "); $options{method} transaction aborted."
+    if scalar(@pending);
+
+  #okay, good to go, if we're a duplicate, cust_pay_pending will kick us out
+
+  my $cust_pay_pending = new FS::cust_pay_pending {
+    'custnum'           => $self->custnum,
+    #'invnum'            => $options{'invnum'},
+    'paid'              => $options{amount},
+    '_date'             => '',
+    'payby'             => $bop_method2payby{$options{method}},
+    'payinfo'           => $options{payinfo},
+    'paydate'           => $paydate,
+    'recurring_billing' => $content{recurring_billing},
+    'pkgnum'            => $options{'pkgnum'},
+    'status'            => 'new',
+    'gatewaynum'        => $payment_gateway->gatewaynum || '',
+    'session_id'        => $options{session_id} || '',
+    'jobnum'            => $options{depend_jobnum} || '',
+  };
+  $cust_pay_pending->payunique( $options{payunique} )
+    if defined($options{payunique}) && length($options{payunique});
+  my $cpp_new_err = $cust_pay_pending->insert; #mutex lost when this is inserted
+  return $cpp_new_err if $cpp_new_err;
+
+  my( $action1, $action2 ) =
+    split( /\s*\,\s*/, $payment_gateway->gateway_action );
+
+  my $transaction = new $namespace( $payment_gateway->gateway_module,
+                                    $self->_bop_options(\%options),
+                                  );
+
+  $transaction->content(
+    'type'           => $options{method},
+    $self->_bop_auth(\%options),          
+    'action'         => $action1,
+    'description'    => $options{'description'},
+    'amount'         => $options{amount},
+    #'invoice_number' => $options{'invnum'},
+    'customer_id'    => $self->custnum,
+    %bop_content,
+    'reference'      => $cust_pay_pending->paypendingnum, #for now
+    'email'          => $email,
+    %content, #after
+  );
+
+  $cust_pay_pending->status('pending');
+  my $cpp_pending_err = $cust_pay_pending->replace;
+  return $cpp_pending_err if $cpp_pending_err;
+
+  #config?
+  my $BOP_TESTING = 0;
+  my $BOP_TESTING_SUCCESS = 1;
+
+  unless ( $BOP_TESTING ) {
+    $transaction->submit();
+  } else {
+    if ( $BOP_TESTING_SUCCESS ) {
+      $transaction->is_success(1);
+      $transaction->authorization('fake auth');
+    } else {
+      $transaction->is_success(0);
+      $transaction->error_message('fake failure');
+    }
+  }
+
+  if ( $transaction->is_success() && $namespace eq 'Business::OnlineThirdPartyPayment' ) {
+
+    return { reference => $cust_pay_pending->paypendingnum,
+             map { $_ => $transaction->$_ } qw ( popup_url collectitems ) };
+
+  } elsif ( $transaction->is_success() && $action2 ) {
+
+    $cust_pay_pending->status('authorized');
+    my $cpp_authorized_err = $cust_pay_pending->replace;
+    return $cpp_authorized_err if $cpp_authorized_err;
+
+    my $auth = $transaction->authorization;
+    my $ordernum = $transaction->can('order_number')
+                   ? $transaction->order_number
+                   : '';
+
+    my $capture =
+      new Business::OnlinePayment( $payment_gateway->gateway_module,
+                                   $self->_bop_options(\%options),
+                                 );
+
+    my %capture = (
+      %content,
+      type           => $options{method},
+      action         => $action2,
+      $self->_bop_auth(\%options),          
+      order_number   => $ordernum,
+      amount         => $options{amount},
+      authorization  => $auth,
+      description    => $options{'description'},
+    );
+
+    foreach my $field (qw( authorization_source_code returned_ACI
+                           transaction_identifier validation_code           
+                           transaction_sequence_num local_transaction_date    
+                           local_transaction_time AVS_result_code          )) {
+      $capture{$field} = $transaction->$field() if $transaction->can($field);
+    }
+
+    $capture->content( %capture );
+
+    $capture->submit();
+
+    unless ( $capture->is_success ) {
+      my $e = "Authorization successful but capture failed, custnum #".
+              $self->custnum. ': '.  $capture->result_code.
+              ": ". $capture->error_message;
+      warn $e;
+      return $e;
+    }
+
+  }
+
+  ###
+  # remove paycvv after initial transaction
+  ###
+
+  #false laziness w/misc/process/payment.cgi - check both to make sure working
+  # correctly
+  if ( defined $self->dbdef_table->column('paycvv')
+       && length($self->paycvv)
+       && ! grep { $_ eq cardtype($options{payinfo}) } $conf->config('cvv-save')
+  ) {
+    my $error = $self->remove_cvv;
+    if ( $error ) {
+      warn "WARNING: error removing cvv: $error\n";
+    }
+  }
+
+  ###
+  # result handling
+  ###
+
+  $self->_realtime_bop_result( $cust_pay_pending, $transaction, %options );
+
+}
+
+=item fake_bop
+
+=cut
+
+sub fake_bop {
+  my $self = shift;
+
+  my %options = ();
+  if (ref($_[0]) eq 'HASH') {
+    %options = %{$_[0]};
+  } else {
+    my ( $method, $amount ) = ( shift, shift );
+    %options = @_;
+    $options{method} = $method;
+    $options{amount} = $amount;
+  }
+  
+  if ( $options{'fake_failure'} ) {
+     return "Error: No error; test failure requested with fake_failure";
+  }
+
+  #my $paybatch = '';
+  #if ( $payment_gateway->gatewaynum ) { # agent override
+  #  $paybatch = $payment_gateway->gatewaynum. '-';
+  #}
+  #
+  #$paybatch .= "$processor:". $transaction->authorization;
+  #
+  #$paybatch .= ':'. $transaction->order_number
+  #  if $transaction->can('order_number')
+  #  && length($transaction->order_number);
+
+  my $paybatch = 'FakeProcessor:54:32';
+
+  my $cust_pay = new FS::cust_pay ( {
+     'custnum'  => $self->custnum,
+     'invnum'   => $options{'invnum'},
+     'paid'     => $options{amount},
+     '_date'    => '',
+     'payby'    => $bop_method2payby{$options{method}},
+     #'payinfo'  => $payinfo,
+     'payinfo'  => '4111111111111111',
+     'paybatch' => $paybatch,
+     #'paydate'  => $paydate,
+     'paydate'  => '2012-05-01',
+  } );
+  $cust_pay->payunique( $options{payunique} ) if length($options{payunique});
+
+  my $error = $cust_pay->insert($options{'manual'} ? ( 'manual' => 1 ) : () );
+
+  if ( $error ) {
+    $cust_pay->invnum(''); #try again with no specific invnum
+    my $error2 = $cust_pay->insert( $options{'manual'} ?
+                                    ( 'manual' => 1 ) : ()
+                                  );
+    if ( $error2 ) {
+      # gah, even with transactions.
+      my $e = 'WARNING: Card/ACH debited but database not updated - '.
+              "error inserting (fake!) payment: $error2".
+              " (previously tried insert with invnum #$options{'invnum'}" .
+              ": $error )";
+      warn $e;
+      return $e;
+    }
+  }
+
+  if ( $options{'paynum_ref'} ) {
+    ${ $options{'paynum_ref'} } = $cust_pay->paynum;
+  }
+
+  return ''; #no error
+
+}
+
+
+# item _realtime_bop_result CUST_PAY_PENDING, BOP_OBJECT [ OPTION => VALUE ... ]
+# 
+# Wraps up processing of a realtime credit card, ACH (electronic check) or
+# phone bill transaction.
+
+sub _realtime_bop_result {
+  my( $self, $cust_pay_pending, $transaction, %options ) = @_;
+  if ( $DEBUG ) {
+    warn "$me _realtime_bop_result: pending transaction ".
+      $cust_pay_pending->paypendingnum. "\n";
+    warn "  $_ => $options{$_}\n" foreach keys %options;
+  }
+
+  my $payment_gateway = $options{payment_gateway}
+    or return "no payment gateway in arguments to _realtime_bop_result";
+
+  $cust_pay_pending->status($transaction->is_success() ? 'captured' : 'declined');
+  my $cpp_captured_err = $cust_pay_pending->replace;
+  return $cpp_captured_err if $cpp_captured_err;
+
+  if ( $transaction->is_success() ) {
+
+    my $paybatch = '';
+    if ( $payment_gateway->gatewaynum ) { # agent override
+      $paybatch = $payment_gateway->gatewaynum. '-';
+    }
+
+    $paybatch .= $payment_gateway->gateway_module. ":".
+      $transaction->authorization;
+
+    $paybatch .= ':'. $transaction->order_number
+      if $transaction->can('order_number')
+      && length($transaction->order_number);
+
+    my $cust_pay = new FS::cust_pay ( {
+       'custnum'  => $self->custnum,
+       'invnum'   => $options{'invnum'},
+       'paid'     => $cust_pay_pending->paid,
+       '_date'    => '',
+       'payby'    => $cust_pay_pending->payby,
+       #'payinfo'  => $payinfo,
+       'paybatch' => $paybatch,
+       'paydate'  => $cust_pay_pending->paydate,
+       'pkgnum'   => $cust_pay_pending->pkgnum,
+    } );
+    #doesn't hurt to know, even though the dup check is in cust_pay_pending now
+    $cust_pay->payunique( $options{payunique} )
+      if defined($options{payunique}) && length($options{payunique});
+
+    my $oldAutoCommit = $FS::UID::AutoCommit;
+    local $FS::UID::AutoCommit = 0;
+    my $dbh = dbh;
+
+    #start a transaction, insert the cust_pay and set cust_pay_pending.status to done in a single transction
+
+    my $error = $cust_pay->insert($options{'manual'} ? ( 'manual' => 1 ) : () );
+
+    if ( $error ) {
+      $cust_pay->invnum(''); #try again with no specific invnum
+      my $error2 = $cust_pay->insert( $options{'manual'} ?
+                                      ( 'manual' => 1 ) : ()
+                                    );
+      if ( $error2 ) {
+        # gah.  but at least we have a record of the state we had to abort in
+        # from cust_pay_pending now.
+        my $e = "WARNING: $options{method} captured but payment not recorded -".
+                " error inserting payment (". $payment_gateway->gateway_module.
+                "): $error2".
+                " (previously tried insert with invnum #$options{'invnum'}" .
+                ": $error ) - pending payment saved as paypendingnum ".
+                $cust_pay_pending->paypendingnum. "\n";
+        warn $e;
+        return $e;
+      }
+    }
+
+    my $jobnum = $cust_pay_pending->jobnum;
+    if ( $jobnum ) {
+       my $placeholder = qsearchs( 'queue', { 'jobnum' => $jobnum } );
+      
+       unless ( $placeholder ) {
+         $dbh->rollback or die $dbh->errstr if $oldAutoCommit;
+         my $e = "WARNING: $options{method} captured but job $jobnum not ".
+             "found for paypendingnum ". $cust_pay_pending->paypendingnum. "\n";
+         warn $e;
+         return $e;
+       }
+
+       $error = $placeholder->delete;
+
+       if ( $error ) {
+         $dbh->rollback or die $dbh->errstr if $oldAutoCommit;
+         my $e = "WARNING: $options{method} captured but could not delete ".
+              "job $jobnum for paypendingnum ".
+              $cust_pay_pending->paypendingnum. ": $error\n";
+         warn $e;
+         return $e;
+       }
+
+    }
+    
+    if ( $options{'paynum_ref'} ) {
+      ${ $options{'paynum_ref'} } = $cust_pay->paynum;
+    }
+
+    $cust_pay_pending->status('done');
+    $cust_pay_pending->statustext('captured');
+    $cust_pay_pending->paynum($cust_pay->paynum);
+    my $cpp_done_err = $cust_pay_pending->replace;
+
+    if ( $cpp_done_err ) {
+
+      $dbh->rollback or die $dbh->errstr if $oldAutoCommit;
+      my $e = "WARNING: $options{method} captured but payment not recorded - ".
+              "error updating status for paypendingnum ".
+              $cust_pay_pending->paypendingnum. ": $cpp_done_err \n";
+      warn $e;
+      return $e;
+
+    } else {
+
+      $dbh->commit or die $dbh->errstr if $oldAutoCommit;
+      return ''; #no error
+
+    }
+
+  } else {
+
+    my $perror = $payment_gateway->gateway_module. " error: ".
+      $transaction->error_message;
+
+    my $jobnum = $cust_pay_pending->jobnum;
+    if ( $jobnum ) {
+       my $placeholder = qsearchs( 'queue', { 'jobnum' => $jobnum } );
+      
+       if ( $placeholder ) {
+         my $error = $placeholder->depended_delete;
+         $error ||= $placeholder->delete;
+         warn "error removing provisioning jobs after declined paypendingnum ".
+           $cust_pay_pending->paypendingnum. "\n";
+       } else {
+         my $e = "error finding job $jobnum for declined paypendingnum ".
+              $cust_pay_pending->paypendingnum. "\n";
+         warn $e;
+       }
+
+    }
+    
+    unless ( $transaction->error_message ) {
+
+      my $t_response;
+      if ( $transaction->can('response_page') ) {
+        $t_response = {
+                        'page'    => ( $transaction->can('response_page')
+                                         ? $transaction->response_page
+                                         : ''
+                                     ),
+                        'code'    => ( $transaction->can('response_code')
+                                         ? $transaction->response_code
+                                         : ''
+                                     ),
+                        'headers' => ( $transaction->can('response_headers')
+                                         ? $transaction->response_headers
+                                         : ''
+                                     ),
+                      };
+      } else {
+        $t_response .=
+          "No additional debugging information available for ".
+            $payment_gateway->gateway_module;
+      }
+
+      $perror .= "No error_message returned from ".
+                   $payment_gateway->gateway_module. " -- ".
+                 ( ref($t_response) ? Dumper($t_response) : $t_response );
+
+    }
+
+    if ( !$options{'quiet'} && !$realtime_bop_decline_quiet
+         && $conf->exists('emaildecline')
+         && grep { $_ ne 'POST' } $self->invoicing_list
+         && ! grep { $transaction->error_message =~ /$_/ }
+                   $conf->config('emaildecline-exclude')
+    ) {
+      my @templ = $conf->config('declinetemplate');
+      my $template = new Text::Template (
+        TYPE   => 'ARRAY',
+        SOURCE => [ map "$_\n", @templ ],
+      ) or return "($perror) can't create template: $Text::Template::ERROR";
+      $template->compile()
+        or return "($perror) can't compile template: $Text::Template::ERROR";
+
+      my $templ_hash = {
+        'company_name'    =>
+          scalar( $conf->config('company_name', $self->agentnum ) ),
+        'company_address' =>
+          join("\n", $conf->config('company_address', $self->agentnum ) ),
+        'error'           => $transaction->error_message,
+      };
+
+      my $error = send_email(
+        'from'    => $conf->config('invoice_from', $self->agentnum ),
+        'to'      => [ grep { $_ ne 'POST' } $self->invoicing_list ],
+        'subject' => 'Your payment could not be processed',
+        'body'    => [ $template->fill_in(HASH => $templ_hash) ],
+      );
+
+      $perror .= " (also received error sending decline notification: $error)"
+        if $error;
+
+    }
+
+    $cust_pay_pending->status('done');
+    $cust_pay_pending->statustext("declined: $perror");
+    my $cpp_done_err = $cust_pay_pending->replace;
+    if ( $cpp_done_err ) {
+      my $e = "WARNING: $options{method} declined but pending payment not ".
+              "resolved - error updating status for paypendingnum ".
+              $cust_pay_pending->paypendingnum. ": $cpp_done_err \n";
+      warn $e;
+      $perror = "$e ($perror)";
+    }
+
+    return $perror;
+  }
+
+}
+
+=item realtime_botpp_capture CUST_PAY_PENDING [ OPTION => VALUE ... ]
+
+Verifies successful third party processing of a realtime credit card,
+ACH (electronic check) or phone bill transaction via a
+Business::OnlineThirdPartyPayment realtime gateway.  See
+L<http://420.am/business-onlinethirdpartypayment> for supported gateways.
+
+Available options are: I<description>, I<invnum>, I<quiet>, I<paynum_ref>, I<payunique>
+
+The additional options I<payname>, I<city>, I<state>,
+I<zip>, I<payinfo> and I<paydate> are also available.  Any of these options,
+if set, will override the value from the customer record.
+
+I<description> is a free-text field passed to the gateway.  It defaults to
+"Internet services".
+
+If an I<invnum> is specified, this payment (if successful) is applied to the
+specified invoice.  If you don't specify an I<invnum> you might want to
+call the B<apply_payments> method.
+
+I<quiet> can be set true to surpress email decline notices.
+
+I<paynum_ref> can be set to a scalar reference.  It will be filled in with the
+resulting paynum, if any.
+
+I<payunique> is a unique identifier for this payment.
+
+Returns a hashref containing elements bill_error (which will be undefined
+upon success) and session_id of any associated session.
+
+=cut
+
+sub realtime_botpp_capture {
+  my( $self, $cust_pay_pending, %options ) = @_;
+  if ( $DEBUG ) {
+    warn "$me realtime_botpp_capture: pending transaction $cust_pay_pending\n";
+    warn "  $_ => $options{$_}\n" foreach keys %options;
+  }
+
+  eval "use Business::OnlineThirdPartyPayment";  
+  die $@ if $@;
+
+  ###
+  # select the gateway
+  ###
+
+  my $method = FS::payby->payby2bop($cust_pay_pending->payby);
+
+  my $payment_gateway = $cust_pay_pending->gatewaynum
+    ? qsearchs( 'payment_gateway',
+                { gatewaynum => $cust_pay_pending->gatewaynum }
+              )
+    : $self->agent->payment_gateway( 'method' => $method,
+                                     # 'invnum'  => $cust_pay_pending->invnum,
+                                     # 'payinfo' => $cust_pay_pending->payinfo,
+                                   );
+
+  $options{payment_gateway} = $payment_gateway; # for the helper subs
+
+  ###
+  # massage data
+  ###
+
+  my @invoicing_list = $self->invoicing_list_emailonly;
+  if ( $conf->exists('emailinvoiceautoalways')
+       || $conf->exists('emailinvoiceauto') && ! @invoicing_list
+       || ( $conf->exists('emailinvoiceonly') && ! @invoicing_list ) ) {
+    push @invoicing_list, $self->all_emails;
+  }
+
+  my $email = ($conf->exists('business-onlinepayment-email-override'))
+              ? $conf->config('business-onlinepayment-email-override')
+              : $invoicing_list[0];
+
+  my %content = ();
+
+  $content{email_customer} = 
+    (    $conf->exists('business-onlinepayment-email_customer')
+      || $conf->exists('business-onlinepayment-email-override') );
+      
+  ###
+  # run transaction(s)
+  ###
+
+  my $transaction =
+    new Business::OnlineThirdPartyPayment( $payment_gateway->gateway_module,
+                                           $self->_bop_options(\%options),
+                                         );
+
+  $transaction->reference({ %options }); 
+
+  $transaction->content(
+    'type'           => $method,
+    $self->_bop_auth(\%options),
+    'action'         => 'Post Authorization',
+    'description'    => $options{'description'},
+    'amount'         => $cust_pay_pending->paid,
+    #'invoice_number' => $options{'invnum'},
+    'customer_id'    => $self->custnum,
+    'referer'        => 'http://cleanwhisker.420.am/',
+    'reference'      => $cust_pay_pending->paypendingnum,
+    'email'          => $email,
+    'phone'          => $self->daytime || $self->night,
+    %content, #after
+    # plus whatever is required for bogus capture avoidance
+  );
+
+  $transaction->submit();
+
+  my $error =
+    $self->_realtime_bop_result( $cust_pay_pending, $transaction, %options );
+
+  {
+    bill_error => $error,
+    session_id => $cust_pay_pending->session_id,
+  }
+
+}
+
+=item default_payment_gateway DEPRECATED -- use agent->payment_gateway
+
+=cut
+
+sub default_payment_gateway {
+  my( $self, $method ) = @_;
+
+  die "Real-time processing not enabled\n"
+    unless $conf->exists('business-onlinepayment');
+
+  #warn "default_payment_gateway deprecated -- use agent->payment_gateway\n";
+
+  #load up config
+  my $bop_config = 'business-onlinepayment';
+  $bop_config .= '-ach'
+    if $method =~ /^(ECHECK|CHEK)$/ && $conf->exists($bop_config. '-ach');
+  my ( $processor, $login, $password, $action, @bop_options ) =
+    $conf->config($bop_config);
+  $action ||= 'normal authorization';
+  pop @bop_options if scalar(@bop_options) % 2 && $bop_options[-1] =~ /^\s*$/;
+  die "No real-time processor is enabled - ".
+      "did you set the business-onlinepayment configuration value?\n"
+    unless $processor;
+
+  ( $processor, $login, $password, $action, @bop_options )
+}
+
+=item remove_cvv
+
+Removes the I<paycvv> field from the database directly.
+
+If there is an error, returns the error, otherwise returns false.
+
+=cut
+
+sub remove_cvv {
+  my $self = shift;
+  my $sth = dbh->prepare("UPDATE cust_main SET paycvv = '' WHERE custnum = ?")
+    or return dbh->errstr;
+  $sth->execute($self->custnum)
+    or return $sth->errstr;
+  $self->paycvv('');
+  '';
+}
+
+=item _new_realtime_refund_bop METHOD [ OPTION => VALUE ... ]
+
+Refunds a realtime credit card, ACH (electronic check) or phone bill transaction
+via a Business::OnlinePayment realtime gateway.  See
+L<http://420.am/business-onlinepayment> for supported gateways.
+
+Available methods are: I<CC>, I<ECHECK> and I<LEC>
+
+Available options are: I<amount>, I<reason>, I<paynum>, I<paydate>
+
+Most gateways require a reference to an original payment transaction to refund,
+so you probably need to specify a I<paynum>.
+
+I<amount> defaults to the original amount of the payment if not specified.
+
+I<reason> specifies a reason for the refund.
+
+I<paydate> specifies the expiration date for a credit card overriding the
+value from the customer record or the payment record. Specified as yyyy-mm-dd
+
+Implementation note: If I<amount> is unspecified or equal to the amount of the
+orignal payment, first an attempt is made to "void" the transaction via
+the gateway (to cancel a not-yet settled transaction) and then if that fails,
+the normal attempt is made to "refund" ("credit") the transaction via the
+gateway is attempted.
+
+#The additional options I<payname>, I<address1>, I<address2>, I<city>, I<state>,
+#I<zip>, I<payinfo> and I<paydate> are also available.  Any of these options,
+#if set, will override the value from the customer record.
+
+#If an I<invnum> is specified, this payment (if successful) is applied to the
+#specified invoice.  If you don't specify an I<invnum> you might want to
+#call the B<apply_payments> method.
+
+=cut
+
+#some false laziness w/realtime_bop, not enough to make it worth merging
+#but some useful small subs should be pulled out
+sub _new_realtime_refund_bop {
+  my $self = shift;
+
+  my %options = ();
+  if (ref($_[0]) ne 'HASH') {
+    %options = %{$_[0]};
+  } else {
+    my $method = shift;
+    %options = @_;
+    $options{method} = $method;
+  }
+
+  if ( $DEBUG ) {
+    warn "$me realtime_refund_bop (new): $options{method} refund\n";
+    warn "  $_ => $options{$_}\n" foreach keys %options;
+  }
+
+  ###
+  # look up the original payment and optionally a gateway for that payment
+  ###
+
+  my $cust_pay = '';
+  my $amount = $options{'amount'};
+
+  my( $processor, $login, $password, @bop_options, $namespace ) ;
+  my( $auth, $order_number ) = ( '', '', '' );
+
+  if ( $options{'paynum'} ) {
+
+    warn "  paynum: $options{paynum}\n" if $DEBUG > 1;
+    $cust_pay = qsearchs('cust_pay', { paynum=>$options{'paynum'} } )
+      or return "Unknown paynum $options{'paynum'}";
+    $amount ||= $cust_pay->paid;
+
+    $cust_pay->paybatch =~ /^((\d+)\-)?(\w+):\s*([\w\-\/ ]*)(:([\w\-]+))?$/
+      or return "Can't parse paybatch for paynum $options{'paynum'}: ".
+                $cust_pay->paybatch;
+    my $gatewaynum = '';
+    ( $gatewaynum, $processor, $auth, $order_number ) = ( $2, $3, $4, $6 );
+
+    if ( $gatewaynum ) { #gateway for the payment to be refunded
+
+      my $payment_gateway =
+        qsearchs('payment_gateway', { 'gatewaynum' => $gatewaynum } );
+      die "payment gateway $gatewaynum not found"
+        unless $payment_gateway;
+
+      $processor   = $payment_gateway->gateway_module;
+      $login       = $payment_gateway->gateway_username;
+      $password    = $payment_gateway->gateway_password;
+      $namespace   = $payment_gateway->gateway_namespace;
+      @bop_options = $payment_gateway->options;
+
+    } else { #try the default gateway
+
+      my $conf_processor;
+      my $payment_gateway =
+        $self->agent->payment_gateway('method' => $options{method});
+
+      ( $conf_processor, $login, $password, $namespace ) =
+        map { my $method = "gateway_$_"; $payment_gateway->$method }
+          qw( module username password namespace );
+
+      @bop_options = $payment_gateway->gatewaynum
+                       ? $payment_gateway->options
+                       : @{ $payment_gateway->get('options') };
+
+      return "processor of payment $options{'paynum'} $processor does not".
+             " match default processor $conf_processor"
+        unless $processor eq $conf_processor;
+
+    }
+
+
+  } else { # didn't specify a paynum, so look for agent gateway overrides
+           # like a normal transaction 
+ 
+    my $payment_gateway =
+      $self->agent->payment_gateway( 'method'  => $options{method},
+                                     #'payinfo' => $payinfo,
+                                   );
+    my( $processor, $login, $password, $namespace ) =
+      map { my $method = "gateway_$_"; $payment_gateway->$method }
+        qw( module username password namespace );
+
+    my @bop_options = $payment_gateway->gatewaynum
+                        ? $payment_gateway->options
+                        : @{ $payment_gateway->get('options') };
+
+  }
+  return "neither amount nor paynum specified" unless $amount;
+
+  eval "use $namespace";  
+  die $@ if $@;
+
+  my %content = (
+    'type'           => $options{method},
+    'login'          => $login,
+    'password'       => $password,
+    'order_number'   => $order_number,
+    'amount'         => $amount,
+    'referer'        => 'http://cleanwhisker.420.am/', #XXX fix referer :/
+  );
+  $content{authorization} = $auth
+    if length($auth); #echeck/ACH transactions have an order # but no auth
+                      #(at least with authorize.net)
+
+  my $disable_void_after;
+  if ($conf->exists('disable_void_after')
+      && $conf->config('disable_void_after') =~ /^(\d+)$/) {
+    $disable_void_after = $1;
+  }
+
+  #first try void if applicable
+  if ( $cust_pay && $cust_pay->paid == $amount
+    && (
+      ( not defined($disable_void_after) )
+      || ( time < ($cust_pay->_date + $disable_void_after ) )
+    )
+  ) {
+    warn "  attempting void\n" if $DEBUG > 1;
+    my $void = new Business::OnlinePayment( $processor, @bop_options );
+    $void->content( 'action' => 'void', %content );
+    $void->submit();
+    if ( $void->is_success ) {
+      my $error = $cust_pay->void($options{'reason'});
+      if ( $error ) {
+        # gah, even with transactions.
+        my $e = 'WARNING: Card/ACH voided but database not updated - '.
+                "error voiding payment: $error";
+        warn $e;
+        return $e;
+      }
+      warn "  void successful\n" if $DEBUG > 1;
+      return '';
+    }
+  }
+
+  warn "  void unsuccessful, trying refund\n"
+    if $DEBUG > 1;
+
+  #massage data
+  my $address = $self->address1;
+  $address .= ", ". $self->address2 if $self->address2;
+
+  my($payname, $payfirst, $paylast);
+  if ( $self->payname && $options{method} ne 'ECHECK' ) {
+    $payname = $self->payname;
+    $payname =~ /^\s*([\w \,\.\-\']*)?\s+([\w\,\.\-\']+)\s*$/
+      or return "Illegal payname $payname";
+    ($payfirst, $paylast) = ($1, $2);
+  } else {
+    $payfirst = $self->getfield('first');
+    $paylast = $self->getfield('last');
+    $payname =  "$payfirst $paylast";
+  }
+
+  my @invoicing_list = $self->invoicing_list_emailonly;
+  if ( $conf->exists('emailinvoiceautoalways')
+       || $conf->exists('emailinvoiceauto') && ! @invoicing_list
+       || ( $conf->exists('emailinvoiceonly') && ! @invoicing_list ) ) {
+    push @invoicing_list, $self->all_emails;
+  }
+
+  my $email = ($conf->exists('business-onlinepayment-email-override'))
+              ? $conf->config('business-onlinepayment-email-override')
+              : $invoicing_list[0];
+
+  my $payip = exists($options{'payip'})
+                ? $options{'payip'}
+                : $self->payip;
+  $content{customer_ip} = $payip
+    if length($payip);
+
+  my $payinfo = '';
+  if ( $options{method} eq 'CC' ) {
+
+    if ( $cust_pay ) {
+      $content{card_number} = $payinfo = $cust_pay->payinfo;
+      (exists($options{'paydate'}) ? $options{'paydate'} : $cust_pay->paydate)
+        =~ /^\d{2}(\d{2})[\/\-](\d+)[\/\-]\d+$/ &&
+        ($content{expiration} = "$2/$1");  # where available
+    } else {
+      $content{card_number} = $payinfo = $self->payinfo;
+      (exists($options{'paydate'}) ? $options{'paydate'} : $self->paydate)
+        =~ /^\d{2}(\d{2})[\/\-](\d+)[\/\-]\d+$/;
+      $content{expiration} = "$2/$1";
+    }
+
+  } elsif ( $options{method} eq 'ECHECK' ) {
+
+    if ( $cust_pay ) {
+      $payinfo = $cust_pay->payinfo;
+    } else {
+      $payinfo = $self->payinfo;
+    } 
+    ( $content{account_number}, $content{routing_code} )= split('@', $payinfo );
+    $content{bank_name} = $self->payname;
+    $content{account_type} = 'CHECKING';
+    $content{account_name} = $payname;
+    $content{customer_org} = $self->company ? 'B' : 'I';
+    $content{customer_ssn} = $self->ss;
+  } elsif ( $options{method} eq 'LEC' ) {
+    $content{phone} = $payinfo = $self->payinfo;
+  }
+
+  #then try refund
+  my $refund = new Business::OnlinePayment( $processor, @bop_options );
+  my %sub_content = $refund->content(
+    'action'         => 'credit',
+    'customer_id'    => $self->custnum,
+    'last_name'      => $paylast,
+    'first_name'     => $payfirst,
+    'name'           => $payname,
+    'address'        => $address,
+    'city'           => $self->city,
+    'state'          => $self->state,
+    'zip'            => $self->zip,
+    'country'        => $self->country,
+    'email'          => $email,
+    'phone'          => $self->daytime || $self->night,
+    %content, #after
+  );
+  warn join('', map { "  $_ => $sub_content{$_}\n" } keys %sub_content )
+    if $DEBUG > 1;
+  $refund->submit();
+
+  return "$processor error: ". $refund->error_message
+    unless $refund->is_success();
+
+  my $paybatch = "$processor:". $refund->authorization;
+  $paybatch .= ':'. $refund->order_number
+    if $refund->can('order_number') && $refund->order_number;
+
+  while ( $cust_pay && $cust_pay->unapplied < $amount ) {
+    my @cust_bill_pay = $cust_pay->cust_bill_pay;
+    last unless @cust_bill_pay;
+    my $cust_bill_pay = pop @cust_bill_pay;
+    my $error = $cust_bill_pay->delete;
+    last if $error;
+  }
+
+  my $cust_refund = new FS::cust_refund ( {
+    'custnum'  => $self->custnum,
+    'paynum'   => $options{'paynum'},
+    'refund'   => $amount,
+    '_date'    => '',
+    'payby'    => $bop_method2payby{$options{method}},
+    'payinfo'  => $payinfo,
+    'paybatch' => $paybatch,
+    'reason'   => $options{'reason'} || 'card or ACH refund',
+  } );
+  my $error = $cust_refund->insert;
+  if ( $error ) {
+    $cust_refund->paynum(''); #try again with no specific paynum
+    my $error2 = $cust_refund->insert;
+    if ( $error2 ) {
+      # gah, even with transactions.
+      my $e = 'WARNING: Card/ACH refunded but database not updated - '.
+              "error inserting refund ($processor): $error2".
+              " (previously tried insert with paynum #$options{'paynum'}" .
+              ": $error )";
+      warn $e;
+      return $e;
+    }
+  }
+
+  ''; #no error
+
+}
+
 =item batch_card OPTION => VALUE...
 
 Adds a payment for this invoice to the pending credit card batch (see
@@ -4503,19 +6222,23 @@ sub batch_card {
   '';
 }
 
-=item apply_payments_and_credits
+=item apply_payments_and_credits [ OPTION => VALUE ... ]
 
 Applies unapplied payments and credits.
 
 In most cases, this new method should be used in place of sequential
 apply_payments and apply_credits methods.
 
+A hash of optional arguments may be passed.  Currently "manual" is supported.
+If true, a payment receipt is sent instead of a statement when
+'payment_receipt_email' configuration option is set.
+
 If there is an error, returns the error, otherwise returns false.
 
 =cut
 
 sub apply_payments_and_credits {
-  my $self = shift;
+  my( $self, %options ) = @_;
 
   local $SIG{HUP} = 'IGNORE';
   local $SIG{INT} = 'IGNORE';
@@ -4531,7 +6254,7 @@ sub apply_payments_and_credits {
   $self->select_for_update; #mutex
 
   foreach my $cust_bill ( $self->open_cust_bill ) {
-    my $error = $cust_bill->apply_payments_and_credits;
+    my $error = $cust_bill->apply_payments_and_credits(%options);
     if ( $error ) {
       $dbh->rollback if $oldAutoCommit;
       return "Error applying: $error";
@@ -4584,32 +6307,52 @@ sub apply_credits {
   @invoices = sort { $b->_date <=> $a->_date } @invoices
     if defined($opt{'order'}) && $opt{'order'} eq 'newest';
 
+  if ( $conf->exists('pkg-balances') ) {
+    # limit @credits to those w/ a pkgnum grepped from $self
+    my %pkgnums = ();
+    foreach my $i (@invoices) {
+      foreach my $li ( $i->cust_bill_pkg ) {
+        $pkgnums{$li->pkgnum} = 1;
+      }
+    }
+    @credits = grep { ! $_->pkgnum || $pkgnums{$_->pkgnum} } @credits;
+  }
+
   my $credit;
+
   foreach my $cust_bill ( @invoices ) {
-    my $amount;
 
     if ( !defined($credit) || $credit->credited == 0) {
       $credit = pop @credits or last;
     }
 
-    if ($cust_bill->owed >= $credit->credited) {
-      $amount=$credit->credited;
-    }else{
-      $amount=$cust_bill->owed;
+    my $owed;
+    if ( $conf->exists('pkg-balances') && $credit->pkgnum ) {
+      $owed = $cust_bill->owed_pkgnum($credit->pkgnum);
+    } else {
+      $owed = $cust_bill->owed;
     }
+    unless ( $owed > 0 ) {
+      push @credits, $credit;
+      next;
+    }
+
+    my $amount = min( $credit->credited, $owed );
     
     my $cust_credit_bill = new FS::cust_credit_bill ( {
       'crednum' => $credit->crednum,
       'invnum'  => $cust_bill->invnum,
       'amount'  => $amount,
     } );
+    $cust_credit_bill->pkgnum( $credit->pkgnum )
+      if $conf->exists('pkg-balances') && $credit->pkgnum;
     my $error = $cust_credit_bill->insert;
     if ( $error ) {
       $dbh->rollback or die $dbh->errstr if $oldAutoCommit;
       die $error;
     }
     
-    redo if ($cust_bill->owed > 0);
+    redo if ($cust_bill->owed > 0) && ! $conf->exists('pkg-balances');
 
   }
 
@@ -4620,19 +6363,24 @@ sub apply_credits {
   return $total_unapplied_credits;
 }
 
-=item apply_payments
+=item apply_payments  [ OPTION => VALUE ... ]
 
 Applies (see L<FS::cust_bill_pay>) unapplied payments (see L<FS::cust_pay>)
 to outstanding invoice balances in chronological order.
 
  #and returns the value of any remaining unapplied payments.
 
+A hash of optional arguments may be passed.  Currently "manual" is supported.
+If true, a payment receipt is sent instead of a statement when
+'payment_receipt_email' configuration option is set.
+
+
 Dies if there is an error.
 
 =cut
 
 sub apply_payments {
-  my $self = shift;
+  my( $self, %options ) = @_;
 
   local $SIG{HUP} = 'IGNORE';
   local $SIG{INT} = 'IGNORE';
@@ -4657,33 +6405,52 @@ sub apply_payments {
                  grep { $_->owed > 0 }
                  $self->cust_bill;
 
+  if ( $conf->exists('pkg-balances') ) {
+    # limit @payments to those w/ a pkgnum grepped from $self
+    my %pkgnums = ();
+    foreach my $i (@invoices) {
+      foreach my $li ( $i->cust_bill_pkg ) {
+        $pkgnums{$li->pkgnum} = 1;
+      }
+    }
+    @payments = grep { ! $_->pkgnum || $pkgnums{$_->pkgnum} } @payments;
+  }
+
   my $payment;
 
   foreach my $cust_bill ( @invoices ) {
-    my $amount;
 
     if ( !defined($payment) || $payment->unapplied == 0 ) {
       $payment = pop @payments or last;
     }
 
-    if ( $cust_bill->owed >= $payment->unapplied ) {
-      $amount = $payment->unapplied;
+    my $owed;
+    if ( $conf->exists('pkg-balances') && $payment->pkgnum ) {
+      $owed = $cust_bill->owed_pkgnum($payment->pkgnum);
     } else {
-      $amount = $cust_bill->owed;
+      $owed = $cust_bill->owed;
     }
+    unless ( $owed > 0 ) {
+      push @payments, $payment;
+      next;
+    }
+
+    my $amount = min( $payment->unapplied, $owed );
 
     my $cust_bill_pay = new FS::cust_bill_pay ( {
       'paynum' => $payment->paynum,
       'invnum' => $cust_bill->invnum,
       'amount' => $amount,
     } );
-    my $error = $cust_bill_pay->insert;
+    $cust_bill_pay->pkgnum( $payment->pkgnum )
+      if $conf->exists('pkg-balances') && $payment->pkgnum;
+    my $error = $cust_bill_pay->insert(%options);
     if ( $error ) {
       $dbh->rollback or die $dbh->errstr if $oldAutoCommit;
       die $error;
     }
 
-    redo if ( $cust_bill->owed > 0);
+    redo if ( $cust_bill->owed > 0) && ! $conf->exists('pkg-balances');
 
   }
 
@@ -4717,6 +6484,22 @@ see L<Time::Local> and L<Date::Parse> for conversion functions.
 sub total_owed_date {
   my $self = shift;
   my $time = shift;
+
+#  my $custnum = $self->custnum;
+#
+#  my $owed_sql = FS::cust_bill->owed_sql;
+#
+#  my $sql = "
+#    SELECT SUM($owed_sql) FROM cust_bill
+#      WHERE custnum = $custnum
+#        AND _date <= $time
+#  ";
+#
+#  my $sth = dbh->prepare($sql) or die dbh->errstr;
+#  $sth->execute() or die $sth->errstr;
+#
+#  return sprintf( '%.2f', $sth->fetchrow_arrayref->[0] );
+
   my $total_bill = 0;
   foreach my $cust_bill (
     grep { $_->_date <= $time }
@@ -4725,6 +6508,42 @@ sub total_owed_date {
     $total_bill += $cust_bill->owed;
   }
   sprintf( "%.2f", $total_bill );
+
+}
+
+=item total_owed_pkgnum PKGNUM
+
+Returns the total owed on all invoices for this customer's specific package
+when using experimental package balances (see L<FS::cust_bill/owed_pkgnum>).
+
+=cut
+
+sub total_owed_pkgnum {
+  my( $self, $pkgnum ) = @_;
+  $self->total_owed_date_pkgnum(2145859200, $pkgnum); #12/31/2037
+}
+
+=item total_owed_date_pkgnum TIME PKGNUM
+
+Returns the total owed for this customer's specific package when using
+experimental package balances on all invoices with date earlier than
+TIME.  TIME is specified as a UNIX timestamp; see L<perlfunc/"time">).  Also
+see L<Time::Local> and L<Date::Parse> for conversion functions.
+
+=cut
+
+sub total_owed_date_pkgnum {
+  my( $self, $time, $pkgnum ) = @_;
+
+  my $total_bill = 0;
+  foreach my $cust_bill (
+    grep { $_->_date <= $time }
+      qsearch('cust_bill', { 'custnum' => $self->custnum, } )
+  ) {
+    $total_bill += $cust_bill->owed_pkgnum($pkgnum);
+  }
+  sprintf( "%.2f", $total_bill );
+
 }
 
 =item total_paid
@@ -4763,6 +6582,21 @@ sub total_unapplied_credits {
   sprintf( "%.2f", $total_credit );
 }
 
+=item total_unapplied_credits_pkgnum PKGNUM
+
+Returns the total outstanding credit (see L<FS::cust_credit>) for this
+customer.  See L<FS::cust_credit/credited>.
+
+=cut
+
+sub total_unapplied_credits_pkgnum {
+  my( $self, $pkgnum ) = @_;
+  my $total_credit = 0;
+  $total_credit += $_->credited foreach $self->cust_credit_pkgnum($pkgnum);
+  sprintf( "%.2f", $total_credit );
+}
+
+
 =item total_unapplied_payments
 
 Returns the total unapplied payments (see L<FS::cust_pay>) for this customer.
@@ -4776,6 +6610,22 @@ sub total_unapplied_payments {
   $total_unapplied += $_->unapplied foreach $self->cust_pay;
   sprintf( "%.2f", $total_unapplied );
 }
+
+=item total_unapplied_payments_pkgnum PKGNUM
+
+Returns the total unapplied payments (see L<FS::cust_pay>) for this customer's
+specific package when using experimental package balances.  See
+L<FS::cust_pay/unapplied>.
+
+=cut
+
+sub total_unapplied_payments_pkgnum {
+  my( $self, $pkgnum ) = @_;
+  my $total_unapplied = 0;
+  $total_unapplied += $_->unapplied foreach $self->cust_pay_pkgnum($pkgnum);
+  sprintf( "%.2f", $total_unapplied );
+}
+
 
 =item total_unapplied_refunds
 
@@ -4829,6 +6679,26 @@ sub balance_date {
   );
 }
 
+=item balance_pkgnum PKGNUM
+
+Returns the balance for this customer's specific package when using
+experimental package balances (total_owed plus total_unrefunded, minus
+total_unapplied_credits minus total_unapplied_payments)
+
+=cut
+
+sub balance_pkgnum {
+  my( $self, $pkgnum ) = @_;
+
+  sprintf( "%.2f",
+      $self->total_owed_pkgnum($pkgnum)
+# n/a - refunds aren't part of pkg-balances since they don't apply to invoices
+#    + $self->total_unapplied_refunds_pkgnum($pkgnum)
+    - $self->total_unapplied_credits_pkgnum($pkgnum)
+    - $self->total_unapplied_payments_pkgnum($pkgnum)
+  );
+}
+
 =item in_transit_payments
 
 Returns the total of requests for payments for this customer pending in 
@@ -4852,6 +6722,86 @@ sub in_transit_payments {
   sprintf( "%.2f", $in_transit_payments );
 }
 
+=item payment_info
+
+Returns a hash of useful information for making a payment.
+
+=over 4
+
+=item balance
+
+Current balance.
+
+=item payby
+
+'CARD' (credit card - automatic), 'DCRD' (credit card - on-demand),
+'CHEK' (electronic check - automatic), 'DCHK' (electronic check - on-demand),
+'LECB' (Phone bill billing), 'BILL' (billing), or 'COMP' (free).
+
+=back
+
+For credit card transactions:
+
+=over 4
+
+=item card_type 1
+
+=item payname
+
+Exact name on card
+
+=back
+
+For electronic check transactions:
+
+=over 4
+
+=item stateid_state
+
+=back
+
+=cut
+
+sub payment_info {
+  my $self = shift;
+
+  my %return = ();
+
+  $return{balance} = $self->balance;
+
+  $return{payname} = $self->payname
+                     || ( $self->first. ' '. $self->get('last') );
+
+  $return{$_} = $self->get($_) for qw(address1 address2 city state zip);
+
+  $return{payby} = $self->payby;
+  $return{stateid_state} = $self->stateid_state;
+
+  if ( $self->payby =~ /^(CARD|DCRD)$/ ) {
+    $return{card_type} = cardtype($self->payinfo);
+    $return{payinfo} = $self->paymask;
+
+    @return{'month', 'year'} = $self->paydate_monthyear;
+
+  }
+
+  if ( $self->payby =~ /^(CHEK|DCHK)$/ ) {
+    my ($payinfo1, $payinfo2) = split '@', $self->paymask;
+    $return{payinfo1} = $payinfo1;
+    $return{payinfo2} = $payinfo2;
+    $return{paytype}  = $self->paytype;
+    $return{paystate} = $self->paystate;
+
+  }
+
+  #doubleclick protection
+  my $_date = time;
+  $return{paybatch} = "webui-MyAccount-$_date-$$-". rand() * 2**32;
+
+  %return;
+
+}
+
 =item paydate_monthyear
 
 Returns a two-element list consisting of the month and year of this customer's
@@ -4868,6 +6818,28 @@ sub paydate_monthyear {
   } else {
     ('', '');
   }
+}
+
+=item tax_exemption TAXNAME
+
+=cut
+
+sub tax_exemption {
+  my( $self, $taxname ) = @_;
+
+  qsearchs( 'cust_main_exemption', { 'custnum' => $self->custnum,
+                                     'taxname' => $taxname,
+                                   },
+          );
+}
+
+=item cust_main_exemption
+
+=cut
+
+sub cust_main_exemption {
+  my $self = shift;
+  qsearch( 'cust_main_exemption', { 'custnum' => $self->custnum } );
 }
 
 =item invoicing_list [ ARRAYREF ]
@@ -5042,12 +7014,35 @@ sub invoicing_list_emailonly_scalar {
   join(', ', $self->invoicing_list_emailonly);
 }
 
+=item referral_custnum_cust_main
+
+Returns the customer who referred this customer (or the empty string, if
+this customer was not referred).
+
+Note the difference with referral_cust_main method: This method,
+referral_custnum_cust_main returns the single customer (if any) who referred
+this customer, while referral_cust_main returns an array of customers referred
+BY this customer.
+
+=cut
+
+sub referral_custnum_cust_main {
+  my $self = shift;
+  return '' unless $self->referral_custnum;
+  qsearchs('cust_main', { 'custnum' => $self->referral_custnum } );
+}
+
 =item referral_cust_main [ DEPTH [ EXCLUDE_HASHREF ] ]
 
 Returns an array of customers referred by this customer (referral_custnum set
 to this custnum).  If DEPTH is given, recurses up to the given depth, returning
 customers referred by customers referred by this customer and so on, inclusive.
 The default behavior is DEPTH 1 (no recursion).
+
+Note the difference with referral_custnum_cust_main method: This method,
+referral_cust_main, returns an array of customers referred BY this customer,
+while referral_custnum_cust_main returns the single customer (if any) who
+referred this customer.
 
 =cut
 
@@ -5155,33 +7150,75 @@ sub credit {
 
 }
 
-=item charge AMOUNT [ PKG [ COMMENT [ TAXCLASS ] ] ]
+=item charge HASHREF || AMOUNT [ PKG [ COMMENT [ TAXCLASS ] ] ]
 
 Creates a one-time charge for this customer.  If there is an error, returns
 the error, otherwise returns false.
+
+New-style, with a hashref of options:
+
+  my $error = $cust_main->charge(
+                                  {
+                                    'amount'     => 54.32,
+                                    'quantity'   => 1,
+                                    'start_date' => str2time('7/4/2009'),
+                                    'pkg'        => 'Description',
+                                    'comment'    => 'Comment',
+                                    'additional' => [], #extra invoice detail
+                                    'classnum'   => 1,  #pkg_class
+
+                                    'setuptax'   => '', # or 'Y' for tax exempt
+
+                                    #internal taxation
+                                    'taxclass'   => 'Tax class',
+
+                                    #vendor taxation
+                                    'taxproduct' => 2,  #part_pkg_taxproduct
+                                    'override'   => {}, #XXX describe
+
+                                    #will be filled in with the new object
+                                    'cust_pkg_ref' => \$cust_pkg,
+
+                                    #generate an invoice immediately
+                                    'bill_now' => 0,
+                                    'invoice_terms' => '', #with these terms
+                                  }
+                                );
+
+Old-style:
+
+  my $error = $cust_main->charge( 54.32, 'Description', 'Comment', 'Tax class' );
 
 =cut
 
 sub charge {
   my $self = shift;
-  my ( $amount, $quantity, $pkg, $comment, $classnum, $additional );
+  my ( $amount, $quantity, $start_date, $classnum );
+  my ( $pkg, $comment, $additional );
   my ( $setuptax, $taxclass );   #internal taxes
   my ( $taxproduct, $override ); #vendor (CCH) taxes
+  my $cust_pkg_ref = '';
+  my ( $bill_now, $invoice_terms ) = ( 0, '' );
   if ( ref( $_[0] ) ) {
     $amount     = $_[0]->{amount};
     $quantity   = exists($_[0]->{quantity}) ? $_[0]->{quantity} : 1;
+    $start_date = exists($_[0]->{start_date}) ? $_[0]->{start_date} : '';
     $pkg        = exists($_[0]->{pkg}) ? $_[0]->{pkg} : 'One-time charge';
     $comment    = exists($_[0]->{comment}) ? $_[0]->{comment}
                                            : '$'. sprintf("%.2f",$amount);
     $setuptax   = exists($_[0]->{setuptax}) ? $_[0]->{setuptax} : '';
     $taxclass   = exists($_[0]->{taxclass}) ? $_[0]->{taxclass} : '';
     $classnum   = exists($_[0]->{classnum}) ? $_[0]->{classnum} : '';
-    $additional = $_[0]->{additional};
+    $additional = $_[0]->{additional} || [];
     $taxproduct = $_[0]->{taxproductnum};
     $override   = { '' => $_[0]->{tax_override} };
-  }else{
+    $cust_pkg_ref = exists($_[0]->{cust_pkg_ref}) ? $_[0]->{cust_pkg_ref} : '';
+    $bill_now = exists($_[0]->{bill_now}) ? $_[0]->{bill_now} : '';
+    $invoice_terms = exists($_[0]->{invoice_terms}) ? $_[0]->{invoice_terms} : '';
+  } else {
     $amount     = shift;
     $quantity   = 1;
+    $start_date = '';
     $pkg        = @_ ? shift : 'One-time charge';
     $comment    = @_ ? shift : '$'. sprintf("%.2f",$amount);
     $setuptax   = '';
@@ -5239,19 +7276,32 @@ sub charge {
   }
 
   my $cust_pkg = new FS::cust_pkg ( {
-    'custnum'  => $self->custnum,
-    'pkgpart'  => $pkgpart,
-    'quantity' => $quantity,
+    'custnum'    => $self->custnum,
+    'pkgpart'    => $pkgpart,
+    'quantity'   => $quantity,
+    'start_date' => $start_date,
   } );
 
   $error = $cust_pkg->insert;
   if ( $error ) {
     $dbh->rollback if $oldAutoCommit;
     return $error;
+  } elsif ( $cust_pkg_ref ) {
+    ${$cust_pkg_ref} = $cust_pkg;
+  }
+
+  if ( $bill_now ) {
+    my $error = $self->bill( 'invoice_terms' => $invoice_terms,
+                             'pkg_list'      => [ $cust_pkg ],
+                           );
+    if ( $error ) {
+      $dbh->rollback if $oldAutoCommit;
+      return $error;
+    }   
   }
 
   $dbh->commit or die $dbh->errstr if $oldAutoCommit;
-  '';
+  return '';
 
 }
 
@@ -5290,6 +7340,7 @@ Returns all the invoices (see L<FS::cust_bill>) for this customer.
 
 sub cust_bill {
   my $self = shift;
+  map { $_ } #return $self->num_cust_bill unless wantarray;
   sort { $a->_date <=> $b->_date }
     qsearch('cust_bill', { 'custnum' => $self->custnum, } )
 }
@@ -5303,7 +7354,27 @@ customer.
 
 sub open_cust_bill {
   my $self = shift;
-  grep { $_->owed > 0 } $self->cust_bill;
+
+  qsearch({
+    'table'     => 'cust_bill',
+    'hashref'   => { 'custnum' => $self->custnum, },
+    'extra_sql' => ' AND '. FS::cust_bill->owed_sql. ' > 0',
+    'order_by'  => 'ORDER BY _date ASC',
+  });
+
+}
+
+=item cust_statements
+
+Returns all the statements (see L<FS::cust_statement>) for this customer.
+
+=cut
+
+sub cust_statement {
+  my $self = shift;
+  map { $_ } #return $self->num_cust_statement unless wantarray;
+  sort { $a->_date <=> $b->_date }
+    qsearch('cust_statement', { 'custnum' => $self->custnum, } )
 }
 
 =item cust_credit
@@ -5314,8 +7385,26 @@ Returns all the credits (see L<FS::cust_credit>) for this customer.
 
 sub cust_credit {
   my $self = shift;
+  map { $_ } #return $self->num_cust_credit unless wantarray;
   sort { $a->_date <=> $b->_date }
     qsearch( 'cust_credit', { 'custnum' => $self->custnum } )
+}
+
+=item cust_credit_pkgnum
+
+Returns all the credits (see L<FS::cust_credit>) for this customer's specific
+package when using experimental package balances.
+
+=cut
+
+sub cust_credit_pkgnum {
+  my( $self, $pkgnum ) = @_;
+  map { $_ } #return $self->num_cust_credit_pkgnum($pkgnum) unless wantarray;
+  sort { $a->_date <=> $b->_date }
+    qsearch( 'cust_credit', { 'custnum' => $self->custnum,
+                              'pkgnum'  => $pkgnum,
+                            }
+    );
 }
 
 =item cust_pay
@@ -5326,8 +7415,41 @@ Returns all the payments (see L<FS::cust_pay>) for this customer.
 
 sub cust_pay {
   my $self = shift;
+  return $self->num_cust_pay unless wantarray;
   sort { $a->_date <=> $b->_date }
     qsearch( 'cust_pay', { 'custnum' => $self->custnum } )
+}
+
+=item num_cust_pay
+
+Returns the number of payments (see L<FS::cust_pay>) for this customer.  Also
+called automatically when the cust_pay method is used in a scalar context.
+
+=cut
+
+sub num_cust_pay {
+  my $self = shift;
+  my $sql = "SELECT COUNT(*) FROM cust_pay WHERE custnum = ?";
+  my $sth = dbh->prepare($sql) or die dbh->errstr;
+  $sth->execute($self->custnum) or die $sth->errstr;
+  $sth->fetchrow_arrayref->[0];
+}
+
+=item cust_pay_pkgnum
+
+Returns all the payments (see L<FS::cust_pay>) for this customer's specific
+package when using experimental package balances.
+
+=cut
+
+sub cust_pay_pkgnum {
+  my( $self, $pkgnum ) = @_;
+  map { $_ } #return $self->num_cust_pay_pkgnum($pkgnum) unless wantarray;
+  sort { $a->_date <=> $b->_date }
+    qsearch( 'cust_pay', { 'custnum' => $self->custnum,
+                           'pkgnum'  => $pkgnum,
+                         }
+    );
 }
 
 =item cust_pay_void
@@ -5338,6 +7460,7 @@ Returns all voided payments (see L<FS::cust_pay_void>) for this customer.
 
 sub cust_pay_void {
   my $self = shift;
+  map { $_ } #return $self->num_cust_pay_void unless wantarray;
   sort { $a->_date <=> $b->_date }
     qsearch( 'cust_pay_void', { 'custnum' => $self->custnum } )
 }
@@ -5350,7 +7473,8 @@ Returns all batched payments (see L<FS::cust_pay_void>) for this customer.
 
 sub cust_pay_batch {
   my $self = shift;
-  sort { $a->_date <=> $b->_date }
+  map { $_ } #return $self->num_cust_pay_batch unless wantarray;
+  sort { $a->paybatchnum <=> $b->paybatchnum }
     qsearch( 'cust_pay_batch', { 'custnum' => $self->custnum } )
 }
 
@@ -5397,6 +7521,7 @@ Returns all the refunds (see L<FS::cust_refund>) for this customer.
 
 sub cust_refund {
   my $self = shift;
+  map { $_ } #return $self->num_cust_refund unless wantarray;
   sort { $a->_date <=> $b->_date }
     qsearch( 'cust_refund', { 'custnum' => $self->custnum } )
 }
@@ -5695,6 +7820,19 @@ sub support_services {
 
 }
 
+# Return a list of latitude/longitude for one of the services (if any)
+sub service_coordinates {
+  my $self = shift;
+
+  my @svc_X = 
+    grep { $_->latitude && $_->longitude }
+    map { $_->svc_x }
+    map { $_->cust_svc }
+    $self->ncancelled_pkgs;
+
+  scalar(@svc_X) ? ( $svc_X[0]->latitude, $svc_X[0]->longitude ) : ()
+}
+
 =back
 
 =head1 CLASS METHODS
@@ -5896,6 +8034,32 @@ sub balance_date_sql {
 
 }
 
+=item unapplied_payments_date_sql START_TIME [ END_TIME ]
+
+Returns an SQL fragment to retreive the total unapplied payments for this
+customer, only considering invoices with date earlier than START_TIME, and
+optionally not later than END_TIME.
+
+Times are specified as SQL fragments or numeric
+UNIX timestamps; see L<perlfunc/"time">).  Also see L<Time::Local> and
+L<Date::Parse> for conversion functions.  The empty string can be passed
+to disable that time constraint completely.
+
+Available options are:
+
+=cut
+
+sub unapplied_payments_date_sql {
+  my( $class, $start, $end, ) = @_;
+
+  my $unapp_pay    = FS::cust_pay->unapplied_sql;
+
+  my $pay_where = $class->_money_table_where( 'cust_pay', $start, $end,
+                                                          'unapplied_date'=>1 );
+
+  " ( SELECT COALESCE(SUM($unapp_pay), 0) FROM cust_pay $pay_where ) ";
+}
+
 =item _money_table_where TABLE START_TIME [ END_TIME [ OPTION => VALUE ... ] ]
 
 Helper method for balance_date_sql; name (and usage) subject to change
@@ -6001,6 +8165,13 @@ sub search_sql {
 
   $pkgwhere .= "AND (cancel = 0 or cancel is null)"
     unless $params->{'cancelled_pkgs'};
+
+  ##
+  # parse without census tract checkbox
+  ##
+
+  push @where, "(censustract = '' or censustract is null)"
+    if $params->{'no_censustract'};
 
   ##
   # dates
@@ -6166,6 +8337,9 @@ sub email_search_sql {
 
   my $job = delete $params->{'job'};
 
+  $params->{'payby'} = [ split(/\0/, $params->{'payby'}) ]
+    unless ref($params->{'payby'});
+
   my $sql_query = $class->search_sql($params);
 
   my $count_query   = delete($sql_query->{'count_query'});
@@ -6226,6 +8400,9 @@ sub process_email_search_sql {
   warn Dumper($param) if $DEBUG;
 
   $param->{'job'} = $job;
+
+  $param->{'payby'} = [ split(/\0/, $param->{'payby'}) ]
+    unless ref($param->{'payby'});
 
   my $error = FS::cust_main->email_search_sql( $param );
   die $error if $error;
@@ -6540,11 +8717,11 @@ sub smart_search {
 
     }
 
-    #eliminate duplicates
-    my %saw = ();
-    @cust_main = grep { !$saw{$_->custnum}++ } @cust_main;
-
   }
+
+  #eliminate duplicates
+  my %saw = ();
+  @cust_main = grep { !$saw{$_->custnum}++ } @cust_main;
 
   @cust_main;
 
@@ -7111,6 +9288,15 @@ sub queued_bill {
       $cust_main->bill_and_collect(
         %args,
       );
+}
+
+sub _upgrade_data { #class method
+  my ($class, %opts) = @_;
+
+  my $sql = 'UPDATE h_cust_main SET paycvv = NULL WHERE paycvv IS NOT NULL';
+  my $sth = dbh->prepare($sql) or die dbh->errstr;
+  $sth->execute or die $sth->errstr;
+
 }
 
 =back

@@ -1,7 +1,10 @@
 package FS::part_pkg::flat;
 
 use strict;
-use vars qw(@ISA %info);
+use vars qw( @ISA %info
+             %usage_fields %usage_recharge_fields
+             @usage_fieldorder @usage_recharge_fieldorder
+           );
 use Tie::IxHash;
 #use FS::Record qw(qsearch);
 use FS::UI::bytecount;
@@ -14,30 +17,8 @@ tie my %temporalities, 'Tie::IxHash',
   'preceding' => "Preceding (past)",
 ;
 
-%info = (
-  'name' => 'Flat rate (anniversary billing)',
-  'shortname' => 'Anniversary',
-  'fields' => {
-    'setup_fee'     => { 'name' => 'Setup fee for this package',
-                         'default' => 0,
-                       },
-    'recur_fee'     => { 'name' => 'Recurring fee for this package',
-                         'default' => 0,
-                       },
+%usage_fields = (
 
-    #false laziness w/voip_cdr.pm
-    'recur_temporality' => { 'name' => 'Charge recurring fee for period',
-                             'type' => 'select',
-                             'select_options' => \%temporalities,
-                           },
-
-    'unused_credit' => { 'name' => 'Credit the customer for the unused portion'.
-                                   ' of service at cancellation',
-                         'type' => 'checkbox',
-                       },
-    'externalid' => { 'name'   => 'Optional External ID',
-                      'default' => '',
-                    },
     'seconds'       => { 'name' => 'Time limit for this package',
                          'default' => '',
                          'check' => sub { shift =~ /^\d*$/ },
@@ -60,6 +41,10 @@ tie my %temporalities, 'Tie::IxHash',
                          'format' => \&FS::UI::bytecount::display_bytecount,
                          'parse' => \&FS::UI::bytecount::parse_bytecount,
                        },
+);
+
+%usage_recharge_fields = (
+
     'recharge_amount'       => { 'name' => 'Cost of recharge for this package',
                          'default' => '',
                          'check' => sub { shift =~ /^\d*(\.\d{2})?$/ },
@@ -94,13 +79,46 @@ tie my %temporalities, 'Tie::IxHash',
                                     'package recharge',
                           'type' => 'checkbox',
                         },
+);
+
+@usage_fieldorder = qw( seconds upbytes downbytes totalbytes );
+@usage_recharge_fieldorder = qw(
+  recharge_amount recharge_seconds recharge_upbytes
+  recharge_downbytes recharge_totalbytes
+  usage_rollover recharge_reset
+);
+
+%info = (
+  'name' => 'Flat rate (anniversary billing)',
+  'shortname' => 'Anniversary',
+  'fields' => {
+    'setup_fee'     => { 'name' => 'Setup fee for this package',
+                         'default' => 0,
+                       },
+    'recur_fee'     => { 'name' => 'Recurring fee for this package',
+                         'default' => 0,
+                       },
+
+    #false laziness w/voip_cdr.pm
+    'recur_temporality' => { 'name' => 'Charge recurring fee for period',
+                             'type' => 'select',
+                             'select_options' => \%temporalities,
+                           },
+
+    %usage_fields,
+    %usage_recharge_fields,
+
+    'unused_credit' => { 'name' => 'Credit the customer for the unused portion'.
+                                   ' of service at cancellation',
+                         'type' => 'checkbox',
+                       },
+    'externalid' => { 'name'   => 'Optional External ID',
+                      'default' => '',
+                    },
   },
-  'fieldorder' => [qw( setup_fee recur_fee recur_temporality unused_credit
-                       seconds upbytes downbytes totalbytes
-                       recharge_amount recharge_seconds recharge_upbytes
-                       recharge_downbytes recharge_totalbytes
-                       usage_rollover recharge_reset externalid
-                    )
+  'fieldorder' => [ qw( setup_fee recur_fee recur_temporality unused_credit ),
+                    @usage_fieldorder, @usage_recharge_fieldorder,
+                    qw( externalid ),
                   ],
   'weight' => 10,
 );
@@ -126,7 +144,8 @@ sub unit_setup {
 }
 
 sub calc_recur {
-  my($self, $cust_pkg) = @_;
+  my $self = shift;
+  my($cust_pkg) = @_;
 
   #my $last_bill = $cust_pkg->last_bill;
   my $last_bill = $cust_pkg->get('last_bill'); #->last_bill falls back to setup
@@ -134,7 +153,7 @@ sub calc_recur {
   return 0
     if $self->option('recur_temporality', 1) eq 'preceding' && $last_bill == 0;
 
-  $self->base_recur($cust_pkg);
+  $self->base_recur(@_);
 }
 
 sub base_recur {
@@ -143,11 +162,11 @@ sub base_recur {
 }
 
 sub base_recur_permonth {
-  my($self, $cust_pkg) = @_; #$cust_pkg?
+  my($self, $cust_pkg) = @_;
 
   return 0 unless $self->freq =~ /^\d+$/ && $self->freq > 0;
 
-  sprintf('%.2f', $self->base_recur / $self->freq );
+  sprintf('%.2f', $self->base_recur($cust_pkg) / $self->freq );
 }
 
 sub calc_remain {
@@ -165,7 +184,7 @@ sub calc_remain {
   #my $last_bill = $cust_pkg->last_bill || 0;
   my $last_bill = $cust_pkg->get('last_bill') || 0; #->last_bill falls back to setup
 
-  return 0 if    ! $self->base_recur
+  return 0 if    ! $self->base_recur($cust_pkg)
               || ! $self->option('unused_credit', 1)
               || ! $last_bill
               || ! $next_bill
@@ -183,7 +202,7 @@ sub calc_remain {
   my $freq_sec = $1 * $sec{$2||'m'};
   return 0 unless $freq_sec;
 
-  sprintf("%.2f", $self->base_recur * ( $next_bill - $time ) / $freq_sec );
+  sprintf("%.2f", $self->base_recur($cust_pkg) * ( $next_bill - $time ) / $freq_sec );
 
 }
 
@@ -195,16 +214,21 @@ sub is_prepaid {
   0; #no, we're postpaid
 }
 
+sub usage_valuehash {
+  my $self = shift;
+  map { $_, $self->option($_) }
+    grep { $self->option($_, 'hush') } 
+    qw(seconds upbytes downbytes totalbytes);
+}
+
 sub reset_usage {
   my($self, $cust_pkg, %opt) = @_;
   warn "    resetting usage counters" if $opt{debug} > 1;
-  my %values = map { $_, $self->option($_) } 
-    grep { $self->option($_, 'hush') } 
-    qw(seconds upbytes downbytes totalbytes);
+  my %values = $self->usage_valuehash;
   if ($self->option('usage_rollover', 1)) {
     $cust_pkg->recharge(\%values);
   }else{
-    $cust_pkg->set_usage(\%values);
+    $cust_pkg->set_usage(\%values, %opt);
   }
 }
 

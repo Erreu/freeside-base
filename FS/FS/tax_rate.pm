@@ -3,15 +3,27 @@ package FS::tax_rate;
 use strict;
 use vars qw( @ISA $DEBUG $me
              %tax_unittypes %tax_maxtypes %tax_basetypes %tax_authorities
-             %tax_passtypes );
+             %tax_passtypes %GetInfoType );
 use Date::Parse;
+use DateTime;
+use DateTime::Format::Strptime;
 use Storable qw( thaw );
+use IO::File;
+use File::Temp;
+use LWP::UserAgent;
+use HTTP::Request;
+use HTTP::Response;
 use MIME::Base64;
-use FS::Record qw( qsearch qsearchs dbh );
+use DBIx::DBSchema;
+use DBIx::DBSchema::Table;
+use DBIx::DBSchema::Column;
+use FS::Record qw( qsearch qsearchs dbh dbdef );
 use FS::tax_class;
 use FS::cust_bill_pkg;
 use FS::cust_tax_location;
+use FS::tax_rate_location;
 use FS::part_pkg_taxrate;
+use FS::part_pkg_taxproduct;
 use FS::cust_main;
 use FS::Misc qw( csv_from_fixed );
 
@@ -530,6 +542,26 @@ sub tax_on_tax {
 
 }
 
+=item tax_rate_location
+
+Returns an object representing the location associated with this tax
+(see L<FS::tax_rate_location>)
+
+=cut
+
+sub tax_rate_location {
+  my $self = shift;
+
+  qsearchs({ 'table'     => 'tax_rate_location',
+             'hashref'   => { 'data_vendor' => $self->data_vendor, 
+                              'geocode'     => $self->geocode,
+                              'disabled'    => '',
+                            },
+          }) ||
+  new FS::tax_rate_location;
+
+}
+
 =back
 
 =head1 SUBROUTINES
@@ -557,7 +589,7 @@ sub batch_import {
   if ( $format eq 'cch-fixed' || $format eq 'cch-fixed-update' ) {
     $format =~ s/-fixed//;
     my $date_format = sub { my $r='';
-                            /^(\d{4})(\d{2})(\d{2})$/ && ($r="$1/$2/$3");
+                            /^(\d{4})(\d{2})(\d{2})$/ && ($r="$3/$2/$1");
                             $r;
                           };
     my $trim = sub { my $r = shift; $r =~ s/^\s*//; $r =~ s/\s*$//; $r };
@@ -588,7 +620,13 @@ sub batch_import {
 
       $hash->{'actionflag'} ='I' if ($hash->{'data_vendor'} eq 'cch');
       $hash->{'data_vendor'} ='cch';
-      $hash->{'effective_date'} = str2time($hash->{'effective_date'});
+      my $parser = new DateTime::Format::Strptime( pattern => "%m/%d/%Y",
+                                                   time_zone => 'floating',
+                                                 );
+      my $dt = $parser->parse_datetime( $hash->{'effective_date'} );
+      $hash->{'effective_date'} = $dt ? $dt->epoch : '';
+
+      $hash->{$_} = sprintf("%.2f", $hash->{$_}) foreach qw( taxbase taxmax );
 
       my $taxclassid =
         join(':', map{ $hash->{$_} } qw(taxtype taxcat) );
@@ -675,7 +713,7 @@ sub batch_import {
     if ( $job ) {  # progress bar
       if ( time - $min_sec > $last ) {
         my $error = $job->update_statustext(
-          int( 100 * $imported / $count )
+          int( 100 * $imported / $count ). ",Importing tax rates"
         );
         die $error if $error;
         $last = time;
@@ -719,7 +757,7 @@ sub batch_import {
     if ( $job ) {  # progress bar
       if ( time - $min_sec > $last ) {
         my $error = $job->update_statustext(
-          int( 100 * $imported / $count )
+          int( 100 * $imported / $count ). ",Importing tax rates"
         );
         die $error if $error;
         $last = time;
@@ -743,7 +781,7 @@ sub batch_import {
     if ( $job ) {  # progress bar
       if ( time - $min_sec > $last ) {
         my $error = $job->update_statustext(
-          int( 100 * $imported / $count )
+          int( 100 * $imported / $count ). ",Importing tax rates"
         );
         die $error if $error;
         $last = time;
@@ -777,7 +815,7 @@ sub batch_import {
     if ( $job ) {  # progress bar
       if ( time - $min_sec > $last ) {
         my $error = $job->update_statustext(
-          int( 100 * $imported / $count )
+          int( 100 * $imported / $count ). ",Importing tax rates"
         );
         die $error if $error;
         $last = time;
@@ -837,7 +875,8 @@ sub process_batch_import {
     my $error = '';
     my $have_location = 0;
 
-    my @list = ( 'CODE',     'codefile',  \&FS::tax_class::batch_import,
+    my @list = ( 'GEOCODE',  'geofile',   \&FS::tax_rate_location::batch_import,
+                 'CODE',     'codefile',  \&FS::tax_class::batch_import,
                  'PLUS4',    'plus4file', \&FS::cust_tax_location::batch_import,
                  'ZIP',      'zipfile',   \&FS::cust_tax_location::batch_import,
                  'TXMATRIX', 'txmatrix',  \&FS::part_pkg_taxrate::batch_import,
@@ -878,8 +917,10 @@ sub process_batch_import {
     my $error = '';
     my @insert_list = ();
     my @delete_list = ();
+    my @predelete_list = ();
 
-    my @list = ( 'CODE',     'codefile',  \&FS::tax_class::batch_import,
+    my @list = ( 'GEOCODE',  'geofile',   \&FS::tax_rate_location::batch_import,
+                 'CODE',     'codefile',  \&FS::tax_class::batch_import,
                  'PLUS4',    'plus4file', \&FS::cust_tax_location::batch_import,
                  'ZIP',      'zipfile',   \&FS::cust_tax_location::batch_import,
                  'TXMATRIX', 'txmatrix',  \&FS::part_pkg_taxrate::batch_import,
@@ -932,9 +973,26 @@ sub process_batch_import {
       close $dfh;
 
       push @insert_list, $name, $ifh->filename, $import_sub;
-      unshift @delete_list, $name, $dfh->filename, $import_sub;
+      if ( $name eq 'GEOCODE' ) { #handle this whole ordering issue better
+        unshift @predelete_list, $name, $dfh->filename, $import_sub;
+      } else {
+        unshift @delete_list, $name, $dfh->filename, $import_sub;
+      }
 
     }
+
+    while( scalar(@predelete_list) ) {
+      my ($name, $file, $import_sub) =
+        (shift @predelete_list, shift @predelete_list, shift @predelete_list);
+
+      my $fmt = $format. ( $name eq 'ZIP' ? '-zip' : '' );
+      open my $fh, "< $file" or $error ||= "Can't open $name file $file: $!";
+      $error ||=
+        &{$import_sub}({ 'filehandle' => $fh, 'format' => $fmt }, $job);
+      close $fh;
+      unlink $file or warn "Can't delete $file: $!";
+    }
+    
     while( scalar(@insert_list) ) {
       my ($name, $file, $import_sub) =
         (shift @insert_list, shift @insert_list, shift @insert_list);
@@ -981,6 +1039,541 @@ sub process_batch_import {
     die "Unknown format: $format";
   }
 
+}
+
+=item process_download_and_reload
+
+Download and process a tax update as a queued JSRPC job after wiping the
+existing wipable tax data.
+
+=cut
+
+sub process_download_and_reload {
+  my $job = shift;
+
+  my $param = thaw(decode_base64($_[0]));
+  my $format = $param->{'format'};        #well... this is all cch specific
+
+  my ( $count, $last, $min_sec, $imported ) = (0, time, 5, 0); #progressbar
+  $count = 100;
+
+  if ( $job ) {  # progress bar
+    my $error = $job->update_statustext( int( 100 * $imported / $count ) );
+    die $error if $error;
+  }
+
+  my $oldAutoCommit = $FS::UID::AutoCommit;
+  local $FS::UID::AutoCommit = 0;
+  my $dbh = dbh;
+  my $error = '';
+
+  my $sql =
+    "SELECT count(*) FROM part_pkg_taxoverride JOIN tax_class ".
+    "USING (taxclassnum) WHERE data_vendor = '$format'";
+  my $sth = $dbh->prepare($sql) or die $dbh->errstr;
+  $sth->execute
+    or die "Unexpected error executing statement $sql: ". $sth->errstr;
+  die "Don't (yet) know how to handle part_pkg_taxoverride records."
+    if $sth->fetchrow_arrayref->[0];
+
+  # really should get a table EXCLUSIVE lock here
+
+  #remember disabled taxes
+  my %disabled_tax_rate = ();
+  foreach my $tax_rate ( qsearch( { table   => 'tax_rate',
+                                    hashref => { disabled => 'Y',
+                                                 data_vendor => $format,
+                                               },
+                                    select  => 'geocode, taxclassnum',
+                                  }
+                                 )
+                       )
+  {
+    my $tax_class =
+      qsearchs( 'tax_class', { taxclassnum => $tax_rate->taxclassnum } );
+    unless ( $tax_class ) {
+      warn "failed to find tax_class ". $tax_rate->taxclassnum;
+      next;
+    }
+    $disabled_tax_rate{$tax_rate->geocode. ':'. $tax_class->taxclass} = 1;
+  }
+
+  #remember tax products
+  # XXX FIXME  this loop only works when cch is the only data provider
+  my %taxproduct = ();
+  my $extra_sql = "WHERE taxproductnum IS NOT NULL OR ".
+                  "0 < ( SELECT count(*) from part_pkg_option WHERE ".
+                  "       part_pkg_option.pkgpart = part_pkg.pkgpart AND ".
+                  "       optionname LIKE 'usage_taxproductnum_%' AND ".
+                  "       optionvalue != '' )";
+  foreach my $part_pkg ( qsearch( { table => 'part_pkg',
+                                    select  => 'DISTINCT pkgpart,taxproductnum',
+                                    hashref => {},
+                                    extra_sql => $extra_sql,
+                                  }
+                                )
+                       )
+  {
+    warn "working with package part ". $part_pkg->pkgpart.
+      "which has a taxproductnum of ". $part_pkg->taxproductnum. "\n" if $DEBUG;
+    my $part_pkg_taxproduct = $part_pkg->taxproduct('');
+    $taxproduct{$part_pkg->pkgpart}{''} = $part_pkg_taxproduct->taxproduct
+      if $part_pkg_taxproduct;
+
+    foreach my $option ( $part_pkg->part_pkg_option ) {
+      next unless $option->optionname =~ /^usage_taxproductnum_(\w)$/;
+      my $class = $1;
+
+      $part_pkg_taxproduct = $part_pkg->taxproduct($class);
+      $taxproduct{$part_pkg->pkgpart}{$class} = $part_pkg_taxproduct->taxproduct
+        if $part_pkg_taxproduct;
+    }
+  }
+
+  #wipe out the old data
+  foreach my $tax_rate_location ( qsearch( 'tax_rate_location',
+                                           { data_vendor => $format,
+                                             disabled    => '',
+                                           }
+                                         )
+                                )
+  {
+    $tax_rate_location->disabled('Y');
+    my $error = $tax_rate_location->replace;
+    if ( $error ) {
+      $dbh->rollback or die $dbh->errstr if $oldAutoCommit;
+      die $error;
+    }
+  }
+
+  local $FS::part_pkg_taxproduct::delete_kludge = 1;
+  my @table = qw(
+    tax_rate part_pkg_taxrate part_pkg_taxproduct tax_class cust_tax_location
+  );
+  foreach my $table ( @table ) {
+    foreach my $row ( qsearch( $table, { data_vendor => $format } ) ) {
+      my $error = $row->delete;
+      if ( $error ) {
+        $dbh->rollback or die $dbh->errstr if $oldAutoCommit;
+        die $error;
+      }
+    }
+  }
+
+  if ( $format eq 'cch' ) {
+    foreach my $cust_tax_location ( qsearch( 'cust_tax_location',
+                                             { data_vendor => "$format-zip" }
+                                           )
+                                  )
+    {
+      my $error = $cust_tax_location->delete;
+      if ( $error ) {
+        $dbh->rollback or die $dbh->errstr if $oldAutoCommit;
+        die $error;
+      }
+    }
+  }
+
+  #import new data
+  process_download_and_update($job, @_);
+
+  #restore taxproducts
+  foreach my $pkgpart ( keys %taxproduct ) {
+    warn "restoring taxproductnums on pkgpart $pkgpart\n" if $DEBUG;
+
+    my $part_pkg = qsearchs('part_pkg', { pkgpart => $pkgpart } );
+    unless ( $part_pkg ) {
+      $dbh->rollback or die $dbh->errstr if $oldAutoCommit;
+      die "somehow failed to find part_pkg with pkgpart $pkgpart!\n";
+    }
+
+    my %options = $part_pkg->options;
+    my %pkg_svc = map { $_->svcpart => $_->quantity } $part_pkg->pkg_svc;
+    my $primary_svc = $part_pkg->svcpart;
+    my $new = new FS::part_pkg { $part_pkg->hash };
+
+    foreach my $class ( keys %{ $taxproduct{$pkgpart} } ) {
+      warn "working with class '$class'\n" if $DEBUG;
+      my $part_pkg_taxproduct =
+        qsearchs( 'part_pkg_taxproduct',
+                  { taxproduct  => $taxproduct{$pkgpart}{$class},
+                    data_vendor => $format,
+                  }
+                );
+
+      unless ( $part_pkg_taxproduct ) {
+        $dbh->rollback or die $dbh->errstr if $oldAutoCommit;
+        die "failed to find part_pkg_taxproduct ($taxproduct{pkgpart}{$class})".
+            " for pkgpart $pkgpart\n";
+      }
+
+      if ( $class eq '' ) {
+        $new->taxproductnum($part_pkg_taxproduct->taxproductnum);
+        next;
+      }
+
+      $options{"usage_taxproductnum_$class"} =
+        $part_pkg_taxproduct->taxproductnum;
+
+    }
+
+    my $error = $new->replace( $part_pkg,
+                               'pkg_svc' => \%pkg_svc,
+                               'primary_svc' => $primary_svc,
+                               'options' => \%options,
+    );
+      
+    if ( $error ) {
+      $dbh->rollback or die $dbh->errstr if $oldAutoCommit;
+      die $error;
+    }
+  }
+
+  #disable tax_rates
+  foreach my $key (keys %disabled_tax_rate) {
+    my ($geocode,$taxclass) = split /:/, $key, 2;
+    my @tax_class = qsearch( 'tax_class', { data_vendor => $format,
+                                            taxclass    => $taxclass,
+                                          } );
+    if (scalar(@tax_class) > 1) {
+      $dbh->rollback or die $dbh->errstr if $oldAutoCommit;
+      die "found multiple tax_class records for format $format class $taxclass";
+    }
+      
+    unless (scalar(@tax_class)) {
+      warn "no tax_class for format $format class $taxclass\n";
+      next;
+    }
+
+    my @tax_rate =
+      qsearch('tax_rate', { data_vendor  => $format,
+                            geocode      => $geocode,
+                            taxclassnum  => $tax_class[0]->taxclassnum,
+                          }
+    );
+
+    if (scalar(@tax_rate) > 1) {
+      $dbh->rollback or die $dbh->errstr if $oldAutoCommit;
+      die "found multiple tax_rate records for format $format geocode $geocode".
+          " and taxclass $taxclass ( taxclassnum ". $tax_class[0]->taxclassnum.
+          " )";
+    }
+      
+    if (scalar(@tax_rate)) {
+      $tax_rate[0]->disabled('Y');
+      my $error = $tax_rate[0]->replace;
+      if ( $error ) {
+        $dbh->rollback or die $dbh->errstr if $oldAutoCommit;
+        die $error;
+      }
+    }
+  }
+
+  #success!
+
+  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
+  
+}
+
+=item process_download_and_update
+
+Download and process a tax update as a queued JSRPC job
+
+=cut
+
+sub process_download_and_update {
+  my $job = shift;
+
+  my $param = thaw(decode_base64(shift));
+  my $format = $param->{'format'};        #well... this is all cch specific
+
+  my ( $count, $last, $min_sec, $imported ) = (0, time, 5, 0); #progressbar
+  $count = 100;
+
+  if ( $job ) {  # progress bar
+    my $error = $job->update_statustext( int( 100 * $imported / $count ) );
+    die $error if $error;
+  }
+
+  my $dir = '%%%FREESIDE_CACHE%%%/cache.'. $FS::UID::datasrc. '/taxdata';
+  unless (-d $dir) {
+    mkdir $dir or die "can't create $dir: $!\n";
+  }
+
+  if ($format eq 'cch') {
+
+    eval "use Text::CSV_XS;";
+    die $@ if $@;
+
+    eval "use XBase;";
+    die $@ if $@;
+
+    my $conffile = '%%%FREESIDE_CONF%%%/cchconf';
+    my $conffh = new IO::File "<$conffile" or die "can't open $conffile: $!\n";
+    my ( $urls, $secret, $states ) =
+      map { /^(.*)$/ or die "bad config line in $conffile: $_\n"; $1 }
+          <$conffh>;
+
+    $dir .= '/cch';
+
+    my $oldAutoCommit = $FS::UID::AutoCommit;
+    local $FS::UID::AutoCommit = 0;
+    my $dbh = dbh;
+    my $error = '';
+
+    # really should get a table EXCLUSIVE lock here
+    # check if initial import or update
+    
+    my $sql = "SELECT count(*) from tax_rate WHERE data_vendor='$format'";
+    my $sth = $dbh->prepare($sql) or die $dbh->errstr;
+    $sth->execute() or die $sth->errstr;
+    my $upgrade = $sth->fetchrow_arrayref->[0];
+
+    # create cache and/or rotate old tax data
+
+    if (-d $dir) {
+
+      if (-d "$dir.4") {
+        opendir(my $dirh, "$dir.4") or die "failed to open $dir.4: $!\n";
+        foreach my $file (readdir($dirh)) {
+          unlink "$dir.4/$file" if (-f "$dir.4/$file");
+        }
+        closedir($dirh);
+        rmdir "$dir.4";
+      }
+
+      for (3, 2, 1) {
+        if ( -e "$dir.$_" ) {
+          rename "$dir.$_", "$dir.". ($_+1) or die "can't rename $dir.$_: $!\n";
+        }
+      }
+      rename "$dir", "$dir.1" or die "can't rename $dir: $!\n";
+
+    } else {
+
+      die "can't find previous tax data\n" if $upgrade;
+
+    }
+
+    mkdir "$dir.new" or die "can't create $dir.new: $!\n";
+    
+    # fetch and unpack the zip files
+
+    my $ua = new LWP::UserAgent;
+    foreach my $url (split ',', $urls) {
+      my @name = split '/', $url;  #somewhat restrictive
+      my $name = pop @name;
+      $name =~ /(.*)/; # untaint that which we trust;
+      $name = $1;
+      
+      open my $taxfh, ">$dir.new/$name" or die "Can't open $dir.new/$name: $!\n";
+     
+      my $res = $ua->request(
+        new HTTP::Request( GET => $url),
+        sub { #my ($data, $response_object) = @_;
+              print $taxfh $_[0] or die "Can't write to $dir.new/$name: $!\n";
+              my $content_length = $_[1]->content_length;
+              $imported += length($_[0]);
+              if ( time - $min_sec > $last ) {
+                my $error = $job->update_statustext(
+                  ($content_length ? int(100 * $imported/$content_length) : 0 ).
+                  ",Downloading data from CCH"
+                );
+                die $error if $error;
+                $last = time;
+              }
+        },
+      );
+      die "download of $url failed: ". $res->status_line
+        unless $res->is_success;
+      
+      close $taxfh;
+      my $error = $job->update_statustext( "0,Unpacking data" );
+      die $error if $error;
+      $secret =~ /(.*)/; # untaint that which we trust;
+      $secret = $1;
+      system('unzip', "-P", $secret, "-d", "$dir.new",  "$dir.new/$name") == 0
+        or die "unzip -P $secret -d $dir.new $dir.new/$name failed";
+      #unlink "$dir.new/$name";
+    }
+ 
+    # extract csv files from the dbf files
+
+    foreach my $name ( qw( code detail geocode plus4 txmatrix zip ) ) {
+      my $error = $job->update_statustext( "0,Unpacking $name" );
+      die $error if $error;
+      warn "opening $dir.new/$name.dbf\n" if $DEBUG;
+      my $table = new XBase 'name' => "$dir.new/$name.dbf";
+      die "failed to access $dir.new/$name.dbf: ". XBase->errstr
+        unless defined($table);
+      $count = $table->last_record; # approximately;
+      $imported = 0;
+      open my $csvfh, ">$dir.new/$name.txt"
+        or die "failed to open $dir.new/$name.txt: $!\n";
+
+      my $csv = new Text::CSV_XS { 'always_quote' => 1 };
+      my @fields = $table->field_names;
+      my $cursor = $table->prepare_select;
+      my $format_date =
+        sub { my $date = shift;
+              $date =~ /^(\d{4})(\d{2})(\d{2})$/ && ($date = "$2/$3/$1");
+              $date;
+            };
+      while (my $row = $cursor->fetch_hashref) {
+        $csv->combine( map { ($table->field_type($_) eq 'D')
+                             ? &{$format_date}($row->{$_}) 
+                             : $row->{$_}
+                           }
+                       @fields
+        );
+        print $csvfh $csv->string, "\n";
+        $imported++;
+        if ( time - $min_sec > $last ) {
+          my $error = $job->update_statustext(
+            int(100 * $imported/$count).  ",Unpacking $name"
+          );
+          die $error if $error;
+          $last = time;
+        }
+      }
+      $table->close;
+      close $csvfh;
+    }
+
+    # generate the diff files
+
+    my @insert_list = ();
+    my @delete_list = ();
+    my @predelete_list = ();
+
+    my @list = (
+                 'geocode',  \&FS::tax_rate_location::batch_import, 
+                 'code',     \&FS::tax_class::batch_import,
+                 'plus4',    \&FS::cust_tax_location::batch_import,
+                 'zip',      \&FS::cust_tax_location::batch_import,
+                 'txmatrix', \&FS::part_pkg_taxrate::batch_import,
+                 'detail',   \&FS::tax_rate::batch_import,
+               );
+
+    while( scalar(@list) ) {
+      my ( $name, $method ) = ( shift @list, shift @list );
+      my %oldlines = ();
+
+      my $error = $job->update_statustext( "0,Comparing to previous $name" );
+      die $error if $error;
+
+      warn "processing $dir.new/$name.txt\n" if $DEBUG;
+
+      if ($upgrade) {
+        open my $oldcsvfh, "$dir.1/$name.txt"
+          or die "failed to open $dir.1/$name.txt: $!\n";
+
+        while(<$oldcsvfh>) {
+          chomp;
+          $oldlines{$_} = 1;
+        }
+        close $oldcsvfh;
+      }
+
+      open my $newcsvfh, "$dir.new/$name.txt"
+        or die "failed to open $dir.new/$name.txt: $!\n";
+    
+      my $ifh = new File::Temp( TEMPLATE => "$name.insert.XXXXXXXX",
+                                DIR      => "$dir.new",
+                                UNLINK   => 0,     #meh
+                              ) or die "can't open temp file: $!\n";
+
+      my $dfh = new File::Temp( TEMPLATE => "$name.delete.XXXXXXXX",
+                                DIR      => "$dir.new",
+                                UNLINK   => 0,     #meh
+                              ) or die "can't open temp file: $!\n";
+
+      while(<$newcsvfh>) {
+        chomp;
+        if (exists($oldlines{$_})) {
+          $oldlines{$_} = 0;
+        } else {
+          print $ifh $_, ',"I"', "\n";
+        }
+      }
+      close $newcsvfh;
+
+      if ($name eq 'detail') {
+        for (keys %oldlines) {  # one file for rate details
+          print $ifh $_, ',"D"', "\n" if $oldlines{$_};
+        }
+      } else {
+        for (keys %oldlines) {
+          print $dfh $_, ',"D"', "\n" if $oldlines{$_};
+        }
+      }
+      %oldlines = ();
+
+      push @insert_list, $name, $ifh->filename, $method;
+      if ( $name eq 'geocode' ) {
+        unshift @predelete_list, $name, $dfh->filename, $method
+          unless $name eq 'detail';
+      } else {
+        unshift @delete_list, $name, $dfh->filename, $method
+          unless $name eq 'detail';
+      }
+
+      close $dfh;
+      close $ifh;
+    }
+
+    while( scalar(@predelete_list) ) {
+      my ($name, $file, $method) =
+        (shift @predelete_list, shift @predelete_list, shift @predelete_list);
+
+      my $fmt = "$format-update";
+      $fmt = $fmt. ( $name eq 'zip' ? '-zip' : '' );
+      open my $fh, "< $file" or $error ||= "Can't open $name file $file: $!";
+      $error ||=
+        &{$method}({ 'filehandle' => $fh, 'format' => $fmt }, $job);
+      close $fh;
+      #unlink $file or warn "Can't delete $file: $!";
+    }
+
+    while( scalar(@insert_list) ) {
+      my ($name, $file, $method) =
+        (shift @insert_list, shift @insert_list, shift @insert_list);
+
+      my $fmt = "$format-update";
+      $fmt = $fmt. ( $name eq 'zip' ? '-zip' : '' );
+      open my $fh, "< $file" or $error ||= "Can't open $name file $file: $!";
+      $error ||=
+        &{$method}({ 'filehandle' => $fh, 'format' => $fmt }, $job);
+      close $fh;
+      #unlink $file or warn "Can't delete $file: $!";
+    }
+    
+    while( scalar(@delete_list) ) {
+      my ($name, $file, $method) =
+        (shift @delete_list, shift @delete_list, shift @delete_list);
+
+      my $fmt = "$format-update";
+      $fmt = $fmt. ( $name eq 'zip' ? '-zip' : '' );
+      open my $fh, "< $file" or $error ||= "Can't open $name file $file: $!";
+      $error ||=
+        &{$method}({ 'filehandle' => $fh, 'format' => $fmt }, $job);
+      close $fh;
+      #unlink $file or warn "Can't delete $file: $!";
+    }
+    
+    if ($error) {
+      $dbh->rollback or die $dbh->errstr if $oldAutoCommit;
+      die $error;
+    }else{
+      $dbh->commit or die $dbh->errstr if $oldAutoCommit;
+    }
+
+    rename "$dir.new", "$dir"
+      or die "cch tax update processed, but can't rename $dir.new: $!\n";
+
+  }else{
+    die "Unknown format: $format";
+  }
 }
 
 =item browse_queries PARAMS
@@ -1061,6 +1654,111 @@ sub browse_queries {
   $query->{extra_sql} = $extra_sql;
 
   return ($query, "SELECT COUNT(*) FROM tax_rate $extra_sql");
+}
+
+# _upgrade_data
+#
+# Used by FS::Upgrade to migrate to a new database.
+#
+#
+
+sub _upgrade_data {  # class method
+  my ($self, %opts) = @_;
+  my $dbh = dbh;
+
+  warn "$me upgrading $self\n" if $DEBUG;
+
+  my @column = qw ( tax excessrate usetax useexcessrate fee excessfee
+                    feebase feemax );
+
+  if ( $dbh->{Driver}->{Name} eq 'Pg' ) {
+
+    eval "use DBI::Const::GetInfoType;";
+    die $@ if $@;
+
+    my $major_version = 0;
+    $dbh->get_info( $GetInfoType{SQL_DBMS_VER} ) =~ /^(\d{2})/
+      && ( $major_version = sprintf("%d", $1) );
+
+    if ( $major_version > 7 ) {
+
+      # ideally this would be supported in DBIx-DBSchema and friends
+
+      foreach my $column ( @column ) {
+        my $columndef = dbdef->table($self->table)->column($column);
+        unless ($columndef->type eq 'numeric') {
+
+          warn "updating tax_rate column $column to numeric\n" if $DEBUG;
+          my $sql = "ALTER TABLE tax_rate ALTER $column TYPE numeric(14,8)";
+          my $sth = $dbh->prepare($sql) or die $dbh->errstr;
+          $sth->execute or die $sth->errstr;
+
+          warn "updating h_tax_rate column $column to numeric\n" if $DEBUG;
+          $sql = "ALTER TABLE h_tax_rate ALTER $column TYPE numeric(14,8)";
+          $sth = $dbh->prepare($sql) or die $dbh->errstr;
+          $sth->execute or die $sth->errstr;
+
+        }
+      }
+
+    } elsif ( $dbh->{pg_server_version} =~ /^704/ ) {
+
+      # ideally this would be supported in DBIx-DBSchema and friends
+
+      foreach my $column ( @column ) {
+        my $columndef = dbdef->table($self->table)->column($column);
+        unless ($columndef->type eq 'numeric') {
+
+          warn "updating tax_rate column $column to numeric\n" if $DEBUG;
+
+          foreach my $table ( qw( tax_rate h_tax_rate ) ) {
+
+            my $sql = "ALTER TABLE $table RENAME $column TO old_$column";
+            my $sth = $dbh->prepare($sql) or die $dbh->errstr;
+            $sth->execute or die $sth->errstr;
+
+            my $def = dbdef->table($table)->column($column);
+            $def->type('numeric');
+            $def->length('14,8'); 
+            my $null = $def->null;
+            $def->null('NULL');
+
+            $sql = "ALTER TABLE $table ADD COLUMN ". $def->line($dbh);
+            $sth = $dbh->prepare($sql) or die $dbh->errstr;
+            $sth->execute or die $sth->errstr;
+
+            $sql = "UPDATE $table SET $column = CAST( old_$column AS numeric )";
+            $sth = $dbh->prepare($sql) or die $dbh->errstr;
+            $sth->execute or die $sth->errstr;
+
+            unless ( $null eq 'NULL' ) {
+              $sql = "ALTER TABLE $table ALTER $column SET NOT NULL";
+              $sth = $dbh->prepare($sql) or die $dbh->errstr;
+              $sth->execute or die $sth->errstr;
+            }
+
+            $sql = "ALTER TABLE $table DROP old_$column";
+            $sth = $dbh->prepare($sql) or die $dbh->errstr;
+            $sth->execute or die $sth->errstr;
+
+          }
+        }
+      }
+
+    } else {
+
+      warn "WARNING: tax_rate table upgrade unsupported for this Pg version\n";
+
+    }
+
+  } else {
+
+    warn "WARNING: tax_rate table upgrade only supported for Pg 8+\n";
+
+  }
+
+  '';
+
 }
 
 =back

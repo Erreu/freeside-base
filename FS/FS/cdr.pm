@@ -13,7 +13,6 @@ use FS::Record qw( qsearch qsearchs );
 use FS::cdr_type;
 use FS::cdr_calltype;
 use FS::cdr_carrier;
-use FS::cdr_upstream_rate;
 
 @ISA = qw(FS::Record);
 @EXPORT_OK = qw( _cdr_date_parser_maker _cdr_min_parser_maker );
@@ -153,6 +152,54 @@ points to.  You can ask the object for a copy with the I<hash> method.
 
 sub table { 'cdr'; }
 
+sub table_info {
+  {
+    'fields' => {
+#XXX fill in some (more) nice names
+        #'acctid'                => '',
+        'calldate'              => 'Call date',
+        'clid'                  => 'Caller ID',
+        'src'                   => 'Source',
+        'dst'                   => 'Destination',
+        'dcontext'              => 'Dest. context',
+        'channel'               => 'Channel',
+        'dstchannel'            => 'Destination channel',
+        #'lastapp'               => '',
+        #'lastdata'              => '',
+        'startdate'             => 'Start date',
+        'answerdate'            => 'Answer date',
+        'enddate'               => 'End date',
+        'duration'              => 'Duration',
+        'billsec'               => 'Billable seconds',
+        'disposition'           => 'Disposition',
+        'amaflags'              => 'AMA flags',
+        'accountcode'           => 'Account code',
+        #'uniqueid'              => '',
+        'userfield'             => 'User field',
+        #'cdrtypenum'            => '',
+        'charged_party'         => 'Charged party',
+        #'upstream_currency'     => '',
+        'upstream_price'        => 'Upstream price',
+        #'upstream_rateplanid'   => '',
+        #'ratedetailnum'         => '',
+        'rated_price'           => 'Rated price',
+        #'distance'              => '',
+        #'islocal'               => '',
+        #'calltypenum'           => '',
+        #'description'           => '',
+        #'quantity'              => '',
+        'carrierid'             => 'Carrier ID',
+        #'upstream_rateid'       => '',
+        'svcnum'                => 'Freeside service',
+        'freesidestatus'        => 'Freeside status',
+        'freesiderewritestatus' => 'Freeside rewrite status',
+        'cdrbatch'              => 'Batch',
+    },
+
+  };
+
+}
+
 =item insert
 
 Adds this record to the database.  If there is an error, returns the error,
@@ -269,6 +316,17 @@ sub check {
   $self->SUPER::check;
 }
 
+=item is_tollfree
+
+  Returns true when the cdr represents a toll free number and false otherwise.
+
+=cut
+
+sub is_tollfree {
+  my $self = shift;
+  ( $self->dst =~ /^(\+?1)?8(8|([02-7])\3)/ ) ? 1 : 0;
+}
+
 =item set_charged_party
 
 If the charged_party field is already set, does nothing.  Otherwise:
@@ -284,17 +342,20 @@ or to the dst field if it is a toll free number.
 sub set_charged_party {
   my $self = shift;
 
-  unless ( $self->charged_party ) {
+  my $conf = new FS::Conf;
 
-    my $conf = new FS::Conf;
+  unless ( $self->charged_party ) {
 
     if ( $conf->exists('cdr-charged_party-accountcode') && $self->accountcode ){
 
-      $self->charged_party( $self->accountcode );
+      my $charged_party = $self->accountcode;
+      $charged_party =~ s/^0+//
+        if $conf->exists('cdr-charged_party-accountcode-trim_leading_0s');
+      $self->charged_party( $charged_party );
 
     } else {
 
-      if ( $self->dst =~ /^(\+?1)?8[02-8]{2}/ ) {
+      if ( $self->is_tollfree ) {
         $self->charged_party($self->dst);
       } else {
         $self->charged_party($self->src);
@@ -304,9 +365,17 @@ sub set_charged_party {
 
   }
 
+#  my $prefix = $conf->config('cdr-charged_party-truncate_prefix');
+#  my $prefix_len = length($prefix);
+#  my $trunc_len = $conf->config('cdr-charged_party-truncate_length');
+#
+#  $self->charged_party( substr($self->charged_party, 0, $trunc_len) )
+#    if $prefix_len && $trunc_len
+#    && substr($self->charged_party, 0, $prefix_len) eq $prefix;
+
 }
 
-=item set_status_and_rated_price STATUS [ RATED_PRICE ]
+=item set_status_and_rated_price STATUS [ RATED_PRICE [ SVCNUM ] ]
 
 Sets the status to the provided string.  If there is an error, returns the
 error, otherwise returns false.
@@ -314,9 +383,10 @@ error, otherwise returns false.
 =cut
 
 sub set_status_and_rated_price {
-  my($self, $status, $rated_price) = @_;
+  my($self, $status, $rated_price, $svcnum) = @_;
   $self->freesidestatus($status);
   $self->rated_price($rated_price);
+  $self->svcnum($svcnum) if $svcnum;
   $self->replace();
 }
 
@@ -402,51 +472,11 @@ sub calltypename {
   $cdr_calltype ? $cdr_calltype->calltypename : '';
 }
 
-=item cdr_upstream_rate
-
-Returns the upstream rate mapping (see L<FS::cdr_upstream_rate>), or the empty
-string if no FS::cdr_upstream_rate object is associated with this CDR.
-
-=cut
-
-sub cdr_upstream_rate {
-  my $self = shift;
-  return '' unless $self->upstream_rateid;
-  qsearchs('cdr_upstream_rate', { 'upstream_rateid' => $self->upstream_rateid })
-    or '';
-}
-
-=item _convergent_format COLUMN [ COUNTRYCODE ]
-
-Returns the number in COLUMN formatted as follows:
-
-If the country code does not match COUNTRYCODE (default "61"), it is returned
-unchanged.
-
-If the country code does match COUNTRYCODE (default "61"), it is removed.  In
-addiiton, "0" is prepended unless the number starts with 13, 18 or 19. (???)
-
-=cut
-
-sub _convergent_format {
-  my( $self, $field ) = ( shift, shift );
-  my $countrycode = scalar(@_) ? shift : '61'; #+61 = australia
-  #my $number = $self->$field();
-  my $number = $self->get($field);
-  #if ( $number =~ s/^(\+|011)$countrycode// ) {
-  if ( $number =~ s/^\+$countrycode// ) {
-    $number = "0$number"
-      unless $number =~ /^1[389]/; #???
-  }
-  $number;
-}
-
 =item downstream_csv [ OPTION => VALUE, ... ]
 
 =cut
 
 my %export_names = (
-  'convergent'      => {},
   'simple'  => {
     'name'           => 'Simple',
     'invoice_header' => "Date,Time,Name,Destination,Duration,Price",
@@ -464,30 +494,28 @@ my %export_names = (
     'name'           => 'Default with source',
     'invoice_header' => 'Caller,Date,Time,Number,Destination,Duration,Price',
   },
+  'accountcode_default' => {
+    'name'           => 'Default plus accountcode',
+    'invoice_header' => 'Date,Time,Account,Number,Destination,Duration,Price',
+  },
 );
 
+my $duration_sub = sub {
+  my($cdr, %opt) = @_;
+  if ( $opt{minutes} ) {
+    $opt{minutes}. ( $opt{granularity} ? 'm' : ' call' );
+  } else {
+    sprintf('%.2fm', $cdr->billsec / 60 );
+  }
+};
+
 my %export_formats = (
-  'convergent' => [
-    'carriername', #CARRIER
-    sub { shift->_convergent_format('src') }, #SERVICE_NUMBER
-    sub { shift->_convergent_format('charged_party') }, #CHARGED_NUMBER
-    sub { time2str('%Y-%m-%d', shift->calldate_unix ) }, #DATE
-    sub { time2str('%T',       shift->calldate_unix ) }, #TIME
-    'billsec', #'duration', #DURATION
-    sub { shift->_convergent_format('dst') }, #NUMBER_DIALED
-    '', #XXX add (from prefixes in most recent email) #FROM_DESC
-    '', #XXX add (from prefixes in most recent email) #TO_DESC
-    'calltypename', #CLASS_CODE
-    'rated_price', #PRICE
-    sub { shift->rated_price ? 'Y' : 'N' }, #RATED
-    '', #OTHER_INFO
-  ],
   'simple' => [
     sub { time2str('%D', shift->calldate_unix ) },   #DATE
     sub { time2str('%r', shift->calldate_unix ) },   #TIME
     'userfield',                                     #USER
     'dst',                                           #NUMBER_DIALED
-    sub { sprintf('%.2fm', shift->billsec / 60 ) },  #DURATION
+    $duration_sub,                                   #DURATION
     #sub { sprintf('%.3f', shift->upstream_price ) }, #PRICE
     sub { my($cdr, %opt) = @_; $opt{money_char}. $opt{charge}; }, #PRICE
   ],
@@ -495,9 +523,9 @@ my %export_formats = (
     sub { time2str('%D', shift->calldate_unix ) },   #DATE
     sub { time2str('%r', shift->calldate_unix ) },   #TIME
     #'userfield',                                     #USER
-    'dst',                                           #NUMBER_DIALED
     'src',                                           #called from
-    sub { sprintf('%.2fm', shift->billsec / 60 ) },  #DURATION
+    'dst',                                           #NUMBER_DIALED
+    $duration_sub,                                   #DURATION
     #sub { sprintf('%.3f', shift->upstream_price ) }, #PRICE
     sub { my($cdr, %opt) = @_; $opt{money_char}. $opt{charge}; }, #PRICE
   ],
@@ -518,9 +546,7 @@ my %export_formats = (
     sub { my($cdr, %opt) = @_; $opt{dst_regionname}; },
 
     #DURATION
-    sub { my($cdr, %opt) = @_;
-          $opt{minutes}. ( $opt{granularity} ? 'm' : ' call' );
-        },
+    $duration_sub,
 
     #PRICE
     sub { my($cdr, %opt) = @_; $opt{money_char}. $opt{charge}; },
@@ -528,11 +554,16 @@ my %export_formats = (
   ],
 );
 $export_formats{'source_default'} = [ 'src', @{ $export_formats{'default'} }, ];
+$export_formats{'accountcode_default'} =
+  [ @{ $export_formats{'default'} }[0,1],
+    'accountcode',
+    @{ $export_formats{'default'} }[2..5],
+  ];
 
 sub downstream_csv {
   my( $self, %opt ) = @_;
 
-  my $format = $opt{'format'}; # 'convergent';
+  my $format = $opt{'format'};
   return "Unknown format $format" unless exists $export_formats{$format};
 
   #my $conf = new FS::Conf;
@@ -654,10 +685,11 @@ sub _cdr_min_parse {
 
 sub _cdr_date_parser_maker {
   my $field = shift;
+  my %options = @_;
   my @fields = ref($field) ? @$field : ($field);
   return sub {
     my( $cdr, $datestring ) = @_;
-    my $unixdate = eval { _cdr_date_parse($datestring) };
+    my $unixdate = eval { _cdr_date_parse($datestring, %options) };
     die "error parsing date for @fields from $datestring: $@\n" if $@;
     $cdr->$_($unixdate) foreach @fields;
   };
@@ -665,26 +697,40 @@ sub _cdr_date_parser_maker {
 
 sub _cdr_date_parse {
   my $date = shift;
+  my %options = @_;
 
   return '' unless length($date); #that's okay, it becomes NULL
+  return '' if $date eq 'NA'; #sansay
+
+  if ( $date =~ /^([a-z]{3})\s+([a-z]{3})\s+(\d{1,2})\s+(\d{1,2}):(\d{1,2}):(\d{1,2})\s+(\d{4})$/i && $7 > 1970 ) {
+    my $time = str2time($date);
+    return $time if $time > 100000; #just in case
+  }
 
   my($year, $mon, $day, $hour, $min, $sec);
 
   #$date =~ /^\s*(\d{4})[\-\/]\(\d{1,2})[\-\/](\d{1,2})\s+(\d{1,2}):(\d{1,2}):(\d{1,2})\s*$/
   #taqua  #2007-10-31 08:57:24.113000000
 
-  if ( $date =~ /^\s*(\d{4})\D(\d{1,2})\D(\d{1,2})\s+(\d{1,2})\D(\d{1,2})\D(\d{1,2})(\D|$)/ ) {
+  if ( $date =~ /^\s*(\d{4})\D(\d{1,2})\D(\d{1,2})\D+(\d{1,2})\D(\d{1,2})\D(\d{1,2})(\D|$)/ ) {
     ($year, $mon, $day, $hour, $min, $sec) = ( $1, $2, $3, $4, $5, $6 );
   } elsif ( $date  =~ /^\s*(\d{1,2})\D(\d{1,2})\D(\d{4})\s+(\d{1,2})\D(\d{1,2})\D(\d{1,2})(\D|$)/ ) {
     ($mon, $day, $year, $hour, $min, $sec) = ( $1, $2, $3, $4, $5, $6 );
+  } elsif ( $date  =~ /^\s*(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d+\.\d+)(\D|$)/ ) {
+    # broadsoft: 20081223201938.314
+    ($year, $mon, $day, $hour, $min, $sec) = ( $1, $2, $3, $4, $5, $6);
   } else {
      die "unparsable date: $date"; #maybe we shouldn't die...
   }
 
-  return '' if $year == 1900 && $mon == 1 && $day == 1
-            && $hour == 0    && $min == 0 && $sec == 0;
+  return '' if ( $year == 1900 || $year == 1970 ) && $mon == 1 && $day == 1
+            && $hour == 0 && $min == 0 && $sec == 0;
 
-  timelocal($sec, $min, $hour, $day, $mon-1, $year);
+  if ($options{gmt}) {
+    timegm($sec, $min, $hour, $day, $mon-1, $year);
+  } else {
+    timelocal($sec, $min, $hour, $day, $mon-1, $year);
+  }
 }
 
 =item batch_import HASHREF

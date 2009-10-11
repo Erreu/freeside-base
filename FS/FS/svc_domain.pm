@@ -140,8 +140,8 @@ otherwise returns false.
 The additional fields I<pkgnum> and I<svcpart> (see L<FS::cust_svc>) should be 
 defined.  An FS::cust_svc record will be created and inserted.
 
-The additional field I<action> should be set to I<N> for new domains or I<M>
-for transfers.
+The additional field I<action> should be set to I<N> for new domains, I<M>
+for transfers, or I<I> for no action (registered elsewhere).
 
 A registration or transfer email will be submitted unless
 $FS::svc_domain::whois_hack is true.
@@ -300,7 +300,7 @@ sub replace {
     if $old->getfield('domain') ne $new->getfield('domain'); 
 
   # Better to do it here than to force the caller to remember that svc_domain is weird.
-  $new->setfield(action => 'M');
+  $new->setfield(action => 'I');
   my $error = $new->SUPER::replace($old, @_);
   return $error if $error;
 }
@@ -388,7 +388,6 @@ sub check {
     or $self->ut_numbern('setup_date')
     or $self->ut_numbern('renewal_interval')
     or $self->ut_numbern('expiration_date')
-    or $self->ut_textn('purpose')
     or $self->SUPER::check;
 
 }

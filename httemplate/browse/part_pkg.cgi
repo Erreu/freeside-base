@@ -1,16 +1,17 @@
 <% include( 'elements/browse.html',
                  'title'                 => 'Package Definitions',
                  'html_init'             => $html_init,
+                 'html_posttotal'        => $html_posttotal,
                  'name'                  => 'package definitions',
                  'disableable'           => 1,
-                 'disabled_statuspos'    => 3,
+                 'disabled_statuspos'    => 4,
                  'agent_virt'            => 1,
                  'agent_null_right'      => [ $edit, $edit_global ],
                  'agent_null_right_link' => $edit_global,
-                 'agent_pos'             => 5,
+                 'agent_pos'             => 6,
                  'query'                 => { 'select'    => $select,
                                               'table'     => 'part_pkg',
-                                              'hashref'   => {},
+                                              'hashref'   => \%hash,
                                               'extra_sql' => $extra_sql,
                                               'order_by'  => "ORDER BY $orderby"
                                             },
@@ -41,15 +42,47 @@ my $money_char = $conf->config('money_char') || '$';
 
 my $select = '*';
 my $orderby = 'pkgpart';
+my %hash = ();
+my $extra_count = '';
+
 if ( $cgi->param('active') ) {
   $orderby = 'num_active DESC';
 }
 
-my $extra_sql = '';
+my @where = ();
 
-unless ( $acl_edit_global ) {
-  $extra_sql .= ' WHERE '.  FS::part_pkg->curuser_pkgs_sql;
+#if ( $cgi->param('activeONLY') ) {
+#  push @where, ' WHERE num_active > 0 '; #XXX doesn't affect count...
+#}
+
+if ( $cgi->param('recurring') ) {
+  $hash{'freq'} = { op=>'!=', value=>'0' };
+  $extra_count = " freq != '0' ";
 }
+
+my $classnum = '';
+if ( $cgi->param('classnum') =~ /^(\d+)$/ ) {
+  $classnum = $1;
+  push @where, $classnum ? "classnum =  $classnum"
+                         : "classnum IS NULL";
+}
+$cgi->delete('classnum');
+
+if ( $cgi->param('missing_recur_fee') ) {
+  push @where, "0 = ( SELECT COUNT(*) FROM part_pkg_option
+                        WHERE optionname = 'recur_fee'
+                          AND part_pkg_option.pkgpart = part_pkg.pkgpart
+                          AND CAST ( optionvalue AS NUMERIC ) > 0
+                    )";
+}
+
+push @where, FS::part_pkg->curuser_pkgs_sql
+  unless $acl_edit_global;
+
+my $extra_sql = scalar(@where)
+                ? ( scalar(keys %hash) ? ' AND ' : ' WHERE ' ).
+                  join( 'AND ', @where)
+                : '';
 
 my $agentnums = join(',', $curuser->agentnums);
 my $count_cust_pkg = "
@@ -94,14 +127,49 @@ my $html_init;
   !;
 #}
 
+$cgi->param('dummy', 1);
+
+my $filter_change =
+  qq(\n<SCRIPT TYPE="text/javascript">\n).
+  "function filter_change() {".
+  "  window.location = '". $cgi->self_url.
+       ";classnum=' + document.getElementById('classnum').options[document.getElementById('classnum').selectedIndex].value".
+  "}".
+  "\n</SCRIPT>\n";
+
+#restore this so pagination works
+$cgi->param('classnum', $classnum) if length($classnum);
+
+my $html_posttotal =
+  "$filter_change\n<BR>( show class: ".
+  include('/elements/select-pkg_class.html',
+            #'curr_value'    => $classnum,
+            'value'         => $classnum, #insist on 0 :/
+            'onchange'      => 'filter_change()',
+            'pre_options'   => [ '-1' => 'all',
+                                 '0'  => '(none)', ],
+            'disable_empty' => 1,
+         ).
+  ' )';
+
+my $recur_toggle = $cgi->param('recurring') ? 'show' : 'hide';
+$cgi->param('recurring', $cgi->param('recurring') ^ 1 );
+
+$html_posttotal .=
+  '( <A HREF="'. $cgi->self_url.'">'. "$recur_toggle one-time charges</A> )";
+
+$cgi->param('recurring', $cgi->param('recurring') ^ 1 ); #put it back
+
 # ------
 
 my $link = [ $p.'edit/part_pkg.cgi?', 'pkgpart' ];
 
-my @header = ( '#', 'Package', 'Comment' );
-my @fields = ( 'pkgpart', 'pkg', 'comment' );
-my $align = 'rll';
-my @links = ( $link, $link, '' );
+my @header = ( '#', 'Package', 'Comment', 'Custom' );
+my @fields = ( 'pkgpart', 'pkg', 'comment',
+               sub{ '<B><FONT COLOR="#0000CC">'.$_[0]->custom.'</FONT></B>' }
+             );
+my $align = 'rllc';
+my @links = ( $link, $link, '', '' );
 
 unless ( 0 ) { #already showing only one class or something?
   push @header, 'Class';
@@ -188,9 +256,7 @@ if ( $acl_edit_global ) {
     my $typelink = $p. 'edit/agent_type.cgi?';
     push @fields, sub { my $part_pkg = shift;
                         [
-                          map { warn $_;
-                                my $agent_type = $_->agent_type;
-                                warn $agent_type;
+                          map { my $agent_type = $_->agent_type;
                                 [ 
                                   { 'data'  => $agent_type->atype, #escape?
                                     'align' => 'left',
@@ -362,6 +428,10 @@ $align .= 'lrl'; #rr';
 
 # --------
 
-my $count_query = "SELECT COUNT(*) FROM part_pkg $extra_sql";
+my $count_extra_sql = $extra_sql;
+$count_extra_sql =~ s/^\s*AND /WHERE /i;
+$extra_count = ( $count_extra_sql ? ' AND ' : ' WHERE ' ). $extra_count
+  if $extra_count;
+my $count_query = "SELECT COUNT(*) FROM part_pkg $count_extra_sql $extra_count";
 
 </%init>

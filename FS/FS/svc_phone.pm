@@ -3,10 +3,11 @@ package FS::svc_phone;
 use strict;
 use vars qw( @ISA @pw_set $conf );
 use FS::Conf;
-use FS::Record qw( qsearch qsearchs );
+use FS::Record qw( qsearch qsearchs dbh );
 use FS::Msgcat qw(gettext);
 use FS::svc_Common;
 use FS::part_svc;
+use FS::phone_device;
 
 @ISA = qw( FS::svc_Common );
 
@@ -102,7 +103,7 @@ sub table_info {
                             disable_select => 1,
                           },
         'sip_password' => 'SIP password',
-        'name'         => 'Name',
+        'phone_name'   => 'Name',
     },
   };
 }
@@ -150,6 +151,39 @@ otherwise returns false.
 Delete this record from the database.
 
 =cut
+
+sub delete {
+  my $self = shift;
+
+  local $SIG{HUP} = 'IGNORE';
+  local $SIG{INT} = 'IGNORE';
+  local $SIG{QUIT} = 'IGNORE';
+  local $SIG{TERM} = 'IGNORE';
+  local $SIG{TSTP} = 'IGNORE';
+  local $SIG{PIPE} = 'IGNORE';
+
+  my $oldAutoCommit = $FS::UID::AutoCommit;
+  local $FS::UID::AutoCommit = 0;
+  my $dbh = dbh;
+
+  foreach my $phone_device ( $self->phone_device ) {
+    my $error = $phone_device->delete;
+    if ( $error ) {
+      $dbh->rollback if $oldAutoCommit;
+      return $error;
+    }
+  }
+
+  my $error = $self->SUPER::delete;
+  if ( $error ) {
+    $dbh->rollback if $oldAutoCommit;
+    return $error;
+  }
+
+  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
+  '';
+
+}
 
 # the delete method can be inherited from FS::Record
 
@@ -324,6 +358,17 @@ sub radius_check {
 
 sub radius_groups {
   ();
+}
+
+=item phone_device
+
+Returns any FS::phone_device records associated with this service.
+
+=cut
+
+sub phone_device {
+  my $self = shift;
+  qsearch('phone_device', { 'svcnum' => $self->svcnum } );
 }
 
 =back

@@ -1,7 +1,7 @@
 #!/usr/bin/perl -w
 
 use strict;
-use vars qw($opt_d $opt_s $opt_q $opt_v);
+use vars qw($opt_d $opt_s $opt_q $opt_v $opt_r);
 use vars qw($DEBUG $DRY_RUN);
 use Getopt::Std;
 use DBIx::DBSchema 0.31;
@@ -17,7 +17,7 @@ my $start = time;
 
 die "Not running uid freeside!" unless checkeuid();
 
-getopts("dqs");
+getopts("dqrs");
 
 $DEBUG = !$opt_q;
 #$DEBUG = $opt_v;
@@ -60,20 +60,24 @@ if (dbdef->table('cust_main')->column('agent_custid') && ! $opt_s) {
 #from 1.3 to 1.4... if not, it needs to be hooked into -upgrade here or
 #you'll lose all the part_svc settings it migrates to part_svc_column
 
+my @statements =
+  grep { $_ !~ /^CREATE +INDEX +h_queue/ } #useless, holds up queue insertion
+       dbdef->sql_update_schema( dbdef_dist(datasrc), $dbh );
+
 if ( $DRY_RUN ) {
   print
-    join(";\n", @bugfix, dbdef->sql_update_schema( dbdef_dist(datasrc), $dbh ) ). ";\n";
+    join(";\n", @bugfix, @statements ). ";\n";
   exit;
 } else {
-  foreach my $statement ( @bugfix ) {
+  foreach my $statement ( @bugfix, @statements ) {
     $dbh->do( $statement )
       or die "Error: ". $dbh->errstr. "\n executing: $statement";
   }
 
-  warn "Pre-schema change upgrades completed in ". (time-$start). " seconds\n"; # if $DEBUG;
-  $start = time;
+#  warn "Pre-schema change upgrades completed in ". (time-$start). " seconds\n"; # if $DEBUG;
+#  $start = time;
 
-  dbdef->update_schema( dbdef_dist(datasrc), $dbh );
+#  dbdef->update_schema( dbdef_dist(datasrc), $dbh );
 }
 
 warn "Schema upgrade completed in ". (time-$start). " seconds\n"; # if $DEBUG;
@@ -127,7 +131,7 @@ $FS::UID::AutoCommit = 0;
 $FS::UID::callback_hack = 1;
 $dbh = adminsuidsetup($user);
 $FS::UID::callback_hack = 0;
-unless ( $DRY_RUN ) {
+unless ( $DRY_RUN || $opt_s ) {
   my $dir = "%%%FREESIDE_CONF%%%/conf.". datasrc;
   if (!scalar(qsearch('conf', {}))) {
     my $error = FS::Conf::init_config($dir);
@@ -149,11 +153,13 @@ $start = time;
 upgrade()
   unless $DRY_RUN || $opt_s;
 
+$dbh->commit or die $dbh->errstr;
+
 warn "Table updates completed in ". (time-$start). " seconds\n"; # if $DEBUG;
 $start = time;
 
 upgrade_sqlradius()
-  unless $DRY_RUN || $opt_s;
+  unless $DRY_RUN || $opt_s || $opt_r;
 
 warn "SQL RADIUS updates completed in ". (time-$start). " seconds\n"; # if $DEBUG;
 $start = time;
@@ -161,7 +167,7 @@ $start = time;
 $dbh->commit or die $dbh->errstr;
 $dbh->disconnect or die $dbh->errstr;
 
-warn "Commit and disconnection completed in ". (time-$start). " seconds; upgrade done!\n"; # if $DEBUG;
+warn "Final commit and disconnection completed in ". (time-$start). " seconds; upgrade done!\n"; # if $DEBUG;
 
 ###
 
@@ -172,7 +178,7 @@ sub dbdef_create { # reverse engineer the schema from the DB and save to file
 }
 
 sub usage {
-  die "Usage:\n  freeside-upgrade [ -d ] [ -s ] [ -q | -v ] user\n"; 
+  die "Usage:\n  freeside-upgrade [ -d ] [ -r ] [ -s ] [ -q | -v ] user\n"; 
 }
 
 =head1 NAME
@@ -181,7 +187,7 @@ freeside-upgrade - Upgrades database schema for new freeside verisons.
 
 =head1 SYNOPSIS
 
-  freeside-upgrade [ -d ] [ -s ] [ -q | -v ]
+  freeside-upgrade [ -d ] [ -r ] [ -s ] [ -q | -v ]
 
 =head1 DESCRIPTION
 
@@ -202,6 +208,9 @@ Also performs other upgrade functions:
           them.
 
   [ -q ]: Run quietly.  This may become the default at some point.
+
+  [ -r ]: Skip sqlradius updates.  Useful for occassions where the sqlradius
+          databases may be inaccessible.
 
   [ -v ]: Run verbosely, sending debugging information to STDERR.  This is the
           current default.
