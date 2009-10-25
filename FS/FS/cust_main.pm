@@ -2674,7 +2674,9 @@ I<description> is a free-text field passed to the gateway.  It defaults to
 
 If an I<invnum> is specified, this payment (if successful) is applied to the
 specified invoice.  If you don't specify an I<invnum> you might want to
-call the B<apply_payments> method.
+call the B<apply_payments> method or set the I<apply> option.
+
+I<apply> can be set to true to apply a resulting payment.
 
 I<quiet> can be set true to surpress email decline notices.
 
@@ -2690,7 +2692,18 @@ I<payunique> is a unique identifier for this payment.
 =cut
 
 sub realtime_bop {
-  my( $self, $method, $amount, %options ) = @_;
+  my $self = shift;
+
+  my($method, $amount);
+  my %options = ();
+  if (ref($_[0]) eq 'HASH') {
+    %options = %{$_[0]};
+    $method = $options{method};
+    $amount = $options{amount};
+  } else {
+    ( $method, $amount ) = ( shift, shift );
+    %options = @_;
+  }
   if ( $DEBUG ) {
     warn "$me realtime_bop: $method $amount\n";
     warn "  $_ => $options{$_}\n" foreach keys %options;
@@ -3135,6 +3148,16 @@ sub realtime_bop {
     } else {
 
       $dbh->commit or die $dbh->errstr if $oldAutoCommit;
+
+      if ( $options{'apply'} ) {
+        my $apply_error = $self->apply_payments_and_credits;
+        if ( $apply_error ) {
+          warn "WARNING: error applying payment: $apply_error\n";
+          #but we still should return no error cause the payment otherwise went
+          #through...
+        }
+      }
+
       return ''; #no error
 
     }
@@ -3636,7 +3659,9 @@ I<description> is a free-text field passed to the gateway.  It defaults to
 
 If an I<invnum> is specified, this payment (if successful) is applied to the
 specified invoice.  If you don't specify an I<invnum> you might want to
-call the B<apply_payments> method.
+call the B<apply_payments> method or set the I<apply> option.
+
+I<apply> can be set to true to apply a resulting payment.
 
 I<quiet> can be set true to surpress email decline notices.
 

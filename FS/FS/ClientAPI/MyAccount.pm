@@ -485,7 +485,7 @@ sub realtime_collect {
 
   my $error = $cust_main->realtime_collect(
     'method'     => $p->{'method'},
-    'session_id' => $p->{'session_id'},
+    'apply'      => 1,
   );
   return { 'error' => $error } unless ref( $error );
 
