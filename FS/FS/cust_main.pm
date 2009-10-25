@@ -3612,6 +3612,59 @@ sub realtime_refund_bop {
 
 }
 
+=item realtime_collect [ OPTION => VALUE ... ]
+
+Runs a realtime credit card, ACH (electronic check) or phone bill transaction
+via a Business::OnlinePayment realtime gateway.  See
+L<http://420.am/business-onlinepayment> for supported gateways.
+
+If there is an error, returns the error, otherwise returns false.
+
+Available options are: I<method>, I<amount>, I<description>, I<invnum>, I<quiet>, I<paynum_ref>, I<payunique>
+
+I<method> is one of: I<CC>, I<ECHECK> and I<LEC>.  If none is specified
+then it is deduced from the customer record.
+
+If no I<amount> is specified, then the customer balance is used.
+
+The additional options I<payname>, I<address1>, I<address2>, I<city>, I<state>,
+I<zip>, I<payinfo> and I<paydate> are also available.  Any of these options,
+if set, will override the value from the customer record.
+
+I<description> is a free-text field passed to the gateway.  It defaults to
+"Internet services".
+
+If an I<invnum> is specified, this payment (if successful) is applied to the
+specified invoice.  If you don't specify an I<invnum> you might want to
+call the B<apply_payments> method.
+
+I<quiet> can be set true to surpress email decline notices.
+
+I<paynum_ref> can be set to a scalar reference.  It will be filled in with the
+resulting paynum, if any.
+
+I<payunique> is a unique identifier for this payment.
+
+I<depend_jobnum> allows payment capture to unlock export jobs
+
+=cut
+
+sub realtime_collect {
+  my( $self, %options ) = @_;
+
+  if ( $DEBUG ) {
+    warn "$me realtime_collect:\n";
+    warn "  $_ => $options{$_}\n" foreach keys %options;
+  }
+
+  $options{amount} = $self->balance unless exists( $options{amount} );
+  $options{method} = FS::payby->payby2bop($self->payby)
+    unless exists( $options{method} );
+
+  return $self->realtime_bop({%options});
+
+}
+
 =item batch_card OPTION => VALUE...
 
 Adds a payment for this invoice to the pending credit card batch (see

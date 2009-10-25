@@ -472,6 +472,28 @@ sub process_payment {
 
 }
 
+sub realtime_collect {
+  my $p = shift;
+
+  my $session = _cache->get($p->{'session_id'})
+    or return { 'error' => "Can't resume session" }; #better error message
+
+  my $custnum = $session->{'custnum'};
+
+  my $cust_main = qsearchs('cust_main', { 'custnum' => $custnum } )
+    or return { 'error' => "unknown custnum $custnum" };
+
+  my $error = $cust_main->realtime_collect(
+    'method'     => $p->{'method'},
+    'session_id' => $p->{'session_id'},
+  );
+  return { 'error' => $error } unless ref( $error );
+
+  my $amount = $cust_main->balance;
+
+  return { 'error' => '', amount => $amount, %$error };
+}
+
 sub process_payment_order_pkg {
   my $p = shift;
 

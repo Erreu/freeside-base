@@ -39,6 +39,7 @@ $socket .= '.'.$tag if defined $tag && length($tag);
   'process_payment_change_pkg' => 'MyAccount/process_payment_change_pkg',
   'process_payment_order_renew' => 'MyAccount/process_payment_order_renew',
   'process_prepay'            => 'MyAccount/process_prepay',
+  'realtime_collect'          => 'MyAccount/realtime_collect',
   'list_pkgs'                 => 'MyAccount/list_pkgs',     #add to ss (added?)
   'list_svcs'                 => 'MyAccount/list_svcs',     #add to ss (added?)
   'list_svc_usage'            => 'MyAccount/list_svc_usage',   
