@@ -251,8 +251,11 @@ sub insert {
     $self->svcpart($cust_svc->svcpart);
   }
 
-  my $error =    $self->set_auto_inventory
+  my $error =    $self->preinsert_hook_first
+              || $self->set_auto_inventory
               || $self->check
+              || $self->_check_duplicate
+              || $self->preinsert_hook
               || $self->SUPER::insert;
   if ( $error ) {
     $dbh->rollback if $oldAutoCommit;
@@ -315,6 +318,11 @@ sub insert {
 
   '';
 }
+
+#fallbacks
+sub preinsert_hook_first { ''; }
+sub _check_duplcate { ''; }
+sub preinsert_hook { ''; }
 
 =item delete
 
