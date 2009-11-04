@@ -96,8 +96,15 @@ $select = "
   *,
 
   ( $count_cust_pkg
+      AND ( setup  IS NULL OR cancel = 0 )
       AND ( cancel IS NULL OR cancel = 0 )
-      AND ( susp IS NULL OR susp = 0 )
+      AND ( susp   IS NULL OR susp   = 0 )
+  ) AS num_not_yet_billed,
+
+  ( $count_cust_pkg
+      AND setup IS NOT NULL AND setup != 0
+      AND ( cancel IS NULL OR cancel = 0 )
+      AND ( susp   IS NULL OR susp   = 0 )
   ) AS num_active,
 
   ( $count_cust_pkg
@@ -283,6 +290,8 @@ if ( $acl_edit_global ) {
     'cancelled'       => 'FF0000',
     #'one-time charge' => '000000',
     'charge'          => '000000',
+    #'not yet billed'  => '000000',
+    'not&nbsp;yet&nbsp;billed'  => '000000',
   );
   my $cust_pkg_link = $p. 'search/cust_pkg.cgi?pkgpart=';
   push @fields, sub { my $part_pkg = shift;
@@ -294,6 +303,8 @@ if ( $acl_edit_global ) {
                                 $magic = 'inactive';
                                 #$label = 'one-time charge',
                                 $label = 'charge',
+                              } else {
+                                $label =~ s/_/&nbsp;/g;
                               }
                           
                               [
@@ -319,7 +330,7 @@ if ( $acl_edit_global ) {
                                             ),
                                 },
                               ],
-                            } (qw( active suspended cancelled ))
+                            } qw(not_yet_billed active suspended cancelled)
                       ]; };
   $align .= 'r';
 #}
