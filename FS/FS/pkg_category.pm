@@ -102,11 +102,11 @@ sub check {
 
 }
 
+=cut
+
 # _ upgrade_data
 #
 # Used by FS::Upgrade to migrate to a new database.
-#
-#
 
 sub _upgrade_data {
   my ($class, %opts) = @_;
