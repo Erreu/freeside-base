@@ -102,8 +102,6 @@ sub check {
 
 }
 
-=cut
-
 # _ upgrade_data
 #
 # Used by FS::Upgrade to migrate to a new database.
