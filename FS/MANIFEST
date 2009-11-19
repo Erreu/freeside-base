@@ -453,3 +453,5 @@ FS/cust_attachment.pm
 t/cust_attachment.t
 FS/cust_statement.pm
 t/cust_statement.t
+FS/cdr_batch.pm
+t/cdr_batch.t
