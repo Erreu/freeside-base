@@ -152,6 +152,8 @@ sub insert {
         'amount'     => (ref($detail) ? $detail->[2] : '' ),
         'classnum'   => (ref($detail) ? $detail->[3] : '' ),
         'phonenum'   => (ref($detail) ? $detail->[4] : '' ),
+        'duration'   => (ref($detail) ? $detail->[5] : '' ),
+        'regionname' => (ref($detail) ? $detail->[6] : '' ),
       };
       $error = $cust_bill_pkg_detail->insert;
       if ( $error ) {
@@ -780,6 +782,25 @@ sub _cust_tax_exempt_pkg {
 
 }
 
+
+=item cust_bill_pkg_detail [ CLASSNUM ]
+
+Returns the list of associated cust_bill_pkg_detail objects
+The optional CLASSNUM argument will limit the details to the specified usage
+class.
+
+=cut
+
+sub cust_bill_pkg_detail {
+  my $self = shift;
+  my $classnum = shift || '';
+
+  my %hash = ( 'billpkgnum' => $self->billpkgnum );
+  $hash{classnum} = $classnum if $classnum;
+
+  qsearch ( 'cust_bill_pkg_detail', { %hash  } ),
+
+}
 
 =back
 
