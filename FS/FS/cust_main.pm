@@ -8263,6 +8263,19 @@ sub search {
   # payby
   ###
 
+  if ( $params->{'payby'} ) {
+ 
+    my @payby = ref( $params->{'payby'} )
+                  ? @{ $params->{'payby'} }
+                  :  ( $params->{'payby'} );
+ 
+    @payby = grep /^([A-Z]{4})$/, @{ $params->{'payby'} };
+ 
+    push @where, '( '. join(' OR ', map "cust_main.payby = '$_'", @payby). ' )'
+      if @payby;
+
+  }
+
   my @payby = grep /^([A-Z]{4})$/, @{ $params->{'payby'} };
   if ( @payby ) {
     push @where, '( '. join(' OR ', map "cust_main.payby = '$_'", @payby). ' )';
