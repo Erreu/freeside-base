@@ -1,14 +1,14 @@
+freeside (1.7.4-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- Ivan Kohler <ivan-debian@420.am>  Sat, 12 Dec 2009 17:57:24 -0800
+
 freeside (1.7.4~rc3-1) unstable; urgency=low
 
   * New upstream release
 
  -- Ivan Kohler <ivan-debian@420.am>  Mon, 05 Oct 2009 19:44:53 -0700
-
-freeside (1.7.4~rc3-1) unstable; urgency=low
-
-  * New upstream release
-
- -- Ivan Kohler <ivan-debian@420.am>  Mon, 14 Sep 2009 17:42:08 -0700
 
 freeside (1.7.4~rc2-1) unstable; urgency=low
 

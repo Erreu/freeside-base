@@ -1,3 +1,11 @@
+2009-12-12 17:38  ivan
+
+	* Makefile: 1.7.4
+
+2009-12-12 17:30  ivan
+
+	* ChangeLog: 1.7.4
+
 2009-11-06 15:39  ivan
 
 	* FS/FS/cust_main.pm: backport using
