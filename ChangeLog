@@ -1,3 +1,56 @@
+2009-11-06 15:39  ivan
+
+	* FS/FS/cust_main.pm: backport using
+	  business-onlinepayment-description in all cases to 1.7
+
+2009-11-02 13:21  ivan
+
+	* httemplate/edit/payment_gateway.html: add Elavon, SagePay,
+	  WorldPay
+
+2009-10-29 14:46  mark
+
+	* httemplate/edit/payment_gateway.html: add Jety to the list
+
+2009-10-28 12:04  ivan
+
+	* FS/FS/: svc_Common.pm, svc_acct.pm, svc_domain.pm,
+	  svc_forward.pm, svc_www.pm: fix problems using inventory for UID
+	  (and other fields controlled by check in svc_acct and also
+	  svc_www, svc_domain and svc_forward), RT#6366
+
+2009-10-28 10:26  ivan
+
+	* httemplate/misc/inventory_item-import.html: fix inventory upload,
+	  RT#6366
+
+2009-10-27 11:11  ivan
+
+	* FS/FS/Conf.pm, FS/FS/cust_main.pm,
+	  httemplate/elements/header.html: address1 search, RT#5060
+
+2009-10-25 18:11  ivan
+
+	* FS/FS/part_pkg/flat.pm: eliminiate noisy but harmless "Use of
+	  uninitialized value in numeric gt (>)" warning
+
+2009-10-25 16:30  ivan
+
+	* FS/FS/: cust_main.pm, ClientAPI/MyAccount.pm: add apply option to
+	  realtime_collect, RT#5071
+
+2009-10-25 15:59  ivan
+
+	* FS/FS/ClientAPI/MyAccount.pm, FS/FS/cust_main.pm,
+	  fs_selfservice/FS-SelfService/SelfService.pm: backport
+	  realtime_collect to 1.7 for SG to use instead of calling collect,
+	  RT#5071
+
+2009-10-05 19:43  ivan
+
+	* ChangeLog, install/rpm/freeside.spec, debian/changelog: Updated
+	  for 1.7.4rc3
+
 2009-10-05 18:41  ivan
 
 	* ChangeLog: 1.7.4rc3
