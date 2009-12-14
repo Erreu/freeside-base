@@ -2247,7 +2247,6 @@ worry that config_items is freeside-specific and icky.
     'section'     => '',
     'description' => 'RADIUS group (or comma-separated groups) to assign to svc_acct which has exceeded its bandwidth or time limit.',
     'type'        => 'text',
-    'per_agent'   => 1,
   },
 
   {
