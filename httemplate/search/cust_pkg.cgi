@@ -142,7 +142,7 @@ my %search_hash = ();
 
 $search_hash{'query'} = $cgi->keywords;
 
-for my $param (qw( agentnum magic status classnum )) {
+for my $param (qw( agentnum magic status classnum cust_fields )) {
   $search_hash{$param} = $cgi->param($param) if $cgi->param($param);
 }
 
