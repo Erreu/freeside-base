@@ -63,3 +63,24 @@ sub report_apache_mpm {
 #  my $ssh_vulnkey = `ssh-vulnkey -a | grep COMPROMISED`;
 #  $ssh_vulnkey;
 #}
+
+sub report_load {
+  open LOAD, "</proc/loadavg" || return;
+  my($one, $five, $fifteen) = split ' ', <LOAD>;
+  close LOAD;
+  ($one, $five, $fifteen);
+}
+
+sub report_freememory {
+  open MEM, "</proc/meminfo" || return;
+  my $free = 0;
+  my @interesting = qw( MemFree Cached SwapFree );
+  while (<MEM>) {
+    /^(\w*):\s*(\d*) kB$/ || next;
+   next unless grep { $_ eq $1 } @interesting;
+   $free += $2;
+  }
+  close MEM;
+  $free;
+}
+
