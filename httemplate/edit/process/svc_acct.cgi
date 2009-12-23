@@ -5,12 +5,13 @@
 <% $cgi->redirect(popurl(3). "view/svc_acct.cgi?" . $svcnum ) %>
 %}
 <%init>
-
+use CGI::Carp;
 die "access denied"
   unless $FS::CurrentUser::CurrentUser->access_right('Provision customer service'); #something else more specific?
 
 $cgi->param('svcnum') =~ /^(\d*)$/ or die "Illegal svcnum!";
 my $svcnum = $1;
+my $error;
 
 my $old;
 if ( $svcnum ) {
@@ -22,12 +23,6 @@ if ( $svcnum ) {
 
 #unmunge popnum
 $cgi->param('popnum', (split(/:/, $cgi->param('popnum') ))[0] );
-
-#unmunge passwd
-if ( $cgi->param('_password') eq '*HIDDEN*' ) {
-  die "fatal: no previous account to recall hidden password from!" unless $old;
-  $cgi->param('_password',$old->getfield('_password'));
-}
 
 #unmunge usergroup
 $cgi->param('usergroup', [ $cgi->param('radius_usergroup') ] );
@@ -45,7 +40,15 @@ map {
   } (fields('svc_acct'), qw ( pkgnum svcpart usergroup ));
 my $new = new FS::svc_acct ( \%hash );
 
-my $error;
+$new->_password($old->_password) if $old;
+if(  $cgi->param('clear_password') eq '*HIDDEN*'
+  or $cgi->param('clear_password') =~ /^\(.* encrypted\)$/ ) {
+  die "fatal: no previous account to recall hidden password from!" unless $old;
+} 
+else {
+  $error = $new->set_password($cgi->param('clear_password'));
+}
+
 if ( $svcnum ) {
   foreach (grep { $old->$_ != $new->$_ } qw( seconds upbytes downbytes totalbytes )) {
     my %hash = map { $_ => $new->$_ } 
