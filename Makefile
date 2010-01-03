@@ -361,12 +361,12 @@ create-rt: configure-rt
 	|| true
 
 install-rt:
-	perl -p -i -e "\
+	[ ${RT_ENABLED} -eq 1 ] && ( cd rt; make install ) || true
+	[ ${RT_ENABLED} -eq 1 ] && perl -p -i -e "\
 	  s'%%%RT_DOMAIN%%%'${RT_DOMAIN}'g;\
 	  s'%%%RT_TIMEZONE%%%'${RT_TIMEZONE}'g;\
 	  s'%%%FREESIDE_URL%%%'${FREESIDE_URL}'g;\
 	" ${RT_PATH}/etc/RT_SiteConfig.pm
-	[ ${RT_ENABLED} -eq 1 ] && ( cd rt; make install ) || true
 
 clean:
 	rm -rf masondocs
