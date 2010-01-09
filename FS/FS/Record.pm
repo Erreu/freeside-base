@@ -9,9 +9,7 @@ use Carp qw(carp cluck croak confess);
 use File::CounterFile;
 use Locale::Country;
 use DBI qw(:sql_types);
-use DBIx::DBSchema 0.25;
-#use DBIx::DBSchema 0.33; #when check for ->can('unique_singles') is sub insert
-                          #is removed
+use DBIx::DBSchema 0.38;
 use FS::UID qw(dbh getotaker datasrc driver_name);
 use FS::CurrentUser;
 use FS::Schema qw(dbdef);
@@ -743,10 +741,7 @@ sub insert {
 
   #single-field unique keys are given a value if false
   #(like MySQL's AUTO_INCREMENT or Pg SERIAL)
-  foreach ( $self->dbdef_table->can('unique_singles')
-              ? $self->dbdef_table->unique_singles
-              : $self->dbdef_table->unique->singles
-          ) {
+  foreach ( $self->dbdef_table->unique_singles) {
     $self->unique($_) unless $self->getfield($_);
   }
 
@@ -755,12 +750,12 @@ sub insert {
   my $db_seq = 0;
   if ( $primary_key ) {
     my $col = $self->dbdef_table->column($primary_key);
-    
+
     $db_seq =
       uc($col->type) =~ /^(BIG)?SERIAL\d?/
       || ( driver_name eq 'Pg'
              && defined($col->default)
-             && $col->default =~ /^nextval\(/i
+             && $col->quoted_default =~ /^nextval\(/i
          )
       || ( driver_name eq 'mysql'
              && defined($col->local)
@@ -824,7 +819,7 @@ sub insert {
       #my $oid = $sth->{'pg_oid_status'};
       #my $i_sql = "SELECT $primary_key FROM $table WHERE oid = ?";
 
-      my $default = $self->dbdef_table->column($primary_key)->default;
+      my $default = $self->dbdef_table->column($primary_key)->quoted_default;
       unless ( $default =~ /^nextval\(\(?'"?([\w\.]+)"?'/i ) {
         dbh->rollback if $FS::UID::AutoCommit;
         return "can't parse $table.$primary_key default value".
