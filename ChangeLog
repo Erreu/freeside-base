@@ -1,3 +1,322 @@
+2010-01-14 19:59  ivan
+
+	* httemplate/edit/process/part_pkg.cgi: remove extraneous debugging
+
+2010-01-12 19:14  ivan
+
+	* FS/FS/tax_rate.pm: if ignore_icalculable_taxes is on, don't call
+	  the errors fatal
+
+2010-01-12 09:17  jeff
+
+	* FS/FS/part_export/prizm.pm: add some debugging
+
+2010-01-12 09:16  jeff
+
+	* FS/FS/part_export/prizm.pm: eliminate harmless argument isn't
+	  numeric messages
+
+2010-01-09 02:03  ivan
+
+	* FS/FS/Record.pm: need DBIx::DBSchema w/quoted_default to make
+	  this all work right :/
+
+2010-01-09 00:21  ivan
+
+	* FS/bin/freeside-upgrade: undo damage from DBIx::DBSchema 0.37_03
+
+2010-01-07 01:48  mark
+
+	* FS/FS/: pay_batch.pm, pay_batch/RBC.pm: Fix problems with RBC
+	  batch import (RT#6967)
+
+2010-01-05 20:47  ivan
+
+	* FS/FS/svc_acct.pm: eliminate spurious warnings on usage
+	  changes...
+
+2010-01-05 20:43  ivan
+
+	* FS/FS/cust_main.pm: eliminate ya "use of uninitialized value"
+	  warning
+
+2010-01-05 20:41  ivan
+
+	* FS/FS/cust_main.pm: doc
+
+2010-01-03 19:23  jeff
+
+	* bin/monitor: add some debugging
+
+2010-01-02 18:54  ivan
+
+	* Makefile: fix RT_SiteConfig.pm substitution
+
+2009-12-31 15:03  mark
+
+	* FS/FS/pay_batch/RBC.pm: Add pre-header line
+
+2009-12-31 04:56  ivan
+
+	* rt/: Makefile, lib/RT.pm: rt 3.6.10
+
+2009-12-31 04:44  ivan
+
+	* rt/: etc/RT_Config.pm.in, html/Admin/Users/Modify.html,
+	  html/Elements/Footer, html/Elements/Header, html/Elements/Menu,
+	  html/Elements/PageLayout, html/Elements/QuickCreate,
+	  html/Elements/SelectDate, html/Elements/SimpleSearch,
+	  html/Elements/Tabs, html/Elements/TicketList,
+	  html/Elements/TitleBoxStart, html/Elements/CollectionAsTable/Row,
+	  html/NoAuth/css/3.5-default/main.css,
+	  html/NoAuth/css/3.5-default/misc.css,
+	  html/NoAuth/css/3.5-default/titlebox.css,
+	  html/NoAuth/css/3.5-default/transactions.css,
+	  html/Prefs/SearchOptions.html, html/Search/Bulk.html,
+	  html/Ticket/Create.html, html/Ticket/Display.html,
+	  html/Ticket/Elements/ShowSummary,
+	  html/Ticket/Elements/ShowTransactionAttachments,
+	  html/Ticket/Elements/Tabs, html/User/Prefs.html,
+	  html/Widgets/TitleBoxStart, lib/RT/Groups_Overlay.pm,
+	  lib/RT/Record.pm, lib/RT/SearchBuilder.pm,
+	  lib/RT/Ticket_Overlay.pm, lib/RT/Transaction_Overlay.pm,
+	  lib/RT/User_Overlay.pm, lib/RT/Users_Overlay.pm,
+	  sbin/rt-setup-database.in: rt 3.6.10
+
+2009-12-31 04:35  ivan
+
+	* rt/FREESIDE_MODIFIED: up-to-date
+
+2009-12-30 23:16  ivan
+
+	* FS/FS/Schema.pm: fix h_cdr acctid changing from bigint to int
+	  with recent DBIx::DBSchema
+
+2009-12-30 21:10  ivan
+
+	* FS/: FS/Cron/bill.pm, bin/freeside-daily: specify multiple
+	  agentnums with freeside-daily
+
+2009-12-30 19:33  ivan
+
+	* Makefile: goodbye conf dir
+
+2009-12-30 18:50  jeff
+
+	* FS/FS/cust_main.pm: really reduce the noise
+
+2009-12-29 22:41  jeff
+
+	* FS/FS/part_pkg/voip_cdr.pm: define all detail header list
+	  elements
+
+2009-12-29 22:05  jeff
+
+	* FS/FS/cust_main.pm: noise reduction
+
+2009-12-29 21:22  jeff
+
+	* FS/FS/tax_rate.pm: noise reduction
+
+2009-12-29 18:39  jeff
+
+	* FS/FS/cust_bill_pkg_detail.pm: use the class used
+
+2009-12-29 18:26  jeff
+
+	* FS/FS/cust_main.pm: noise reduction
+
+2009-12-28 20:49  ivan
+
+	* FS/bin/freeside-upgrade: output SQL statements as we run them
+	  (and only the ones we run), not immediately
+
+2009-12-28 20:44  ivan
+
+	* FS/FS/Conf.pm: oops, syntax error adding queued-sleep_time
+
+2009-12-28 20:24  ivan
+
+	* FS/bin/: freeside-upgrade: don't change h_queue.job type under
+	  non-mysql, takes forever on large dbs, RT#6946
+
+2009-12-28 17:38  ivan
+
+	* FS/bin/freeside-daily: add -u option for vacuuming, RT#5258
+
+2009-12-28 17:00  mark
+
+	* FS/FS/AccessRight.pm, httemplate/browse/cust_attachment.html,
+	  httemplate/elements/menu.html: Add Browse attachments ACL
+	  (RT#4964)
+
+2009-12-28 16:33  mark
+
+	* FS/FS/Conf.pm: RT#6358
+
+2009-12-27 21:25  ivan
+
+	* FS/FS/: part_pkg_taxclass.pm, phone_device.pm: use blessed
+
+2009-12-26 17:00  jeff
+
+	* FS/FS/: cust_main.pm, cust_location.pm: improve spacing around
+	  county
+
+2009-12-23 15:32  jeff
+
+	* bin/monitor: remove debugging
+
+2009-12-23 15:29  jeff
+
+	* bin/: monitor: add non-forking one machine monitor program
+
+2009-12-23 15:29  jeff
+
+	* bin/monitor: file monitor was added on branch FREESIDE_1_9_BRANCH
+	  on 2009-12-23 23:29:54 +0000
+
+2009-12-23 15:14  jeff
+
+	* FS/FS/Yori.pm: teach yori to do some load monitoring
+
+2009-12-23 13:21  jeff
+
+	* FS/FS/cust_bill.pm, FS/FS/cust_location.pm, FS/FS/cust_main.pm,
+	  FS/FS/cust_pkg.pm,
+	  httemplate/view/cust_main/packages/location.html: correct invoice
+	  package address display and reduce false laziness
+
+2009-12-22 16:30  mark
+
+	* FS/FS/svc_acct.pm, httemplate/edit/svc_acct.cgi,
+	  httemplate/edit/process/svc_acct.cgi,
+	  httemplate/view/svc_acct.cgi: Tweak set_password per RT#6358
+
+2009-12-21 06:36  jeff
+
+	* bin/fetch_and_expand_taxes: file fetch_and_expand_taxes was added
+	  on branch FREESIDE_1_9_BRANCH on 2009-12-21 14:37:22 +0000
+
+2009-12-21 06:36  jeff
+
+	* bin/reassemble_taxes: file reassemble_taxes was added on branch
+	  FREESIDE_1_9_BRANCH on 2009-12-21 14:37:22 +0000
+
+2009-12-21 06:36  jeff
+
+	* bin/fetch_and_expand_taxes, bin/reassemble_taxes, FS/FS/Conf.pm,
+	  FS/FS/tax_rate.pm: move cch conf into database and add a couple
+	  small tools for processing updates more manually
+
+2009-12-20 18:56  mark
+
+	* httemplate/search/elements/search-xls.html: Fix filename for
+	  Excel spreadsheet reports
+
+2009-12-20 18:00  ivan
+
+	* FS/FS/cust_main.pm, httemplate/misc/bill.cgi: have 'Bill now'
+	  link cancel expired (and suspend adjourned) packages, and catch
+	  and return errors in all cases, RT#6627
+
+2009-12-20 13:52  ivan
+
+	* FS/FS/Conf.pm: late fee package class specified in the event
+	  action instead of a global finance_pkgclass config, RT#6617
+
+2009-12-20 13:48  ivan
+
+	* FS/FS/part_event/Action/: cust_bill_fee_percent.pm, fee.pm: late
+	  fee package class specified in the event action instead of a
+	  global finance_pkgclass config, RT#6617
+
+2009-12-20 11:42  ivan
+
+	* FS/FS/ClientAPI/MyAccount.pm: fix usage details pulling from
+	  wrong account for customers who have multiple accounts, RT#6681,
+	  fallout from RT#4189
+
+2009-12-19 22:52  ivan
+
+	* httemplate/search/cust_pkg.cgi: fix address fields on advanced
+	  package search, RT#6609
+
+2009-12-19 18:51  ivan
+
+	* FS/FS/cust_pkg.pm: fix bulk package order with one package
+	  changing to one new package, RT#6519, fallout from RT#4499
+
+2009-12-19 17:02  ivan
+
+	* httemplate/view/cust_main/: packages.html, payment_history.html:
+	  fix cust_main-packages-years, RT#6798
+
+2009-12-19 14:41  ivan
+
+	* httemplate/edit/cust_credit.cgi: add add'l info field as a
+	  customer-editable field, RT#6505
+
+2009-12-19 14:32  ivan
+
+	* httemplate/view/cust_main/payment_history.html: make room for
+	  credit reasons in popup
+
+2009-12-19 12:58  mark
+
+	* FS/: bin/freeside-paymentech-upload, FS/pay_batch/paymentech.pm,
+	  bin/freeside-paymentech-download: Fix date format string and
+	  quoting of password
+
+2009-12-19 12:29  ivan
+
+	* FS/FS/cust_main_Mixin.pm: fix event report w/ a customer status
+
+2009-12-19 11:10  ivan
+
+	* FS/FS/part_pkg.pm: fix package order to really display only those
+	  pacakges available
+
+2009-12-19 11:09  ivan
+
+	* httemplate/misc/cust-part_pkg.cgi: fix order of packages after
+	  class selection changes
+
+2009-12-16 09:35  ivan
+
+	* httemplate/edit/cust_main_attach.cgi: tweak attachment adding UI:
+	  table consistency, input sizes and maxlengths, RT#4964
+
+2009-12-16 07:07  jeff
+
+	* FS/FS/: Conf.pm, Record.pm, cust_bill.pm, cust_location.pm,
+	  cust_main.pm, cust_pkg.pm: group invoice line items by location,
+	  show location address on invoice, option for due date rather than
+	  invoice date on prior unpaid invoice line items, and option for
+	  aging on invoice (#6418, #5235, #4648)
+
+2009-12-13 23:52  ivan
+
+	* FS/FS/svc_acct.pm: use a global config too
+
+2009-12-13 23:10  ivan
+
+	* FS/FS/: Conf.pm, svc_acct.pm, part_export/sqlradius.pm: add
+	  overlimit_groups agent-specific config, overriding
+	  export-specific overlimit_groups, RT#6622
+
+2009-12-13 17:41  mark
+
+	* FS/FS/AccessRight.pm, httemplate/browse/cust_attachment.html,
+	  httemplate/edit/cust_main_attach.cgi,
+	  httemplate/elements/menu.html, httemplate/view/cust_main.cgi,
+	  httemplate/view/cust_main/attachments.html: Add access right to
+	  view attachments
+
+2009-12-12 18:10  ivan
+
+	* ChangeLog: 1.9.2ish
+
 2009-12-12 14:35  ivan
 
 	* FS/FS/cust_credit_bill_pkg.pm: doc
