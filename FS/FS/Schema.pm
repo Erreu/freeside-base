@@ -2499,6 +2499,20 @@ sub tables_hashref {
       'unique'      => [ [ 'pkgnum', 'refnum' ] ],
       'index'       => [ [ 'pkgnum' ], [ 'refnum' ] ],
     },
+
+    'svc_pbx' => {
+      'columns' => [
+        'svcnum',         'int',     '',      '', '', '', 
+        'id',             'int', 'NULL',      '', '', '', 
+        'title',      'varchar', 'NULL', $char_d, '', '', 
+        'max_extensions', 'int', 'NULL',      '', '', '',
+      ],
+      'primary_key' => 'svcnum',
+      'unique' => [],
+      'index'  => [ [ 'id' ] ],
+    },
+
+
     # name type nullability length default local
 
     #'new_table' => {

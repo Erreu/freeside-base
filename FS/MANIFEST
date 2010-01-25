@@ -455,3 +455,5 @@ FS/cust_statement.pm
 t/cust_statement.t
 FS/cdr_batch.pm
 t/cdr_batch.t
+FS/svc_pbx.pm
+t/svc_pbx.t
