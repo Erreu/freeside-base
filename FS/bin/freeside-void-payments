@@ -15,7 +15,7 @@ use Date::Parse 'str2time';
 use Date::Format 'time2str';
 
 my %opt;
-getopts("r:f:ca:g:s:e:vX:", \%opt);
+getopts("r:f:ca:g:s:e:vnX:", \%opt);
 
 $user = shift or die &usage;
 &adminsuidsetup( $user );
@@ -34,7 +34,7 @@ elsif($opt{'a'}) {
     or die "Agent has no payment gateway for method '$method'.";
 }
 
-if(defined($opt{'X'}) and !qsearchs('reason', { reasonnum => $opt{'X'} })) {
+if(defined($opt{'X'}) and !qsearchs('reason', { reasonnum => opt{'X'} })) {
   die "Cancellation reason not found: '".$opt{'X'}."'";
 }
 
@@ -88,7 +88,7 @@ $opt{'r'} ||= 'freeside-void-payments';
 my $success = 0;
 my $notfound = 0;
 my $canceled = 0;
-
+print "Voiding ".scalar(@auths)." transactions:\n" if $opt{'v'};
 foreach my $authnum (@auths) {
   my $paybatch = $gatewaynum . $processor . ':' . $authnum;
   my $cust_pay = qsearchs('cust_pay', { paybatch => $paybatch } );
@@ -98,15 +98,15 @@ foreach my $authnum (@auths) {
     $error = $cust_pay->void($opt{'r'});
     $success++ if not $error;
     if($opt{'X'} and not $error) {
-      $cancel_error = join(';', $cust_pay->cust_main->cancel(reason => $opt{'X'}));
+      $cancel_error = join(';',$cust_pay->cust_main->cancel('reason' => $opt{'X'}));
       $canceled++ if !$cancel_error;
     }
   }
   else {
     my $cpv = qsearchs('cust_pay_void', { paybatch => $paybatch });
     if($cpv) {
-      $error = 'already voided '.time2str('%Y-%m-%d', $cpv->void_date).
-               ' by '.$cpv->otaker;
+      $error = 'already voided '.time2str('%Y-%m-%d', $cpv->void_date) . 
+        ' by ' . $cpv->otaker;
     }
     else {
       $error = 'not found';
@@ -116,7 +116,7 @@ foreach my $authnum (@auths) {
   if($opt{'v'}) {
     print $authnum;
     if($error) {
-      print "\t$error";
+      print "\t($error)";
     }
     elsif($opt{'X'}) {
       print "\t(canceled service)" if !$cancel_error;
@@ -132,14 +132,21 @@ if($opt{'v'}) {
 }
 
 sub usage {
-    die 
-"Usage:
-freeside-void-payments [ -f file | [ -s start-date ] [ -e end-date ] ] 
-                       [ -r 'reason' ]
-                       [ -g gatewaynum | -a agentnum ] 
-                       [ -c ] [ -v ] [ -n ] 
-                       [ -X reasonnum ]
-                       user\n";
+    die "Usage:\n\n  freeside-void-payments [ options ] user
+    
+    options:
+      -a agentnum    use agentnum's gateway information
+      -g gatewaynum  use gatewaynum
+      -f file        read transaction numbers from file
+      -c             use ECHECK gateway instead of CARD
+      -r reason      specify void reason (as a string)
+      -v             be verbose
+      -s start-date
+      -e end-date    limit by payment return date
+      -X reasonnum   cancel customers whose payments are voided
+                     (specify cancellation reason number)
+
+";
 }
 
 __END__
@@ -153,13 +160,15 @@ freeside-void-payments - Automatically void a list of returned payments.
 =head1 SYNOPSIS
 
   freeside-void-payments [ -f file | [ -s start-date ] [ -e end-date ] ] 
-                         [ -r 'reason' ]
+                         [ -r 'reason' ] 
                          [ -g gatewaynum | -a agentnum ] 
                          [ -c ] [ -v ] 
-                         [ -X reasonnum ]
+                         [ -X reasonnum ] 
                          user
 
 =head1 DESCRIPTION
+
+=pod
 
 Voids payments that were returned by the payment processor.  Can be 
 run periodically from crontab or manually after receiving a list of 
@@ -173,12 +182,12 @@ generally how the processor will identify them later.
   -f: Read the list of authorization numbers from the specified file.  
       If they are not from the default payment gateway, -g or -a 
       must be given to identify the gateway.
-      
+
   If -f is not given, the script will attempt to contact the gateway 
   and download a list of returned transactions.  To support this, 
   the Business::OnlinePayment module for the processor must implement 
-  the I<get_returns()> method.  For an example, see 
-  L<Business::OnlinePayment::WesternACH>.
+  the get_returns() method.  For an example, see 
+  Business::OnlinePayment::WesternACH.
 
   -s, -e: Specify the starting and ending dates for the void list.  
       This has no effect if -f is given.  The end date defaults to 
@@ -186,7 +195,7 @@ generally how the processor will identify them later.
 
   -r: The reason for voiding the payments, to be stored in the database.
 
-  -g: The L<FS::payment_gateway> number for the gateway that handled 
+  -g: The FS::payment_gateway number for the gateway that handled 
       these payments.  If -f is not given, this determines which 
       gateway will be contacted.  This overrides -a.
 
@@ -195,15 +204,12 @@ generally how the processor will identify them later.
 
   -c: Use the default gateway for check transactions rather than 
       credit cards.
-  
+
   -v: Be verbose.
-
-  -X: Automatically cancel all packages belonging to customers whose payments
-      were returned.  Requires a cancellation reasonnum (from L<FS::reason>).
-
-A warning will be emitted for each transaction that can't be found.  
-This may happen if it's already been voided, or if the gateway 
-doesn't match.
+  
+  -X: Automatically cancel all packages belonging to customers whose 
+      payments were returned.  Requires a cancellation reasonnum 
+      (from FS::reason).
 
 =head1 EXAMPLE
 
