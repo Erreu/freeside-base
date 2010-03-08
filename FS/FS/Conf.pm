@@ -3289,6 +3289,13 @@ worry that config_items is freeside-specific and icky.
   },
 
   {
+    'key'         => 'svc_phone-domain',
+    'section'     => '',
+    'description' => 'Track an optional domain association with each phone service.',
+    'type'        => 'checkbox',
+  },
+
+  {
     'key'         => 'default_phone_countrycode',
     'section'     => '',
     'description' => 'Default countrcode',
