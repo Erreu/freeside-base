@@ -463,3 +463,5 @@ FS/svc_pbx.pm
 t/svc_pbx.t
 FS/h_svc_www.pm
 t/h_svc_www.t
+FS/location_Mixin.pm
+t/location_Mixin.t
