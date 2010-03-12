@@ -3493,6 +3493,18 @@ sub realtime_refund_bop {
   ) {
     warn "  attempting void\n" if $DEBUG > 1;
     my $void = new Business::OnlinePayment( $processor, @bop_options );
+    if( $void->can('info') ) { # backported from 1.9
+      if( $cust_pay->payby eq 'CARD' 
+          and $void->info('CC_void_requires_card') ) {
+        $content{'card_number'} = $cust_pay->payinfo;
+      }
+      elsif( $cust_pay->payby eq 'CHEK'
+              and $void->info('ECHECK_void_requires_account') ) {
+        @content{'account_number', 'routing_code'} = 
+          split('@', $cust_pay->payinfo);
+        $content{'name'} = $self->get('first') . ' ' . $self->get('last');
+      }
+    }
     $void->content( 'action' => 'void', %content );
     $void->submit();
     if ( $void->is_success ) {
