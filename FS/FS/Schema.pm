@@ -2439,10 +2439,13 @@ sub tables_hashref {
         'phone_name',   'varchar', 'NULL', $char_d, '', '',
         'pbxsvc',           'int', 'NULL',      '', '', '',
         'domsvc',           'int', 'NULL',      '', '', '', 
+        'locationnum',      'int', 'NULL', '', '', '',
       ],
       'primary_key' => 'svcnum',
       'unique' => [],
-      'index'  => [ [ 'countrycode', 'phonenum' ], ['pbxsvc'], ['domsvc'] ],
+      'index'  => [ ['countrycode', 'phonenum'], ['pbxsvc'], ['domsvc'],
+                    ['locationnum'],
+                  ],
     },
 
     'phone_device' => {
