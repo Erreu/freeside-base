@@ -1,3 +1,7 @@
+2010-03-12 16:39  ivan
+
+	* ChangeLog: 1.7.4
+
 2010-03-12 02:52  mark
 
 	* FS/FS/cust_main.pm: RT#7180: backport
