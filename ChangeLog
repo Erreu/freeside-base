@@ -1,3 +1,36 @@
+2010-03-12 02:52  mark
+
+	* FS/FS/cust_main.pm: RT#7180: backport
+	  ECHECK_void_requires_account
+
+2010-02-26 19:15  ivan
+
+	* httemplate/edit/cust_refund.cgi: expiration date not meaningful
+	  for non-CARD, RT#7419
+
+2010-02-26 18:59  ivan
+
+	* FS/FS/cust_bill_ApplicationCommon.pm: fix rare "Illegal division
+	  by zero" error applying things when using weights, RT#7491
+
+2010-02-17 19:48  mark
+
+	* FS/bin/freeside-void-payments: Documentation cleanup
+
+2010-01-16 19:10  jeff
+
+	* FS/FS/cust_pkg.pm: work around bug in pre-perl5.10 which is at
+	  best noisy and at worst missorting
+
+2010-01-09 02:38  ivan
+
+	* FS/FS/Record.pm: backport DBIx::DBSchema 0.38 usage from
+	  1.9/HEAD... the alternative is breakage w/ 0.38+ on 1.7
+
+2009-12-31 05:06  ivan
+
+	* ChangeLog: 1.7.4 fo real
+
 2009-12-28 20:44  ivan
 
 	* FS/FS/Conf.pm: oops, syntax error adding queued-sleep_time
