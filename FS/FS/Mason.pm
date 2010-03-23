@@ -222,6 +222,7 @@ if ( -e $addl_handler_use_file ) {
   use FS::h_svc_www;
   use FS::cust_statement;
   use FS::svc_pbx;
+  use FS::svc_mailinglist;
   # Sammath Naur
 
   if ( $FS::Mason::addl_handler_use ) {
