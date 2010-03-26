@@ -6,7 +6,6 @@ use Scalar::Util qw( blessed );
 use FS::Record qw( dbh qsearchs ); # qsearch );
 use FS::mailinglist;
 use FS::svc_acct;
-use FS::contact_email;
 
 =head1 NAME
 
@@ -46,10 +45,6 @@ listnum
 =item svcnum
 
 svcnum
-
-=item contactemailnum
-
-contactemailnum
 
 =item email
 
@@ -193,7 +188,6 @@ sub check {
     $self->ut_numbern('membernum')
     || $self->ut_foreign_key('listnum', 'mailinglist', 'listnum')
     || $self->ut_foreign_keyn('svcnum', 'svc_acct', 'svcnum')
-    || $self->ut_foreign_keyn('contactemailnum', 'contact_email', 'contactemailnum')
     || $self->ut_textn('email') #XXX ut_email! from svc_forward, cust_main_invoice
   ;
   return $error if $error;
@@ -216,7 +210,7 @@ sub mailinglist {
 
 sub email_address {
   my $self = shift;
-  #XXX svcnum, contactemailnum
+  #XXX svcnum
   $self->email;
 }
 

@@ -2585,12 +2585,11 @@ sub tables_hashref {
         'membernum',        'serial',     '',   '', '', '',
         'listnum',             'int',     '',   '', '', '',
         'svcnum',              'int', 'NULL',   '', '', '', 
-        'contactemailnum',     'int', 'NULL',   '', '', '', 
         'email',           'varchar', 'NULL',  255, '', '', 
       ],
       'primary_key' => 'membernum',
       'unique'      => [],
-      'index'       => [['listnum'],['svcnum'],['contactemailnum'],['email']],
+      'index'       => [['listnum'],['svcnum'],['email']],
     },
 
 
