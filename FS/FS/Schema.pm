@@ -2380,11 +2380,12 @@ sub tables_hashref {
         '_password', 'varchar', '', $char_d, '', '',
         'last',      'varchar', '', $char_d, '', '', 
         'first',     'varchar', '', $char_d, '', '', 
+        'user_custnum',  'int', 'NULL',  '', '', '',
         'disabled',     'char', 'NULL',   1, '', '', 
       ],
       'primary_key' => 'usernum',
       'unique' => [ [ 'username' ] ],
-      'index'  => [],
+      'index'  => [ [ 'user_custnum' ] ],
     },
 
     'access_user_pref' => {
