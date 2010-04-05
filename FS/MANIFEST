@@ -465,3 +465,14 @@ FS/h_svc_www.pm
 t/h_svc_www.t
 FS/location_Mixin.pm
 t/location_Mixin.t
+FS/svc_mailinglist.pm
+t/svc_mailinglist.t
+FS/mailinglist.pm
+t/mailinglist.t
+FS/mailinglistmember.pm
+t/mailinglistmember.t
+FS/part_event/Action/Mixin/credit_pkg.pm
+FS/part_event/Action/pkg_agent_credit.pm
+FS/part_event/Action/pkg_agent_credit_pkg.pm
+FS/part_event/Action/pkg_employee_credit.pm
+FS/part_event/Action/pkg_employee_credit_pkg.pm

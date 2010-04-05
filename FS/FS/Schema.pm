@@ -102,6 +102,10 @@ sub dbdef_dist {
       my %hash = map { $_ => shift @coldef }
                      qw( name type null length default local );
 
+      #can be removed once we depend on DBIx::DBSchema 0.39;
+      $hash{'type'} = 'LONGTEXT'
+        if $hash{'type'} =~ /^TEXT$/i && $datasrc =~ /^dbi:mysql/i;
+
       unless ( defined $hash{'default'} ) {
         warn "$tablename:\n".
              join('', map "$_ => $hash{$_}\n", keys %hash) ;# $stop = <STDIN>;
@@ -113,7 +117,17 @@ sub dbdef_dist {
     #false laziness w/sub indices in DBIx::DBSchema::DBD (well, sorta)
     #and sub sql_create_table in DBIx::DBSchema::Table (slighty more?)
     my $unique = $tables_hashref->{$tablename}{'unique'};
-    my $index  = $tables_hashref->{$tablename}{'index'};
+    my @index  = @{ $tables_hashref->{$tablename}{'index'} };
+
+    # kludge to avoid avoid "BLOB/TEXT column 'statustext' used in key
+    #  specification without a key length".
+    # better solution: teach DBIx::DBSchema to specify a default length for
+    #  MySQL indices on text columns, or just to support an index length at all
+    #  so we can pass something in.
+    # best solution: eliminate need for this index in cust_main::retry_realtime
+    @index = grep { @{$_}[0] ne 'statustext' } @index
+      if $datasrc =~ /^dbi:mysql/i;
+
     my @indices = ();
     push @indices, map {
                          DBIx::DBSchema::Index->new({
@@ -130,7 +144,7 @@ sub dbdef_dist {
                            'columns' => $_,
                          });
                        }
-                       @$index;
+                       @index;
 
     DBIx::DBSchema::Table->new({
       'name'          => $tablename,
@@ -641,10 +655,11 @@ sub tables_hashref {
         'addlinfo', 'text', 'NULL', '', '', '',
         'closed',    'char', 'NULL', 1, '', '', 
         'pkgnum', 'int', 'NULL', '', '', '', #desired pkgnum for pkg-balances
+        'eventnum', 'int', 'NULL', '', '', '', #triggering event for commission
       ],
       'primary_key' => 'crednum',
       'unique' => [],
-      'index' => [ ['custnum'], ['_date'] ],
+      'index' => [ ['custnum'], ['_date'], ['eventnum'] ],
     },
 
     'cust_credit_bill' => {
@@ -1353,8 +1368,8 @@ sub tables_hashref {
     'part_pkg_taxoverride' => { 
       'columns' => [
         'taxoverridenum', 'serial', '', '', '', '',
-        'pkgpart',        'serial', '', '', '', '',
-        'taxclassnum',    'serial', '', '', '', '',
+        'pkgpart',           'int', '', '', '', '',
+        'taxclassnum',       'int', '', '', '', '',
         'usage_class',    'varchar', 'NULL', $char_d, '', '', 
       ],
       'primary_key' => 'taxoverridenum',
@@ -1969,16 +1984,17 @@ sub tables_hashref {
 
     'rate_detail' => {
       'columns' => [
-        'ratedetailnum',   'serial', '', '', '', '', 
-        'ratenum',         'int',     '', '', '', '', 
-        'orig_regionnum',  'int', 'NULL', '', '', '', 
-        'dest_regionnum',  'int',     '', '', '', '', 
-        'min_included',    'int',     '', '', '', '', 
-        #'min_charge',      @money_type, '', '', 
-        'min_charge',      'decimal', '', '10,5', '', '', 
-        'sec_granularity', 'int',     '', '', '', '', 
+        'ratedetailnum',   'serial',  '',     '', '', '', 
+        'ratenum',         'int',     '',     '', '', '', 
+        'orig_regionnum',  'int', 'NULL',     '', '', '', 
+        'dest_regionnum',  'int',     '',     '', '', '', 
+        'min_included',    'int',     '',     '', '', '', 
+        'conn_charge',     @money_type, '0', '', #'decimal','','10,5','0','',
+        'conn_sec',        'int',     '',     '', '0', '',
+        'min_charge',      'decimal', '', '10,5', '', '', #@money_type, '', '', 
+        'sec_granularity', 'int',     '',     '', '', '', 
         #time period (link to table of periods)?
-        'classnum',        'int',     'NULL', '', '', '', 
+        'classnum',        'int', 'NULL',     '', '', '', 
       ],
       'primary_key' => 'ratedetailnum',
       'unique'      => [ [ 'ratenum', 'orig_regionnum', 'dest_regionnum' ] ],
@@ -2365,11 +2381,12 @@ sub tables_hashref {
         '_password', 'varchar', '', $char_d, '', '',
         'last',      'varchar', '', $char_d, '', '', 
         'first',     'varchar', '', $char_d, '', '', 
+        'user_custnum',  'int', 'NULL',  '', '', '',
         'disabled',     'char', 'NULL',   1, '', '', 
       ],
       'primary_key' => 'usernum',
       'unique' => [ [ 'username' ] ],
-      'index'  => [],
+      'index'  => [ [ 'user_custnum' ] ],
     },
 
     'access_user_pref' => {
@@ -2551,6 +2568,44 @@ sub tables_hashref {
       'primary_key' => 'svcnum',
       'unique' => [],
       'index'  => [ [ 'id' ] ],
+    },
+
+    'svc_mailinglist' => { #svc_group?
+      'columns' => [
+        'svcnum',            'int',     '',            '', '', '', 
+        'username',      'varchar',     '', $username_len, '', '',
+        'domsvc',            'int',     '',            '', '', '', 
+        'listnum',           'int',     '',            '', '', '',
+        'reply_to',         'char', 'NULL',             1, '', '',#SetReplyTo
+        'remove_from',      'char', 'NULL',             1, '', '',#RemoveAuthor
+        'reject_auto',      'char', 'NULL',             1, '', '',#RejectAuto
+        'remove_to_and_cc', 'char', 'NULL',             1, '', '',#RemoveToAndCc
+      ],
+      'primary_key' => 'svcnum',
+      'unique' => [],
+      'index'  => [ ['username'], ['domsvc'], ['listnum'] ],
+    },
+
+    'mailinglist' => {
+      'columns' => [
+        'listnum',   'serial', '',      '', '', '',
+        'listname', 'varchar', '', $char_d, '', '',
+      ],
+      'primary_key' => 'listnum',
+      'unique' => [],
+      'index'  => [],
+    },
+
+    'mailinglistmember' => {
+      'columns' => [
+        'membernum',        'serial',     '',   '', '', '',
+        'listnum',             'int',     '',   '', '', '',
+        'svcnum',              'int', 'NULL',   '', '', '', 
+        'email',           'varchar', 'NULL',  255, '', '', 
+      ],
+      'primary_key' => 'membernum',
+      'unique'      => [],
+      'index'       => [['listnum'],['svcnum'],['email']],
     },
 
 

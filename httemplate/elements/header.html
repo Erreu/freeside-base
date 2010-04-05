@@ -24,7 +24,7 @@ Example:
 <HTML>
   <HEAD>
     <TITLE>
-      <% $title %>
+      <% $title |h %>
     </TITLE>
     <META HTTP-Equiv="Cache-Control" Content="no-cache">
     <META HTTP-Equiv="Pragma" Content="no-cache">
@@ -293,7 +293,7 @@ input.fstext {
         <TD BGCOLOR="#e8e8e8" HEIGHT="100%" VALIGN="top"> <!-- WIDTH="100%"> -->
 
           <FONT SIZE=6>
-            <% $title %>
+            <% $title |h %>
           </FONT>
 
 % unless ( $nobr ) {

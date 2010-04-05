@@ -7,7 +7,7 @@ Import a CSV file set containing tax rate records.
               'name'      => 'TaxRateUpload',
               'action'    => 'process/tax-import.cgi', 
               'num_files' => 6,
-              'fields'    => [ 'format', 'reload' ],
+              'fields'    => [ 'format', ],
               'message'   => 'Tax rates imported',
           )
 %>
@@ -18,28 +18,21 @@ Import a CSV file set containing tax rate records.
     <TH ALIGN="right">Format</TH>
     <TD>
       <SELECT NAME="format">
-        <!-- <OPTION VALUE="cch-update" SELECTED>CCH update (CSV) -->
-        <OPTION VALUE="cch">CCH import (CSV)
-        <!-- <OPTION VALUE="cch-fixed-update">CCH update (fixed length) -->
-        <OPTION VALUE="cch-fixed">CCH import (fixed length)
+        <OPTION VALUE="cch-update" SELECTED>CCH update (CSV)
+        <OPTION VALUE="cch">CCH initial import (CSV)
+        <OPTION VALUE="cch-fixed-update">CCH update (fixed length)
+        <OPTION VALUE="cch-fixed">CCH initial import (fixed length)
       </SELECT>
     </TD>
   </TR>
 
-  <TR>
-    <TH ALIGN="right">Replace existing data from this vendor</TH>
-    <TD>
-      <INPUT NAME="reload" TYPE="checkbox" VALUE="1" CHECKED>
-    </TD>
-  </TR>
-
   <% include( '/elements/file-upload.html',
-                'field'    => [ 'geocodefile',
+                'field'    => [ 'geofile',
                                 'codefile',
                                 'plus4file',
                                 'zipfile',
-                                'txmatrixfile',
-                                'detailfile',
+                                'txmatrix',
+                                'detail',
                               ],
                 'label'    => [ 'geocode filename',
                                 'code filename',

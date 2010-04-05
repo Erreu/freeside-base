@@ -1,8 +1,7 @@
 package FS::part_export::domreg_opensrs;
 
-use vars qw(@ISA %info %options $conf $me $DEBUG);
+use vars qw(@ISA %info %options $conf);
 use Tie::IxHash;
-use DateTime;
 use FS::Record qw(qsearchs qsearch);
 use FS::Conf;
 use FS::part_export::null;
@@ -39,8 +38,6 @@ gateway when setting up this export.
 =cut
 
 @ISA = qw(FS::part_export::null);
-$me = '[' .  __PACKAGE__ . ']';
-$DEBUG = 1;
 
 my @tldlist = qw/com net org biz info name mobi at be ca cc ch cn de dk es eu fr it mx nl tv uk us/;
 
@@ -53,10 +50,6 @@ tie %options, 'Tie::IxHash',
                       },
   'masterdomain' => { label => 'Master domain at OpenSRS',
                       },
-  'wait_for_pay' => { label => 'Do not provision until payment is received',
-                      type => 'checkbox',
-                      default => '0',
-                    },
   'debug_level'  => { label => 'Net::OpenSRS debug level',
                       type => 'select',
                       options => [ 0, 1, 2, 3 ],
@@ -220,7 +213,6 @@ sub testmode {
   return 'live' if $self->machine eq "rr-n1-tor.opensrs.net";
   return 'test' if $self->machine eq "horizon.opensrs.net";
   undef;
-
 }
 
 =item _export_insert
@@ -247,20 +239,6 @@ sub _export_insert {
     return $self->transfer( $svc_domain );
   } 
   return "Unknown domain action " . $svc_domain->action;
-}
-
-sub _export_insert_on_payment {
-  my( $self, $svc_domain ) = ( shift, shift );
-  warn "$me:_export_insert_on_payment called\n" if $DEBUG;
-  return '' unless $self->option('wait_for_pay');
-
-  my $queue = new FS::queue {
-    'svcnum' => $svc_domain->svcnum,
-    'job'    => 'FS::part_export::domreg_opensrs::renew_through',
-  };
-  $queue->insert( $self, $svc_domain ); #_export_insert with 'R' action?
-
-  return '';
 }
 
 ## Domain registration exports do nothing on replace.  Mainly because we haven't decided what they should do.
@@ -398,11 +376,10 @@ sub register {
 
   my $srs = $self->get_srs;
 
-#  cookie not required for registration
-#  my $cookie = $srs->get_cookie( $self->option('masterdomain') );
-#  if (!$cookie) {
-#     return "Unable to get cookie at OpenSRS: " . $srs->last_response();
-#  }
+  my $cookie = $srs->get_cookie( $self->option('masterdomain') );
+  if (!$cookie) {
+     return "Unable to get cookie at OpenSRS: " . $srs->last_response();
+  }
 
 #  return "Domain registration not enabled" if !$self->option('register');
   return $srs->last_response() if !$srs->register_domain( $svc_domain->domain, $c);
@@ -473,84 +450,6 @@ sub renew {
 
 #  return "Domain renewal not enabled" if !$self->option('renew');
   return $srs->last_response() if !$srs->renew_domain( $svc_domain->domain, $years );
-
-  return ''; # Should only get here if renewal succeeded
-}
-
-=item renew_through [ EPOCH_DATE ]
-
-Attempts to renew the domain through the specified date.  If no date is
-provided it is gleaned from the associated cust_pkg bill date
-
-Like most export functions, returns an error message on failure or undef on success.
-
-=cut
-
-sub renew_through {
-  my ( $self, $svc_domain, $date ) = @_;
-
-  warn "$me: renew_through called\n" if $DEBUG;
-  eval "use Net::OpenSRS;";
-  return $@ if $@;
-
-  unless ( $date ) {
-    my $cust_pkg = $svc_domain->cust_svc->cust_pkg;
-    return "Can't renew: no date specified and domain is not in a package."
-      unless $cust_pkg;
-    $date = $cust_pkg->bill;
-  }
-
-  my $err = $self->is_supported_domain( $svc_domain );
-  return $err if $err;
-
-  warn "$me: checking status\n" if $DEBUG;
-  my $rv = $self->get_status($svc_domain);
-  return "Domain ". $svc_domain->domain. " is not renewable"
-    unless $rv->{expdate};
-
-  return "Can't parse expiration date for ". $svc_domain->domain
-    unless $rv->{expdate} =~ /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})/;
-
-  my ($year,$month,$day,$hour,$minute,$second) = ($1,$2,$3,$4,$5,$6);
-  my $exp = DateTime->new( year   => $year,
-                           month  => $month,
-                           day    => $day,
-                           hour   => $hour,
-                           minute => $minute,
-                           second => $second,
-                           time_zone => 'America/New_York',#timezone of opensrs
-                         );
-
-  my $bill = DateTime->
-   from_epoch( 'epoch'     => $date,
-               'time_zone' => DateTime::TimeZone->new( name => 'local' ),
-  );
-
-  my $years = 0;
-  while ( DateTime->compare( $bill, $exp ) > 0 ) {
-    $years++;
-    $exp->add( 'years' => 1 );
-
-    return "Can't renew ". $svc_domain->domain. " for more than 10 years."
-      if $years > 10; #no infinite loop
-  }
-
-  warn "$me: renewing ". $svc_domain->domain. "for $years years\n" if $DEBUG;
-  my $srs = $self->get_srs;
-  $rv = $srs->make_request(
-    {
-      action     => 'renew',
-      object     => 'domain',
-      attributes => {
-        domain                => $svc_domain->domain,
-        auto_renew            => 0,
-        handle                => 'process',
-        period                => $years,
-        currentexpirationyear => $year,
-      }
-    }
-  );
-  return $rv->{response_text} unless $rv->{is_success};
 
   return ''; # Should only get here if renewal succeeded
 }

@@ -56,7 +56,6 @@ $hashref->{totalbytes} = $cgi->param('totalbytes') * $cgi->param('totalmultiplie
 
 $error ||= FS::prepay_credit::generate( $num,
                                         scalar($cgi->param('type')), 
-                                        $cgi->param('length'),
                                         $hashref
                                       );
 
