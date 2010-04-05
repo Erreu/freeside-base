@@ -235,6 +235,7 @@ if($curuser->access_right('Financial reports')) {
     'Sales, Credits and Receipts' => [ $fsurl.'graph/report_money_time.html', 'Sales, credits and receipts summary graph' ],
     'Sales Report' => [ $fsurl.'graph/report_cust_bill_pkg.html', 'Sales report and graph (by agent, package class and/or date range)' ],
     'Rated Call Sales Report' => [ $fsurl.'graph/report_cust_bill_pkg_detail.html', 'Sales report and graph (by agent, package class, usage class and/or date range)' ],
+    'Employee Commission Report' => [ $fsurl.'search/report_employee_commission.html', '' ],
     'Credit Report' => [ $fsurl.'search/report_cust_credit.html', 'Credit report (by employee and/or date range)' ],
     'Refund Report' => [ $fsurl.'search/report_cust_refund.html', 'Refund report (by type and/or date range)' ],
   );
@@ -320,7 +321,7 @@ $tools_menu{'Job Queue'} =  [ $fsurl.'search/queue.html', 'View pending job queu
   if $curuser->access_right('Job queue');
 $tools_menu{'Ticketing'} = [ \%tools_ticketing, 'Ticketing tools' ]
   if $conf->config('ticket_system');
-$tools_menu{'Time Queue'} =  [ $fsurl.'search/timeworked.html', 'View pending support time' ]
+$tools_menu{'Time Queue'} =  [ $fsurl.'search/report_timeworked.html', 'View pending support time' ]
   if $curuser->access_right('Time queue');
 $tools_menu{'Attachments'} = [ $fsurl.'browse/cust_attachment.html', 'View customer attachments' ]
   if !$conf->config('disable_cust_attachment') and $curuser->access_right('View attachments') and $curuser->access_right('Browse attachments');
