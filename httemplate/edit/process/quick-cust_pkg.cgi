@@ -50,7 +50,7 @@ my $cust_pkg = new FS::cust_pkg {
   'custnum'     => $custnum,
   'pkgpart'     => $pkgpart,
   'start_date'  => ( scalar($cgi->param('start_date'))
-                       ? str2time($cgi->param('start_date'))
+                       ? parse_datetime($cgi->param('start_date'))
                        : ''
                    ),
   'refnum'      => $refnum,
