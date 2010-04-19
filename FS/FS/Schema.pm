@@ -1562,6 +1562,11 @@ sub tables_hashref {
         'acct_def_file_maxsize',    'varchar', 'NULL', $char_d, '', '',
         'acct_def_cgp_deletemode',  'varchar', 'NULL', $char_d, '', '',
         'acct_def_cgp_emptytrash',  'varchar', 'NULL', $char_d, '', '',
+        'acct_def_cgp_rulesallowed','varchar', 'NULL', $char_d, '', '',
+        'acct_def_cgp_rpopallowed',    'char', 'NULL',       1, '', '', 
+        'acct_def_cgp_mailtoall',      'char', 'NULL',       1, '', '', 
+        'acct_def_cgp_addmailtrailer', 'char', 'NULL',       1, '', '', 
+
       ],
       'primary_key' => 'svcnum',
       'unique' => [ ],
