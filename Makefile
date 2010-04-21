@@ -149,7 +149,7 @@ help:
 	@echo "                   wikiman"
 	@echo "                   perl-modules"
 	#@echo
-	#@echo "                   upload-docs release update-webdemo"
+	#@echo "                   upload-docs release"
 
 
 masondocs: httemplate/* httemplate/*/* httemplate/*/*/* httemplate/*/*/*/*
@@ -399,6 +399,10 @@ release:
 	dch -v ${DEBVERSION} -p "New upstream release"
 	cvs commit -m "Updated for ${VERSION}" debian/changelog
 
+	# Make sure other people's changes are pulled in!
+	cvs update -d -P
+
+	# Tag the release
 	#cvs tag ${TAG}
 	cvs tag -F ${TAG}
 
@@ -421,9 +425,4 @@ release:
 	#update web demo?
 
 	#update web demo self-service?
-
-update-webdemo:
-	ssh ivan@420.am '( cd freeside; cvs update -d -P )'
-	#ssh root@420.am '( cd /home/ivan/freeside; make clean; make deploy )'
-	ssh root@420.am '( cd /home/ivan/freeside; make deploy )'
 
