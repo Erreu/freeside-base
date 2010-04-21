@@ -123,7 +123,7 @@ RT_PATH = /opt/rt3
 FREESIDE_PATH = `pwd`
 PERL_INC_DEV_KLUDGE = /usr/local/share/perl/5.10.0/
 
-VERSION=1.9.3
+VERSION=1.9.4cvs
 TAG=freeside_1_9_3
 
 DEBVERSION = `echo ${VERSION} | perl -pe 's/(\d)([a-z])/\1~\2/'`-1
