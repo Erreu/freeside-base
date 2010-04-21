@@ -1,3 +1,153 @@
+2010-04-20 20:56  ivan
+
+	* Makefile: ensure that the trainwreck which was 1.9.2 does not
+	  happen again
+
+2010-04-19 21:29  ivan
+
+	* FS/FS/svc_domain.pm, httemplate/edit/part_svc.cgi: communigate
+	  (phase 2): add a textarea type to edit/part_svc so you can set it
+	  to a default or fixed trailer that's multi-line, RT#7514
+
+2010-04-19 21:13  ivan
+
+	* FS/FS/Schema.pm, FS/FS/svc_acct.pm, FS/FS/svc_domain.pm,
+	  httemplate/view/svc_acct/basics.html,
+	  FS/FS/part_export/communigate_pro.pm,
+	  httemplate/edit/svc_acct.cgi, httemplate/edit/svc_domain.cgi,
+	  httemplate/view/svc_domain/acct_defaults.html: communigate (phase
+	  2): Account Preferences (& Domain::Account Defaults:Preferences):
+	  ProntoSkinName  RT#7514
+
+2010-04-19 18:51  ivan
+
+	* FS/FS/svc_acct.pm, FS/FS/Schema.pm, FS/FS/svc_domain.pm,
+	  httemplate/edit/svc_acct.cgi, httemplate/edit/svc_domain.cgi,
+	  httemplate/view/svc_acct/basics.html,
+	  FS/FS/part_export/communigate_pro.pm,
+	  httemplate/view/svc_domain/acct_defaults.html: communigate (phase
+	  2): Account Preferences (& Domain::Account Defaults:Preferences):
+	  Language, Time zone, Layout, Send read receipts.  RT#7514
+
+2010-04-19 00:09  ivan
+
+	* FS/FS/Schema.pm, FS/FS/svc_acct.pm,
+	  FS/FS/part_export/communigate_pro.pm,
+	  httemplate/edit/svc_acct.cgi,
+	  httemplate/view/svc_acct/basics.html: communigate (phase 2),
+	  Account:Settings PasswordRecovery.  also fix modification of
+	  svc_acct booleans in export.	RT#7514
+
+2010-04-18 23:15  ivan
+
+	* FS/FS/Schema.pm, FS/FS/svc_acct.pm, FS/FS/svc_domain.pm,
+	  FS/FS/part_export/communigate_pro.pm,
+	  httemplate/edit/svc_acct.cgi,
+	  httemplate/view/svc_acct/basics.html: communigate provisioning
+	  phase 2: Account:Settings: RulesAllowed, RPOPAllowed, MailToAll,
+	  AddMailTrailer.  RT#7514
+
+2010-04-18 22:01  ivan
+
+	* FS/FS/Schema.pm, FS/FS/svc_domain.pm,
+	  FS/FS/part_export/communigate_pro.pm,
+	  httemplate/edit/svc_domain.cgi,
+	  httemplate/view/svc_domain/acct_defaults.html: communigate
+	  provisioning phase 2: Domain:Account Defaults:Settings:
+	  RulesAllowed, RPOPAllowed, MailToAll, AddMailTrailer.  RT#7514
+
+2010-04-18 18:25  ivan
+
+	* FS/FS/Schema.pm, FS/FS/svc_domain.pm,
+	  FS/FS/part_export/communigate_pro.pm,
+	  httemplate/edit/svc_domain.cgi,
+	  httemplate/view/svc_domain/basics.html: communigate provisioning
+	  phase 2: add svc_domain.trailer -> communigate TrailerText,
+	  RT#7514
+
+2010-04-09 21:21  mark
+
+	* httemplate/search/elements/cust_main_dayranges.html: RT#866: fix
+	  payment links
+
+2010-04-09 01:17  ivan
+
+	* httemplate/search/elements/cust_main_dayranges.html, FS/MANIFEST,
+	  FS/FS/Mason.pm, FS/FS/Misc/DateTime.pm, FS/FS/UI/Web.pm,
+	  FS/FS/cust_main/Import.pm, httemplate/edit/REAL_cust_pkg.cgi,
+	  httemplate/edit/cust_pay.cgi,
+	  httemplate/edit/process/REAL_cust_pkg.cgi,
+	  httemplate/edit/process/cust_main.cgi,
+	  httemplate/edit/process/cust_pay.cgi,
+	  httemplate/edit/process/quick-charge.cgi,
+	  httemplate/edit/process/quick-cust_pkg.cgi,
+	  httemplate/misc/process/cancel_pkg.html,
+	  httemplate/misc/process/delay_susp_pkg.html,
+	  httemplate/search/pay_batch.cgi,
+	  httemplate/search/report_prepaid_income.cgi,
+	  httemplate/search/sqlradius.cgi: fix date parsing when using
+	  international dates (package date edit), RT#8027
+
+2010-04-09 01:09  jeff
+
+	* FS/FS/Conf.pm, FS/FS/cust_bill.pm, conf/invoice_html: modify
+	  total items for balance below line and current charges above line
+	  with configurable description.  also bug fixes that might close
+	  7896
+
+2010-04-08 12:23  jeff
+
+	* httemplate/elements/about_rt.html: close tag rather than open a
+	  new one
+
+2010-04-07 18:15  mark
+
+	* FS/FS/cust_pkg.pm, FS/FS/Report/Table/Monthly.pm,
+	  httemplate/elements/menu.html,
+	  httemplate/graph/cust_pkg_cost.cgi,
+	  httemplate/graph/report_cust_pkg_cost.html,
+	  httemplate/search/cust_pkg.cgi: RT#1382: beginning of package
+	  cost report
+
+2010-04-07 01:24  ivan
+
+	* httemplate/edit/agent.cgi: also in agent edit, fix form getting
+	  submitted before customer search can complete.  throws "status
+	  connecting to" error and custnum does not get filled in, RT#8014
+
+2010-04-07 01:15  ivan
+
+	* httemplate/: edit/access_user.html, edit/elements/edit.html,
+	  elements/search-cust_main.html: in employee edit, fix form
+	  getting submitted before customer search can complete.  throws
+	  "status connecting to" error and custnum does not get filled in,
+	  RT#8014
+
+2010-04-06 23:20  ivan
+
+	* FS/FS/TicketSystem/RT_Internal.pm: fix capitalization of RT
+	  tables and columns - mysql fix
+
+2010-04-06 22:52  mark
+
+	* FS/FS/pay_batch/RBC.pm: fix floating point error
+
+2010-04-06 21:11  ivan
+
+	* httemplate/search/part_pkg.html: fix a mysql-ism in employee
+	  commission report, now compatible with Pg, that's a new one.
+	  RT#6991
+
+2010-04-06 14:43  ivan
+
+	* httemplate/search/report_employee_commission.html: fix 1.9-style
+	  employee comission report, RT#6991
+
+2010-04-05 05:24  jeff
+
+	* FS/FS/part_export/dashcs_e911.pm: fix noisy but harmless
+	  redeclaration
+
 2010-04-04 23:58  ivan
 
 	* conf/invoice_from: company email
@@ -460,16 +610,20 @@
 	  editor/dialog/fck_textfield.html,
 	  editor/dialog/common/fck_dialog_common.css,
 	  editor/dialog/common/fck_dialog_common.js,
+	  editor/dialog/fck_about/sponsors/spellchecker_net.gif,
 	  editor/dialog/fck_docprops/fck_document_preview.html,
 	  editor/dialog/fck_flash/fck_flash.js,
 	  editor/dialog/fck_flash/fck_flash_preview.html,
 	  editor/dialog/fck_image/fck_image.js,
 	  editor/dialog/fck_image/fck_image_preview.html,
 	  editor/dialog/fck_link/fck_link.js,
+	  editor/dialog/fck_scayt/scayt_dialog.css,
 	  editor/dialog/fck_select/fck_select.js,
 	  editor/dialog/fck_spellerpages/spellerpages/spellChecker.js,
 	  editor/dialog/fck_spellerpages/spellerpages/spellerStyle.css,
 	  editor/dialog/fck_spellerpages/spellerpages/server-scripts/spellchecker.pl,
+	  editor/dtd/fck_dtd_test.html, editor/dtd/fck_xhtml10strict.js,
+	  editor/dtd/fck_xhtml10transitional.js,
 	  editor/filemanager/browser/default/browser.css,
 	  editor/filemanager/browser/default/browser.html,
 	  editor/filemanager/browser/default/frmactualfolder.html,
@@ -480,6 +634,16 @@
 	  editor/filemanager/browser/default/frmupload.html,
 	  editor/filemanager/browser/default/js/common.js,
 	  editor/filemanager/browser/default/js/fckxml.js,
+	  editor/filemanager/connectors/test.html,
+	  editor/filemanager/connectors/uploadtest.html,
+	  editor/filemanager/connectors/perl/basexml.pl,
+	  editor/filemanager/connectors/perl/commands.pl,
+	  editor/filemanager/connectors/perl/config.pl,
+	  editor/filemanager/connectors/perl/connector.cgi,
+	  editor/filemanager/connectors/perl/io.pl,
+	  editor/filemanager/connectors/perl/upload.cgi,
+	  editor/filemanager/connectors/perl/upload_fck.pl,
+	  editor/filemanager/connectors/perl/util.pl,
 	  editor/js/fckadobeair.js, editor/js/fckeditorcode_gecko.js,
 	  editor/js/fckeditorcode_ie.js,
 	  editor/lang/_translationstatus.txt, editor/lang/af.js,
@@ -503,6 +667,8 @@
 	  editor/lang/tr.js, editor/lang/uk.js, editor/lang/vi.js,
 	  editor/lang/zh-cn.js, editor/lang/zh.js,
 	  editor/plugins/autogrow/fckplugin.js,
+	  editor/plugins/bbcode/fckplugin.js,
+	  editor/plugins/dragresizetable/fckplugin.js,
 	  editor/plugins/placeholder/fck_placeholder.html,
 	  editor/plugins/placeholder/fckplugin.js,
 	  editor/plugins/placeholder/lang/de.js,
@@ -540,7 +706,8 @@
 	  editor/skins/silver/images/dialog.sides.png,
 	  editor/skins/silver/images/dialog.sides.rtl.png,
 	  editor/skins/silver/images/sprites.gif,
-	  editor/skins/silver/images/sprites.png: FCKeditor 2.6.6
+	  editor/skins/silver/images/sprites.png, editor/wsc/ciframe.html,
+	  editor/wsc/tmpFrameset.html, editor/wsc/w.html: FCKeditor 2.6.6
 
 2010-03-15 19:51  mark
 
@@ -26949,6 +27116,11 @@
 
 	* FS/FS/cust_pkg.pm: add last_bill field to manpage
 
+2003-05-30 02:40  ivan
+
+	* httemplate/docs/man/FS/part_export/.cvs_is_on_crack: force
+	  inclusion of httemplate/docs/man hierarchy
+
 2003-05-30 02:22  ivan
 
 	* FS/FS/part_export/sqlradius.pm: sqlradius exports include "op"
@@ -31506,6 +31678,10 @@
 
 	* httemplate/docs/install.html: doc update
 
+2002-02-04 09:12  ivan
+
+	* httemplate/docs/man/FS/: Bill.html, Invoice.html: ancient files
+
 2002-02-04 09:06  ivan
 
 	* Makefile, README.1.4.0pre4567-8, README.1.4.0pre8: 1.4.0pre8!
@@ -31594,11 +31770,60 @@
 	  new CGI;   &cgisuidsetup(); from all templates.  should work
 	  better under Mason.
 
+2002-01-29 09:46  ivan
+
+	* httemplate/docs/man/: FS.html, FS/CGI.html, FS/CGIwrapper.html,
+	  FS/Conf.html, FS/Record.html, FS/SessionClient.html,
+	  FS/SignupClient.html, FS/UID.html, FS/agent.html,
+	  FS/agent_type.html, FS/cust_bill.html, FS/cust_bill_pkg.html,
+	  FS/cust_credit.html, FS/cust_main.html, FS/cust_main_county.html,
+	  FS/cust_main_invoice.html, FS/cust_pay.html,
+	  FS/cust_pay_batch.html, FS/cust_pkg.html, FS/cust_refund.html,
+	  FS/cust_svc.html, FS/domain_record.html, FS/nas.html,
+	  FS/part_pkg.html, FS/part_referral.html, FS/part_svc.html,
+	  FS/pkg_svc.html, FS/port.html, FS/prepay_credit.html,
+	  FS/session.html, FS/svc_Common.html, FS/svc_acct.html,
+	  FS/svc_acct_pop.html, FS/svc_acct_sm.html, FS/svc_domain.html,
+	  FS/svc_www.html, FS/type_pkgs.html: these are all auto-generated
+	  by the installation; don't check them into CVS (probably should
+	  generate them for a release tarball though)
+
 2002-01-29 09:42  ivan
 
 	* README.1.4.0pre4567-8, FS/FS/part_bill_event.pm, bin/fs-setup,
-	  httemplate/docs/schema.html, httemplate/docs/upgrade8.html:
-	  weight, plan and plandata fields in part_bill_event
+	  httemplate/docs/schema.html, httemplate/docs/upgrade8.html,
+	  httemplate/docs/man/FS/SessionClient.html,
+	  httemplate/docs/man/FS/UID.html,
+	  httemplate/docs/man/FS/agent.html,
+	  httemplate/docs/man/FS/agent_type.html,
+	  httemplate/docs/man/FS/cust_bill.html,
+	  httemplate/docs/man/FS/cust_bill_pkg.html,
+	  httemplate/docs/man/FS/cust_credit.html,
+	  httemplate/docs/man/FS/cust_main.html,
+	  httemplate/docs/man/FS/cust_main_county.html,
+	  httemplate/docs/man/FS/cust_main_invoice.html,
+	  httemplate/docs/man/FS/cust_pay.html,
+	  httemplate/docs/man/FS/cust_pay_batch.html,
+	  httemplate/docs/man/FS/cust_pkg.html,
+	  httemplate/docs/man/FS/cust_refund.html,
+	  httemplate/docs/man/FS/cust_svc.html,
+	  httemplate/docs/man/FS/domain_record.html,
+	  httemplate/docs/man/FS/nas.html,
+	  httemplate/docs/man/FS/part_pkg.html,
+	  httemplate/docs/man/FS/part_referral.html,
+	  httemplate/docs/man/FS/part_svc.html,
+	  httemplate/docs/man/FS/pkg_svc.html,
+	  httemplate/docs/man/FS/port.html,
+	  httemplate/docs/man/FS/prepay_credit.html,
+	  httemplate/docs/man/FS/session.html,
+	  httemplate/docs/man/FS/svc_Common.html,
+	  httemplate/docs/man/FS/svc_acct.html,
+	  httemplate/docs/man/FS/svc_acct_pop.html,
+	  httemplate/docs/man/FS/svc_acct_sm.html,
+	  httemplate/docs/man/FS/svc_domain.html,
+	  httemplate/docs/man/FS/svc_www.html,
+	  httemplate/docs/man/FS/type_pkgs.html: weight, plan and plandata
+	  fields in part_bill_event
 
 2002-01-29 08:33  ivan
 
@@ -31606,7 +31831,42 @@
 	  FS/FS/cust_pay.pm, FS/FS/cust_pkg.pm, FS/FS/cust_svc.pm,
 	  FS/FS/svc_acct.pm, bin/pod2x, htetc/global.asa, htetc/handler.pl,
 	  httemplate/index.html, httemplate/browse/part_bill_event.cgi,
-	  httemplate/docs/install.html,
+	  httemplate/docs/install.html, httemplate/docs/man/FS.html,
+	  httemplate/docs/man/FS/CGI.html,
+	  httemplate/docs/man/FS/Conf.html,
+	  httemplate/docs/man/FS/Record.html,
+	  httemplate/docs/man/FS/SessionClient.html,
+	  httemplate/docs/man/FS/SignupClient.html,
+	  httemplate/docs/man/FS/UID.html,
+	  httemplate/docs/man/FS/agent.html,
+	  httemplate/docs/man/FS/agent_type.html,
+	  httemplate/docs/man/FS/cust_bill.html,
+	  httemplate/docs/man/FS/cust_bill_pkg.html,
+	  httemplate/docs/man/FS/cust_credit.html,
+	  httemplate/docs/man/FS/cust_main.html,
+	  httemplate/docs/man/FS/cust_main_county.html,
+	  httemplate/docs/man/FS/cust_main_invoice.html,
+	  httemplate/docs/man/FS/cust_pay.html,
+	  httemplate/docs/man/FS/cust_pay_batch.html,
+	  httemplate/docs/man/FS/cust_pkg.html,
+	  httemplate/docs/man/FS/cust_refund.html,
+	  httemplate/docs/man/FS/cust_svc.html,
+	  httemplate/docs/man/FS/domain_record.html,
+	  httemplate/docs/man/FS/nas.html,
+	  httemplate/docs/man/FS/part_pkg.html,
+	  httemplate/docs/man/FS/part_referral.html,
+	  httemplate/docs/man/FS/part_svc.html,
+	  httemplate/docs/man/FS/pkg_svc.html,
+	  httemplate/docs/man/FS/port.html,
+	  httemplate/docs/man/FS/prepay_credit.html,
+	  httemplate/docs/man/FS/session.html,
+	  httemplate/docs/man/FS/svc_Common.html,
+	  httemplate/docs/man/FS/svc_acct.html,
+	  httemplate/docs/man/FS/svc_acct_pop.html,
+	  httemplate/docs/man/FS/svc_acct_sm.html,
+	  httemplate/docs/man/FS/svc_domain.html,
+	  httemplate/docs/man/FS/svc_www.html,
+	  httemplate/docs/man/FS/type_pkgs.html,
 	  httemplate/edit/part_bill_event.cgi,
 	  httemplate/edit/part_pkg.cgi,
 	  httemplate/edit/process/part_bill_event.cgi: - web interface for
@@ -33525,7 +33785,45 @@
 	  httemplate/docs/upgrade3.html, httemplate/docs/upgrade4.html,
 	  httemplate/docs/upgrade5.html, httemplate/docs/upgrade6.html,
 	  httemplate/docs/upgrade7.html, httemplate/docs/upgrade8.html,
-	  bin/fs-setup, bin/masonize, bin/pod2x, httemplate/edit/agent.cgi,
+	  httemplate/docs/man/FS.html, httemplate/docs/man/FS/Bill.html,
+	  httemplate/docs/man/FS/CGI.html,
+	  httemplate/docs/man/FS/CGIwrapper.html,
+	  httemplate/docs/man/FS/Conf.html,
+	  httemplate/docs/man/FS/Invoice.html,
+	  httemplate/docs/man/FS/Record.html,
+	  httemplate/docs/man/FS/SessionClient.html,
+	  httemplate/docs/man/FS/SignupClient.html,
+	  httemplate/docs/man/FS/UID.html,
+	  httemplate/docs/man/FS/agent.html,
+	  httemplate/docs/man/FS/agent_type.html,
+	  httemplate/docs/man/FS/cust_bill.html,
+	  httemplate/docs/man/FS/cust_bill_pkg.html,
+	  httemplate/docs/man/FS/cust_credit.html,
+	  httemplate/docs/man/FS/cust_main.html,
+	  httemplate/docs/man/FS/cust_main_county.html,
+	  httemplate/docs/man/FS/cust_main_invoice.html,
+	  httemplate/docs/man/FS/cust_pay.html,
+	  httemplate/docs/man/FS/cust_pay_batch.html,
+	  httemplate/docs/man/FS/cust_pkg.html,
+	  httemplate/docs/man/FS/cust_refund.html,
+	  httemplate/docs/man/FS/cust_svc.html,
+	  httemplate/docs/man/FS/domain_record.html,
+	  httemplate/docs/man/FS/nas.html,
+	  httemplate/docs/man/FS/part_pkg.html,
+	  httemplate/docs/man/FS/part_referral.html,
+	  httemplate/docs/man/FS/part_svc.html,
+	  httemplate/docs/man/FS/pkg_svc.html,
+	  httemplate/docs/man/FS/port.html,
+	  httemplate/docs/man/FS/prepay_credit.html,
+	  httemplate/docs/man/FS/session.html,
+	  httemplate/docs/man/FS/svc_Common.html,
+	  httemplate/docs/man/FS/svc_acct.html,
+	  httemplate/docs/man/FS/svc_acct_pop.html,
+	  httemplate/docs/man/FS/svc_acct_sm.html,
+	  httemplate/docs/man/FS/svc_domain.html,
+	  httemplate/docs/man/FS/svc_www.html,
+	  httemplate/docs/man/FS/type_pkgs.html, bin/fs-setup,
+	  bin/masonize, bin/pod2x, httemplate/edit/agent.cgi,
 	  httemplate/edit/agent_type.cgi, httemplate/edit/cust_credit.cgi,
 	  httemplate/edit/cust_main.cgi,
 	  httemplate/edit/cust_main_county-expand.cgi,
