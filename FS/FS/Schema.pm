@@ -1623,15 +1623,15 @@ sub tables_hashref {
 
     'cgp_rule' => {
       'columns' => [
-        'rulenum',  'serial', '',      '', '', '',
-        'name',    'varchar', '', $char_d, '', '',
-        'comment', 'varchar', '', $char_d, '', '',
-        'svcnum',      'int', '',      '', '', '',
-        'priority',    'int', '',      '', '', '',
+        'rulenum',  'serial',     '',      '', '', '',
+        'name',    'varchar',     '', $char_d, '', '',
+        'comment', 'varchar', 'NULL', $char_d, '', '',
+        'svcnum',      'int',     '',      '', '', '',
+        'priority',    'int',     '',      '', '', '',
       ],
       'primary_key' => 'rulenum',
       'unique'      => [],
-      'index '      => [ [ 'svcnum' ] ],
+      'index'       => [ [ 'svcnum' ] ],
     },
 
     'cgp_rule_condition' => {
@@ -1644,7 +1644,7 @@ sub tables_hashref {
       ],
       'primary_key' => 'ruleconditionnum',
       'unique'      => [],
-      'index '      => [ [ 'rulenum' ] ],
+      'index'       => [ [ 'rulenum' ] ],
     },
 
     'cgp_rule_action' => {
@@ -1656,7 +1656,7 @@ sub tables_hashref {
       ],
       'primary_key' => 'ruleactionnum',
       'unique'      => [],
-      'index '      => [ [ 'rulenum' ] ],
+      'index'       => [ [ 'rulenum' ] ],
    },
 
     'svc_forward' => {
