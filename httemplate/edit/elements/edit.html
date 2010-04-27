@@ -50,6 +50,8 @@ Example:
                     'm2m_method'       =>
                     #'m2m_srccol'  => #opt, if not the same as this table
                     'm2m_dstcol'  => #required for now, eventuaully opt, if not the same as target table
+                    #OR#
+                    'o2m_table' =>
 
                     'm2_label'   => 'Label',        #
                     'm2_new_default' => \@table_name_objects, #default
@@ -244,6 +246,7 @@ Example:
 %   $layer_values = &{ $f->{'layer_values_callback'} }( $cgi, $object )
 %     if $f->{'layer_values_callback'}
 %     && ! $f->{'m2name_table'}
+%     && ! $f->{'o2m_table'}
 %     && ! $f->{'m2m_method'};
 %
 %   warn "layer values: ". Dumper($layer_values)
@@ -377,12 +380,15 @@ Example:
 %
 %   my $fieldnum = '';
 %   my $curr_value = '';
-%   if ( $f->{'m2name_table'} || $f->{'m2m_method'} ) { #XXX test this for all
-%                                                      #types of fields
+%   if ( $f->{'m2name_table'} || $f->{'o2m_table'} || $f->{'m2m_method'} ) {
+%
 %     my($table, $col);
 %     if ( $f->{'m2name_table'} ) {
 %       $table = $f->{'m2name_table'};
 %       $col   = $f->{'m2name_namecol'};
+%     } elsif ( $f->{'o2m_table'} ) {
+%       $table = $f->{'o2m_table'};
+%       $col   = dbdef->table($f->{'o2m_table'})->primary_key;
 %     } elsif ( $f->{'m2m_method'} ) {
 %       $table = $f->{'m2m_method'};
 %       $col   = $f->{'m2m_dstcol'};
@@ -395,8 +401,8 @@ Example:
 %       @existing = &{ $f->{'m2_error_callback'} }( $cgi, $object );
 %     } elsif ( $object->$pkey() ) { # $mode eq 'edit'||'clone'
 %       @existing = $object->$table();
-%      warn scalar(@existing). " from $object->$table: ". join('/', @existing)
-%        if $opt{'debug'};
+%       warn scalar(@existing). " from $object->$table: ". join('/', @existing)
+%         if $opt{'debug'};
 %     } elsif ( $f->{'m2_new_default'} ) { # && $mode eq 'new'
 %       @existing = @{ $f->{'m2_new_default'} };
 %     }
@@ -430,7 +436,7 @@ Example:
 %       $label[0] = '/elements/tr-td-label.html';
 
         <% include( @label ) %>
-        <TD>
+        <TD COLSPAN="<% $f->{'colspan'} || 1 %>">
         <% include( @existing ) %>
         </TD>
 
@@ -480,13 +486,13 @@ Example:
 %     ( $fieldnum ? ('cell_style' => 'border-top:1px solid black') : () ),
 %   );
 %
-%   if ( $f->{'m2name_table'} || $f->{'m2m_method'} ) {
+%   if ( $f->{'m2name_table'} || $f->{'o2m_table'} || $f->{'m2m_method'} ) {
 %     $include[0] =~ s(^/elements/tr-)(/elements/);
 %     my @label = @include;
 %     $label[0] = '/elements/tr-td-label.html';
 
       <% include( @label ) %>
-      <TD>
+      <TD COLSPAN="<% $f->{'colspan'} || 1 %>">
       <% include( @include ) %>
       </TD>
 
@@ -513,7 +519,7 @@ Example:
       <% include( @include ) %>
 
 %   }
-%   if ( $f->{'m2name_table'} || $f->{'m2m_method'} ) {
+%   if ( $f->{'m2name_table'} || $f->{'o2m_table'} || $f->{'m2m_method'} ) {
 
       <SCRIPT TYPE="text/javascript">
 
@@ -524,7 +530,7 @@ Example:
 
           // only spawn if we're the last element... return if not
 
-          var field_regex = /(\d+)$/;
+          var field_regex = /(\d+)(_[a-z]+)?$/;
           var match = field_regex.exec(what.name);
           if ( !match ) {
             alert(what.name + " didn't match?!");
@@ -595,6 +601,7 @@ Example:
 
           widget_cell.style.borderTop = "1px solid black";
           widget_cell.style.paddingTop = "3px";
+          widget_cell.colSpan = "<% $f->{'colspan'} || 1 %>"
 
           widget_cell.innerHTML = newrow;
 
