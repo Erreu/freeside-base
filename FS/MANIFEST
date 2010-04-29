@@ -460,6 +460,7 @@ FS/cust_statement.pm
 t/cust_statement.t
 FS/cdr_batch.pm
 t/cdr_batch.t
+FS/o2m_Common.pm
 FS/svc_pbx.pm
 t/svc_pbx.t
 FS/h_svc_www.pm
