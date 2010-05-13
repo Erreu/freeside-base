@@ -7,7 +7,7 @@
                                     $unearned ? ( $money_char. '%.2f unearned revenue' ) : (),
                                   ],
                  'header'      => [
-                   '#',
+                   #'#',
                    'Description',
                    ( $unearned
                      ? 'Unearned'
@@ -26,7 +26,7 @@
                    FS::UI::Web::cust_header(),
                  ],
                  'fields'      => [
-                   'billpkgnum',
+                   #'billpkgnum',
                    sub { $_[0]->pkgnum > 0
                            ? $_[0]->get('pkg')      # possibly use override.pkg
                            : $_[0]->get('itemdesc') # but i think this correct
@@ -528,7 +528,6 @@ if ($use_usage) {
 } else {
   $count_query .= " FROM cust_bill_pkg $join_cust $join_pkg $where";
 }
-warn "count_query is $count_query\n";
 
 my @select = ( 'cust_bill_pkg.*',
                'cust_bill._date', );
