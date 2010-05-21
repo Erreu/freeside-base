@@ -1,13 +1,14 @@
 package FS::Report::Table::Monthly;
 
 use strict;
-use vars qw( @ISA );
+use vars qw( @ISA $DEBUG );
 use Time::Local;
 use FS::UID qw( dbh );
 use FS::Report::Table;
 use FS::CurrentUser;
 
 @ISA = qw( FS::Report::Table );
+$DEBUG = 0; # turning this on will trace all SQL statements, VERY noisy
 
 =head1 NAME
 
@@ -307,6 +308,64 @@ sub _subtract_11mo {
   timelocal($sec,$min,$hour,$mday,$mon,$year);
 }
 
+sub cust_pkg_setup_cost {
+  my( $self, $speriod, $eperiod, $agentnum, %opt ) = @_;
+  my $where = '';
+  my $comparison = '';
+  if ( $opt{'classnum'} =~ /^(\d+)$/ ) {
+    if ( $1 == 0 ) {
+      $comparison = 'IS NULL';
+    }
+    else {
+      $comparison = "= $1";
+    }
+    $where = "AND part_pkg.classnum $comparison";
+  }
+  $agentnum ||= $opt{'agentnum'};
+
+  my $total_sql = " SELECT SUM(part_pkg.setup_cost) ";
+  $total_sql .= " FROM cust_pkg 
+             LEFT JOIN cust_main USING ( custnum )
+             LEFT JOIN part_pkg  USING ( pkgpart )
+                  WHERE pkgnum != 0
+                  $where
+                  AND ".$self->in_time_period_and_agent(
+                    $speriod, $eperiod, $agentnum, 'cust_pkg.setup');
+  return $self->scalar_sql($total_sql);
+}
+
+sub cust_pkg_recur_cost {
+  my( $self, $speriod, $eperiod, $agentnum, %opt ) = @_;
+  my $where = '';
+  my $comparison = '';
+  if ( $opt{'classnum'} =~ /^(\d+)$/ ) {
+    if ( $1 == 0 ) {
+      $comparison = 'IS NULL';
+    }
+    else {
+      $comparison = "= $1";
+    }
+    $where = " AND part_pkg.classnum $comparison";
+  }
+  $agentnum ||= $opt{'agentnum'};
+  # duplication of in_time_period_and_agent
+  # because we do it a little differently here
+  $where .= " AND cust_main.agentnum = $agentnum" if $agentnum;
+  $where .= " AND ".
+          $FS::CurrentUser::CurrentUser->agentnums_sql('table' => 'cust_main');
+
+  my $total_sql = " SELECT SUM(part_pkg.recur_cost) ";
+  $total_sql .= " FROM cust_pkg
+             LEFT JOIN cust_main USING ( custnum )
+             LEFT JOIN part_pkg  USING ( pkgpart )
+                  WHERE pkgnum != 0
+                  $where
+                  AND cust_pkg.setup < $eperiod
+                  AND (cust_pkg.cancel > $speriod OR cust_pkg.cancel IS NULL)
+                  ";
+  return $self->scalar_sql($total_sql);
+}
+ 
 sub cust_bill_pkg {
   my( $self, $speriod, $eperiod, $agentnum, %opt ) = @_;
 
@@ -320,12 +379,12 @@ sub cust_bill_pkg {
     }
 
     if ( $opt{'use_override'} ) {
-      $where = "(
+      $where = "AND (
         part_pkg.classnum $comparison AND pkgpart_override IS NULL OR
         override.classnum $comparison AND pkgpart_override IS NOT NULL
       )";
     } else {
-      $where = "part_pkg.classnum $comparison";
+      $where = "AND part_pkg.classnum $comparison";
     }
   }
 
@@ -346,7 +405,7 @@ sub cust_bill_pkg {
         LEFT JOIN part_pkg USING ( pkgpart )
         LEFT JOIN part_pkg AS override ON pkgpart_override = override.pkgpart
       WHERE pkgnum != 0
-        AND $where
+        $where
         AND ". $self->in_time_period_and_agent($speriod, $eperiod, $agentnum);
   
   if ($opt{use_usage} && $opt{use_usage} eq 'recurring') {
@@ -463,6 +522,7 @@ sub in_time_period_and_agent {
 
 sub scalar_sql {
   my( $self, $sql ) = ( shift, shift );
+  warn "FS::Report::Table::Monthly\n$sql\n" if $DEBUG;
   my $sth = dbh->prepare($sql) or die dbh->errstr;
   $sth->execute
     or die "Unexpected error executing statement $sql: ". $sth->errstr;
