@@ -506,6 +506,12 @@ my $html_bottom = sub {
                    : keys %{ $href };
   
     foreach my $field ( grep $_ !~ /^(setup|recur)_fee$/, @fields ) {
+
+      if(!exists($href->{$field})) {
+        # shouldn't happen
+        warn "nonexistent part_pkg option: '$field'\n";
+        next;
+      }
   
       $html .= '<TR><TD ALIGN="right">'. $href->{$field}{'name'}. '</TD><TD>';
   
