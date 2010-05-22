@@ -47,6 +47,7 @@
                             'bill_dst_pkgpart' => 'Include line item(s) from package',
                             'svc_dst_pkgpart'  => 'Include services of package',
                             'report_option'    => 'Report classes',
+                            'fcc_ds0s'         => 'Voice-grade eqivalents',
                           },
 
               'fields' => [
@@ -158,6 +159,16 @@
                               },
                               { field=>'pay_weight',    type=>'text', size=>6 },
                               { field=>'credit_weight', type=>'text', size=>6 },
+
+                              ( $conf->exists('cust_pkg-show_fcc_voice_grade_equivalent')
+                                ? ( 
+                                    { type  => 'tablebreak-tr-title',
+                                      value => 'FCC Form 477 information',
+                                    },
+                                    { field=>'fcc_ds0s', type=>'text', size=>6 },
+                                  )
+                                 : ()
+                              ),
 
 
                             { type => 'columnend' },
