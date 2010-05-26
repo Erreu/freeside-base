@@ -1967,7 +1967,7 @@ EOF
     print $report <<EOF;
       <TR>
         <TD CLASS="grid" BGCOLOR="<% '$bgcolor' %>"><% '$tax->{label}' %></TD>
-        <% $tax->{base} ? qq!<TD CLASS="grid" BGCOLOR="$bgcolor"></TD>! : '' %>
+        <% ($tax->{base}) ? qq!<TD CLASS="grid" BGCOLOR="$bgcolor"></TD>! : '' %>
         <TD CLASS="grid" BGCOLOR="<% '$bgcolor' %>" ALIGN="right">
           <A HREF="<% '$baselink$link' %>;istax=1"><% '$money_char' %><% sprintf('%.2f', $tax->{'tax'} ) %></A>
         </TD>
