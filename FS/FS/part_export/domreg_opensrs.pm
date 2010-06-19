@@ -259,8 +259,6 @@ sub _export_insert_on_payment {
     'job'    => 'FS::part_export::domreg_opensrs::renew_through',
   };
   $queue->insert( $self, $svc_domain ); #_export_insert with 'R' action?
-
-  return '';
 }
 
 ## Domain registration exports do nothing on replace.  Mainly because we haven't decided what they should do.
