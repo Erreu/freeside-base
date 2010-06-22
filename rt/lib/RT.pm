@@ -24,7 +24,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
 # 02110-1301 or visit their web page on the internet at
-# http://www.gnu.org/licenses/old-licenses/gpl-2.0.html.
+# http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
 # 
 # 
 # CONTRIBUTION SUBMISSION POLICY:
@@ -186,6 +186,8 @@ Conenct to the database, set up logging.
 
 sub Init {
 
+    my @arg = @_;
+
     CheckPerlRequirements();
 
     #Get a database connection
@@ -202,7 +204,7 @@ sub Init {
     $System = RT::System->new();
 
     InitClasses();
-    InitLogging(); 
+    InitLogging(@arg); 
 }
 
 
@@ -227,6 +229,8 @@ Create the RT::Logger object.
 =cut
 
 sub InitLogging {
+
+    my %arg = @_;
 
     # We have to set the record separator ($, man perlvar)
     # or Log::Dispatch starts getting
@@ -342,6 +346,8 @@ sub InitLogging {
 ## Mason).  It will log all problems through the standard logging
 ## mechanism (see above).
 
+    unless ( $arg{'NoSignalHandlers'} ) {
+
     $SIG{__WARN__} = sub {
         # The 'wide character' warnings has to be silenced for now, at least
         # until HTML::Mason offers a sane way to process both raw output and
@@ -362,6 +368,8 @@ $SIG{__DIE__}  = sub {
     }
     die $_[0];
 };
+
+    }
 
 # }}}
 
