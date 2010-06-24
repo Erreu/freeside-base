@@ -24,7 +24,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
 # 02110-1301 or visit their web page on the internet at
-# http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+# http://www.gnu.org/copyleft/gpl.html.
 # 
 # 
 # CONTRIBUTION SUBMISSION POLICY:
@@ -68,7 +68,7 @@ use vars qw($VERSION $System $SystemUser $Nobody $Handle $Logger
         $MasonSessionDir
 );
 
-$VERSION = '3.6.10';
+$VERSION = '3.6.6';
 $CORE_CONFIG_FILE = "/opt/rt3/etc/RT_Config.pm";
 $SITE_CONFIG_FILE = "/opt/rt3/etc/RT_SiteConfig.pm";
 
