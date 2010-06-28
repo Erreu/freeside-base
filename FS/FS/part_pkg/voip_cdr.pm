@@ -15,7 +15,7 @@ use FS::part_pkg::recur_Common;
 
 @ISA = qw(FS::part_pkg::recur_Common);
 
-$DEBUG = 0;
+$DEBUG = 1;
 
 tie my %rating_method, 'Tie::IxHash',
   'prefix' => 'Rate calls by using destination prefix to look up a region and rate according to the internal prefix and rate tables',
@@ -556,16 +556,16 @@ sub calc_usage {
 
           $charge = sprintf('%.2f', $rate_detail->conn_charge);
 
-          if ( $included_min{$regionnum} <= 0 ) {
+          if ( $included_min{$regionnum} < 0 ) {
             my $charge_min = 0 - $included_min{$regionnum}; #XXX should preserve
                                                             #(display?) this
             $included_min{$regionnum} = 0;
             $charge += sprintf('%.2f', ($rate_detail->min_charge * $charge_min)
                                        + 0.00000001 ); #so 1.005 rounds to 1.01
             $charge = sprintf('%.2f', $charge);
-            warn "Incrementing \$charges by $charge.  Now $charges\n" if $DEBUG;
-            $charges += $charge;
           }
+          warn "Incrementing \$charges by $charge.  Now $charges\n" if $DEBUG;
+          $charges += $charge;
 
           # this is why we need regionnum/rate_region....
           warn "  (rate region $rate_region)\n" if $DEBUG;
