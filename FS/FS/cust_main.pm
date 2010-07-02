@@ -3492,19 +3492,17 @@ sub collect {
     }
   }
 
-  my $error = $self->do_cust_event(
+  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
+
+  #never want to roll back an event just because it returned an error
+  local $FS::UID::AutoCommit = 1; #$oldAutoCommit;
+
+  $self->do_cust_event(
     'debug'      => ( $options{'debug'} || 0 ),
     'time'       => $invoice_time,
     'check_freq' => $options{'check_freq'},
     'stage'      => 'collect',
   );
-  if ( $error ) {
-    $dbh->rollback if $oldAutoCommit;
-    return $error;
-  }
-
-  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
-  '';
 
 }
 
@@ -3599,6 +3597,11 @@ sub do_cust_event {
     return $due_cust_event;
   }
 
+  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
+  #never want to roll back an event just because it or a different one
+  # returned an error
+  local $FS::UID::AutoCommit = 1; #$oldAutoCommit;
+
   foreach my $cust_event ( @$due_cust_event ) {
 
     #XXX lock event
@@ -3607,11 +3610,7 @@ sub do_cust_event {
     unless ( $cust_event->test_conditions( 'time' => $time ) ) {
       #don't leave stray "new/locked" records around
       my $error = $cust_event->delete;
-      if ( $error ) {
-        #gah, even with transactions
-        $dbh->commit if $oldAutoCommit; #well.
-        return $error;
-      }
+      return $error if $error;
       next;
     }
 
@@ -3620,20 +3619,16 @@ sub do_cust_event {
       warn "  running cust_event ". $cust_event->eventnum. "\n"
         if $DEBUG > 1;
 
-      
       #if ( my $error = $cust_event->do_event(%options) ) { #XXX %options?
       if ( my $error = $cust_event->do_event() ) {
         #XXX wtf is this?  figure out a proper dealio with return value
         #from do_event
-	  # gah, even with transactions.
-	  $dbh->commit if $oldAutoCommit; #well.
-	  return $error;
-	}
+        return $error;
+      }
     }
 
   }
 
-  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
   '';
 
 }
