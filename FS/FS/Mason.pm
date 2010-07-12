@@ -228,6 +228,7 @@ if ( -e $addl_handler_use_file ) {
   use FS::cgp_rule;
   use FS::cgp_rule_condition;
   use FS::cgp_rule_action;
+  use FS::msg_template;
   # Sammath Naur
 
   if ( $FS::Mason::addl_handler_use ) {
