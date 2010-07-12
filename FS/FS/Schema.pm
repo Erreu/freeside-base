@@ -2677,6 +2677,20 @@ sub tables_hashref {
       'index'       => [['listnum'],['svcnum'],['email']],
     },
 
+    'msg_template' => {
+      'columns' => [
+        'msgnum',     'serial',     '',      '', '', '',
+        'msgname',   'varchar',     '', $char_d, '', '',
+        'agentnum',      'int', 'NULL',      '', '', '',
+        'mime_type', 'varchar',     '', $char_d, '', '',
+        'body',         'blob', 'NULL',      '', '', '',
+        'disabled',     'char', 'NULL',       1, '', '', 
+      ],
+      'primary_key' => 'msgnum',
+      'unique'      => [ ['msgname', 'mime_type'] ],
+      'index'       => [ ['agentnum'], ]
+    },
+
 
     # name type nullability length default local
 
