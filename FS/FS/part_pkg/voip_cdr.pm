@@ -538,19 +538,24 @@ sub calc_usage {
           my $granularity = $rate_detail->sec_granularity;
 
                       # length($cdr->billsec) ? $cdr->billsec : $cdr->duration;
-          $seconds = $use_duration ? $cdr->duration : $cdr->billsec;
+          my $charge_sec = $seconds =
+            $use_duration ? $cdr->duration : $cdr->billsec;
 
-          $seconds -= $rate_detail->conn_sec;
-          $seconds = 0 if $seconds < 0;
+          $charge_sec -= $rate_detail->conn_sec;
+          $charge_sec = 0 if $charge_sec < 0;
 
-          $seconds += $granularity - ( $seconds % $granularity )
-            if $seconds      # don't granular-ize 0 billsec calls (bills them)
-            && $granularity; # 0 is per call
-          my $minutes = sprintf("%.1f", $seconds / 60);
+          if ( $seconds && $granularity ) {
+            # don't granular-ize 0 billsec calls (bills them)
+            # 0 granularity is per call
+            $seconds += $granularity - ( $seconds % $granularity );
+            $charge_sec += $granularity - ( $charge_sec % $granularity );
+          }
+
+          my $minutes = sprintf("%.1f", $charge_sec / 60);
           $minutes =~ s/\.0$// if $granularity == 60;
 
           my $duration_minutes =  #for invoice display purposes
-            sprintf("%.1f", ($seconds + $rate_detail->conn_sec)/ 60);
+            sprintf("%.1f", $seconds / 60);
           $duration_minutes =~ s/\.0$// if $granularity == 60;
 
           # per call rather than per minute
