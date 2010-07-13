@@ -549,8 +549,13 @@ sub calc_usage {
           my $minutes = sprintf("%.1f", $seconds / 60);
           $minutes =~ s/\.0$// if $granularity == 60;
 
+          my $duration_minutes =  #for invoice display purposes
+            sprintf("%.1f", ($seconds + $rate_detail->conn_sec)/ 60);
+          $duration_minutes =~ s/\.0$// if $granularity == 60;
+
           # per call rather than per minute
           $minutes = 1 unless $granularity;
+          $duration_minutes = 1 unless $granularity; 
 
           $included_min{$regionnum} -= $minutes;
 
@@ -573,7 +578,7 @@ sub calc_usage {
           @call_details = (
            $cdr->downstream_csv( 'format'         => $output_format,
                                  'granularity'    => $granularity,
-                                 'minutes'        => $minutes,
+                                 'minutes'        => $duration_minutes,
                                  'charge'         => $charge,
                                  'pretty_dst'     => $pretty_destnum,
                                  'dst_regionname' => $regionname,
