@@ -2385,6 +2385,17 @@ sub agent {
   qsearchs( 'agent', { 'agentnum' => $self->agentnum } );
 }
 
+=item agent_name
+
+Returns the agent name (see L<FS::agent>) for this customer.
+
+=cut
+
+sub agent_name {
+  my $self = shift;
+  $self->agent->agent;
+}
+
 =item bill_and_collect 
 
 Cancels and suspends any packages due, generates bills, applies payments and
