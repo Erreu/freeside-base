@@ -1,3 +1,134 @@
+2010-07-13 17:17  jeff
+
+	* FS/FS/part_pkg/voip_cdr.pm: third time's a charm - fix a small
+	  bug and make more analogous to HEAD - RT#8605
+
+2010-07-13 16:06  jeff
+
+	* FS/FS/part_pkg/voip_cdr.pm: without screwing up usage summaries
+	  RT#8605
+
+2010-07-13 13:32  jeff
+
+	* FS/FS/part_pkg/voip_cdr.pm: include rate_detail->conn_sec in
+	  displayed duration #RT8605
+
+2010-07-13 04:09  ivan
+
+	* FS/FS/part_event/Action/notice.pm: file notice.pm was added on
+	  branch FREESIDE_1_9_BRANCH on 2010-07-13 11:09:56 +0000
+
+2010-07-13 04:09  ivan
+
+	* FS/FS/part_event/Action/notice.pm,
+	  httemplate/edit/msg_template.html, FS/FS/Mason.pm,
+	  httemplate/edit/elements/edit.html,
+	  httemplate/elements/htmlarea.html, FS/FS/cust_main.pm,
+	  FS/FS/msg_template.pm: notices, RT#8324
+
+2010-07-12 06:17  ivan
+
+	* httemplate/: browse/msg_template.html, edit/msg_template.html:
+	  file msg_template.html was added on branch FREESIDE_1_9_BRANCH on
+	  2010-07-12 13:18:05 +0000
+
+2010-07-12 06:17  ivan
+
+	* httemplate/edit/process/msg_template.html: file msg_template.html
+	  was added on branch FREESIDE_1_9_BRANCH on 2010-07-12 13:18:06
+	  +0000
+
+2010-07-12 06:17  ivan
+
+	* httemplate/elements/tr-htmlarea.html: file tr-htmlarea.html was
+	  added on branch FREESIDE_1_9_BRANCH on 2010-07-12 13:18:06 +0000
+
+2010-07-12 06:17  ivan
+
+	* FS/t/msg_template.t: file msg_template.t was added on branch
+	  FREESIDE_1_9_BRANCH on 2010-07-12 13:18:05 +0000
+
+2010-07-12 06:17  ivan
+
+	* FS/FS/msg_template.pm: file msg_template.pm was added on branch
+	  FREESIDE_1_9_BRANCH on 2010-07-12 13:18:05 +0000
+
+2010-07-12 06:17  ivan
+
+	* FS/FS/msg_template.pm, FS/t/msg_template.t,
+	  httemplate/browse/msg_template.html,
+	  httemplate/edit/msg_template.html,
+	  httemplate/edit/process/msg_template.html,
+	  httemplate/elements/tr-htmlarea.html, FS/FS.pm, FS/MANIFEST,
+	  FS/FS/AccessRight.pm, FS/FS/Schema.pm,
+	  httemplate/elements/menu.html: message templates, RT#8896
+
+2010-07-12 06:07  ivan
+
+	* FS/FS/Mason.pm: message templates, RT#8896
+
+2010-07-11 23:19  ivan
+
+	* httemplate/view/svc_domain/dns.html: fix wording
+
+2010-07-07 20:25  jeff
+
+	* FS/FS/tax_rate.pm: grr - fix agentnum passing
+
+2010-07-06 14:01  mark
+
+	* FS/bin/freeside-cdr-sftp_and_import: add command line opts for
+	  port, passive mode, and debug level, RT#9115
+
+2010-07-05 13:18  jeff
+
+	* FS/FS/part_export/domreg_opensrs.pm: place errors where users can
+	  find them (in the queue)
+
+2010-07-05 01:59  jeff
+
+	* FS/FS/part_export/domreg_opensrs.pm: fix bad bug causing
+	  inappropriate renewals
+
+2010-07-02 21:19  ivan
+
+	* FS/bin/freeside-selfservice-xmlrpcd: fix leaking db connections
+	  in freeside-selfservice-xmlrpcd, RT#7780
+
+2010-07-02 18:25  ivan
+
+	* FS/FS/: cust_main.pm: should fix cancellations in rare
+	  circumstances where cached _num_cust_svc becomes inaccurate,
+	  RT#8994
+
+2010-07-01 20:06  jeff
+
+	* conf/invoice_html: fix html ext_desc alignment in svc_phone
+	  sections
+
+2010-07-01 17:25  ivan
+
+	* FS/FS/: cust_event.pm, cust_main.pm: fix bad transactional
+	  decisions that made it possible to abort and rollback a gateway
+	  payment, RT#8995
+
+2010-07-01 12:51  ivan
+
+	* httemplate/docs/about.html: He's gone
+
+2010-07-01 12:30  ivan
+
+	* httemplate/docs/credits.html: He's gone
+
+2010-06-30 14:56  ivan
+
+	* FS/bin/: freeside-dbdef-create, freeside-fetch, freeside-setup:
+	  -T causing problems
+
+2010-06-28 23:28  ivan
+
+	* ChangeLog: 1.9.4 prep
+
 2010-06-28 22:22  ivan
 
 	* httemplate/: graph/cust_bill_pkg.cgi, search/cust_bill_pkg.cgi,
