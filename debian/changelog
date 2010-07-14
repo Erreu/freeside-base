@@ -2,8 +2,9 @@ freeside (1.9.4-1) UNRELEASED; urgency=low
 
   * New upstream release
   * New upstream release
+  * New upstream release
 
- -- Ivan Kohler <ivan-debian@420.am>  Wed, 14 Jul 2010 03:12:36 -0700
+ -- Ivan Kohler <ivan-debian@420.am>  Wed, 14 Jul 2010 03:36:46 -0700
 
 freeside (1.9.2-1) unstable; urgency=low
 

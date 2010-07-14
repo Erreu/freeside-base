@@ -1,3 +1,11 @@
+2010-07-14 03:33  ivan
+
+	* FS/FS/part_event/Action/notice.pm: notices, RT#8324
+
+2010-07-14 03:12  ivan
+
+	* ChangeLog, rpm/freeside.spec, debian/changelog: Updated for 1.9.4
+
 2010-07-14 03:10  ivan
 
 	* ChangeLog, Makefile: 1.9.4
