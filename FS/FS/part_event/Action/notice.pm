@@ -16,8 +16,14 @@ sub description { 'Send a notice from a message template'; }
 
 sub option_fields {
   (
-    'msgnum' => { 'label' => 'Template' },
+    'msgnum' => { 'label'    => 'Template',
+                  'type'     => 'select-table',
+                  'table'    => 'msg_template',
+                  'name_col' => 'msgname',
+                  'disable_empty' => 1,
+                },
   );
+}
 
 sub default_weight { 55; } #?
 
