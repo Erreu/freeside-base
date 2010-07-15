@@ -953,6 +953,30 @@ sub tables_hashref {
       'unique' => [],
       'index' => [ [ 'data_vendor', 'geocode', 'disabled' ] ],
     },
+ 
+    'cust_tag' => {
+      'columns' => [
+        'custtagnum', 'serial', '', '', '', '',
+        'custnum',       'int', '', '', '', '',
+        'tagnum',        'int', '', '', '', '',
+      ],
+      'primary_key' => 'custtagnum',
+      'unique'      => [ [ 'custnum', 'tagnum' ] ],
+      'index'       => [ [ 'custnum' ] ],
+    },
+
+    'part_tag' => {
+      'columns' => [
+        'tagnum',    'serial',     '',      '', '', '',
+        'tagname',  'varchar',     '', $char_d, '', '',
+        'tagdesc',  'varchar', 'NULL', $char_d, '', '',
+        'tagcolor', 'varchar', 'NULL',       6, '', '',
+        'disabled',    'char', 'NULL',       1, '', '', 
+      ],
+      'primary_key' => 'tagnum',
+      'unique'      => [], #[ [ 'tagname' ] ], #?
+      'index'       => [ [ 'disabled' ] ],
+    },
 
     'cust_tax_location' => { 
       'columns' => [

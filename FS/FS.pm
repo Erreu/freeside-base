@@ -248,6 +248,10 @@ L<FS::cust_main_Mixin> - Mixin class for records that contain fields from cust_m
 
 L<FS::cust_main_invoice> - Invoice destination class
 
+L<FS::cust_tag> - Customer tag class
+
+L<FS::part_tag> - Tag definition class
+
 L<FS::cust_main_exemption> - Customer tax exemption class
 
 L<FS::cust_main_note> - Customer note class
