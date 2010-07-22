@@ -1148,6 +1148,12 @@ and customer address. Include units.',
     'type'        => 'select',
     'select_enum' => [ '', 'Payable upon receipt', 'Net 0', 'Net 10', 'Net 15', 'Net 20', 'Net 30', 'Net 45', 'Net 60' ],
   },
+  {
+    'key'         => 'invoice_print_pdf',
+    'section'     => 'invoicing',
+    'description' => 'Store postal invoices for download in PDF format rather than printing them directly.',
+    'type'        => 'checkbox',
+  },
 
   { 
     'key'         => 'invoice_show_prior_due_date',
@@ -2237,7 +2243,12 @@ and customer address. Include units.',
                            }
                          },
   },
-
+  {
+    'key'         => 'ticket_system-force_default_queueid',
+    'section'     => '',
+    'description' => 'Disallow queue selection when creating new tickets from customer view.',
+    'type'        => 'checkbox',
+  },
   {
     'key'         => 'ticket_system-selfservice_queueid',
     'section'     => '',
