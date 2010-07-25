@@ -138,6 +138,9 @@ sub upgrade_data {
     #cdrbatch fixes
     'cdr' => [],
 
+    #default namespace
+    'payment_gateway' => [],
+
   ;
 
   \%hash;
