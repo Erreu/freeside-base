@@ -2253,6 +2253,7 @@ sub tables_hashref {
       ],
       'primary_key' => 'classnum',
       'unique' => [],
+        'ratetimenum',     'int', 'NULL',     '', '', '',
       'index' => [ ['disabled'] ],
     },
 
@@ -2284,6 +2285,28 @@ sub tables_hashref {
           #'start',  'timestamp', 'NULL',  '',    '', '',
           #'answer', 'timestamp', 'NULL',  '',    '', '',
           #'end',    'timestamp', 'NULL',  '',    '', '',
+    'rate_time' => {
+      'columns' => [
+        'ratetimenum', 'serial',      '',      '', '', '',
+        'ratetimename',   'varchar',      '', $char_d, '', '',
+      ],
+      'primary_key' => 'ratetimenum',
+      'unique'      => [],
+      'index'       => [],
+    },
+
+    'rate_time_interval' => {
+      'columns' => [
+        'intervalnum', 'serial', '', '', '', '',
+        'stime',          'int', '', '', '', '',
+        'etime',          'int', '', '', '', '',
+        'ratetimenum',    'int', '', '', '', '',
+      ],
+      'primary_key' => 'intervalnum',
+      'unique'      => [],
+      'index'       => [],
+    },
+
         'startdate',  @date_type, '', '', 
         'answerdate', @date_type, '', '', 
         'enddate',    @date_type, '', '', 
@@ -2549,6 +2572,7 @@ sub tables_hashref {
         'phone_name',   'varchar', 'NULL', $char_d, '', '',
         'pbxsvc',           'int', 'NULL',      '', '', '',
         'domsvc',           'int', 'NULL',      '', '', '', 
+        'svcnum',           'int', 'NULL',      '', '', '',
         'locationnum',      'int', 'NULL', '', '', '',
       ],
       'primary_key' => 'svcnum',
@@ -2743,3 +2767,39 @@ L<DBIx::DBSchema>
 
 1;
 
+    'bill_batch' => {
+      'columns' => [
+        'batchnum',         'serial',     '', '', '', '',
+        'status',             'char', 'NULL','1', '', '',
+        'pdf',                'blob', 'NULL', '', '', '',
+      ],
+      'primary_key' => 'batchnum',
+      'unique'      => [],
+      'index'       => [],
+    },
+
+    'cust_bill_batch' => {
+      'columns' => [
+        'billbatchnum',     'serial',     '', '', '', '',
+        'batchnum',            'int',     '', '', '', '',
+        'invnum',              'int',     '', '', '', '',
+      ],
+      'primary_key' => 'billbatchnum',
+      'unique'      => [],
+      'index'       => [ [ 'batchnum' ], [ 'invnum' ] ],
+    },
+
+    'cust_bill_batch_option' => {
+      'columns' => [
+        'optionnum', 'serial', '', '', '', '', 
+        'billbatchnum', 'int', '', '', '', '', 
+        'optionname', 'varchar', '', $char_d, '', '', 
+        'optionvalue', 'text', 'NULL', '', '', '', 
+      ],
+      'primary_key' => 'optionnum',
+      'unique'      => [],
+      'index'       => [ [ 'billbatchnum' ], [ 'optionname' ] ],
+    },
+
+
+        'from_addr', 'varchar', 'NULL',     255, '', '',

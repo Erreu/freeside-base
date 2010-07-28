@@ -696,12 +696,21 @@ sub cancel {
 
   my @invoicing_list = grep { $_ !~ /^(POST|FAX)$/ } $self->cust_main->invoicing_list;
   if ( !$options{'quiet'} && $conf->exists('emailcancel') && @invoicing_list ) {
-    my $error = send_email(
-      'from'    => $conf->config('invoice_from', $self->cust_main->agentnum),
-      'to'      => \@invoicing_list,
-      'subject' => ( $conf->config('cancelsubject') || 'Cancellation Notice' ),
-      'body'    => [ map "$_\n", $conf->config('cancelmessage') ],
-    );
+    my $msgnum = $conf->config('cancel_msgnum', $self->cust_main->agentnum);
+    my $error = '';
+    if ( $msgnum ) {
+      my $msg_template = qsearchs('msg_template', { msgnum => $msgnum });
+      $error = $msg_template->send( 'cust_main' => $self->cust_main,
+                                    'object'    => $self );
+    }
+    else {
+      $error = send_email(
+        'from'    => $conf->config('invoice_from', $self->cust_main->agentnum),
+        'to'      => \@invoicing_list,
+        'subject' => ( $conf->config('cancelsubject') || 'Cancellation Notice' ),
+        'body'    => [ map "$_\n", $conf->config('cancelmessage') ],
+      );
+    }
     #should this do something on errors?
   }
 
@@ -1908,7 +1917,7 @@ sub _labels_short {
   my %labels;
   #tie %labels, 'Tie::IxHash';
   push @{ $labels{$_->[0]} }, $_->[1]
-    foreach $self->h_labels(@_);
+    foreach $self->$method(@_);
   my @labels;
   foreach my $label ( keys %labels ) {
     my %seen = ();
@@ -2561,21 +2570,32 @@ sub search {
     ''                => {},
   );
 
-  foreach my $field (qw( setup last_bill bill adjourn susp expire cancel )) {
-
-    next unless exists($params->{$field});
-
-    my($beginning, $ending) = @{$params->{$field}};
-
-    next if $beginning == 0 && $ending == 4294967295;
-
+  if( exists($params->{'active'} ) ) {
+    # This overrides all the other date-related fields
+    my($beginning, $ending) = @{$params->{'active'}};
     push @where,
-      "cust_pkg.$field IS NOT NULL",
-      "cust_pkg.$field >= $beginning",
-      "cust_pkg.$field <= $ending";
+      "cust_pkg.setup IS NOT NULL",
+      "cust_pkg.setup <= $ending",
+      "(cust_pkg.cancel IS NULL OR cust_pkg.cancel >= $beginning )",
+      "NOT (".FS::cust_pkg->onetime_sql . ")";
+  }
+  else {
+    foreach my $field (qw( setup last_bill bill adjourn susp expire cancel )) {
 
-    $orderby ||= "ORDER BY cust_pkg.$field";
+      next unless exists($params->{$field});
 
+      my($beginning, $ending) = @{$params->{$field}};
+
+      next if $beginning == 0 && $ending == 4294967295;
+
+      push @where,
+        "cust_pkg.$field IS NOT NULL",
+        "cust_pkg.$field >= $beginning",
+        "cust_pkg.$field <= $ending";
+
+      $orderby ||= "ORDER BY cust_pkg.$field";
+
+    }
   }
 
   $orderby ||= 'ORDER BY bill';

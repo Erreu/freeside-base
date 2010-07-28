@@ -548,21 +548,36 @@ worry that config_items is freeside-specific and icky.
   "Solo",
 );
 
-@base_items = qw (
-                   invoice_template
-                   invoice_latex
-                   invoice_latexreturnaddress
-                   invoice_latexfooter
-                   invoice_latexsmallfooter
-                   invoice_latexnotes
-                   invoice_latexcoupon
-                   invoice_html
-                   invoice_htmlreturnaddress
-                   invoice_htmlfooter
-                   invoice_htmlnotes
-                   logo.png
-                   logo.eps
-                 );
+@base_items = qw(
+invoice_template
+invoice_latex
+invoice_latexreturnaddress
+invoice_latexfooter
+invoice_latexsmallfooter
+invoice_latexnotes
+invoice_latexcoupon
+invoice_html
+invoice_htmlreturnaddress
+invoice_htmlfooter
+invoice_htmlnotes
+logo.png
+logo.eps
+);
+
+my %msg_template_options = (
+  'type'        => 'select-sub',
+  'options_sub' => sub { require FS::Record;
+                         require FS::agent;
+                         require FS::msg_template;
+                         map { $_->msgnum, $_->msgname } 
+                            qsearch('msg_template', { disabled => '' });
+                       },
+  'option_sub'  => sub { require FS::msg_template;
+                         my $msg_template = FS::msg_template->by_key(shift);
+                         $msg_template ? $msg_template->msgname : ''
+                       },
+);
+
 
 #Billing (81 items)
 #Invoicing (50 items)
@@ -570,7 +585,6 @@ worry that config_items is freeside-specific and icky.
 #Self-service (29 items)
 #...
 #Unclassified (77 items)
-
 
 @config_items = map { new FS::ConfItem $_ } (
 
@@ -583,7 +597,7 @@ worry that config_items is freeside-specific and icky.
 
   {
     'key'         => 'alert_expiration',
-    'section'     => 'billing',
+    'section'     => 'notification',
     'description' => 'Enable alerts about billing method expiration.',
     'type'        => 'checkbox',
     'per_agent'   => 1,
@@ -591,10 +605,17 @@ worry that config_items is freeside-specific and icky.
 
   {
     'key'         => 'alerter_template',
-    'section'     => 'billing',
-    'description' => 'Template file for billing method expiration alerts.  See the <a href="http://www.freeside.biz/mediawiki/index.php/Freeside:1.7:Documentation:Administration#Credit_cards_and_Electronic_checks">billing documentation</a> for details.',
+    'section'     => 'deprecated',
+    'description' => 'Template file for billing method expiration alerts (i.e. expiring credit cards).',
     'type'        => 'textarea',
     'per_agent'   => 1,
+  },
+  
+  {
+    'key'         => 'alerter_msgnum',
+    'section'     => 'notification',
+    'description' => 'Template to use for credit card expiration alerts.',
+    %msg_template_options,
   },
 
   {
@@ -1780,42 +1801,56 @@ and customer address. Include units.',
 
   {
     'key'         => 'declinetemplate',
-    'section'     => 'billing',
+    'section'     => 'deprecated',
     'description' => 'Template file for credit card decline emails.',
     'type'        => 'textarea',
   },
 
   {
+    'key'         => 'decline_msgnum',
+    'section'     => 'notification',
+    'description' => 'Template to use for credit card and electronic check decline messages.',
+    %msg_template_options,
+  },
+
+  {
     'key'         => 'emaildecline',
-    'section'     => 'billing',
+    'section'     => 'notification',
     'description' => 'Enable emailing of credit card decline notices.',
     'type'        => 'checkbox',
   },
 
   {
     'key'         => 'emaildecline-exclude',
-    'section'     => 'billing',
+    'section'     => 'notification',
     'description' => 'List of error messages that should not trigger email decline notices, one per line.',
     'type'        => 'textarea',
   },
 
   {
     'key'         => 'cancelmessage',
-    'section'     => 'billing',
+    'section'     => 'deprecated',
     'description' => 'Template file for cancellation emails.',
     'type'        => 'textarea',
   },
 
   {
+    'key'         => 'cancel_msgnum',
+    'section'     => 'notification',
+    'description' => 'Template to use for cancellation emails.',
+    %msg_template_options,
+  },
+
+  {
     'key'         => 'cancelsubject',
-    'section'     => 'billing',
+    'section'     => 'deprecated',
     'description' => 'Subject line for cancellation emails.',
     'type'        => 'text',
   },
 
   {
     'key'         => 'emailcancel',
-    'section'     => 'billing',
+    'section'     => 'notification',
     'description' => 'Enable emailing of cancellation notices.  Make sure to fill in the cancelmessage and cancelsubject configuration values as well.',
     'type'        => 'checkbox',
   },
@@ -1871,15 +1906,22 @@ and customer address. Include units.',
 
   {
     'key'         => 'welcome_email',
-    'section'     => '',
-    'description' => 'Template file for welcome email.  Welcome emails are sent to the customer email invoice destination(s) each time a svc_acct record is created.  See the <a href="http://search.cpan.org/dist/Text-Template/lib/Text/Template.pm">Text::Template</a> documentation for details on the template substitution language.  The following variables are available<ul><li><code>$username</code> <li><code>$password</code> <li><code>$first</code> <li><code>$last</code> <li><code>$pkg</code></ul>',
+    'section'     => 'deprecated',
+    'description' => 'Template file for welcome email.  Welcome emails are sent to the customer email invoice destination(s) each time a svc_acct record is created.',
     'type'        => 'textarea',
     'per_agent'   => 1,
   },
 
   {
+    'key'         => 'welcome_msgnum',
+    'section'     => 'notification',
+    'description' => 'Template to use for welcome messages when a svc_acct record is created.',
+    %msg_template_options,
+  },
+
+  {
     'key'         => 'welcome_email-from',
-    'section'     => '',
+    'section'     => 'deprecated',
     'description' => 'From: address header for welcome email',
     'type'        => 'text',
     'per_agent'   => 1,
@@ -1887,7 +1929,7 @@ and customer address. Include units.',
 
   {
     'key'         => 'welcome_email-subject',
-    'section'     => '',
+    'section'     => 'deprecated',
     'description' => 'Subject: header for welcome email',
     'type'        => 'text',
     'per_agent'   => 1,
@@ -1895,7 +1937,7 @@ and customer address. Include units.',
   
   {
     'key'         => 'welcome_email-mimetype',
-    'section'     => '',
+    'section'     => 'deprecated',
     'description' => 'MIME type for welcome email',
     'type'        => 'select',
     'select_enum' => [ 'text/plain', 'text/html' ],
@@ -1904,42 +1946,49 @@ and customer address. Include units.',
 
   {
     'key'         => 'welcome_letter',
-    'section'     => '',
+    'section'     => 'deprecated',
     'description' => 'Optional LaTex template file for a printed welcome letter.  A welcome letter is printed the first time a cust_pkg record is created.  See the <a href="http://search.cpan.org/dist/Text-Template/lib/Text/Template.pm">Text::Template</a> documentation and the billing documentation for details on the template substitution language.  A variable exists for each fieldname in the customer record (<code>$first, $last, etc</code>).  The following additional variables are available<ul><li><code>$payby</code> - a friendler represenation of the field<li><code>$payinfo</code> - the masked payment information<li><code>$expdate</code> - the time at which the payment method expires (a UNIX timestamp)<li><code>$returnaddress</code> - the invoice return address for this customer\'s agent</ul>',
     'type'        => 'textarea',
   },
 
   {
     'key'         => 'warning_email',
-    'section'     => '',
+    'section'     => 'notification',
     'description' => 'Template file for warning email.  Warning emails are sent to the customer email invoice destination(s) each time a svc_acct record has its usage drop below a threshold or 0.  See the <a href="http://search.cpan.org/dist/Text-Template/lib/Text/Template.pm">Text::Template</a> documentation for details on the template substitution language.  The following variables are available<ul><li><code>$username</code> <li><code>$password</code> <li><code>$first</code> <li><code>$last</code> <li><code>$pkg</code> <li><code>$column</code> <li><code>$amount</code> <li><code>$threshold</code></ul>',
     'type'        => 'textarea',
   },
 
+#  {
+#    'key'         => 'warning_msgnum',
+#    'section'     => 'notification',
+#    'description' => 'Template to use for warning messages, sent to the customer email invoice destination(s) when a svc_acct record has its usage drop below a threshold.',
+#    %msg_template_options,
+#  },
+
   {
     'key'         => 'warning_email-from',
-    'section'     => '',
+    'section'     => 'notification',
     'description' => 'From: address header for warning email',
     'type'        => 'text',
   },
 
   {
     'key'         => 'warning_email-cc',
-    'section'     => '',
+    'section'     => 'notification',
     'description' => 'Additional recipient(s) (comma separated) for warning email when remaining usage reaches zero.',
     'type'        => 'text',
   },
 
   {
     'key'         => 'warning_email-subject',
-    'section'     => '',
+    'section'     => 'notification',
     'description' => 'Subject: header for warning email',
     'type'        => 'text',
   },
   
   {
     'key'         => 'warning_email-mimetype',
-    'section'     => '',
+    'section'     => 'notification',
     'description' => 'MIME type for warning email',
     'type'        => 'select',
     'select_enum' => [ 'text/plain', 'text/html' ],
@@ -1977,7 +2026,7 @@ and customer address. Include units.',
 
   {
     'key'         => 'radius-password',
-    'section'     => '',
+    'section'     => 'notification',
     'description' => 'RADIUS attribute for plain-text passwords.',
     'type'        => 'select',
     'select_enum' => [ 'Password', 'User-Password', 'Cleartext-Password' ],
@@ -2912,8 +2961,15 @@ and customer address. Include units.',
   },
 
   {
+    'key'         => 'impending_recur_msgnum',
+    'section'     => 'notification',
+    'description' => 'Template to use for alerts about first-time recurring billing.',
+    %msg_template_options,
+  },
+
+  {
     'key'         => 'disable_setup_suspended_pkgs',
-    'section'     => 'billing',
+    'section'     => 'deprecated',
     'description' => 'Disables charging of setup fees for suspended packages.',
     'type'        => 'checkbox',
   },

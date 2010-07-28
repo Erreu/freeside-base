@@ -4617,28 +4617,39 @@ sub realtime_bop {
          && ! grep { $transaction->error_message =~ /$_/ }
                    $conf->config('emaildecline-exclude')
     ) {
-      my @templ = $conf->config('declinetemplate');
-      my $template = new Text::Template (
-        TYPE   => 'ARRAY',
-        SOURCE => [ map "$_\n", @templ ],
-      ) or return "($perror) can't create template: $Text::Template::ERROR";
-      $template->compile()
-        or return "($perror) can't compile template: $Text::Template::ERROR";
 
-      my $templ_hash = {
-        'company_name'    =>
-          scalar( $conf->config('company_name', $self->agentnum ) ),
-        'company_address' =>
-          join("\n", $conf->config('company_address', $self->agentnum ) ),
-        'error'           => $transaction->error_message,
-      };
+      # Send a decline alert to the customer.
+      my $msgnum = $conf->config('decline_msgnum', $self->agentnum);
+      my $error = '';
+      if ( $msgnum ) {
+        my $msg_template = qsearchs('msg_template', { msgnum => $msgnum });
+        $error = $msg_template->send( 'cust_main' => $self );
+      }
+      else { #!$msgnum
 
-      my $error = send_email(
-        'from'    => $conf->config('invoice_from', $self->agentnum ),
-        'to'      => [ grep { $_ ne 'POST' } $self->invoicing_list ],
-        'subject' => 'Your payment could not be processed',
-        'body'    => [ $template->fill_in(HASH => $templ_hash) ],
-      );
+        my @templ = $conf->config('declinetemplate');
+        my $template = new Text::Template (
+          TYPE   => 'ARRAY',
+          SOURCE => [ map "$_\n", @templ ],
+        ) or return "($perror) can't create template: $Text::Template::ERROR";
+        $template->compile()
+          or return "($perror) can't compile template: $Text::Template::ERROR";
+
+        my $templ_hash = {
+          'company_name'    =>
+            scalar( $conf->config('company_name', $self->agentnum ) ),
+          'company_address' =>
+            join("\n", $conf->config('company_address', $self->agentnum ) ),
+          'error'           => $transaction->error_message,
+        };
+
+        my $error = send_email(
+          'from'    => $conf->config('invoice_from', $self->agentnum ),
+          'to'      => [ grep { $_ ne 'POST' } $self->invoicing_list ],
+          'subject' => 'Your payment could not be processed',
+          'body'    => [ $template->fill_in(HASH => $templ_hash) ],
+        );
+      }
 
       $perror .= " (also received error sending decline notification: $error)"
         if $error;
@@ -8265,6 +8276,7 @@ Returns an SQL expression identifying un-cancelled cust_main records.
 
 sub uncancelled_sql { uncancel_sql(@_); }
 sub uncancel_sql { "
+
   ( 0 < ( $select_count_pkgs
                    AND ( cust_pkg.cancel IS NULL
                          OR cust_pkg.cancel = 0
@@ -9395,6 +9407,9 @@ sub batch_charge {
 }
 
 =item notify CUSTOMER_OBJECT TEMPLATE_NAME OPTIONS
+
+Deprecated.  Use event notification and message templates 
+(L<FS::msg_template>) instead.
 
 Sends a templated email notification to the customer (see L<Text::Template>).
 
