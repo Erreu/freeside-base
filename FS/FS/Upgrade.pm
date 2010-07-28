@@ -170,7 +170,8 @@ sub upgrade_sqlradius {
     my $str2time = str2time_sql( $dbh->{Driver}->{Name} );
     my $group = "UserName";
     $group .= ",Realm"
-      if ( ref($part_export) =~ /withdomain/ );
+      if ref($part_export) =~ /withdomain/
+      || $dbh->{Driver}->{Name} =~ /^Pg/; #hmm
 
     my $sth_alter = $dbh->prepare(
       "ALTER TABLE radacct ADD COLUMN FreesideStatus varchar(32) NULL"
@@ -183,7 +184,10 @@ sub upgrade_sqlradius {
         $sth_update->execute or die $errmsg.$sth_update->errstr;
       } else {
         my $error = $sth_alter->errstr;
-        warn $errmsg.$error unless $error =~ /Duplicate column name/i;
+        warn $errmsg.$error
+          unless $error =~ /Duplicate column name/i  #mysql
+              || $error =~ /already exists/i;        #Pg
+;
       }
     } else {
       my $error = $dbh->errstr;
@@ -197,8 +201,8 @@ sub upgrade_sqlradius {
       unless ( $sth_index->execute ) {
         my $error = $sth_index->errstr;
         warn $errmsg.$error
-          unless $error =~ /Duplicate key name/i                        #mysql
-              || $error =~ /relation "freesidestatus" already exists/i; #Pg
+          unless $error =~ /Duplicate key name/i #mysql
+              || $error =~ /already exists/i;    #Pg
       }
     } else {
       my $error = $dbh->errstr;
