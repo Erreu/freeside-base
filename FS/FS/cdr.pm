@@ -285,10 +285,6 @@ sub check {
 #  ;
 #  return $error if $error;
 
-  for my $f ( grep { $self->$_ =~ /[a-z ]/i } qw( startdate enddate ) ) {
-    $self->$f( str2time($self->$f) );
-  }
-
   $self->calldate( $self->startdate_sql )
     if !$self->calldate && $self->startdate;
 
@@ -324,19 +320,15 @@ sub check {
   $self->SUPER::check;
 }
 
-=item is_tollfree [ COLUMN ]
+=item is_tollfree
 
-Returns true when the cdr represents a toll free number and false otherwise.
-
-By default, inspects the dst field, but an optional column name can be passed
-to inspect other field.
+  Returns true when the cdr represents a toll free number and false otherwise.
 
 =cut
 
 sub is_tollfree {
   my $self = shift;
-  my $field = scalar(@_) ? shift : 'dst';
-  ( $self->$field() =~ /^(\+?1)?8(8|([02-7])\3)/ ) ? 1 : 0;
+  ( $self->dst =~ /^(\+?1)?8(8|([02-7])\3)/ ) ? 1 : 0;
 }
 
 =item set_charged_party
@@ -364,11 +356,6 @@ sub set_charged_party {
       $charged_party =~ s/^0+//
         if $conf->exists('cdr-charged_party-accountcode-trim_leading_0s');
       $self->charged_party( $charged_party );
-
-    } elsif ( $conf->exists('cdr-charged_party-field') ) {
-
-      my $field = $conf->config('cdr-charged_party-field');
-      $self->charged_party( $self->$field() );
 
     } else {
 
@@ -539,86 +526,73 @@ my %export_names = (
   },
 );
 
-my %export_formats = ();
-sub export_formats {
-  #my $self = shift;
+my $duration_sub = sub {
+  my($cdr, %opt) = @_;
+  if ( $opt{minutes} ) {
+    $opt{minutes}. ( $opt{granularity} ? 'm' : ' call' );
+  } else {
+    #config if anyone really wants decimal minutes back
+    #sprintf('%.2fm', $cdr->billsec / 60 );
+    int($cdr->billsec / 60).'m '. ($cdr->billsec % 60).'s';
+  }
+};
 
-  return %export_formats if keys %export_formats;
+my %export_formats = (
+  'simple' => [
+    sub { time2str('%D', shift->calldate_unix ) },   #DATE
+    sub { time2str('%r', shift->calldate_unix ) },   #TIME
+    'userfield',                                     #USER
+    'dst',                                           #NUMBER_DIALED
+    $duration_sub,                                   #DURATION
+    #sub { sprintf('%.3f', shift->upstream_price ) }, #PRICE
+    sub { my($cdr, %opt) = @_; $opt{money_char}. $opt{charge}; }, #PRICE
+  ],
+  'simple2' => [
+    sub { time2str('%D', shift->calldate_unix ) },   #DATE
+    sub { time2str('%r', shift->calldate_unix ) },   #TIME
+    #'userfield',                                     #USER
+    'src',                                           #called from
+    'dst',                                           #NUMBER_DIALED
+    $duration_sub,                                   #DURATION
+    #sub { sprintf('%.3f', shift->upstream_price ) }, #PRICE
+    sub { my($cdr, %opt) = @_; $opt{money_char}. $opt{charge}; }, #PRICE
+  ],
+  'default' => [
 
-  my $conf = new FS::Conf;
-  my $date_format = $conf->config('date_format') || '%m/%d/%Y';
+    #DATE
+    sub { time2str('%D', shift->calldate_unix ) },
+          # #time2str("%Y %b %d - %r", $cdr->calldate_unix ),
 
-  my $duration_sub = sub {
-    my($cdr, %opt) = @_;
-    if ( $opt{minutes} ) {
-      $opt{minutes}. ( $opt{granularity} ? 'm' : ' call' );
-    } else {
-      #config if anyone really wants decimal minutes back
-      #sprintf('%.2fm', $cdr->billsec / 60 );
-      int($cdr->billsec / 60).'m '. ($cdr->billsec % 60).'s';
-    }
-  };
+    #TIME
+    sub { time2str('%r', shift->calldate_unix ) },
+          # time2str("%c", $cdr->calldate_unix),  #XXX this should probably be a config option dropdown so they can select US vs- rest of world dates or whatnot
 
-  %export_formats = (
-    'simple' => [
-      sub { time2str($date_format, shift->calldate_unix ) },   #DATE
-      sub { time2str('%r', shift->calldate_unix ) },   #TIME
-      'userfield',                                     #USER
-      'dst',                                           #NUMBER_DIALED
-      $duration_sub,                                   #DURATION
-      #sub { sprintf('%.3f', shift->upstream_price ) }, #PRICE
-      sub { my($cdr, %opt) = @_; $opt{money_char}. $opt{charge}; }, #PRICE
-    ],
-    'simple2' => [
-      sub { time2str($date_format, shift->calldate_unix ) },   #DATE
-      sub { time2str('%r', shift->calldate_unix ) },   #TIME
-      #'userfield',                                     #USER
-      'src',                                           #called from
-      'dst',                                           #NUMBER_DIALED
-      $duration_sub,                                   #DURATION
-      #sub { sprintf('%.3f', shift->upstream_price ) }, #PRICE
-      sub { my($cdr, %opt) = @_; $opt{money_char}. $opt{charge}; }, #PRICE
-    ],
-    'default' => [
+    #DEST ("Number")
+    sub { my($cdr, %opt) = @_; $opt{pretty_dst} || $cdr->dst; },
 
-      #DATE
-      sub { time2str($date_format, shift->calldate_unix ) },
-            # #time2str("%Y %b %d - %r", $cdr->calldate_unix ),
+    #REGIONNAME ("Destination")
+    sub { my($cdr, %opt) = @_; $opt{dst_regionname}; },
 
-      #TIME
-      sub { time2str('%r', shift->calldate_unix ) },
-            # time2str("%c", $cdr->calldate_unix),  #XXX this should probably be a config option dropdown so they can select US vs- rest of world dates or whatnot
+    #DURATION
+    $duration_sub,
 
-      #DEST ("Number")
-      sub { my($cdr, %opt) = @_; $opt{pretty_dst} || $cdr->dst; },
+    #PRICE
+    sub { my($cdr, %opt) = @_; $opt{money_char}. $opt{charge}; },
 
-      #REGIONNAME ("Destination")
-      sub { my($cdr, %opt) = @_; $opt{dst_regionname}; },
-
-      #DURATION
-      $duration_sub,
-
-      #PRICE
-      sub { my($cdr, %opt) = @_; $opt{money_char}. $opt{charge}; },
-
-    ],
-  );
-  $export_formats{'source_default'} = [ 'src', @{ $export_formats{'default'} }, ];
-  $export_formats{'accountcode_default'} =
-    [ @{ $export_formats{'default'} }[0,1],
-      'accountcode',
-      @{ $export_formats{'default'} }[2..5],
-    ];
-
-  %export_formats
-}
+  ],
+);
+$export_formats{'source_default'} = [ 'src', @{ $export_formats{'default'} }, ];
+$export_formats{'accountcode_default'} =
+  [ @{ $export_formats{'default'} }[0,1],
+    'accountcode',
+    @{ $export_formats{'default'} }[2..5],
+  ];
 
 sub downstream_csv {
   my( $self, %opt ) = @_;
 
   my $format = $opt{'format'};
-  my %formats = $self->export_formats;
-  return "Unknown format $format" unless exists $formats{$format};
+  return "Unknown format $format" unless exists $export_formats{$format};
 
   #my $conf = new FS::Conf;
   #$opt{'money_char'} ||= $conf->config('money_char') || '$';
@@ -632,7 +606,7 @@ sub downstream_csv {
     map {
           ref($_) ? &{$_}($self, %opt) : $self->$_();
         }
-    @{ $formats{$format} };
+    @{ $export_formats{$format} };
 
   my $status = $csv->combine(@columns);
   die "FS::CDR: error combining ". $csv->error_input(). "into downstream CSV"
@@ -773,9 +747,6 @@ sub _cdr_date_parse {
   } elsif ( $date  =~ /^\s*(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d+\.\d+)(\D|$)/ ) {
     # broadsoft: 20081223201938.314
     ($year, $mon, $day, $hour, $min, $sec) = ( $1, $2, $3, $4, $5, $6 );
-  } elsif ( $date  =~ /^\s*(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\d+(\D|$)/ ) {
-    # Taqua OM:  20050422203450943
-    ($year, $mon, $day, $hour, $min, $sec) = ( $1, $2, $3, $4, $5, $6 );
   } elsif ( $date  =~ /^\s*(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/ ) {
     # WIP: 20100329121420
     ($year, $mon, $day, $hour, $min, $sec) = ( $1, $2, $3, $4, $5, $6 );
@@ -845,10 +816,6 @@ my %import_options = (
     { map { $_ => $cdr_info{$_}->{'fixedlength_format'}; }
           keys %cdr_info
     },
-
-  'format_row_callbacks' => { map { $_ => $cdr_info{$_}->{'row_callback'}; }
-                                  keys %cdr_info
-                            },
 );
 
 sub _import_options {
@@ -899,14 +866,9 @@ sub _upgrade_data {
 
   my %cdrbatchnum = ();
   while (my $row = $sth->fetchrow_arrayref) {
-
-    my $cdr_batch = qsearchs( 'cdr_batch', { 'cdrbatch' => $row->[0] } );
-    unless ( $cdr_batch ) {
-      $cdr_batch = new FS::cdr_batch { 'cdrbatch' => $row->[0] };
-      my $error = $cdr_batch->insert;
-      die $error if $error;
-    }
-
+    my $cdr_batch = new FS::cdr_batch { 'cdrbatch' => $row->[0] };
+    my $error = $cdr_batch->insert;
+    die $error if $error;
     $cdrbatchnum{$row->[0]} = $cdr_batch->cdrbatchnum;
   }
 

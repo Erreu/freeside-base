@@ -179,7 +179,7 @@ sub insert {
   $error = $self->SUPER::insert;
   if ( $error ) {
     $dbh->rollback if $oldAutoCommit;
-    return "error inserting cust_pay: $error";
+    return "error inserting $self: $error";
   }
 
   if ( $self->invnum ) {
@@ -192,11 +192,11 @@ sub insert {
     $error = $cust_bill_pay->insert(%options);
     if ( $error ) {
       if ( $ignore_noapply ) {
-        warn "warning: error inserting cust_bill_pay: $error ".
+        warn "warning: error inserting $cust_bill_pay: $error ".
              "(ignore_noapply flag set; inserting cust_pay record anyway)\n";
       } else {
         $dbh->rollback if $oldAutoCommit;
-        return "error inserting cust_bill_pay: $error";
+        return "error inserting $cust_bill_pay: $error";
       }
     }
   }
@@ -446,82 +446,76 @@ sub send_receipt {
 
   my $conf = new FS::Conf;
 
-  my @invoicing_list = $cust_main->invoicing_list_emailonly;
-  return '' unless @invoicing_list;
+  return ''
+    unless $conf->exists('payment_receipt_email')
+        && grep { $_ !~ /^(POST|FAX)$/ } $cust_main->invoicing_list;
 
   $cust_bill ||= ($cust_main->cust_bill)[-1]; #rather inefficient though?
 
   if (    ( exists($opt->{'manual'}) && $opt->{'manual'} )
-       || ! $conf->exists('invoice_html_statement') # XXX msg_template
+       || ! $conf->exists('invoice_html_statement')
        || ! $cust_bill
      ) {
 
-    my $error = '';
+    my $receipt_template = new Text::Template (
+      TYPE   => 'ARRAY',
+      SOURCE => [ map "$_\n", $conf->config('payment_receipt_email') ],
+    ) or do {
+      warn "can't create payment receipt template: $Text::Template::ERROR";
+      return '';
+    };
 
-    if( $conf->exists('payment_receipt_msgnum') ) {
-      my $msg_template = 
-          FS::msg_template->by_key($conf->config('payment_receipt_msgnum'));
-      $error = $msg_template->send('cust_main'=> $cust_main, 'object'=> $self);
+    my @invoicing_list = grep { $_ !~ /^(POST|FAX)$/ }
+                           $cust_main->invoicing_list;
+
+    my $payby = $self->payby;
+    my $payinfo = $self->payinfo;
+    $payby =~ s/^BILL$/Check/ if $payinfo;
+    if ( $payby eq 'CARD' || $payby eq 'CHEK' ) {
+      $payinfo = $self->paymask
+    } else {
+      $payinfo = $self->decrypt($payinfo);
     }
-    elsif ( $conf->exists('payment_receipt_email') ) {
-      my $receipt_template = new Text::Template (
-        TYPE   => 'ARRAY',
-        SOURCE => [ map "$_\n", $conf->config('payment_receipt_email') ],
-      ) or do {
-        warn "can't create payment receipt template: $Text::Template::ERROR";
-        return '';
-      };
+    $payby =~ s/^CHEK$/Electronic check/;
 
-      my $payby = $self->payby;
-      my $payinfo = $self->payinfo;
-      $payby =~ s/^BILL$/Check/ if $payinfo;
-      if ( $payby eq 'CARD' || $payby eq 'CHEK' ) {
-        $payinfo = $self->paymask
-      } else {
-        $payinfo = $self->decrypt($payinfo);
-      }
-      $payby =~ s/^CHEK$/Electronic check/;
+    my %fill_in = (
+      'date'         => time2str("%a %B %o, %Y", $self->_date),
+      'name'         => $cust_main->name,
+      'paynum'       => $self->paynum,
+      'paid'         => sprintf("%.2f", $self->paid),
+      'payby'        => ucfirst(lc($payby)),
+      'payinfo'      => $payinfo,
+      'balance'      => $cust_main->balance,
+      'company_name' => $conf->config('company_name', $cust_main->agentnum),
+    );
 
-      my %fill_in = (
-        'date'         => time2str("%a %B %o, %Y", $self->_date),
-        'name'         => $cust_main->name,
-        'paynum'       => $self->paynum,
-        'paid'         => sprintf("%.2f", $self->paid),
-        'payby'        => ucfirst(lc($payby)),
-        'payinfo'      => $payinfo,
-        'balance'      => $cust_main->balance,
-        'company_name' => $conf->config('company_name', $cust_main->agentnum),
-      );
-
-      if ( $opt->{'cust_pkg'} ) {
-        $fill_in{'pkg'} = $opt->{'cust_pkg'}->part_pkg->pkg;
-        #setup date, other things?
-      }
-
-      $error = send_email(
-        'from'    => $conf->config('invoice_from', $cust_main->agentnum),
-                                   #invoice_from??? well as good as any
-        'to'      => \@invoicing_list,
-        'subject' => 'Payment receipt',
-        'body'    => [ $receipt_template->fill_in( HASH => \%fill_in ) ],
-      );
-
-    } 
-    else { # no payment_receipt_msgnum or payment_receipt_email
-
-      my $queue = new FS::queue {
-         'paynum' => $self->paynum,
-         'job'    => 'FS::cust_bill::queueable_email',
-      };
-
-      $queue->insert(
-        'invnum'   => $cust_bill->invnum,
-        'template' => 'statement',
-      );
+    if ( $opt->{'cust_pkg'} ) {
+      $fill_in{'pkg'} = $opt->{'cust_pkg'}->part_pkg->pkg;
+      #setup date, other things?
     }
-  
-    warn "send_receipt: $error\n" if $error;
-  } #$opt{manual} || no invoice_html_statement || customer has no invoices
+
+    send_email(
+      'from'    => $conf->config('invoice_from', $cust_main->agentnum),
+                                 #invoice_from??? well as good as any
+      'to'      => \@invoicing_list,
+      'subject' => 'Payment receipt',
+      'body'    => [ $receipt_template->fill_in( HASH => \%fill_in ) ],
+    );
+
+  } else {
+
+    my $queue = new FS::queue {
+       'paynum' => $self->paynum,
+       'job'    => 'FS::cust_bill::queueable_email',
+    };
+
+    $queue->insert(
+      'invnum'   => $cust_bill->invnum,
+      'template' => 'statement',
+    );
+
+  }
+
 }
 
 =item cust_bill_pay
@@ -665,7 +659,7 @@ Returns an SQL fragment to retreive the unapplied amount.
 =cut 
 
 sub unapplied_sql {
-  my ($class, $start, $end) = @_;
+  my ($class, $start, $end) = shift;
   my $bill_start   = $start ? "AND cust_bill_pay._date <= $start"   : '';
   my $bill_end     = $end   ? "AND cust_bill_pay._date > $end"     : '';
   my $refund_start = $start ? "AND cust_pay_refund._date <= $start" : '';
@@ -698,10 +692,6 @@ sub _upgrade_data {  #class method
   my ($class, %opts) = @_;
 
   warn "$me upgrading $class\n" if $DEBUG;
-
-  ##
-  # otaker/ivan upgrade
-  ##
 
   #not the most efficient, but hey, it only has to run once
 
@@ -757,43 +747,6 @@ sub _upgrade_data {  #class method
     }
 
   }
-
-  ###
-  # payinfo N/A upgrade
-  ###
-
-  #XXX remove the 'N/A (tokenized)' part (or just this entire thing)
-
-  my @na_cust_pay = qsearch( {
-    'table'     => 'cust_pay',
-    'hashref'   => {}, #could be encrypted# { 'payinfo' => 'N/A' },
-    'extra_sql' => "WHERE ( payinfo = 'N/A' OR paymask = 'N/AA' OR paymask = 'N/A (tokenized)' ) AND payby IN ( 'CARD', 'CHEK' )",
-  } );
-
-  foreach my $na ( @na_cust_pay ) {
-
-    next unless $na->payinfo eq 'N/A';
-
-    my $cust_pay_pending =
-      qsearchs('cust_pay_pending', { 'paynum' => $na->paynum } );
-    unless ( $cust_pay_pending ) {
-      warn " *** WARNING: not-yet recoverable N/A card for payment ".
-           $na->paynum. " (no cust_pay_pending)\n";
-      next;
-    }
-    $na->$_($cust_pay_pending->$_) for qw( payinfo paymask );
-    my $error = $na->replace;
-    if ( $error ) {
-      warn " *** WARNING: Error updating payinfo for payment paynum ".
-           $na->paynun. ": $error\n";
-      next;
-    }
-
-  }
-
-  ###
-  # otaker->usernum upgrade
-  ###
 
   $class->_upgrade_otaker(%opts);
 

@@ -73,8 +73,6 @@ if ( -e $addl_handler_use_file ) {
   use HTML::FormatText;
   use HTML::Defang;
   use JSON;
-#  use XMLRPC::Transport::HTTP;
-#  use XMLRPC::Lite; # for XMLRPC::Serializer
   use MIME::Base64;
   use IO::Handle;
   use IO::File;
@@ -219,7 +217,6 @@ if ( -e $addl_handler_use_file ) {
   use FS::part_pkg_report_option;
   use FS::cust_attachment;
   use FS::h_cust_pkg;
-  use FS::h_inventory_item;
   use FS::h_svc_acct;
   use FS::h_svc_broadband;
   use FS::h_svc_domain;
@@ -242,12 +239,6 @@ if ( -e $addl_handler_use_file ) {
   use FS::cgp_rule;
   use FS::cgp_rule_condition;
   use FS::cgp_rule_action;
-  use FS::bill_batch;
-  use FS::cust_bill_batch;
-  use FS::rate_time;
-  use FS::rate_time_interval;
-  use FS::msg_template;
-  use FS::part_tag;
   # Sammath Naur
 
   if ( $FS::Mason::addl_handler_use ) {
@@ -260,7 +251,6 @@ if ( -e $addl_handler_use_file ) {
       use lib ( "/opt/rt3/local/lib", "/opt/rt3/lib" );
       use vars qw($Nobody $SystemUser);
       use RT;
-      use RT::Util;
       use RT::Tickets;
       use RT::Transactions;
       use RT::Users;
@@ -290,9 +280,6 @@ if ( -e $addl_handler_use_file ) {
       use CSS::Squish 0.06;
 
       use RT::Interface::Web::Request;
-
-      #nother undeclared web UI dep (for ticket links graph)
-      use IPC::Run::SafeHandles;
 
       #slow, unreliable, segfaults and is optional
       #see rt/html/Ticket/Elements/ShowTransactionAttachments
@@ -365,11 +352,6 @@ if ( -e $addl_handler_use_file ) {
   sub errorpage {
     use vars qw($m);
     $m->comp('/elements/errorpage.html', @_);
-  }
-
-  sub errorpage_popup {
-    use vars qw($m);
-    $m->comp('/elements/errorpage-popup.html', @_);
   }
 
   sub redirect {
@@ -480,17 +462,14 @@ sub mason_interps {
 
   my $html_defang = new HTML::Defang (%defang_opts);
 
-  my $js_string_sub = sub {
-    #${$_[0]} =~ s/(['\\\n])/'\\'.($1 eq "\n" ? 'n' : $1)/ge;
-    ${$_[0]} =~ s/(['\\])/\\$1/g;
-    ${$_[0]} =~ s/\r/\\r/g;
-    ${$_[0]} =~ s/\n/\\n/g;
-    ${$_[0]} = "'". ${$_[0]}. "'";
-  };
-
   my $fs_interp = new HTML::Mason::Interp (
     %interp,
-    escape_flags => { 'js_string' => $js_string_sub,
+    escape_flags => { 'js_string' => sub {
+                        #${$_[0]} =~ s/(['\\\n])/'\\'.($1 eq "\n" ? 'n' : $1)/ge;
+                        ${$_[0]} =~ s/(['\\])/\\$1/g;
+                        ${$_[0]} =~ s/\n/\\n/g;
+                        ${$_[0]} = "'". ${$_[0]}. "'";
+                      },
                       'defang'    => sub {
                         ${$_[0]} = $html_defang->defang(${$_[0]});
                       },
@@ -502,9 +481,7 @@ sub mason_interps {
 
   my $rt_interp = new HTML::Mason::Interp (
     %interp,
-    escape_flags => { 'h'         => \&RT::Interface::Web::EscapeUTF8,
-                      'js_string' => $js_string_sub,
-                    },
+    escape_flags => { 'h' => \&RT::Interface::Web::EscapeUTF8 },
     compiler     => HTML::Mason::Compiler::ToObject->new(
                       default_escape_flags => 'h',
                       allow_globals        => [qw(%session)],

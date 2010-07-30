@@ -202,7 +202,7 @@ sub ParseURI {
       $pkey = $2;
 
       unless ( $pkey ) {
-        #way too noisy, using this prefix is normal usage# cluck "bad URL $uri";
+        cluck "bad URL $uri";
         return(undef);
       }
 

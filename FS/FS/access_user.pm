@@ -1,15 +1,19 @@
 package FS::access_user;
 
 use strict;
-use base qw( FS::m2m_Common FS::option_Common ); 
-use vars qw( $DEBUG $me $conf $htpasswd_file );
+use vars qw( @ISA $DEBUG $me $conf $htpasswd_file );
 use FS::UID;
 use FS::Conf;
 use FS::Record qw( qsearch qsearchs dbh );
+use FS::m2m_Common;
+use FS::option_Common;
 use FS::access_user_pref;
 use FS::access_usergroup;
 use FS::agent;
 use FS::cust_main;
+
+@ISA = qw( FS::m2m_Common FS::option_Common FS::Record );
+#@ISA = qw( FS::m2m_Common FS::option_Common );
 
 $DEBUG = 0;
 $me = '[FS::access_user]';
@@ -363,11 +367,6 @@ user has the provided access right
 Optional table name in which agentnum is being checked.  Sometimes required to
 resolve 'column reference "agentnum" is ambiguous' errors.
 
-=item viewall_right
-
-All agents will be viewable if the current user has the provided access right.
-Defaults to 'View customers of all agents'.
-
 =back
 
 =cut
@@ -378,21 +377,16 @@ sub agentnums_sql {
 
   my $agentnum = $opt{'table'} ? $opt{'table'}.'.agentnum' : 'agentnum';
 
-  my @or = ();
+#  my @agentnums = map { "$agentnum = $_" } $self->agentnums;
+  my @agentnums = ();
+  push @agentnums, "$agentnum IN (". join(',', $self->agentnums). ')';
 
-  my $viewall_right = $opt{'viewall_right'} || 'View customers of all agents';
-  if ( $self->access_right($viewall_right) ) {
-    push @or, "$agentnum IS NOT NULL";
-  } else {
-    push @or, "$agentnum IN (". join(',', $self->agentnums). ')';
-  }
-
-  push @or, "$agentnum IS NULL"
+  push @agentnums, "$agentnum IS NULL"
     if $opt{'null'}
     || ( $opt{'null_right'} && $self->access_right($opt{'null_right'}) );
 
-  return ' 1 = 0 ' unless scalar(@or);
-  '( '. join( ' OR ', @or ). ' )';
+  return ' 1 = 0 ' unless scalar(@agentnums);
+  '( '. join( ' OR ', @agentnums ). ' )';
 
 }
 
@@ -413,10 +407,10 @@ sub agentnum {
   $sth->fetchrow_arrayref->[0];
 }
 
-=item agents [ HASHREF | OPTION => VALUE ... ]
+=item agents
 
 Returns the list of agents this user can view (via group membership), as
-FS::agent objects.  Accepts the same options as the agentnums_sql method.
+FS::agent objects.
 
 =cut
 
@@ -425,7 +419,7 @@ sub agents {
   qsearch({
     'table'     => 'agent',
     'hashref'   => { disabled=>'' },
-    'extra_sql' => ' AND '. $self->agentnums_sql(@_),
+    'extra_sql' => ' AND '. $self->agentnums_sql,
   });
 }
 

@@ -2,7 +2,7 @@ package FS::cust_pkg;
 
 use strict;
 use base qw( FS::otaker_Mixin FS::cust_main_Mixin FS::location_Mixin
-             FS::m2m_Common FS::option_Common );
+             FS::m2m_Common FS::option_Common FS::Record );
 use vars qw($disable_agentcheck $DEBUG $me);
 use Carp qw(cluck);
 use Scalar::Util qw( blessed );
@@ -708,21 +708,12 @@ sub cancel {
 
   my @invoicing_list = grep { $_ !~ /^(POST|FAX)$/ } $self->cust_main->invoicing_list;
   if ( !$options{'quiet'} && $conf->exists('emailcancel') && @invoicing_list ) {
-    my $msgnum = $conf->config('cancel_msgnum', $self->cust_main->agentnum);
-    my $error = '';
-    if ( $msgnum ) {
-      my $msg_template = qsearchs('msg_template', { msgnum => $msgnum });
-      $error = $msg_template->send( 'cust_main' => $self->cust_main,
-                                    'object'    => $self );
-    }
-    else {
-      $error = send_email(
-        'from'    => $conf->config('invoice_from', $self->cust_main->agentnum),
-        'to'      => \@invoicing_list,
-        'subject' => ( $conf->config('cancelsubject') || 'Cancellation Notice' ),
-        'body'    => [ map "$_\n", $conf->config('cancelmessage') ],
-      );
-    }
+    my $error = send_email(
+      'from'    => $conf->config('invoice_from', $self->cust_main->agentnum),
+      'to'      => \@invoicing_list,
+      'subject' => ( $conf->config('cancelsubject') || 'Cancellation Notice' ),
+      'body'    => [ map "$_\n", $conf->config('cancelmessage') ],
+    );
     #should this do something on errors?
   }
 
@@ -1774,16 +1765,6 @@ sub status {
   return 'active';
 }
 
-=item ucfirst_status
-
-Returns the status with the first character capitalized.
-
-=cut
-
-sub ucfirst_status {
-  ucfirst(shift->status);
-}
-
 =item statuses
 
 Class method that returns the list of possible status strings for packages
@@ -1939,7 +1920,7 @@ sub _labels_short {
   my %labels;
   #tie %labels, 'Tie::IxHash';
   push @{ $labels{$_->[0]} }, $_->[1]
-    foreach $self->$method(@_);
+    foreach $self->h_labels(@_);
   my @labels;
   foreach my $label ( keys %labels ) {
     my %seen = ();
@@ -2445,25 +2426,14 @@ sub onetime_sql { "
             where cust_pkg.pkgpart = part_pkg.pkgpart )
 "; }
 
-=item ordered_sql
-
-Returns an SQL expression identifying ordered packages (recurring packages not
-yet billed).
-
-=cut
-
-sub ordered_sql {
-   $_[0]->recurring_sql. " AND ". $_[0]->not_yet_billed_sql;
-}
-
 =item active_sql
 
 Returns an SQL expression identifying active packages.
 
 =cut
 
-sub active_sql {
-  $_[0]->recurring_sql. "
+sub active_sql { "
+  ". $_[0]->recurring_sql(). "
   AND cust_pkg.setup IS NOT NULL AND cust_pkg.setup != 0
   AND ( cust_pkg.cancel IS NULL OR cust_pkg.cancel = 0 )
   AND ( cust_pkg.susp   IS NULL OR cust_pkg.susp   = 0 )

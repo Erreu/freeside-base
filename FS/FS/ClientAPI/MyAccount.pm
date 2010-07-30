@@ -632,7 +632,7 @@ sub process_payment {
     validate($payinfo)
       or return { 'error' => gettext('invalid_card') }; # . ": ". $self->payinfo
     return { 'error' => gettext('unknown_card_type') }
-      if $payinfo !~ /^99\d{14}$/ && cardtype($payinfo) eq "Unknown";
+      if cardtype($payinfo) eq "Unknown";
 
     if ( length($p->{'paycvv'}) && $p->{'paycvv'} !~ /^\s*$/ ) {
       if ( cardtype($payinfo) eq 'American Express card' ) {
@@ -683,7 +683,7 @@ sub process_payment {
                     stateid stateid_state );
       $new->set( 'payby' => $p->{'auto'} ? 'CHEK' : 'DCHK' );
     }
-    $new->set( 'payinfo' => $cust_main->card_token || $payinfo );
+    $new->set( 'payinfo' => $payinfo );
     $new->set( 'paydate' => $p->{'year'}. '-'. $p->{'month'}. '-01' );
     my $error = $new->replace($cust_main);
     if ( $error ) {
@@ -1344,7 +1344,7 @@ sub _do_bop_realtime {
 
     my $bill_error =    $cust_main->bill
                      || $cust_main->apply_payments_and_credits
-                     || $cust_main->realtime_collect;
+                     || $cust_main->collect('realtime' => 1);
 
     if (    $cust_main->balance > $old_balance
          && $cust_main->balance > 0

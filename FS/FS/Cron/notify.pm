@@ -21,8 +21,6 @@ sub notify_flat_delay {
   
   #we're at now now (and later).
   my($time) = $^T;
-  my $conf = new FS::Conf;
-  my $error = '';
 
   my $integer = driver_name =~ /^mysql/ ? 'SIGNED' : 'INTEGER';
 
@@ -103,20 +101,14 @@ END
       push @cust_pkgs, $cust_pkg[0];
       shift @cust_pkg;
     }
-    my $msgnum = $conf->config('impending_recur_msgnum',$cust_main->agentnum);
-    if ( $msgnum ) {
-      my $msg_template = qsearchs('msg_template', { msgnum => $msgnum });
-      $error = $msg_template->send('cust_main' => $cust_main);
-    }
-    else {
-      $error = $cust_main->notify( 'impending_recur_template',
+    my $error = 
+      $cust_main->notify( 'impending_recur_template',
                           'extra_fields' => { 'packages'   => \@packages,
                                               'recurdates' => \@recurdates,
                                               'package'    => $packages[0],
                                               'recurdate'  => $recurdates[0],
                                             },
                         );
-    } #if $msgnum
     warn "Error notifying, custnum ". $cust_main->custnum. ": $error" if $error;
 
     unless ($error) { 

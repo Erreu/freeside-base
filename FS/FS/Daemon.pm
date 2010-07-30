@@ -1,13 +1,11 @@
 package FS::Daemon;
 
 use vars qw( @ISA @EXPORT_OK );
-use vars qw( $pid_dir $me $pid_file $sigint $sigterm $NOSIG $logfile );
+use vars qw( $pid_dir $me $pid_file $sigint $sigterm $logfile );
 use Exporter;
 use Fcntl qw(:flock);
 use POSIX qw(setsid);
 use IO::File;
-use File::Basename;
-use File::Slurp qw(slurp);
 use Date::Format;
 
 #this is a simple refactoring of the stuff from freeside-queued, just to
@@ -21,19 +19,10 @@ use Date::Format;
 
 $pid_dir = '/var/run';
 
-$NOSIG = 0;
-$PID_NEWSTYLE = 0;
-
 sub daemonize1 {
   $me = shift;
 
-  $pid_file = $pid_dir;
-  if ( $PID_NEWSTYLE ) {
-    $pid_file .= '/freeside';
-    mkdir $pid_file unless -d $pid_file;
-    chown $FS::UID::freeside_uid, -1, $pid_file;
-  }
-  $pid_file .= "/$me";
+  $pid_file = "$pid_dir/$me";
   $pid_file .= '.'.shift if scalar(@_);
   $pid_file .= '.pid';
 
@@ -44,7 +33,6 @@ sub daemonize1 {
     print "$me started with pid $pid\n"; #logging to $log_file\n";
     exit unless $pid_file;
     my $pidfh = new IO::File ">$pid_file" or exit;
-    chown $FS::UID::freeside_uid, -1, $pid_file;
     print $pidfh "$pid\n";
     exit;
   }
@@ -53,10 +41,8 @@ sub daemonize1 {
   #$SIG{CHLD} =  \&REAPER;
   $sigterm = 0;
   $sigint = 0;
-  unless ( $NOSIG ) {
-    $SIG{INT}  = sub { warn "SIGINT received; shutting down\n"; $sigint++;  };
-    $SIG{TERM} = sub { warn "SIGTERM received; shutting down\n"; $sigterm++; };
-  }
+  $SIG{INT}  = sub { warn "SIGINT received; shutting down\n"; $sigint++;  };
+  $SIG{TERM} = sub { warn "SIGTERM received; shutting down\n"; $sigterm++; };
 }
 
 sub drop_root {
@@ -92,18 +78,13 @@ sub sigterm { $sigterm; }
 sub logfile { $logfile = shift; } #_logmsg('test'); }
 
 sub myexit {
-  chomp( my $pid = slurp($pid_file) );
-  unlink $pid_file if -e $pid_file && $$ == $pid;
+  unlink $pid_file if -e $pid_file;
   exit;  
 }
 
 sub _die {
-  die @_ if $^S; # $^S = 1 during an eval(), don't break exception handling
   my $msg = shift;
-
-  chomp( my $pid = slurp($pid_file) );
-  unlink $pid_file if -e $pid_file && $$ == $pid;
-
+  unlink $pid_file if -e $pid_file;
   _logmsg($msg);
 }
 
@@ -117,4 +98,3 @@ sub _logmsg {
   close $log;
 }
 
-1;

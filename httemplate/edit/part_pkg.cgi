@@ -563,10 +563,6 @@ my $html_bottom = sub {
         $html .= ' MULTIPLE'
           if $href->{$field}{'type'} eq 'select_multiple';
         $html .= qq! NAME="${layer}__$field">!;
-
-        $html .= '<OPTION VALUE="">'. $href->{$field}{'empty_label'}
-          if exists($href->{$field}{'disable_empty'})
-               && ! $href->{$field}{'disable_empty'};
   
         if ( $href->{$field}{'select_table'} ) {
           foreach my $record (

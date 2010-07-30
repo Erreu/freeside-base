@@ -34,8 +34,6 @@ use FS::cust_bill_pay;
 use FS::cust_bill_pay_batch;
 use FS::part_bill_event;
 use FS::payby;
-use FS::bill_batch;
-use FS::cust_bill_batch;
 
 @ISA = qw( FS::cust_main_Mixin FS::Record );
 
@@ -1302,13 +1300,7 @@ sub print {
     'notice_name' => $notice_name,
   );
 
-  if($conf->exists('invoice_print_pdf')) {
-    # Add the invoice to the current batch.
-    $self->batch_invoice(\%opt);
-  }
-  else {
-    do_print $self->lpr_data(\%opt);
-  }
+  do_print $self->lpr_data(\%opt);
 }
 
 =item fax_invoice HASHREF | [ TEMPLATE ] 
@@ -1352,23 +1344,6 @@ sub fax_invoice {
                       );
   die $error if $error;
 
-}
-
-=item batch_invoice [ HASHREF ]
-
-Place this invoice into the open batch (see C<FS::bill_batch>).  If there 
-isn't an open batch, one will be created.
-
-=cut
-
-sub batch_invoice {
-  my ($self, $opt) = @_;
-  my $batch = FS::bill_batch->get_open_batch;
-  my $cust_bill_batch = FS::cust_bill_batch->new({
-      batchnum => $batch->batchnum,
-      invnum   => $self->invnum,
-  });
-  return $cust_bill_batch->insert($opt);
 }
 
 =item ftp_invoice [ TEMPLATENAME ] 
@@ -2324,13 +2299,11 @@ sub print_generic {
 
   }
 
-  my $agentnum = $self->cust_main->agentnum;
-
   my %invoice_data = (
 
     #invoice from info
-    'company_name'    => scalar( $conf->config('company_name', $agentnum) ),
-    'company_address' => join("\n", $conf->config('company_address', $agentnum) ). "\n",
+    'company_name'    => scalar( $conf->config('company_name', $self->cust_main->agentnum) ),
+    'company_address' => join("\n", $conf->config('company_address', $self->cust_main->agentnum) ). "\n",
     'returnaddress'   => $returnaddress,
     'agent'           => &$escape_function($cust_main->agent->agent),
 
@@ -2358,19 +2331,6 @@ sub print_generic {
     'smallerfooter'   => $conf->exists('invoice-smallerfooter'),
     'balance_due_below_line' => $conf->exists('balance_due_below_line'),
    
-    #layout info -- would be fancy to calc some of this and bury the template
-    #               here in the code
-    'topmargin'             => scalar($conf->config('invoice_latextopmargin', $agentnum)),
-    'headsep'               => scalar($conf->config('invoice_latexheadsep', $agentnum)),
-    'textheight'            => scalar($conf->config('invoice_latextextheight', $agentnum)),
-    'extracouponspace'      => scalar($conf->config('invoice_latexextracouponspace', $agentnum)),
-    'couponfootsep'         => scalar($conf->config('invoice_latexcouponfootsep', $agentnum)),
-    'verticalreturnaddress' => $conf->exists('invoice_latexverticalreturnaddress', $agentnum),
-    'addresssep'            => scalar($conf->config('invoice_latexaddresssep', $agentnum)),
-    'amountenclosedsep'     => scalar($conf->config('invoice_latexcouponamountenclosedsep', $agentnum)),
-    'coupontoaddresssep'    => scalar($conf->config('invoice_latexcoupontoaddresssep', $agentnum)),
-    'addcompanytoaddress'   => $conf->exists('invoice_latexcouponaddcompanytoaddress', $agentnum),
-
     # better hang on to conf_dir for a while (for old templates)
     'conf_dir'        => "$FS::UID::conf_dir/conf.$FS::UID::datasrc",
 
@@ -2438,6 +2398,8 @@ sub print_generic {
   $invoice_data{'balance_adjustments'} = sprintf("%.2f", ($self->previous_balance || 0) - ($self->billing_balance || 0) );
   $invoice_data{'previous_balance'} = sprintf("%.2f", $pr_total);
   $invoice_data{'balance'} = sprintf("%.2f", $balance_due);
+
+  my $agentnum = $self->cust_main->agentnum;
 
   my $summarypage = '';
   if ( $conf->exists('invoice_usesummary', $agentnum) ) {
@@ -2621,12 +2583,6 @@ sub print_generic {
 
   foreach my $section (@sections, @$late_sections) {
 
-    # begin some normalization
-    $section->{'subtotal'} = $section->{'amount'}
-      if $multisection
-         && !exists($section->{subtotal})
-         && exists($section->{amount});
-
     $invoice_data{finance_amount} = sprintf('%.2f', $section->{'subtotal'} )
       if ( $invoice_data{finance_section} &&
            $section->{'description'} eq $invoice_data{finance_section} );
@@ -2635,7 +2591,7 @@ sub print_generic {
                              sprintf('%.2f', $section->{'subtotal'})
       if $multisection;
 
-    # continue some normalization
+    # begin some normalization
     $section->{'amount'}   = $section->{'subtotal'}
       if $multisection;
 
@@ -3397,9 +3353,7 @@ my %condensed_format = (
   'fields' => [
                 sub { shift->{description} },
                 sub { shift->{quantity} },
-                sub { my($href, %opt) = @_;
-                      ($opt{dollar} || ''). $href->{amount};
-                    },
+                sub { shift->{amount} },
               ],
   'align'  => [ qw( l r r ) ],
   'span'   => [ qw( 5 1 1 ) ],            # unitprices?
@@ -3473,7 +3427,6 @@ sub _condensed_description_generator {
   my ( $f, $prefix, $suffix, $separator, $column ) =
     _condensed_generator_defaults($format);
 
-  my $money_char = '$';
   if ($format eq 'latex') {
     $prefix = "\\hline\n\\multicolumn{1}{c}{\\rule{0pt}{2.5ex}~} &\n";
     $suffix = '\\\\';
@@ -3482,7 +3435,6 @@ sub _condensed_description_generator {
       sub { my ($d,$a,$s,$w) = @_;
             return "\\multicolumn{$s}{$a}{\\makebox[$w][$a]{\\textbf{$d}}}";
           };
-    $money_char = '\\dollar';
   }elsif ( $format eq 'html' ) {
     $prefix = '"><td align="center"></td>';
     $suffix = '';
@@ -3491,22 +3443,16 @@ sub _condensed_description_generator {
       sub { my ($d,$a,$s,$w) = @_;
             return qq!<td align="$html_align{$a}">$d</td>!;
       };
-    #$money_char = $conf->config('money_char') || '$';
-    $money_char = '';  # this is madness
   }
 
   sub {
-    #my @args = @_;
-    my $href = shift;
+    my @args = @_;
     my @result = ();
 
     foreach  (my $i = 0; $f->{label}->[$i]; $i++) {
-      my $dollar = '';
-      $dollar = $money_char if $i == scalar(@{$f->{label}})-1;
-      push @result,
-        &{$column}( &{$f->{fields}->[$i]}($href, 'dollar' => $dollar),
-                    map { $f->{$_}->[$i] } qw(align span width)
-                  );
+      push @result, &{$column}( &{$f->{fields}->[$i]}(@args),
+                                map { $f->{$_}->[$i] } qw(align span width)
+                              );
     }
 
     $prefix. join( $separator, @result ). $suffix;
@@ -3751,9 +3697,6 @@ sub _items_svc_phone_sections {
   foreach my $cust_bill_pkg ( $self->cust_bill_pkg ) {
     next unless $cust_bill_pkg->pkgnum > 0;
 
-    my @header = $cust_bill_pkg->details_header;
-    next unless scalar(@header);
-
     foreach my $detail ( $cust_bill_pkg->cust_bill_pkg_detail ) {
 
       my $phonenum = $detail->phonenum;
@@ -3802,7 +3745,6 @@ sub _items_svc_phone_sections {
           'duration' => 0,
           'sort_weight' => $usage_class{$detail->classnum}->weight,
           'phonenum' => $phonenum,
-          'header'  => [ @header ],
         };
       $sections{"$phonenum $line"}{amount} += $amount;  #subtotal
       $sections{"$phonenum $line"}{calls}++;
@@ -3833,17 +3775,11 @@ sub _items_svc_phone_sections {
 
   my %sectionmap = ();
   my $simple = new FS::usage_class { format => 'simple' }; #bleh
+  my $usage_simple = new FS::usage_class { format => 'usage_simple' }; #bleh
   foreach ( keys %sections ) {
-    my @header = @{ $sections{$_}{header} || [] };
-    my $usage_simple =
-      new FS::usage_class { format => 'usage_'. (scalar(@header) || 6). 'col' };
     my $summary = $sections{$_}{sort_weight} < 0 ? 1 : 0;
     my $usage_class = $summary ? $simple : $usage_simple;
     my $ending = $summary ? ' usage charges' : '';
-    my %gen_opt = ();
-    unless ($summary) {
-      $gen_opt{label} = [ map{ &{$escape}($_) } @header ];
-    }
     $sectionmap{$_} = { 'description' => &{$escape}($_. $ending),
                         'amount'    => $sections{$_}{amount},    #subtotal
                         'calls'       => $sections{$_}{calls},
@@ -3854,7 +3790,7 @@ sub _items_svc_phone_sections {
                         'sort_weight' => $sections{$_}{sort_weight},
                         'post_total'  => $summary, #inspire pagebreak
                         (
-                          ( map { $_ => $usage_class->$_($format, %gen_opt) }
+                          ( map { $_ => $usage_class->$_($format) }
                             qw( description_generator
                                 header_generator
                                 total_generator
@@ -3963,12 +3899,12 @@ sub _items_pkg {
 }
 
 sub _taxsort {
-  return 0 unless $a->itemdesc cmp $b->itemdesc;
-  return -1 if $b->itemdesc eq 'Tax';
-  return 1 if $a->itemdesc eq 'Tax';
-  return -1 if $b->itemdesc eq 'Other surcharges';
-  return 1 if $a->itemdesc eq 'Other surcharges';
-  $a->itemdesc cmp $b->itemdesc;
+  return 0 unless $a cmp $b;
+  return -1 if $b eq 'Tax';
+  return 1 if $a eq 'Tax';
+  return -1 if $b eq 'Other surcharges';
+  return 1 if $a eq 'Other surcharges';
+  $a cmp $b;
 }
 
 sub _items_tax {

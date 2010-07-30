@@ -11,7 +11,6 @@ Example:
     my( $start, $end ) = @_;
 
     "SQL EXPRESSION BASED ON $start AND $end";
-    # where $start and $end are unix timestamps
   };
 
 </%doc>
@@ -146,7 +145,7 @@ unless ( $cgi->param('all_customers') ) {
   }
 
   push @where,
-    call_range_sub($range_sub, $days, 0, 'offset' => $offset, 'no_as'=>1). ' > 0'; # != 0';
+    call_range_sub($range_sub, $days + $offset, 0, 'no_as'=>1). ' > 0'; # != 0';
 }
 
 if ( $cgi->param('agentnum') =~ /^(\d+)$/ ) {
@@ -249,25 +248,11 @@ my $money_char = $conf->config('money_char') || '$';
 # )
 
 sub call_range_sub {
-  my($range_sub, $startdays, $enddays, %opt) = @_;
+  my($range_sub, $start, $end, %opt) = @_;
 
-  my $as = $opt{'no_as'} ? '' : " AS rangecol_${startdays}_$enddays";
+  my $as = $opt{'no_as'} ? '' : " AS rangecol_${start}_$end";
 
-  my $offset = $opt{'offset'} || 0;
-  # Always use $offset - 1day + 1sec = the last second of that day
-  my $cutoff = DateTime->now->set(hour => 23, minute => 59, second => 59);
-  $cutoff->subtract(days => $offset);
-
-  my $start = $cutoff->clone;
-  $start->subtract(days => $startdays);
- 
-  my $end = $cutoff->clone;
-  $end->subtract(days => $enddays);
-
-  #warn "offset $offset (".$cutoff->epoch."), range $startdays-$enddays (".$start->epoch . '-' . ($enddays ? $end->epoch : '').")\n";
-  my $sql = &{$range_sub}( $start->epoch, 
-                           $enddays ? $end->epoch : '', 
-                           $cutoff->epoch ); #%opt?
+  my $sql = &{$range_sub}( $start, $end, $opt{'offset'} ); #%opt?
 
   $sql = "SUM($sql)" if $opt{'sum'};
 

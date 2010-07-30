@@ -795,17 +795,6 @@ sub setfield {
   $self->set(@_);
 }
 
-=item exists COLUMN
-
-Returns true if the column/field/key COLUMN exists.
-
-=cut
-
-sub exists {
-  my($self,$field) = @_;
-  exists($self->{Hash}->{$field});
-}
-
 =item AUTLOADED METHODS
 
 $record->column is a synonym for $record->get('column');
@@ -1580,7 +1569,6 @@ sub process_batch_import {
     format_headers             => $opt->{format_headers},
     format_sep_chars           => $opt->{format_sep_chars},
     format_fixedlength_formats => $opt->{format_fixedlength_formats},
-    format_row_callbacks       => $opt->{format_row_callbacks},
     #per-import
     job                        => $job,
     file                       => $file,
@@ -1621,8 +1609,6 @@ Class method for batch imports.  Available params:
 
 =item format_fixedlength_formats
 
-=item format_row_callbacks
-
 =item params
 
 =item job
@@ -1647,7 +1633,7 @@ sub batch_import {
   my $param = shift;
 
   warn "$me batch_import call with params: \n". Dumper($param)
-  ;#  if $DEBUG;
+    if $DEBUG;
 
   my $table   = $param->{table};
   my $formats = $param->{formats};
@@ -1686,11 +1672,6 @@ sub batch_import {
   my $fixedlength_format =
     $param->{'format_fixedlength_formats'}
       ? $param->{'format_fixedlength_formats'}{ $param->{'format'} }
-      : '';
-
-  my $row_callback =
-    $param->{'format_row_callbacks'}
-      ? $param->{'format_row_callbacks'}{ $param->{'format'} }
       : '';
 
   my @fields = @{ $formats->{ $format } };
@@ -1787,8 +1768,6 @@ sub batch_import {
       $line = shift(@buffer);
 
       next if $line =~ /^\s*$/; #skip empty lines
-
-      $line = &{$row_callback}($line) if $row_callback;
 
       $parser->parse($line) or do {
         $dbh->rollback if $oldAutoCommit;

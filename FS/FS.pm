@@ -272,10 +272,6 @@ L<FS::cust_class> - Customer classification class
 
 L<FS::cust_category> - Customer category class
 
-L<FS::cust_tag> - Customer tag class
-
-L<FS::part_tag> - Tag definition class
-
 L<FS::cust_main_exemption> - Customer tax exemption class
 
 L<FS::cust_main_note> - Customer note class
@@ -354,9 +350,7 @@ L<FS::queue_arg> - Job arguments
 
 L<FS::queue_depend> - Job dependencies
 
-L<FS::msg_template> - Message templates (customer notices)
-
-L<FS::msgcat> - Message catalogs (error messages)
+L<FS::msgcat> - Message catalogs
 
 L<FS::clientapi_session>
 

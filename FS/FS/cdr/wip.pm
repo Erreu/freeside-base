@@ -17,10 +17,7 @@ use FS::cdr qw(_cdr_date_parser_maker);
 # except that we assume that before all the fields mentioned in the
 # spec, there's a counter field.
     skip(4),          # counter, id, APCSJursID, RecordType
-    sub { my($cdr, $data, $conf, $param) = @_;
-          $param->{skiprow} = 1 if $data == 1;
-          $cdr->uniqueid($data);
-    },      # CDRID; is 1 for line charge records
+    'unique_id',      # CDRID
     skip(1),          # AccountNumber; empty
     'charged_party',  # ServiceNumber
     skip(1),          # ServiceNumberType
@@ -40,6 +37,10 @@ use FS::cdr qw(_cdr_date_parser_maker);
     'upstream_price', # ISPBuy
     skip(2),          # EUBuy, CDRFromCarrier
     ],
+# Need clarification on:
+# Values for RecordType, Jurisdiction, CompletionStatus, and ProviderClass
+# Do we care about the following:
+# AccountNumber, ServiceNumberType, CDRStatus
 
 );
 

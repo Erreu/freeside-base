@@ -136,7 +136,6 @@ our %FIELD_METADATA = (
     QueueAdminCc     => [ 'WATCHERFIELD'    => 'AdminCc' => 'Queue', ], #loc_left_pair
     QueueWatcher     => [ 'WATCHERFIELD'    => undef     => 'Queue', ], #loc_left_pair
     CustomFieldValue => [ 'CUSTOMFIELD', ], #loc_left_pair
-    DateCustomFieldValue => [ 'DATECUSTOMFIELD', ],
     CustomField      => [ 'CUSTOMFIELD', ], #loc_left_pair
     CF               => [ 'CUSTOMFIELD', ], #loc_left_pair
     Updated          => [ 'TRANSDATE', ], #loc_left_pair
@@ -161,7 +160,6 @@ our %dispatch = (
     WATCHERFIELD    => \&_WatcherLimit,
     MEMBERSHIPFIELD => \&_WatcherMembershipLimit,
     CUSTOMFIELD     => \&_CustomFieldLimit,
-    DATECUSTOMFIELD => \&_DateCustomFieldLimit,
     HASATTRIBUTE    => \&_HasAttributeLimit,
 );
 our %can_bundle = ();# WATCHERFIELD => "yes", );
@@ -1342,101 +1340,6 @@ sub _CustomFieldJoin {
     return ($TicketCFs, $CFs);
 }
 
-=head2 _DateCustomFieldLimit
-
-Limit based on CustomFields of type Date
-
-Meta Data:
-  none
-
-=cut
-
-sub _DateCustomFieldLimit {
-    my ( $self, $_field, $op, $value, %rest ) = @_;
-
-    my $field = $rest{'SUBKEY'} || die "No field specified";
-
-    # For our sanity, we can only limit on one queue at a time
-
-    my ($queue, $cfid, $column);
-    ($queue, $field, $cfid, $column) = $self->_CustomFieldDecipher( $field );
-
-# If we're trying to find custom fields that don't match something, we
-# want tickets where the custom field has no value at all.  Note that
-# we explicitly don't include the "IS NULL" case, since we would
-# otherwise end up with a redundant clause.
-
-    my $null_columns_ok;
-    if ( ( $op =~ /^NOT LIKE$/i ) or ( $op eq '!=' ) ) {
-        $null_columns_ok = 1;
-    }
-
-    my $cfkey = $cfid ? $cfid : "$queue.$field";
-    my ($TicketCFs, $CFs) = $self->_CustomFieldJoin( $cfkey, $cfid, $field );
-
-    $self->_OpenParen;
-
-    if ( $CFs && !$cfid ) {
-        $self->SUPER::Limit(
-            ALIAS           => $CFs,
-            FIELD           => 'Name',
-            VALUE           => $field,
-            ENTRYAGGREGATOR => 'AND',
-        );
-    }
-
-    $self->_OpenParen if $null_columns_ok;
-
-    my $date = RT::Date->new( $self->CurrentUser );
-    $date->Set( Format => 'unknown', Value => $value );
-
-    if ( $op eq "=" ) {
-
-        # if we're specifying =, that means we want everything on a
-        # particular single day.  in the database, we need to check for >
-        # and < the edges of that day.
-
-        $date->SetToMidnight( Timezone => 'server' );
-        my $daystart = $date->ISO;
-        $date->AddDay;
-        my $dayend = $date->ISO;
-
-        $self->_OpenParen;
-
-        $self->_SQLLimit(
-            ALIAS    => $TicketCFs,
-            FIELD    => 'Content',
-            OPERATOR => ">=",
-            VALUE    => $daystart,
-            %rest,
-        );
-
-        $self->_SQLLimit(
-            ALIAS    => $TicketCFs,
-            FIELD    => 'Content',
-            OPERATOR => "<=",
-            VALUE    => $dayend,
-            %rest,
-            ENTRYAGGREGATOR => 'AND',
-        );
-
-        $self->_CloseParen;
-
-    }
-    else {
-        $self->_SQLLimit(
-            ALIAS    => $TicketCFs,
-            FIELD    => 'Content',
-            OPERATOR => $op,
-            VALUE    => $date->ISO,
-            %rest,
-        );
-    }
-
-    $self->_CloseParen;
-
-}
-
 =head2 _CustomFieldLimit
 
 Limit based on CustomFields
@@ -1830,60 +1733,7 @@ sub OrderByCols {
            }
 
            push @res, { %$row, FIELD => "Priority", ORDER => $order } ;
-
-       } elsif ( $field eq 'Customer' ) { #Freeside
-
-           my $linkalias = $self->Join(
-               TYPE   => 'LEFT',
-               ALIAS1 => 'main',
-               FIELD1 => 'id',
-               TABLE2 => 'Links',
-               FIELD2 => 'LocalBase'
-           );
-
-           $self->SUPER::Limit(
-               LEFTJOIN => $linkalias,
-               FIELD    => 'Type',
-               OPERATOR => '=',
-               VALUE    => 'MemberOf',
-           );
-           $self->SUPER::Limit(
-               LEFTJOIN => $linkalias,
-               FIELD    => 'Target',
-               OPERATOR => 'STARTSWITH',
-               VALUE    => 'freeside://freeside/cust_main/',
-           );
-
-           #if there was a Links.RemoteTarget int, this bs wouldn't be necessary
-           my $custnum_sql = "CAST(SUBSTR($linkalias.Target,31) AS INTEGER)";
-
-           if ( $subkey eq 'Number' ) {
-
-               push @res, { %$row,
-                            ALIAS => '',
-                            FIELD => $custnum_sql,
-                          };
-
-           } elsif ( $subkey eq 'Name' ) {
-
-              my $custalias = $self->Join(
-                  TYPE       => 'LEFT',
-                  EXPRESSION => $custnum_sql,
-                  TABLE2     => 'cust_main',
-                  FIELD2     => 'custnum',
-                  
-              );
-
-              my $field = "COALESCE( $custalias.company,
-                                     $custalias.last || ', ' || $custalias.first
-                                   )";
-
-              push @res, { %$row, ALIAS => '', FIELD => $field };
-
-           }
-
-       } #Freeside
-
+       }
        else {
            push @res, $row;
        }
@@ -2815,11 +2665,6 @@ sub LimitCustomField {
             Queue => $args{QUEUE}
         );
         $args{CUSTOMFIELD} = $CF->Id;
-    }
-
-    # Handle special customfields types
-    if ($CF->Type eq 'Date') {
-        $args{FIELD} = 'DateCustomFieldValue';
     }
 
     #If we are looking to compare with a null value.

@@ -71,11 +71,10 @@ DNS records
 
     <FORM NAME="SlaveForm" METHOD="POST" ACTION="<%$p%>edit/process/domain_record.cgi">
       <INPUT TYPE="hidden" NAME="svcnum" VALUE="<%$svcnum%>">
-      Or
 %     if ( @records ) { 
-         delete all records and 
+         Delete all records and 
 %     } 
-      slave from nameserver IP 
+      Or slave from nameserver IP 
       <INPUT TYPE="hidden" NAME="svcnum" VALUE="<%$svcnum%>">
       <INPUT TYPE="hidden" NAME="reczone" VALUE="@"> 
       <INPUT TYPE="hidden" NAME="recaf" VALUE="IN">

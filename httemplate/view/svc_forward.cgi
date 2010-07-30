@@ -50,9 +50,6 @@
 </TABLE>
 
 <BR>
-
-<% include('elements/svc_export_settings.html', $svc_forward) %>
-
 <% joblisting({'svcnum'=>$svcnum}, 1) %>
 
 <% include('/elements/footer.html') %>

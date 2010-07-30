@@ -560,83 +560,6 @@ sub Create {
 
     # }}}
 
-    # {{{ Add all the custom fields
-
-    foreach my $arg ( keys %args ) {
-        next unless $arg =~ /^CustomField-(\d+)$/i;
-        my $cfid = $1;
-
-        foreach my $value (
-            UNIVERSAL::isa( $args{$arg} => 'ARRAY' ) ? @{ $args{$arg} } : ( $args{$arg} ) )
-        {
-            next unless defined $value && length $value;
-
-            # Allow passing in uploaded LargeContent etc by hash reference
-            my ($status, $msg) = $self->_AddCustomFieldValue(
-                (UNIVERSAL::isa( $value => 'HASH' )
-                    ? %$value
-                    : (Value => $value)
-                ),
-                Field             => $cfid,
-                RecordTransaction => 0,
-            );
-            push @non_fatal_errors, $msg unless $status;
-        }
-    }
-
-    # }}}
-
-    # {{{ Deal with setting up links
-
-    # TODO: Adding link may fire scrips on other end and those scrips
-    # could create transactions on this ticket before 'Create' transaction.
-    #
-    # We should implement different schema: record 'Create' transaction,
-    # create links and only then fire create transaction's scrips.
-    #
-    # Ideal variant: add all links without firing scrips, record create
-    # transaction and only then fire scrips on the other ends of links.
-    #
-    # //RUZ
-
-    foreach my $type ( keys %LINKTYPEMAP ) {
-        next unless ( defined $args{$type} );
-        foreach my $link (
-            ref( $args{$type} ) ? @{ $args{$type} } : ( $args{$type} ) )
-        {
-            # Check rights on the other end of the link if we must
-            # then run _AddLink that doesn't check for ACLs
-            if ( RT->Config->Get( 'StrictLinkACL' ) ) {
-                my ($val, $msg, $obj) = $self->__GetTicketFromURI( URI => $link );
-                unless ( $val ) {
-                    push @non_fatal_errors, $msg;
-                    next;
-                }
-                if ( $obj && !$obj->CurrentUserHasRight('ModifyTicket') ) {
-                    push @non_fatal_errors, $self->loc('Linking. Permission denied');
-                    next;
-                }
-            }
-
-            #don't show transactions for reminders
-            my $silent = ( !$args{'_RecordTransaction'}
-                           || $self->Type eq 'reminder'
-                         );
-
-            my ( $wval, $wmsg ) = $self->_AddLink(
-                Type                          => $LINKTYPEMAP{$type}->{'Type'},
-                $LINKTYPEMAP{$type}->{'Mode'} => $link,
-                Silent                        => $silent,
-                'Silent'. ( $LINKTYPEMAP{$type}->{'Mode'} eq 'Base'? 'Target': 'Base' )
-                                              => 1,
-            );
-
-            push @non_fatal_errors, $wmsg unless ($wval);
-        }
-    }
-
-    # }}}
-
     # {{{ Deal with auto-customer association
 
     #unless we already have (a) customer(s)...
@@ -699,6 +622,77 @@ sub Create {
 
     # }}}
 
+    # {{{ Add all the custom fields
+
+    foreach my $arg ( keys %args ) {
+        next unless $arg =~ /^CustomField-(\d+)$/i;
+        my $cfid = $1;
+
+        foreach my $value (
+            UNIVERSAL::isa( $args{$arg} => 'ARRAY' ) ? @{ $args{$arg} } : ( $args{$arg} ) )
+        {
+            next unless defined $value && length $value;
+
+            # Allow passing in uploaded LargeContent etc by hash reference
+            my ($status, $msg) = $self->_AddCustomFieldValue(
+                (UNIVERSAL::isa( $value => 'HASH' )
+                    ? %$value
+                    : (Value => $value)
+                ),
+                Field             => $cfid,
+                RecordTransaction => 0,
+            );
+            push @non_fatal_errors, $msg unless $status;
+        }
+    }
+
+    # }}}
+
+    # {{{ Deal with setting up links
+
+    # TODO: Adding link may fire scrips on other end and those scrips
+    # could create transactions on this ticket before 'Create' transaction.
+    #
+    # We should implement different schema: record 'Create' transaction,
+    # create links and only then fire create transaction's scrips.
+    #
+    # Ideal variant: add all links without firing scrips, record create
+    # transaction and only then fire scrips on the other ends of links.
+    #
+    # //RUZ
+
+    foreach my $type ( keys %LINKTYPEMAP ) {
+        next unless ( defined $args{$type} );
+        foreach my $link (
+            ref( $args{$type} ) ? @{ $args{$type} } : ( $args{$type} ) )
+        {
+            # Check rights on the other end of the link if we must
+            # then run _AddLink that doesn't check for ACLs
+            if ( RT->Config->Get( 'StrictLinkACL' ) ) {
+                my ($val, $msg, $obj) = $self->__GetTicketFromURI( URI => $link );
+                unless ( $val ) {
+                    push @non_fatal_errors, $msg;
+                    next;
+                }
+                if ( $obj && !$obj->CurrentUserHasRight('ModifyTicket') ) {
+                    push @non_fatal_errors, $self->loc('Linking. Permission denied');
+                    next;
+                }
+            }
+            
+            my ( $wval, $wmsg ) = $self->_AddLink(
+                Type                          => $LINKTYPEMAP{$type}->{'Type'},
+                $LINKTYPEMAP{$type}->{'Mode'} => $link,
+                Silent                        => !$args{'_RecordTransaction'},
+                'Silent'. ( $LINKTYPEMAP{$type}->{'Mode'} eq 'Base'? 'Target': 'Base' )
+                                              => 1,
+            );
+
+            push @non_fatal_errors, $wmsg unless ($wval);
+        }
+    }
+
+    # }}}
     # Now that we've created the ticket and set up its metadata, we can actually go and check OwnTicket on the ticket itself. 
     # This might be different than before in cases where extensions like RTIR are doing clever things with RT's ACL system
     if (  $DeferOwner ) { 
@@ -721,8 +715,7 @@ sub Create {
         );
     }
 
-    #don't make a transaction or fire off any scrips for reminders either
-    if ( $args{'_RecordTransaction'} && $self->Type ne 'reminder' ) {
+    if ( $args{'_RecordTransaction'} ) {
 
         # {{{ Add a transaction for the create
         my ( $Trans, $Msg, $TransObj ) = $self->_NewTransaction(

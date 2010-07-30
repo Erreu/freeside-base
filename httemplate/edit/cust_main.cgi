@@ -1,5 +1,5 @@
 <% include('/elements/header.html',
-      $title,
+      "Customer $action",
       '',
       ' onUnload="myclose()"' #hmm, in billing.html
 ) %>
@@ -190,7 +190,7 @@ function samechanged(what) {
 
 % }
 
-<INPUT TYPE="hidden" NAME="usernum" VALUE="<% $cust_main->usernum %>">
+<INPUT TYPE="hidden" NAME="otaker" VALUE="<% $cust_main->otaker %>">
 
 %# cust_main/bottomfixup.js
 % foreach my $hidden (
@@ -313,8 +313,8 @@ my $error = $cgi->param('error');
 $cgi->delete_all();
 $cgi->param('error', $error);
 
-my $title = $custnum ? 'Edit Customer' : 'Add Customer';
-$title .= ": ". $cust_main->name if $custnum;
+my $action = $custnum ? 'Edit' : 'Add';
+$action .= ": ". $cust_main->name if $custnum;
 
 my $r = qq!<font color="#ff0000">*</font>&nbsp;!;
 

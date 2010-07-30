@@ -3,7 +3,6 @@ package FS::svc_pbx;
 use strict;
 use base qw( FS::svc_External_Common );
 use FS::Record qw( qsearch qsearchs dbh );
-use FS::Conf;
 use FS::cust_svc;
 use FS::svc_phone;
 use FS::svc_acct;
@@ -56,10 +55,6 @@ PBX name
 
 Maximum number of extensions
 
-=item max_simultaneous
-
-Maximum number of simultaneous users
-
 =back
 
 =head1 METHODS
@@ -90,7 +85,6 @@ sub table_info {
       'id'    => 'ID',
       'title' => 'Name',
       'max_extensions' => 'Maximum number of User Extensions',
-      'max_simultaneous' => 'Maximum number of simultaneous users',
 #      'field'         => 'Description',
 #      'another_field' => { 
 #                           'label'     => 'Description',
@@ -212,15 +206,15 @@ returns the error, otherwise returns false.
 
 =cut
 
-#sub replace {
-#  my ( $new, $old ) = ( shift, shift );
-#  my $error;
-#
-#  $error = $new->SUPER::replace($old);
-#  return $error if $error;
-#
-#  '';
-#}
+sub replace {
+  my ( $new, $old ) = ( shift, shift );
+  my $error;
+
+  $error = $new->SUPER::replace($old);
+  return $error if $error;
+
+  '';
+}
 
 =item suspend
 
@@ -259,9 +253,6 @@ sub check {
 sub _check_duplicate {
   my $self = shift;
 
-  my $conf = new FS::Conf;
-  return '' if $conf->config('global_unique-pbx_title') eq 'disabled';
-
   $self->lock_table;
 
   if ( qsearchs( 'svc_pbx', { 'title' => $self->title } ) ) {
@@ -269,75 +260,6 @@ sub _check_duplicate {
   } else {
     return '';
   }
-}
-
-=item get_cdrs
-
-Returns a set of Call Detail Records (see L<FS::cdr>) associated with this 
-service.  By default, "associated with" means that the "charged_party" field of
-the CDR matches the "title" field of the service.
-
-=over 2
-
-Accepts the following options:
-
-=item for_update => 1: SELECT the CDRs "FOR UPDATE".
-
-=item status => "" (or "done"): Return only CDRs with that processing status.
-
-=item inbound => 1: No-op for svc_pbx CDR processing.
-
-=item default_prefix => "XXX": Also accept the phone number of the service prepended 
-with the chosen prefix.
-
-=item disable_src => 1: No-op for svc_pbx CDR processing.
-
-=back
-
-=cut
-
-sub get_cdrs {
-  my($self, %options) = @_;
-  my %hash = ();
-  my @where = ();
-
-  my @fields = ( 'charged_party' );
-  $hash{'freesidestatus'} = $options{'status'}
-    if exists($options{'status'});
-  
-  my $for_update = $options{'for_update'} ? 'FOR UPDATE' : '';
-
-  my $title = $self->title;
-
-  my $prefix = $options{'default_prefix'};
-
-  my @orwhere =  map " $_ = '$title'        ", @fields;
-  push @orwhere, map " $_ = '$prefix$title' ", @fields
-    if length($prefix);
-  if ( $prefix =~ /^\+(\d+)$/ ) {
-    push @orwhere, map " $_ = '$1$title' ", @fields
-  }
-
-  push @where, ' ( '. join(' OR ', @orwhere ). ' ) ';
-
-  if ( $options{'begin'} ) {
-    push @where, 'startdate >= '. $options{'begin'};
-  }
-  if ( $options{'end'} ) {
-    push @where, 'startdate < '.  $options{'end'};
-  }
-
-  my $extra_sql = ( keys(%hash) ? ' AND ' : ' WHERE ' ). join(' AND ', @where );
-
-  my @cdrs =
-    qsearch( {
-      'table'      => 'cdr',
-      'hashref'    => \%hash,
-      'extra_sql'  => $extra_sql,
-      'order_by'   => "ORDER BY startdate $for_update",
-    } );
-
-  @cdrs;
 }
 
 =back

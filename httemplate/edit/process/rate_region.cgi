@@ -1,8 +1,6 @@
 %if ( $error ) {
 %  $cgi->param('error', $error);
 <% $cgi->redirect(popurl(2). "rate_region.cgi?". $cgi->query_string ) %>
-%} elsif ( $action eq 'Add' ) {
-<% $cgi->redirect(popurl(2). "rate_region.cgi?$regionnum") %>
 %} else { 
 <% $cgi->redirect(popurl(3). "browse/rate_region.html") %>
 %}
@@ -13,7 +11,6 @@ die "access denied"
   unless $FS::CurrentUser::CurrentUser->access_right('Configuration');
 
 my $regionnum = $cgi->param('regionnum');
-my $action = $regionnum ? 'Edit' : 'Add';
 
 my $old = qsearchs('rate_region', { 'regionnum' => $regionnum } ) if $regionnum;
 
@@ -36,12 +33,24 @@ my @rate_prefix = map {
                           'npa'         => $_,
                         }
                       } @npa;
-# we no longer process dest_detail records here
+
+my @dest_detail = map {
+  my $ratenum = $_->ratenum;
+  new FS::rate_detail {
+    'ratenum'  => $ratenum,
+    map { $_ => $cgi->param("$_$ratenum") }
+        qw( min_included conn_charge conn_sec min_charge sec_granularity classnum )
+  };
+} qsearch('rate', {} );
+
+
 my $error;
 if ( $regionnum ) {
-  $error = $new->replace($old, 'rate_prefix' => \@rate_prefix );
+  $error = $new->replace($old, 'rate_prefix' => \@rate_prefix,
+                               'dest_detail' => \@dest_detail, );
 } else {
-  $error = $new->insert( 'rate_prefix' => \@rate_prefix );
+  $error = $new->insert( 'rate_prefix' => \@rate_prefix,
+                         'dest_detail' => \@dest_detail, );
   $regionnum = $new->getfield('regionnum');
 }
 

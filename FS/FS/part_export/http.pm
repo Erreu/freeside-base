@@ -1,10 +1,12 @@
 package FS::part_export::http;
 
-use base qw( FS::part_export );
-use vars qw( %options %info );
+use vars qw(@ISA %info);
 use Tie::IxHash;
+use FS::part_export;
 
-tie %options, 'Tie::IxHash',
+@ISA = qw(FS::part_export);
+
+tie my %options, 'Tie::IxHash',
   'method' => { label   =>'Method',
                 type    =>'select',
                 #options =>[qw(POST GET)],
@@ -64,10 +66,6 @@ sub _export_command {
 
   return unless $self->option("${action}_data");
 
-  my $cust_main = $svc_x->table eq 'cust_main'
-                    ? $svc_x
-                    : $svc_x->cust_svc->cust_pkg->cust_main;
-
   $self->http_queue( $svc_x->svcnum,
     $self->option('method'),
     $self->option('url'),
@@ -87,18 +85,12 @@ sub _export_replace {
 
   return unless $self->option('replace_data');
 
-  my $new_cust_main = $new->table eq 'cust_main'
-                        ? $new
-                        : $new->cust_svc->cust_pkg->cust_main;
-  my $cust_main = $new_cust_main; #so folks can use $new_cust_main or $cust_main
-
-  $self->http_queue( $new->svcnum,
+  $self->http_queue( $svc_x->svcnum,
     $self->option('method'),
     $self->option('url'),
     map {
       /^\s*(\S+)\s+(.*)$/ or /()()/;
       my( $field, $value_expression ) = ( $1, $2 );
-      my $value = eval $value_expression;
       die $@ if $@;
       ( $field, $value );
     } split(/\n/, $self->option('replace_data') )
@@ -108,8 +100,10 @@ sub _export_replace {
 
 sub http_queue {
   my($self, $svcnum) = (shift, shift);
-  my $queue = new FS::queue { 'job' => "FS::part_export::http::http" };
-  $queue->svcnum($svcnum) if $svcnum;
+  my $queue = new FS::queue {
+    'svcnum' => $svcnum,
+    'job'    => "FS::part_export::http::http",
+  };
   $queue->insert( @_ );
 }
 

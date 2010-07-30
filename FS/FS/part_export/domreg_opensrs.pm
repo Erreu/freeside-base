@@ -259,6 +259,8 @@ sub _export_insert_on_payment {
     'job'    => 'FS::part_export::domreg_opensrs::renew_through',
   };
   $queue->insert( $self, $svc_domain ); #_export_insert with 'R' action?
+
+  return '';
 }
 
 ## Domain registration exports do nothing on replace.  Mainly because we haven't decided what they should do.
@@ -480,8 +482,7 @@ sub renew {
 Attempts to renew the domain through the specified date.  If no date is
 provided it is gleaned from the associated cust_pkg bill date
 
-Like some export functions, dies on failure or returns undef on success.
-It is always called from the queue.
+Like most export functions, returns an error message on failure or undef on success.
 
 =cut
 
@@ -490,24 +491,24 @@ sub renew_through {
 
   warn "$me: renew_through called\n" if $DEBUG;
   eval "use Net::OpenSRS;";
-  die $@ if $@;
+  return $@ if $@;
 
   unless ( $date ) {
     my $cust_pkg = $svc_domain->cust_svc->cust_pkg;
-    die "Can't renew: no date specified and domain is not in a package."
+    return "Can't renew: no date specified and domain is not in a package."
       unless $cust_pkg;
     $date = $cust_pkg->bill;
   }
 
   my $err = $self->is_supported_domain( $svc_domain );
-  die $err if $err;
+  return $err if $err;
 
   warn "$me: checking status\n" if $DEBUG;
   my $rv = $self->get_status($svc_domain);
-  die "Domain ". $svc_domain->domain. " is not renewable"
+  return "Domain ". $svc_domain->domain. " is not renewable"
     unless $rv->{expdate};
 
-  die "Can't parse expiration date for ". $svc_domain->domain
+  return "Can't parse expiration date for ". $svc_domain->domain
     unless $rv->{expdate} =~ /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})/;
 
   my ($year,$month,$day,$hour,$minute,$second) = ($1,$2,$3,$4,$5,$6);
@@ -530,13 +531,11 @@ sub renew_through {
     $years++;
     $exp->add( 'years' => 1 );
 
-    die "Can't renew ". $svc_domain->domain. " for more than 10 years."
+    return "Can't renew ". $svc_domain->domain. " for more than 10 years."
       if $years > 10; #no infinite loop
   }
 
-  return '' unless $years;
-
-  warn "$me: renewing ". $svc_domain->domain. " for $years years\n" if $DEBUG;
+  warn "$me: renewing ". $svc_domain->domain. "for $years years\n" if $DEBUG;
   my $srs = $self->get_srs;
   $rv = $srs->make_request(
     {
@@ -551,7 +550,7 @@ sub renew_through {
       }
     }
   );
-  die $rv->{response_text} unless $rv->{is_success};
+  return $rv->{response_text} unless $rv->{is_success};
 
   return ''; # Should only get here if renewal succeeded
 }

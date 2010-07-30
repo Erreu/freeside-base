@@ -1,19 +1,11 @@
 <% &ntable("#cccccc") %>
 
-%# tags
-<% include('/elements/tr-select-cust_tag.html',
-             'custnum' => $custnum,
-             'cgi'     => $cgi,
-          )
-%>
-
 %# agent
 <% include('/elements/tr-select-agent.html', 
               'curr_value'    => $cust_main->agentnum,
               'label'         => "<B>${r}Agent</B>",
               'empty_label'   => 'Select agent',
               'disable_empty' => ( $cust_main->agentnum ? 1 : 0 ),
-              'viewall_right' => 'None', #override default 'View customers of all agents'
            )
 %>
 

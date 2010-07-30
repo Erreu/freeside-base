@@ -42,10 +42,6 @@ sub upgrade {
 
   my $data = upgrade_data(%opt);
 
-  my $oldAutoCommit = $FS::UID::AutoCommit;
-  local $FS::UID::AutoCommit = 0;
-  local $FS::UID::AutoCommit = 0;
-
   foreach my $table ( keys %$data ) {
 
     my $class = "FS::$table";
@@ -57,10 +53,13 @@ sub upgrade {
 
       my $start = time;
 
+      my $oldAutoCommit = $FS::UID::AutoCommit;
+      local $FS::UID::AutoCommit = 0;
+      $FS::UID::AutoCommit = 0;
+
       $class->_upgrade_data(%opt);
 
       if ( $oldAutoCommit ) {
-        warn "  committing\n";
         dbh->commit or die dbh->errstr;
       }
       
@@ -154,12 +153,6 @@ sub upgrade_data {
     'cust_refund' => [],
     'banned_pay' => [],
 
-    #default namespace
-    'payment_gateway' => [],
-
-    #migrate to templates
-    'msg_template' => [],
-
   ;
 
   \%hash;
@@ -189,8 +182,7 @@ sub upgrade_sqlradius {
     my $str2time = str2time_sql( $dbh->{Driver}->{Name} );
     my $group = "UserName";
     $group .= ",Realm"
-      if ref($part_export) =~ /withdomain/
-      || $dbh->{Driver}->{Name} =~ /^Pg/; #hmm
+      if ( ref($part_export) =~ /withdomain/ );
 
     my $sth_alter = $dbh->prepare(
       "ALTER TABLE radacct ADD COLUMN FreesideStatus varchar(32) NULL"
@@ -203,10 +195,7 @@ sub upgrade_sqlradius {
         $sth_update->execute or die $errmsg.$sth_update->errstr;
       } else {
         my $error = $sth_alter->errstr;
-        warn $errmsg.$error
-          unless $error =~ /Duplicate column name/i  #mysql
-              || $error =~ /already exists/i;        #Pg
-;
+        warn $errmsg.$error unless $error =~ /Duplicate column name/i;
       }
     } else {
       my $error = $dbh->errstr;
@@ -219,18 +208,12 @@ sub upgrade_sqlradius {
     if ( $sth_index ) {
       unless ( $sth_index->execute ) {
         my $error = $sth_index->errstr;
-        warn $errmsg.$error
-          unless $error =~ /Duplicate key name/i #mysql
-              || $error =~ /already exists/i;    #Pg
+        warn $errmsg.$error unless $error =~ /Duplicate key name/i;
       }
     } else {
       my $error = $dbh->errstr;
-      warn $errmsg.$error. ' (preparing statement)';#unless $error =~ /exists/i;
+      warn $errmsg.$error; #unless $error =~ /exists/i;
     }
-
-    my $times = ($dbh->{Driver}->{Name} =~ /^mysql/)
-      ? ' AcctStartTime != 0 AND AcctStopTime != 0 '
-      : ' AcctStartTime IS NOT NULL AND AcctStopTime IS NOT NULL ';
 
     my $sth = $dbh->prepare("SELECT UserName,
                                     Realm,
@@ -238,7 +221,8 @@ sub upgrade_sqlradius {
                                     $str2time max(AcctStopTime))
                               FROM radacct
                               WHERE FreesideStatus = 'done'
-                                AND $times
+                                AND AcctStartTime != 0
+                                AND AcctStopTime  != 0
                               GROUP BY $group
                             ")
       or die $errmsg.$dbh->errstr;

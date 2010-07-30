@@ -50,14 +50,14 @@
 <IMG SRC="<%$fsurl%>images/calendar.png" ID="<% $Name %>_date_button" STYLE="cursor: pointer" TITLE="Select date">
 <script type="text/javascript">
 Calendar.setup({
-    inputField: <% $Name |n,js_string %>,
+    inputField: "<%$Name%>",
 % if ( defined($ShowTime) && $ShowTime ) {
     ifFormat:   "%Y-%m-%d %H:%M",
     showsTime:  true,
 % } else {
     ifFormat:   "%Y-%m-%d",
 % }
-    button:     <% $Name.'_date_button' |n,js_string %>,
+    button:     "<%$Name%>_date_button",
 });
 </script>
 <%init>

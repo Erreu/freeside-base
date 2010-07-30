@@ -1,27 +1,80 @@
-<% include('/elements/init_overlib.html') %>
-<% include('/elements/header.html',$title) %>
-<% include('/elements/menubar.html',@menubar) %>
-<% include('/edit/elements/rate_detail.html',
-    'ratenum' => $ratenum,
-    'countrycode' => $countrycode,
-) %>
-<% include('/elements/footer.html') %>
-
+<% include( 'elements/browse.html',
+     'title'          => $title,
+     'name_singular'  => 'rate',
+     'html_init'      => $html_init,
+     'menubar'        => [ 'Rate plans' => $p.'browse/rate.cgi' ],
+     'query'          => {
+                           'table'     => 'rate_detail',
+                           'addl_from' => $join,
+                           'hashref'   => { 'ratenum' => $ratenum },
+                           'extra_sql' => $where,
+                         },
+     'count_query'    => "SELECT COUNT(*) FROM rate_detail $join".
+                         " WHERE ratenum = $ratenum $where",
+     'header'         => [
+                           'Region',
+                           'Prefix(es)',
+                           'Included<BR>minutes',
+                           'Connection<BR>charge',
+                           'Charge per<BR>minute',
+                           'Granularity',
+                           'Usage class',
+                         ],
+     'fields'         => [
+                           'regionname',
+                           sub { shift->dest_region->prefixes_short },
+                           sub { shift->min_included. $edit_hint },
+                           $conn_charge_sub,
+                           sub { $money_char. shift->min_charge. $edit_hint },
+                           sub { $granularity{ shift->sec_granularity } },
+                           'classname',
+                         ],
+     'links'          => [ '', '', $edit_link,    $edit_link,    '', '' ],
+     'link_onclicks'  => [ '', '', $edit_onclick, $edit_onclick, '', '' ],
+     'align'          => 'llrrcc',
+   )
+%>
 <%once>
+
+tie my %granularity, 'Tie::IxHash', FS::rate_detail::granularities();
+tie my %conn_secs,   'Tie::IxHash', FS::rate_detail::conn_secs();
 
 my $conf = new FS::Conf;
 my $money_char = $conf->config('money_char') || '$';
 
-my @menubar = ( 'Rate plans' => $p.'browse/rate.cgi',
-                'Regions and Prefixes' => $p.'browse/rate_region.html',
-                'Time Periods' => $p.'browse/rate_time.html',
-                );
+my $join =
+  ' JOIN rate_region ON ( rate_detail.dest_regionnum = rate_region.regionnum )';
+
+my $edit_link = [ 'javascript:void(0);', sub { ''; } ];
+
+my $edit_onclick = sub {
+  my $rate_detail = shift;
+  my $ratedetailnum = $rate_detail->ratedetailnum;
+  include( '/elements/popup_link_onclick.html',
+             'action'      => "${p}edit/rate_detail.html?$ratedetailnum",
+             'actionlabel' => 'Edit rate',
+             'height'      => 420,
+             #default# 'width'       => 540,
+             #default# 'color'       => '#333399',
+         );
+};
+my $edit_hint = '&nbsp;<FONT SIZE="-1">(edit)</FONT>';
+
+my $conn_charge_sub = sub {
+   my $rate_detail = shift;
+   #return '' unless $rate_detail->conn_charge > 0 || $rate_detail->conn_sec;
+   $money_char. $rate_detail->conn_charge.
+     ($rate_detail->conn_sec ? ' for '.$conn_secs{$rate_detail->conn_sec} : '').
+     $edit_hint;
+};
 
 </%once>
 <%init>
 
 die "access denied"
   unless $FS::CurrentUser::CurrentUser->access_right('Configuration');
+
+my $html_init = include('/elements/init_overlib.html');
 
 $cgi->param('ratenum') =~ /^(\d+)$/ or die "unparsable ratenum";
 my $ratenum = $1;
@@ -30,11 +83,18 @@ my $rate = qsearchs('rate', { 'ratenum' => $ratenum } )
 my $ratename = $rate->ratename;
 my $title = "$ratename rates";
 
-my $where;
-my $countrycode = '';
+my @where = ();
+
 if ( $cgi->param('countrycode') =~ /^(\d+)$/ ) { 
-  $countrycode = $1;
+  my $countrycode = $1;
+  push @where, "0 < ( SELECT COUNT(*) FROM rate_prefix
+                        WHERE rate_prefix.regionnum = rate_region.regionnum
+                          AND countrycode = '$countrycode'
+                    )
+               ";
   $title .= " for +$countrycode";
 }
+
+my $where = scalar(@where) ? ' AND '.join(' AND ', @where ) : '';
 
 </%init>

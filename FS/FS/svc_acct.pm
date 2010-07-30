@@ -1,8 +1,7 @@
 package FS::svc_acct;
 
 use strict;
-use base qw( FS::svc_Domain_Mixin FS::svc_CGP_Mixin FS::svc_CGPRule_Mixin
-             FS::svc_Common );
+use base qw( FS::svc_Domain_Mixin FS::svc_CGPRule_Mixin FS::svc_Common );
 use vars qw( $DEBUG $me $conf $skip_fuzzyfiles
              $dir_prefix @shells $usernamemin
              $usernamemax $passwordmin $passwordmax
@@ -451,9 +450,8 @@ sub table_info {
                               disable_select    => 1,
                             },
         'cgp_emptytrash' => { 
-                              label     => 'Communigate on logout remove trash',
-                              type        => 'select',
-                              select_list => __PACKAGE__->cgp_emptytrash_values,
+                              label => 'Communigate on logout remove trash',
+                              type  => 'text',
                               disable_inventory => 1,
                               disable_select    => 1,
                             },
@@ -465,9 +463,71 @@ sub table_info {
                             disable_select    => 1,
                           },
         'cgp_timezone' => {
-                            label       => 'Communigate time zone',
-                            type        => 'select',
-                            select_list => __PACKAGE__->cgp_timezone_values,
+                            label => 'Communigate time zone',
+                            type  => 'select',
+                            select_list => [ '',
+                                             'HostOS',
+                                             '(+0100) Algeria/Congo',
+                                             '(+0200) Egypt/South Africa',
+                                             '(+0300) Saudi Arabia',
+                                             '(+0400) Oman',
+                                             '(+0500) Pakistan',
+                                             '(+0600) Bangladesh',
+                                             '(+0700) Thailand/Vietnam',
+                                             '(+0800) China/Malaysia',
+                                             '(+0900) Japan/Korea',
+                                             '(+1000) Queensland',
+                                             '(+1100) Micronesia',
+                                             '(+1200) Fiji',
+                                             '(+1300) Tonga/Kiribati',
+                                             '(+1400) Christmas Islands',
+                                             '(-0100) Azores/Cape Verde',
+                                             '(-0200) Fernando de Noronha',
+                                             '(-0300) Argentina/Uruguay',
+                                             '(-0400) Venezuela/Guyana',
+                                             '(-0500) Haiti/Peru',
+                                             '(-0600) Central America',
+                                             '(-0700) Arisona',
+                                             '(-0800) Adamstown',
+                                             '(-0900) Marquesas Islands',
+                                             '(-1000) Hawaii/Tahiti',
+                                             '(-1100) Samoa',
+                                             'Asia/Afghanistan',
+                                             'Asia/India',
+                                             'Asia/Iran',
+                                             'Asia/Iraq',
+                                             'Asia/Israel',
+                                             'Asia/Jordan',
+                                             'Asia/Lebanon',
+                                             'Asia/Syria',
+                                             'Australia/Adelaide',
+                                             'Australia/East',
+                                             'Australia/NorthernTerritory',
+                                             'Europe/Central',
+                                             'Europe/Eastern',
+                                             'Europe/Moscow',
+                                             'Europe/Western',
+                                             'GMT (+0000)',
+                                             'Newfoundland',
+                                             'NewZealand/Auckland',
+                                             'NorthAmerica/Alaska',
+                                             'NorthAmerica/Atlantic',
+                                             'NorthAmerica/Central',
+                                             'NorthAmerica/Eastern',
+                                             'NorthAmerica/Mountain',
+                                             'NorthAmerica/Pacific',
+                                             'Russia/Ekaterinburg',
+                                             'Russia/Irkutsk',
+                                             'Russia/Kamchatka',
+                                             'Russia/Krasnoyarsk',
+                                             'Russia/Magadan',
+                                             'Russia/Novosibirsk',
+                                             'Russia/Vladivostok',
+                                             'Russia/Yakutsk',
+                                             'SouthAmerica/Brasil',
+                                             'SouthAmerica/Chile',
+                                             'SouthAmerica/Paraguay',
+                                           ],
                             disable_inventory => 1,
                             disable_select    => 1,
                           },
@@ -721,89 +781,82 @@ sub insert {
     }
 
     #welcome email
-    my $error = '';
-    my $msgnum = $conf->config('welcome_msgnum', $agentnum);
-    if ( $msgnum ) {
-      my $msg_template = qsearchs('msg_template', { msgnum => $msgnum });
-      $error = $msg_template->send('cust_main' => $cust_main);
+    my ($to,$welcome_template,$welcome_from,$welcome_subject,$welcome_subject_template,$welcome_mimetype)
+      = ('','','','','','');
+
+    if ( $conf->exists('welcome_email', $agentnum) ) {
+      $welcome_template = new Text::Template (
+        TYPE   => 'ARRAY',
+        SOURCE => [ map "$_\n", $conf->config('welcome_email', $agentnum) ]
+      ) or warn "can't create welcome email template: $Text::Template::ERROR";
+      $welcome_from = $conf->config('welcome_email-from', $agentnum);
+        # || 'your-isp-is-dum'
+      $welcome_subject = $conf->config('welcome_email-subject', $agentnum)
+        || 'Welcome';
+      $welcome_subject_template = new Text::Template (
+        TYPE   => 'STRING',
+        SOURCE => $welcome_subject,
+      ) or warn "can't create welcome email subject template: $Text::Template::ERROR";
+      $welcome_mimetype = $conf->config('welcome_email-mimetype', $agentnum)
+        || 'text/plain';
     }
-    else { #!$msgnum
-      my ($to,$welcome_template,$welcome_from,$welcome_subject,$welcome_subject_template,$welcome_mimetype)
-        = ('','','','','','');
+    if ( $welcome_template && $cust_pkg ) {
+      my $to = join(', ', grep { $_ !~ /^(POST|FAX)$/ } $cust_main->invoicing_list );
+      if ( $to ) {
 
-      if ( $conf->exists('welcome_email', $agentnum) ) {
-        $welcome_template = new Text::Template (
-          TYPE   => 'ARRAY',
-          SOURCE => [ map "$_\n", $conf->config('welcome_email', $agentnum) ]
-        ) or warn "can't create welcome email template: $Text::Template::ERROR";
-        $welcome_from = $conf->config('welcome_email-from', $agentnum);
-          # || 'your-isp-is-dum'
-        $welcome_subject = $conf->config('welcome_email-subject', $agentnum)
-          || 'Welcome';
-        $welcome_subject_template = new Text::Template (
-          TYPE   => 'STRING',
-          SOURCE => $welcome_subject,
-        ) or warn "can't create welcome email subject template: $Text::Template::ERROR";
-        $welcome_mimetype = $conf->config('welcome_email-mimetype', $agentnum)
-          || 'text/plain';
-      }
-      if ( $welcome_template ) {
-        my $to = join(', ', grep { $_ !~ /^(POST|FAX)$/ } $cust_main->invoicing_list );
-        if ( $to ) {
-
-          my %hash = (
-                       'custnum'  => $self->custnum,
-                       'username' => $self->username,
-                       'password' => $self->_password,
-                       'first'    => $cust_main->first,
-                       'last'     => $cust_main->getfield('last'),
-                       'pkg'      => $cust_pkg->part_pkg->pkg,
-                     );
-          my $wqueue = new FS::queue {
-            'svcnum' => $self->svcnum,
-            'job'    => 'FS::svc_acct::send_email'
-          };
-          my $error = $wqueue->insert(
-            'to'       => $to,
-            'from'     => $welcome_from,
-            'subject'  => $welcome_subject_template->fill_in( HASH => \%hash, ),
-            'mimetype' => $welcome_mimetype,
-            'body'     => $welcome_template->fill_in( HASH => \%hash, ),
-          );
-          if ( $error ) {
-            $dbh->rollback if $oldAutoCommit;
-            return "error queuing welcome email: $error";
-          }
-
-          if ( $options{'depend_jobnum'} ) {
-            warn "$me depend_jobnum found; adding to welcome email dependancies"
-              if $DEBUG;
-            if ( ref($options{'depend_jobnum'}) ) {
-              warn "$me adding jobs ". join(', ', @{$options{'depend_jobnum'}} ).
-                   "to welcome email dependancies"
-                if $DEBUG;
-              push @jobnums, @{ $options{'depend_jobnum'} };
-            } else {
-              warn "$me adding job $options{'depend_jobnum'} ".
-                   "to welcome email dependancies"
-                if $DEBUG;
-              push @jobnums, $options{'depend_jobnum'};
-            }
-          }
-
-          foreach my $jobnum ( @jobnums ) {
-            my $error = $wqueue->depend_insert($jobnum);
-            if ( $error ) {
-              $dbh->rollback if $oldAutoCommit;
-              return "error queuing welcome email job dependancy: $error";
-            }
-          }
-
+        my %hash = (
+                     'custnum'  => $self->custnum,
+                     'username' => $self->username,
+                     'password' => $self->_password,
+                     'first'    => $cust_main->first,
+                     'last'     => $cust_main->getfield('last'),
+                     'pkg'      => $cust_pkg->part_pkg->pkg,
+                   );
+        my $wqueue = new FS::queue {
+          'svcnum' => $self->svcnum,
+          'job'    => 'FS::svc_acct::send_email'
+        };
+        my $error = $wqueue->insert(
+          'to'       => $to,
+          'from'     => $welcome_from,
+          'subject'  => $welcome_subject_template->fill_in( HASH => \%hash, ),
+          'mimetype' => $welcome_mimetype,
+          'body'     => $welcome_template->fill_in( HASH => \%hash, ),
+        );
+        if ( $error ) {
+          $dbh->rollback if $oldAutoCommit;
+          return "error queuing welcome email: $error";
         }
 
-      } # if $welcome_template
-    } # if !$msgnum
-  } # if $cust_pkg
+        if ( $options{'depend_jobnum'} ) {
+          warn "$me depend_jobnum found; adding to welcome email dependancies"
+            if $DEBUG;
+          if ( ref($options{'depend_jobnum'}) ) {
+            warn "$me adding jobs ". join(', ', @{$options{'depend_jobnum'}} ).
+                 "to welcome email dependancies"
+              if $DEBUG;
+            push @jobnums, @{ $options{'depend_jobnum'} };
+          } else {
+            warn "$me adding job $options{'depend_jobnum'} ".
+                 "to welcome email dependancies"
+              if $DEBUG;
+            push @jobnums, $options{'depend_jobnum'};
+          }
+        }
+
+        foreach my $jobnum ( @jobnums ) {
+          my $error = $wqueue->depend_insert($jobnum);
+          if ( $error ) {
+            $dbh->rollback if $oldAutoCommit;
+            return "error queuing welcome email job dependancy: $error";
+          }
+        }
+
+      }
+
+    }
+
+  } # if ( $cust_pkg )
 
   $dbh->commit or die $dbh->errstr if $oldAutoCommit;
   ''; #no error
@@ -1175,10 +1228,6 @@ sub check {
               || $self->ut_snumbern('upbytes')
               || $self->ut_snumbern('downbytes')
               || $self->ut_snumbern('totalbytes')
-              || $self->ut_snumbern('seconds_threshold')
-              || $self->ut_snumbern('upbytes_threshold')
-              || $self->ut_snumbern('downbytes_threshold')
-              || $self->ut_snumbern('totalbytes_threshold')
               || $self->ut_enum('_password_encoding', ['',qw(plain crypt ldap)])
               || $self->ut_enum('password_selfchange', [ '', 'Y' ])
               || $self->ut_enum('password_recover',    [ '', 'Y' ])
@@ -1192,7 +1241,7 @@ sub check {
               || $self->ut_enum('cgp_addmailtrailer', [ '', 'Y' ])
               #preferences
               || $self->ut_alphasn('cgp_deletemode')
-              || $self->ut_enum('cgp_emptytrash', $self->cgp_emptytrash_values)
+              || $self->ut_alphan('cgp_emptytrash')
               || $self->ut_alphan('cgp_language')
               || $self->ut_textn('cgp_timezone')
               || $self->ut_textn('cgp_skinname')
@@ -2234,7 +2283,7 @@ sub set_usage {
   my $reset = 0;
   my %handyhash = ();
   if ( $options{null} ) { 
-    %handyhash = ( map { ( $_ => undef, $_."_threshold" => undef ) }
+    %handyhash = ( map { ( $_ => 'NULL', $_."_threshold" => 'NULL' ) }
                    qw( seconds upbytes downbytes totalbytes )
                  );
   }
@@ -2256,7 +2305,7 @@ sub set_usage {
   #die $error if $error;         #services not explicity changed via the UI
 
   my $sql = "UPDATE svc_acct SET " .
-    join (',', map { "$_ =  ?" } (keys %handyhash) ).
+    join (',', map { "$_ =  $handyhash{$_}" } (keys %handyhash) ).
     " WHERE svcnum = ". $self->svcnum;
 
   warn "$me $sql\n"
@@ -2265,7 +2314,7 @@ sub set_usage {
   if (scalar(keys %handyhash)) {
     my $sth = $dbh->prepare( $sql )
       or die "Error preparing $sql: ". $dbh->errstr;
-    my $rv = $sth->execute(values %handyhash);
+    my $rv = $sth->execute();
     die "Error executing $sql: ". $sth->errstr
       unless defined($rv);
     die "Can't update usage for svcnum ". $self->svcnum

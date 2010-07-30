@@ -8,16 +8,14 @@ use Data::Dumper;
 use IPC::Run qw( run timeout );   # for _pslatex
 use IPC::Run3; # for do_print... should just use IPC::Run i guess
 use File::Temp;
-use Tie::IxHash;
 #do NOT depend on any FS:: modules here, causes weird (sometimes unreproducable
 #until on client machine) dependancy loops.  put them in FS::Misc::Something
 #instead
 
 @ISA = qw( Exporter );
-@EXPORT_OK = qw( send_email generate_email send_fax
+@EXPORT_OK = qw( generate_email send_email send_fax
                  states_hash counties cities state_label
                  card_types
-                 pkg_freqs
                  generate_ps generate_pdf do_print
                  csv_from_fixed
                );
@@ -38,11 +36,135 @@ FS::Misc - Miscellaneous subroutines
 
 Miscellaneous subroutines.  This module contains miscellaneous subroutines
 called from multiple other modules.  These are not OO or necessarily related,
-but are collected here to eliminate code duplication.
+but are collected here to elimiate code duplication.
 
 =head1 SUBROUTINES
 
 =over 4
+
+=item generate_email OPTION => VALUE ...
+
+Options:
+
+=over 4
+
+=item from
+
+Sender address, required
+
+=item to
+
+Recipient address, required
+
+=item subject
+
+email subject, required
+
+=item html_body
+
+Email body (HTML alternative).  Arrayref of lines, or scalar.
+
+Will be placed inside an HTML <BODY> tag.
+
+=item text_body
+
+Email body (Text alternative).  Arrayref of lines, or scalar.
+
+=back
+
+Returns an argument list to be passsed to L<send_email>.
+
+=cut
+
+#false laziness w/FS::cust_bill::generate_email
+
+use MIME::Entity;
+use HTML::Entities;
+
+sub generate_email {
+  my %args = @_;
+
+  my $me = '[FS::Misc::generate_email]';
+
+  my %return = (
+    'from'    => $args{'from'},
+    'to'      => $args{'to'},
+    'subject' => $args{'subject'},
+  );
+
+  #if (ref($args{'to'}) eq 'ARRAY') {
+  #  $return{'to'} = $args{'to'};
+  #} else {
+  #  $return{'to'} = [ grep { $_ !~ /^(POST|FAX)$/ }
+  #                         $self->cust_main->invoicing_list
+  #                  ];
+  #}
+
+  warn "$me creating HTML/text multipart message"
+    if $DEBUG;
+
+  $return{'nobody'} = 1;
+
+  my $alternative = build MIME::Entity
+    'Type'        => 'multipart/alternative',
+    'Encoding'    => '7bit',
+    'Disposition' => 'inline'
+  ;
+
+  my $data;
+  if ( ref($args{'text_body'}) eq 'ARRAY' ) {
+    $data = $args{'text_body'};
+  } else {
+    $data = [ split(/\n/, $args{'text_body'}) ];
+  }
+
+  $alternative->attach(
+    'Type'        => 'text/plain',
+    #'Encoding'    => 'quoted-printable',
+    'Encoding'    => '7bit',
+    'Data'        => $data,
+    'Disposition' => 'inline',
+  );
+
+  my @html_data;
+  if ( ref($args{'html_body'}) eq 'ARRAY' ) {
+    @html_data = @{ $args{'html_body'} };
+  } else {
+    @html_data = split(/\n/, $args{'html_body'});
+  }
+
+  $alternative->attach(
+    'Type'        => 'text/html',
+    'Encoding'    => 'quoted-printable',
+    'Data'        => [ '<html>',
+                       '  <head>',
+                       '    <title>',
+                       '      '. encode_entities($return{'subject'}), 
+                       '    </title>',
+                       '  </head>',
+                       '  <body bgcolor="#e8e8e8">',
+                       @html_data,
+                       '  </body>',
+                       '</html>',
+                     ],
+    'Disposition' => 'inline',
+    #'Filename'    => 'invoice.pdf',
+  );
+
+  #no other attachment:
+  # multipart/related
+  #   multipart/alternative
+  #     text/plain
+  #     text/html
+
+  $return{'content-type'} = 'multipart/related';
+  $return{'mimeparts'} = [ $alternative ];
+  $return{'type'} = 'multipart/alternative'; #Content-Type of first part...
+  #$return{'disposition'} = 'inline';
+
+  %return;
+
+}
 
 =item send_email OPTION => VALUE ...
 
@@ -231,154 +353,12 @@ sub send_email {
     $smtp_opt{'ssl'} = 1 if defined($enc) && $enc eq 'tls';
     $transport = Email::Sender::Transport::SMTP->new( %smtp_opt );
   }
-  
-  local $@; # just in case
-  eval { sendmail($message, { transport => $transport }) };
- 
-  if(ref($@) and $@->isa('Email::Sender::Failure')) {
-    return ($@->code ? $@->code.' ' : '').$@->message
-  }
-  else {
-    return $@;
-  }
-}
 
-=item generate_email OPTION => VALUE ...
+  eval { sendmail($message, { transport => $transport }); };
+  ref($@) eq 'Email::Sender::Failure'
+    ? ( $@->code ? $@->code.' ' : '' ). $@->message
+    : $@;
 
-Options:
-
-=over 4
-
-=item from
-
-Sender address, required
-
-=item to
-
-Recipient address, required
-
-=item subject
-
-email subject, required
-
-=item html_body
-
-Email body (HTML alternative).  Arrayref of lines, or scalar.
-
-Will be placed inside an HTML <BODY> tag.
-
-=item text_body
-
-Email body (Text alternative).  Arrayref of lines, or scalar.
-
-=back
-
-Constructs a multipart message from text_body and html_body.
-
-=cut
-
-#false laziness w/FS::cust_bill::generate_email
-
-use MIME::Entity;
-use HTML::Entities;
-
-sub generate_email {
-  my %args = @_;
-
-  my $me = '[FS::Misc::generate_email]';
-
-  my %return = (
-    'from'    => $args{'from'},
-    'to'      => $args{'to'},
-    'subject' => $args{'subject'},
-  );
-
-  #if (ref($args{'to'}) eq 'ARRAY') {
-  #  $return{'to'} = $args{'to'};
-  #} else {
-  #  $return{'to'} = [ grep { $_ !~ /^(POST|FAX)$/ }
-  #                         $self->cust_main->invoicing_list
-  #                  ];
-  #}
-
-  warn "$me creating HTML/text multipart message"
-    if $DEBUG;
-
-  $return{'nobody'} = 1;
-
-  my $alternative = build MIME::Entity
-    'Type'        => 'multipart/alternative',
-    'Encoding'    => '7bit',
-    'Disposition' => 'inline'
-  ;
-
-  my $data;
-  if ( ref($args{'text_body'}) eq 'ARRAY' ) {
-    $data = $args{'text_body'};
-  } else {
-    $data = [ split(/\n/, $args{'text_body'}) ];
-  }
-
-  $alternative->attach(
-    'Type'        => 'text/plain',
-    #'Encoding'    => 'quoted-printable',
-    'Encoding'    => '7bit',
-    'Data'        => $data,
-    'Disposition' => 'inline',
-  );
-
-  my @html_data;
-  if ( ref($args{'html_body'}) eq 'ARRAY' ) {
-    @html_data = @{ $args{'html_body'} };
-  } else {
-    @html_data = split(/\n/, $args{'html_body'});
-  }
-
-  $alternative->attach(
-    'Type'        => 'text/html',
-    'Encoding'    => 'quoted-printable',
-    'Data'        => [ '<html>',
-                       '  <head>',
-                       '    <title>',
-                       '      '. encode_entities($return{'subject'}), 
-                       '    </title>',
-                       '  </head>',
-                       '  <body bgcolor="#e8e8e8">',
-                       @html_data,
-                       '  </body>',
-                       '</html>',
-                     ],
-    'Disposition' => 'inline',
-    #'Filename'    => 'invoice.pdf',
-  );
-
-  #no other attachment:
-  # multipart/related
-  #   multipart/alternative
-  #     text/plain
-  #     text/html
-
-  $return{'content-type'} = 'multipart/related';
-  $return{'mimeparts'} = [ $alternative ];
-  $return{'type'} = 'multipart/alternative'; #Content-Type of first part...
-  #$return{'disposition'} = 'inline';
-
-  %return;
-
-}
-
-=item process_send_email OPTION => VALUE ...
-
-Takes arguments as per generate_email() and sends the message.  This 
-will die on any error and can be used in the job queue.
-
-=cut
-
-sub process_send_email {
-  my %message = @_;
-  my $error = send_email(generate_email(%message));
-  die "$error\n" if $error;
-  '';
 }
 
 =item send_fax OPTION => VALUE ...
@@ -608,39 +588,6 @@ sub card_types {
   }
 
   \%card_types;
-}
-
-=item pkg_freqs
-
-Returns a hash reference of allowed package billing frequencies.
-
-=cut
-
-sub pkg_freqs {
-  tie my %freq, 'Tie::IxHash', (
-    '0'    => '(no recurring fee)',
-    '1h'   => 'hourly',
-    '1d'   => 'daily',
-    '2d'   => 'every two days',
-    '3d'   => 'every three days',
-    '1w'   => 'weekly',
-    '2w'   => 'biweekly (every 2 weeks)',
-    '1'    => 'monthly',
-    '45d'  => 'every 45 days',
-    '2'    => 'bimonthly (every 2 months)',
-    '3'    => 'quarterly (every 3 months)',
-    '4'    => 'every 4 months',
-    '137d' => 'every 4 1/2 months (137 days)',
-    '6'    => 'semiannually (every 6 months)',
-    '12'   => 'annually',
-    '13'   => 'every 13 months (annually +1 month)',
-    '24'   => 'biannually (every 2 years)',
-    '36'   => 'triannually (every 3 years)',
-    '48'   => '(every 4 years)',
-    '60'   => '(every 5 years)',
-    '120'  => '(every 10 years)',
-  ) ;
-  \%freq;
 }
 
 =item generate_ps FILENAME

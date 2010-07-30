@@ -1,31 +1,17 @@
-<FORM METHOD="GET" NAME="CreateTicketForm" STYLE="display:inline">
-<SCRIPT TYPE="text/javascript">
-function updateTicketLink() {
-  var link = document.getElementById('CreateTicketLink');
-  var selector = document.getElementById('Queue')
-  link.href = "<% $new_base.'?'.
-    join(';', map(
-      { ($_ eq 'Queue') ? () : "$_=$new_param{$_}"} 
-    keys %new_param),'Queue=') %>" + selector.options[selector.selectedIndex].value;
-}
-</SCRIPT>
-<A id="CreateTicketLink" HREF="<% $new_link %>">Create new ticket</A>
- in queue
+<FORM METHOD="GET" ACTION="<% $new_base %>" NAME="CreateTicketForm">
+<INPUT TYPE="submit" VALUE="Create new ticket">
+in queue
+<SELECT NAME="Queue">
 % my %queues = FS::TicketSystem->queues();
-% if( $conf->exists('ticket_system-force_default_queueid') ) {
-<B><% $queues{$new_param{'Queue'}} %></B>
-<INPUT TYPE="hidden" NAME="Queue" VALUE="<% $new_param{'Queue'} %>">
-% }
-% else {
-<SELECT NAME="Queue" id="Queue" onchange="updateTicketLink()">
-% foreach my $queueid ( sort { $queues{$a} cmp $queues{$b} } keys %queues ) {
+% foreach my $queueid ( keys %queues ) {
 %   #should consider whether the user has ACL to create ticket in each queue
     <OPTION VALUE="<% $queueid %>"
             <% $queueid == $new_param{'Queue'} ? 'SELECTED' : '' %>
     ><% $queues{$queueid} |h %>
 % }
 </SELECT>
-<SCRIPT DEFER TYPE="text/javascript">updateTicketLink();</SCRIPT>
+% foreach my $param ( grep { $_ ne 'Queue' } keys %new_param ) {
+    <INPUT TYPE="hidden" NAME="<% $param %>" VALUE="<% $new_param{$param} |h %>">
 % }
 </FORM>
 <BR>
@@ -93,7 +79,6 @@ function updateTicketLink() {
 
 <%init>
 
-my( $conf ) = new FS::Conf;
 my( $cust_main ) = @_;
 my( @tickets )  = $cust_main->tickets;
 

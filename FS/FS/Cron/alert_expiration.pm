@@ -2,7 +2,7 @@ package FS::Cron::alert_expiration;
 
 use vars qw( @ISA @EXPORT_OK);
 use Exporter;
-use FS::Record qw(qsearch qsearchs);
+use FS::Record qw(qsearch);
 use FS::Conf;
 use FS::cust_main;
 use FS::Misc;
@@ -58,7 +58,6 @@ sub alert_expiration {
   }
   return if(!@customers);
   foreach my $customer (@customers) {
-    next if !($customer->ncancelled_pkgs); # skip inactive customers
     my $paydate = $customer->paydate;
     next if $paydate =~ /^\s*$/; # skip empty expiration dates
     
@@ -92,32 +91,25 @@ sub alert_expiration {
     if (grep { $expire_time < $_date + $_ &&
                $expire_time > $_date + $_ - $window_time } 
                ($warning_time, $urgent_time, $panic_time) ) {
-      # Send an expiration notice.
       my $agentnum = $customer->agentnum;
-      my $error = '';
+      $mail_sender = $conf->config('invoice_from', $agentnum);
+      $failure_recipient = $conf->config('invoice_from', $agentnum) 
+        || 'postmaster';
+      
+      my @alerter_template = $conf->config('alerter_template', $agentnum)
+        or die 'cannot load config file alerter_template';
 
-      my $msgnum = $conf->config('alerter_msgnum', $agentnum);
-      if ( $msgnum ) { # new hotness
-        my $msg_template = qsearchs('msg_template', { msgnum => $msgnum } );
-        $error = $msg_template->send('cust_main' => $customer);
-      }
-      else { #!$msgnum, the hard way
-        $mail_sender = $conf->config('invoice_from', $agentnum);
-        $failure_recipient = $conf->config('invoice_from', $agentnum) 
-          || 'postmaster';
-       
-        my @alerter_template = $conf->config('alerter_template', $agentnum)
-          or die 'cannot load config file alerter_template';
+      my $alerter = new Text::Template(TYPE   => 'ARRAY',
+                                       SOURCE => [ 
+                                         map "$_\n", @alerter_template
+                                         ])
+        or die "can't create Text::Template object: $Text::Template::ERROR";
 
-        my $alerter = new Text::Template(TYPE   => 'ARRAY',
-                                         SOURCE => [ 
-                                           map "$_\n", @alerter_template
-                                           ])
-          or die "can't create Text::Template object: $Text::Template::ERROR";
-
-        $alerter->compile()
-          or die "can't compile template: $Text::Template::ERROR";
-        
+      $alerter->compile()
+        or die "can't compile template: $Text::Template::ERROR";
+      
+      my @packages = $customer->ncancelled_pkgs;
+      if(@packages) {
         my @invoicing_list = $customer->invoicing_list;
         my @to_addrs = grep { $_ ne 'POST' } @invoicing_list;
         if(@to_addrs) {
@@ -141,29 +133,26 @@ sub alert_expiration {
             $fill_in{'payby'} = 'current method';
           }
           # Send it already!
-          $error = FS::Misc::send_email ( 
+          my $error = FS::Misc::send_email ( 
             from    =>  $mail_sender,
             to      =>  [ @to_addrs ],
             subject =>  'Billing Arrangement Expiration',
             body    =>  [ $alerter->fill_in( HASH => \%fill_in ) ],
           );
-      } 
-      else { # if(@to_addrs)
-        push @{$agent_failure_body{$customer->agentnum}},
-          sprintf(qq{%5d %-32.32s %4s %10s %12s %12s},
-            $custnum,
-            $first . " " . $last . "   " . $company,
-            $payby,
-            $paydate,
-            $daytime,
-            $night );
-      }
-    } # if($msgnum)
-    
-# should we die here rather than report failure as below?
-    die "can't send expiration alert: $error"
-      if $error;
-    
+          die "can't send expiration alert: $error"
+            if $error;
+        } 
+        else { # if(@to_addrs)
+          push @{$agent_failure_body{$customer->agentnum}},
+            sprintf(qq{%5d %-32.32s %4s %10s %12s %12s},
+              $custnum,
+              $first . " " . $last . "   " . $company,
+              $payby,
+              $paydate,
+              $daytime,
+              $night );
+        }
+      } # if(@packages)
     } # if(expired)
   } # foreach(@customers)
 

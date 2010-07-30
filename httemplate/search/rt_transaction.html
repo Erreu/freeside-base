@@ -3,12 +3,11 @@
              'name_singular' => 'transaction',
              'query'         => $query,
              'count_query'   => $count_query,
-             'count_addl'    => [ $format_seconds_sub, $format_seconds_sub, ],
+             'count_addl'    => [ $format_seconds_sub, ],
              'header'        => [ 'Ticket #',
                                   'Ticket',
                                   'Date',
                                   'Time',
-                                  'Applied',
                                 ],
              'fields'        => [ 'ticketid',
                                   sub { encode_entities(shift->get('subject')) },
@@ -16,14 +15,10 @@
                                   sub { my $seconds = shift->get('transaction_time');
                                         &{ $format_seconds_sub }( $seconds );
                                       },
-                                  sub { my $seconds = shift->get('support');
-                                        &{ $format_seconds_sub }( $seconds );
-                                      },
                                 ],
              'links'         => [
                                   $link,
                                   $link,
-                                  '',
                                   '',
                                   '',
                                 ],
@@ -33,9 +28,7 @@
 
 my $format_seconds_sub = sub {
   my $seconds = shift;
-  #(($seconds < 0) ? '-' : '') . concise(duration($seconds));
-  (($seconds < 0) ? '-' : '' ). int(abs($seconds)/3600)."h".sprintf("%02d",(abs(
-$seconds)%3600)/60)."m";
+  (($seconds < 0) ? '-' : '') . concise(duration($seconds));
 };
 
 </%once>
@@ -54,9 +47,8 @@ my $transactiontime = "
 ";
 
 my $join = 'JOIN Tickets ON Transactions.ObjectId = Tickets.Id '.
-           'JOIN Users   ON Transactions.Creator = Users.Id '.
-           'LEFT JOIN acct_rt_transaction '.
-                 '  ON Transactions.Id = acct_rt_transaction.transaction_id';
+           'JOIN Users   ON Transactions.Creator = Users.Id ';
+
 my $where = "
   WHERE objecttype='RT::Ticket'
     AND (    ( Transactions.Type = 'Set'
@@ -85,26 +77,20 @@ if ( $cgi->param('otaker') && $cgi->param('otaker') =~ /^([\w\.\-]+)$/ ) {
   $where .= " AND Users.name = '$1' ";
 }
 
-if ( $cgi->param('ticketid') =~ /^\s*(\d+)\s*$/ ) {
-  $where .= " AND Tickets.ID = $1";
-}
-
-if ( $cgi->param('svcnum') =~ /^\s*(\d+)\s*$/ ) {
-  $where .= " AND acct_rt_transaction.svcnum = $1";
-}
-
 my $query = {
-  'select'    => "Transactions.*, Tickets.Id AS ticketid, Tickets.Subject, Users.name as otaker, $transactiontime AS transaction_time, acct_rt_transaction.support",
+  'select'    => "Transactions.*, Tickets.Id AS ticketid, Tickets.Subject, Users.name as otaker, $transactiontime AS transaction_time",
   #'table'     => 'Transactions',
   'table'     => 'transactions',
-  'addl_from' => $join,
+  'addl_from' => $join.
+                 'LEFT JOIN acct_rt_transaction '.
+                 '  ON Transactions.Id = acct_rt_transaction.transaction_id',
   'extra_sql' => $where,
   'order by'  => 'ORDER BY Created',
 };
 
 my $count_query =
-  "SELECT COUNT(*), SUM($transactiontime), SUM(acct_rt_transaction.support) FROM Transactions $join $where";
+  "SELECT COUNT(*), SUM($transactiontime) FROM Transactions $join $where";
 
-my $link = [ "${p}rt/Ticket/Display.html?id=", sub { shift->get('ticketid'); } ];
+my $link = [ "${p}rt/Ticket/Display.html?id=", sub { shift->get('id'); } ];
 
 </%init>

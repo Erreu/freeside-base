@@ -65,9 +65,6 @@ Example:
    #return an error string or empty for no error
    'precheck_callback' => sub { my( $cgi ) = @_; },
 
-   #after everything's inserted
-   'noerror_callback' => sub { my( $cgi, $object ) = @_; },
-
    #supplies arguments to insert() and replace()
    # for use with tables that are FS::option_Common (among other things)
    'args_callback' => sub { my( $cgi, $object ) = @_; },
@@ -207,7 +204,6 @@ if ( $opt{'agent_virt'} ) {
 
     die "illegal agentnum"
       unless $curuser->agentnums_href->{$new->agentnum}
-          or $curuser->access_right('View customers of all agents')
           or $opt{'agent_null_right'}
              && ! $new->agentnum
              && $curuser->access_right($opt{'agent_null_right'});
@@ -302,20 +298,12 @@ if ( !$error && $opt{'process_o2m'} ) {
 
 
 if ( $error ) {
-
   $cgi->param('error', $error);
   if ( $opt{'clear_on_error'} && scalar(@{$opt{'clear_on_error'}}) ) {
     foreach my $field (@{$opt{'clear_on_error'}}) {
       $cgi->param($field, '')
     }
   }
-
-} else {
-
-  if ( $opt{'noerror_callback'} ) {
-    &{ $opt{'noerror_callback'} }( $cgi, $new );
-  }
-
 }
 
 </%init>

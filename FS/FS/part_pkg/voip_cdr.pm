@@ -13,16 +13,9 @@ use FS::rate_prefix;
 use FS::rate_detail;
 use FS::part_pkg::recur_Common;
 
-use List::Util qw(first min);
-
 @ISA = qw(FS::part_pkg::recur_Common);
 
-$DEBUG = 1;
-
-tie my %cdr_svc_method, 'Tie::IxHash',
-  'svc_phone.phonenum' => 'Phone numbers (svc_phone.phonenum)',
-  'svc_pbx.title'      => 'PBX name (svc_pbx.title)',
-;
+$DEBUG = 0;
 
 tie my %rating_method, 'Tie::IxHash',
   'prefix' => 'Rate calls by using destination prefix to look up a region and rate according to the internal prefix and rate tables',
@@ -77,11 +70,6 @@ tie my %granularity, 'Tie::IxHash', FS::rate_detail::granularities();
                          'type' => 'select',
                          'select_options' => \%FS::part_pkg::recur_Common::recur_method,
                        },
-
-    'cdr_svc_method' => { 'name' => 'CDR service matching method',
-                          'type' => 'radio',
-                          'options' => \%cdr_svc_method,
-                        },
 
     'rating_method' => { 'name' => 'Rating method',
                          'type' => 'radio',
@@ -149,31 +137,11 @@ tie my %granularity, 'Tie::IxHash', FS::rate_detail::granularities();
     'use_cdrtypenum' => { 'name' => 'Do not charge for CDRs where the CDR Type is not set to: ',
                          },
 
-    'skip_dst_prefix' => { 'name' => 'Do not charge for CDRs where the destination number starts with any of these values:',
-    },
-
     'skip_dcontext' => { 'name' => 'Do not charge for CDRs where the dcontext is set to any of these (comma-separated) values:',
                        },
 
     'skip_dstchannel_prefix' => { 'name' => 'Do not charge for CDRs where the dstchannel starts with:',
                                 },
-
-    'skip_src_length_more' => { 'name' => 'Do not charge for CDRs where the source is more than this many digits:',
-                              },
-
-    'noskip_src_length_accountcode_tollfree' => { 'name' => 'Do charge for CDRs where source is equal or greater than the specified digits and accountcode is toll free',
-                                                  'type' => 'checkbox',
-                                                },
-
-    'accountcode_tollfree_ratenum' => {
-      'name' => 'Optional alternate rate plan when accountcode is toll free',
-      'type' => 'select',
-      'select_table'  => 'rate',
-      'select_key'    => 'ratenum',
-      'select_label'  => 'ratename',
-      'disable_empty' => 0,
-      'empty_label'   => '',
-    },
 
     'skip_dst_length_less' => { 'name' => 'Do not charge for CDRs where the destination is less than this many digits:',
                               },
@@ -242,7 +210,6 @@ tie my %granularity, 'Tie::IxHash', FS::rate_detail::granularities();
   'fieldorder' => [qw(
                        setup_fee recur_fee recur_temporality unused_credit
                        recur_method cutoff_day
-                       cdr_svc_method
                        rating_method ratenum min_charge sec_granularity
                        ignore_unrateable
                        default_prefix
@@ -251,10 +218,7 @@ tie my %granularity, 'Tie::IxHash', FS::rate_detail::granularities();
                        disable_tollfree
                        use_amaflags use_disposition
                        use_disposition_taqua use_carrierid use_cdrtypenum
-                       skip_dcontext skip_dst_prefix 
-                       skip_dstchannel_prefix skip_src_length_more 
-                       noskip_src_length_accountcode_tollfree
-                       accountcode_tollfree_ratenum
+                       skip_dcontext skip_dstchannel_prefix
                        skip_dst_length_less skip_lastapp
                        use_duration
                        411_rewrite
@@ -314,7 +278,6 @@ sub calc_usage {
 
 #  my $downstream_cdr = '';
 
-  my $cdr_svc_method    = $self->option('cdr_svc_method')||'svc_phone.phonenum';
   my $rating_method     = $self->option('rating_method') || 'prefix';
   my $intl              = $self->option('international_prefix') || '011';
   my $domestic_prefix   = $self->option('domestic_prefix');
@@ -335,8 +298,6 @@ sub calc_usage {
     @dirass = split(',', $dirass);
   }
 
-  my %interval_cache = (); # for timed rates
-
   #for check_chargable, so we don't keep looking up options inside the loop
   my %opt_cache = ();
 
@@ -344,15 +305,13 @@ sub calc_usage {
   die $@ if $@;
   my $csv = new Text::CSV_XS;
 
-  my($svc_table, $svc_field) = split('\.', $cdr_svc_method);
-
   foreach my $cust_svc (
-    grep { $_->part_svc->svcdb eq $svc_table } $cust_pkg->cust_svc
+    grep { $_->part_svc->svcdb eq 'svc_phone' } $cust_pkg->cust_svc
   ) {
 
-    my $svc_x = $cust_svc->svc_x;
+    my $svc_phone = $cust_svc->svc_x;
     foreach my $cdr (
-      $svc_x->get_cdrs(
+      $svc_phone->get_cdrs(
         'disable_src'    => $self->option('disable_src'),
         'default_prefix' => $self->option('default_prefix'),
         'status'         => '',
@@ -366,16 +325,11 @@ sub calc_usage {
 
       my $rate_detail;
       my( $rate_region, $regionnum );
-      my $rate;
       my $pretty_destnum;
       my $charge = '';
       my $seconds = '';
-      my $weektime = '';
       my $regionname = '';
       my $classnum = '';
-      my $countrycode;
-      my $number;
-
       my @call_details = ();
       if ( $rating_method eq 'prefix' ) {
 
@@ -402,7 +356,7 @@ sub calc_usage {
           # (or calling station id for toll free calls)
           ###
 
-          my( $to_or_from );
+          my( $to_or_from, $number );
           if ( $cdr->is_tollfree && ! $disable_tollfree )
           { #tollfree call
             $to_or_from = 'from';
@@ -422,7 +376,7 @@ sub calc_usage {
 #          $dest =~ s/\@(.*)$// and $siphost = $1; # @10.54.32.1, @sip.example.com
 
           #determine the country code
-          $countrycode = '';
+          my $countrycode;
           if (    $number =~ /^$intl(((\d)(\d))(\d))(\d+)$/
                || $number =~ /^\+(((\d)(\d))(\d))(\d+)$/
              )
@@ -451,24 +405,11 @@ sub calc_usage {
           #asterisks here causes inserting the detail to barf, so:
           $pretty_destnum =~ s/\*//g;
 
-          my $eff_ratenum = $cdr->is_tollfree('accountcode')
-            ? $cust_pkg->part_pkg->option('accountcode_tollfree_ratenum')
-            : '';
-          $eff_ratenum ||= $ratenum;
-          $rate = qsearchs('rate', { 'ratenum' => $eff_ratenum })
-            or die "ratenum $eff_ratenum not found!";
+          my $rate = qsearchs('rate', { 'ratenum' => $ratenum })
+            or die "ratenum $ratenum not found!";
 
-          my @ltime = localtime($cdr->startdate);
-          $weektime = $ltime[0] + 
-                      $ltime[1]*60 +   #minutes
-                      $ltime[2]*3600 + #hours
-                      $ltime[6]*86400; #days since sunday
-          # if there's no timed rate_detail for this time/region combination,
-          # dest_detail returns the default.  There may still be a timed rate 
-          # that applies after the starttime of the call, so be careful...
           $rate_detail = $rate->dest_detail({ 'countrycode' => $countrycode,
                                               'phonenum'    => $number,
-                                              'weektime'    => $weektime,
                                             });
 
           if ( $rate_detail ) {
@@ -479,17 +420,6 @@ sub calc_usage {
             warn "  found rate for regionnum $regionnum ".
                  "and rate detail $rate_detail\n"
               if $DEBUG;
-
-            if ( !exists($interval_cache{$regionnum}) ) {
-              my @intervals = (
-                sort { $a->stime <=> $b->stime }
-                map { my $r = $_->rate_time; $r ? $r->intervals : () }
-                $rate->rate_detail
-              );
-              $interval_cache{$regionnum} = \@intervals;
-              warn "  cached ".scalar(@intervals)." interval(s)\n"
-                if $DEBUG;
-            }
 
           } elsif ( $ignore_unrateable ) {
 
@@ -525,7 +455,6 @@ sub calc_usage {
 #        } else { #pass upstream price through
 #
 #          $charge = sprintf('%.2f', $cdr->upstream_price);
-#          warn "Incrementing \$charges by $charge.  Now $charges\n" if $DEBUG;
 #          $charges += $charge;
 # 
 #          @call_details = (
@@ -544,7 +473,6 @@ sub calc_usage {
         #XXX $charge = sprintf('%.2f', $cdr->upstream_price);
         $charge = sprintf('%.3f', $cdr->upstream_price);
         $charges += $charge;
-        warn "Incrementing \$charges by $charge.  Now $charges\n" if $DEBUG;
 
         @call_details = ($cdr->downstream_csv( 'format' => $output_format,
                                                'charge' => $charge,
@@ -575,7 +503,6 @@ sub calc_usage {
         $charge = sprintf('%.4f', ( $self->option('min_charge') * $minutes )
                                   + 0.0000000001 ); #so 1.00005 rounds to 1.0001
 
-        warn "Incrementing \$charges by $charge.  Now $charges\n" if $DEBUG;
         $charges += $charge;
 
         @call_details = ($cdr->downstream_csv( 'format' => $output_format,
@@ -605,121 +532,59 @@ sub calc_usage {
 
         unless ( @call_details || ( $charge ne '' && $charge == 0 ) ) {
 
-          my $seconds_left = $use_duration ? $cdr->duration : $cdr->billsec;
-          # charge for the first (conn_sec) seconds
-          $seconds = min($seconds_left, $rate_detail->conn_sec);
-          $seconds_left -= $seconds; 
-          $weektime     += $seconds;
-          $charge = sprintf("%.02f", $rate_detail->conn_charge);
+          $included_min{$regionnum} = $rate_detail->min_included
+            unless exists $included_min{$regionnum};
 
-          my $total_minutes = 0;
-          my $whole_minutes = 1;
-          my $etime;
-          while($seconds_left) {
-            my $ratetimenum = $rate_detail->ratetimenum; # may be empty
+          my $granularity = $rate_detail->sec_granularity;
 
-            # find the end of the current rate interval
-            if(@{ $interval_cache{$regionnum} } == 0) {
-              # There are no timed rates in this group, so just stay 
-              # in the default rate_detail for the entire duration.
-              # Set an "end" of 1 past the end of the current call.
-              $etime = $weektime + $seconds_left + 1;
-            } 
-            elsif($ratetimenum) {
-              # This is a timed rate, so go to the etime of this interval.
-              # If it's followed by another timed rate, the stime of that 
-              # interval should match the etime of this one.
-              my $interval = $rate_detail->rate_time->contains($weektime);
-              $etime = $interval->etime;
-            }
-            else {
-              # This is a default rate, so use the stime of the next 
-              # interval in the sequence.
-              my $next_int = first { $_->stime > $weektime } 
-                              @{ $interval_cache{$regionnum} };
-              if ($next_int) {
-                $etime = $next_int->stime;
-              }
-              else {
-                # weektime is near the end of the week, so decrement 
-                # it by a full week and use the stime of the first 
-                # interval.
-                $weektime -= (3600*24*7);
-                $etime = $interval_cache{$regionnum}->[0]->stime;
-              }
-            }
+                      # length($cdr->billsec) ? $cdr->billsec : $cdr->duration;
+          $seconds = $use_duration ? $cdr->duration : $cdr->billsec;
 
-            my $charge_sec = min($seconds_left, $etime - $weektime);
+          $seconds -= $rate_detail->conn_sec;
+          $seconds = 0 if $seconds < 0;
 
-            $seconds_left -= $charge_sec;
+          $seconds += $granularity - ( $seconds % $granularity )
+            if $seconds      # don't granular-ize 0 billsec calls (bills them)
+            && $granularity; # 0 is per call
+          my $minutes = sprintf("%.1f", $seconds / 60);
+          $minutes =~ s/\.0$// if $granularity == 60;
 
-            $included_min{$regionnum}{$ratetimenum} = $rate_detail->min_included
-              unless exists $included_min{$regionnum}{$ratetimenum};
+          # per call rather than per minute
+          $minutes = 1 unless $granularity;
 
-            my $granularity = $rate_detail->sec_granularity;
-            $whole_minutes = 0 if $granularity;
+          $included_min{$regionnum} -= $minutes;
 
-            # should this be done in every rate interval?
-            $charge_sec += $granularity - ( $charge_sec % $granularity )
-              if $charge_sec   # don't granular-ize 0 billsec calls (bills them)
-              && $granularity; # 0 is per call
-            my $minutes = sprintf("%.1f", $charge_sec / 60);
-            $minutes =~ s/\.0$// if $granularity == 60;
+          $charge = sprintf('%.2f', $rate_detail->conn_charge);
 
-            $seconds += $charge_sec;
+          if ( $included_min{$regionnum} < 0 ) {
+            my $charge_min = 0 - $included_min{$regionnum}; #XXX should preserve
+                                                            #(display?) this
+            $included_min{$regionnum} = 0;
+            $charge += sprintf('%.2f', ($rate_detail->min_charge * $charge_min)
+                                       + 0.00000001 ); #so 1.005 rounds to 1.01
+            $charge = sprintf('%.2f', $charge);
+            $charges += $charge;
+          }
 
-            # per call rather than per minute
-            $minutes = 1 unless $granularity;
-            $seconds_left = 0 unless $granularity;
-
-            $included_min{$regionnum}{$ratetimenum} -= $minutes;
-            
-            if ( $included_min{$regionnum}{$ratetimenum} <= 0 ) {
-              my $charge_min = 0 - $included_min{$regionnum}{$ratetimenum}; #XXX should preserve
-                                                              #(display?) this
-              $included_min{$regionnum}{$ratetimenum} = 0;
-              $charge += sprintf('%.2f', ($rate_detail->min_charge * $charge_min)
-                                         + 0.00000001 ); #so 1.005 rounds to 1.01
-            }
-
-            # choose next rate_detail
-            $rate_detail = $rate->dest_detail({ 'countrycode' => $countrycode,
-                                                'phonenum'    => $number,
-                                                'weektime'    => $etime })
-                    if($seconds_left);
-            # we have now moved forward to $etime
-            $weektime = $etime;
-
-          } #while $seconds_left
           # this is why we need regionnum/rate_region....
           warn "  (rate region $rate_region)\n" if $DEBUG;
 
-          $total_minutes = sprintf("%.1f", $seconds / 60);
-          $total_minutes =~ s/\.0$// if $whole_minutes;
+          @call_details = (
+           $cdr->downstream_csv( 'format'         => $output_format,
+                                 'granularity'    => $granularity,
+                                 'minutes'        => $minutes,
+                                 'charge'         => $charge,
+                                 'pretty_dst'     => $pretty_destnum,
+                                 'dst_regionname' => $regionname,
+                               )
+          );
 
           $classnum = $rate_detail->classnum;
-          $charge = sprintf('%.2f', $charge);
 
-          @call_details = (
-            $cdr->downstream_csv( 'format'         => $output_format,
-                                  'granularity'    => $rate_detail->sec_granularity, 
-                                  'minutes'        => $total_minutes,
-                                  # why do we go through this hocus-pocus?
-                                  # the cdr *will* show duration here
-                                  # if we forego the 'minutes' key
-                                  # duration vs billsec?
-                                  'charge'         => $charge,
-                                  'pretty_dst'     => $pretty_destnum,
-                                  'dst_regionname' => $regionname,
-                                )
-          );
-        } #if(there is a rate_detail)
- 
+        }
 
         if ( $charge > 0 ) {
           #just use FS::cust_bill_pkg_detail objects?
-          warn "Incrementing \$charges by $charge.  Now $charges\n" if $DEBUG;
-          $charges += $charge;
           my $call_details;
           my $phonenum = $cust_svc->svc_x->phonenum;
 
@@ -823,10 +688,8 @@ sub check_chargable {
     use_disposition_taqua
     use_carrierid
     use_cdrtypenum
-    skip_dst_prefix
     skip_dcontext
     skip_dstchannel_prefix
-    skip_src_length_more noskip_src_length_accountcode_tollfree
     skip_dst_length_less
     skip_lastapp
   );
@@ -853,11 +716,6 @@ sub check_chargable {
     if length($opt{'use_cdrtypenum'})
     && $cdr->cdrtypenum ne $opt{'use_cdrtypenum'}; #ne otherwise 0 matches ''
 
-  foreach(split(',',$opt{'skip_dst_prefix'})) {
-    return "dst starts with '$_'"
-    if length($_) && substr($cdr->dst,0,length($_)) eq $_;
-  }
-
   return "dcontext IN ( $opt{'skip_dcontext'} )"
     if $opt{'skip_dcontext'} =~ /\S/
     && grep { $cdr->dcontext eq $_ } split(/\s*,\s*/, $opt{'skip_dcontext'});
@@ -873,26 +731,6 @@ sub check_chargable {
 
   return "lastapp is $opt{'skip_lastapp'}"
     if length($opt{'skip_lastapp'}) && $cdr->lastapp eq $opt{'skip_lastapp'};
-
-  my $src_length = $opt{'skip_src_length_more'};
-  if ( $src_length ) {
-
-    if ( $opt{'noskip_src_length_accountcode_tollfree'} ) {
-
-      if ( $cdr->is_tollfree('accountcode') ) {
-        return "source less than or equal to $src_length digits"
-          if length($cdr->src) <= $src_length;
-      } else {
-        return "source more than $src_length digits"
-          if length($cdr->src) > $src_length;
-      }
-
-    } else {
-      return "source more than $src_length digits"
-        if length($cdr->src) > $src_length;
-    }
-
-  }
 
   #all right then, rate it
   '';

@@ -16,8 +16,6 @@ use Exporter;
 use Scalar::Util qw( blessed );
 use List::Util qw( min );
 use Time::Local qw(timelocal);
-use Storable qw(thaw);
-use MIME::Base64;
 use Data::Dumper;
 use Tie::IxHash;
 use Digest::MD5 qw(md5_base64);
@@ -57,7 +55,6 @@ use FS::cust_tax_location;
 use FS::part_pkg_taxrate;
 use FS::agent;
 use FS::cust_main_invoice;
-use FS::cust_tag;
 use FS::cust_credit_bill;
 use FS::cust_bill_pay;
 use FS::prepay_credit;
@@ -65,7 +62,6 @@ use FS::queue;
 use FS::part_pkg;
 use FS::part_event;
 use FS::part_event_condition;
-use FS::part_export;
 #use FS::cust_event;
 use FS::type_pkgs;
 use FS::payment_gateway;
@@ -90,7 +86,7 @@ $skip_fuzzyfiles = 0;
 @fuzzyfields = ( 'first', 'last', 'company', 'address1' );
 
 @encrypted_fields = ('payinfo', 'paycvv');
-sub nohistory_fields { ('payinfo', 'paycvv'); }
+sub nohistory_fields { ('paycvv'); }
 
 @paytypes = ('', 'Personal checking', 'Personal savings', 'Business checking', 'Business savings');
 
@@ -474,30 +470,6 @@ sub insert {
     $self->invoicing_list( $invoicing_list );
   }
 
-  warn "  setting customer tags\n"
-    if $DEBUG > 1;
-
-  foreach my $tagnum ( @{ $self->tagnum || [] } ) {
-    my $cust_tag = new FS::cust_tag { 'tagnum'  => $tagnum,
-                                      'custnum' => $self->custnum };
-    my $error = $cust_tag->insert;
-    if ( $error ) {
-      $dbh->rollback if $oldAutoCommit;
-      return $error;
-    }
-  }
-
-  if ( $invoicing_list ) {
-    $error = $self->check_invoicing_list( $invoicing_list );
-    if ( $error ) {
-      $dbh->rollback if $oldAutoCommit;
-      #return "checking invoicing_list (transaction rolled back): $error";
-      return $error;
-    }
-    $self->invoicing_list( $invoicing_list );
-  }
-
-
   warn "  setting cust_main_exemption\n"
     if $DEBUG > 1;
 
@@ -573,45 +545,6 @@ sub insert {
       return "updating fuzzy search cache: $error";
     }
   }
-
-  # cust_main exports!
-  warn "  exporting\n" if $DEBUG > 1;
-
-  my $export_args = $options{'export_args'} || [];
-
-  my @part_export =
-    map qsearch( 'part_export', {exportnum=>$_} ),
-      $conf->config('cust_main-exports'); #, $agentnum
-
-  foreach my $part_export ( @part_export ) {
-    my $error = $part_export->export_insert($self, @$export_args);
-    if ( $error ) {
-      $dbh->rollback if $oldAutoCommit;
-      return "exporting to ". $part_export->exporttype.
-             " (transaction rolled back): $error";
-    }
-  }
-
-  #foreach my $depend_jobnum ( @$depend_jobnums ) {
-  #    warn "[$me] inserting dependancies on supplied job $depend_jobnum\n"
-  #      if $DEBUG;
-  #    foreach my $jobnum ( @jobnums ) {
-  #      my $queue = qsearchs('queue', { 'jobnum' => $jobnum } );
-  #      warn "[$me] inserting dependancy for job $jobnum on $depend_jobnum\n"
-  #        if $DEBUG;
-  #      my $error = $queue->depend_insert($depend_jobnum);
-  #      if ( $error ) {
-  #        $dbh->rollback if $oldAutoCommit;
-  #        return "error queuing job dependancy: $error";
-  #      }
-  #    }
-  #  }
-  #
-  #}
-  #
-  #if ( exists $options{'jobnums'} ) {
-  #  push @{ $options{'jobnums'} }, @jobnums;
-  #}
 
   warn "  insert complete; committing transaction\n"
     if $DEBUG > 1;
@@ -1381,13 +1314,23 @@ sub delete {
     }
   }
 
-  foreach my $table (qw( cust_main_invoice cust_main_exemption cust_tag )) {
-    foreach my $record ( qsearch( 'table', { 'custnum' => $self->custnum } ) ) {
-      my $error = $record->delete;
-      if ( $error ) {
-        $dbh->rollback if $oldAutoCommit;
-        return $error;
-      }
+  foreach my $cust_main_invoice ( #(email invoice destinations, not invoices)
+    qsearch( 'cust_main_invoice', { 'custnum' => $self->custnum } )
+  ) {
+    my $error = $cust_main_invoice->delete;
+    if ( $error ) {
+      $dbh->rollback if $oldAutoCommit;
+      return $error;
+    }
+  }
+
+  foreach my $cust_main_exemption (
+    qsearch( 'cust_main_exemption', { 'custnum' => $self->custnum } )
+  ) {
+    my $error = $cust_main_exemption->delete;
+    if ( $error ) {
+      $dbh->rollback if $oldAutoCommit;
+      return $error;
     }
   }
 
@@ -1395,23 +1338,6 @@ sub delete {
   if ( $error ) {
     $dbh->rollback if $oldAutoCommit;
     return $error;
-  }
-
-  # cust_main exports!
-
-  #my $export_args = $options{'export_args'} || [];
-
-  my @part_export =
-    map qsearch( 'part_export', {exportnum=>$_} ),
-      $conf->config('cust_main-exports'); #, $agentnum
-
-  foreach my $part_export ( @part_export ) {
-    my $error = $part_export->export_delete( $self ); #, @$export_args);
-    if ( $error ) {
-      $dbh->rollback if $oldAutoCommit;
-      return "exporting to ". $part_export->exporttype.
-             " (transaction rolled back): $error";
-    }
   }
 
   $dbh->commit or die $dbh->errstr if $oldAutoCommit;
@@ -1493,28 +1419,6 @@ sub replace {
     $self->invoicing_list( $invoicing_list );
   }
 
-  if ( $self->exists('tagnum') ) { #so we don't delete these on edit by accident
-
-    #this could be more efficient than deleting and re-inserting, if it matters
-    foreach my $cust_tag (qsearch('cust_tag', {'custnum'=>$self->custnum} )) {
-      my $error = $cust_tag->delete;
-      if ( $error ) {
-        $dbh->rollback if $oldAutoCommit;
-        return $error;
-      }
-    }
-    foreach my $tagnum ( @{ $self->tagnum || [] } ) {
-      my $cust_tag = new FS::cust_tag { 'tagnum'  => $tagnum,
-                                        'custnum' => $self->custnum };
-      my $error = $cust_tag->insert;
-      if ( $error ) {
-        $dbh->rollback if $oldAutoCommit;
-        return $error;
-      }
-    }
-
-  }
-
   my %options = @param;
 
   my $tax_exemption = delete $options{'tax_exemption'};
@@ -1549,15 +1453,8 @@ sub replace {
 
   }
 
-  if ( $self->payby =~ /^(CARD|CHEK|LECB)$/
-       && ( ( $self->get('payinfo') ne $old->get('payinfo')
-              && $self->get('payinfo') !~ /^99\d{14}$/ 
-            )
-            || grep { $self->get($_) ne $old->get($_) } qw(paydate payname)
-          )
-     )
-  {
-
+  if ( $self->payby =~ /^(CARD|CHEK|LECB)$/ &&
+       grep { $self->get($_) ne $old->get($_) } qw(payinfo paydate payname) ) {
     # card/check/lec info has changed, want to retry realtime_ invoice events
     my $error = $self->retry_realtime;
     if ( $error ) {
@@ -1571,23 +1468,6 @@ sub replace {
     if ( $error ) {
       $dbh->rollback if $oldAutoCommit;
       return "updating fuzzy search cache: $error";
-    }
-  }
-
-  # cust_main exports!
-
-  my $export_args = $options{'export_args'} || [];
-
-  my @part_export =
-    map qsearch( 'part_export', {exportnum=>$_} ),
-      $conf->config('cust_main-exports'); #, $agentnum
-
-  foreach my $part_export ( @part_export ) {
-    my $error = $part_export->export_replace( $self, $old, @$export_args);
-    if ( $error ) {
-      $dbh->rollback if $oldAutoCommit;
-      return "exporting to ". $part_export->exporttype.
-             " (transaction rolled back): $error";
     }
   }
 
@@ -1828,7 +1708,12 @@ sub check {
 
   # If it is encrypted and the private key is not availaible then we can't
   # check the credit card.
-  my $check_payinfo = ! $self->is_encrypted($self->payinfo);
+
+  my $check_payinfo = 1;
+
+  if ($self->is_encrypted($self->payinfo)) {
+    $check_payinfo = 0;
+  }
 
   if ( $check_payinfo && $self->payby =~ /^(CARD|DCRD)$/ ) {
 
@@ -1842,8 +1727,7 @@ sub check {
       or return gettext('invalid_card'); # . ": ". $self->payinfo;
 
     return gettext('unknown_card_type')
-      if $self->payinfo !~ /^99\d{14}$/ #token
-      && cardtype($self->payinfo) eq "Unknown";
+      if cardtype($self->payinfo) eq "Unknown";
 
     my $ban = qsearchs('banned_pay', $self->_banned_pay_hashref);
     if ( $ban ) {
@@ -2220,9 +2104,6 @@ sub sort_packages {
     return 1  if !$a_num_cust_svc &&  $b_num_cust_svc;
     my @a_cust_svc = $a->cust_svc;
     my @b_cust_svc = $b->cust_svc;
-    return 0  if !scalar(@a_cust_svc) && !scalar(@b_cust_svc);
-    return -1 if  scalar(@a_cust_svc) && !scalar(@b_cust_svc);
-    return 1  if !scalar(@a_cust_svc) &&  scalar(@b_cust_svc);
     $a_cust_svc[0]->svc_x->label cmp $b_cust_svc[0]->svc_x->label;
   }
 
@@ -2501,42 +2382,6 @@ sub agent {
   qsearchs( 'agent', { 'agentnum' => $self->agentnum } );
 }
 
-=item agent_name
-
-Returns the agent name (see L<FS::agent>) for this customer.
-
-=cut
-
-sub agent_name {
-  my $self = shift;
-  $self->agent->agent;
-}
-
-=item cust_tag
-
-Returns any tags associated with this customer, as FS::cust_tag objects,
-or an empty list if there are no tags.
-
-=cut
-
-sub cust_tag {
-  my $self = shift;
-  qsearch('cust_tag', { 'custnum' => $self->custnum } );
-}
-
-=item part_tag
-
-Returns any tags associated with this customer, as FS::part_tag objects,
-or an empty list if there are no tags.
-
-=cut
-
-sub part_tag {
-  my $self = shift;
-  map $_->part_tag, $self->cust_tag; 
-}
-
-
 =item cust_class
 
 Returns the customer class, as an FS::cust_class object, or the empty string
@@ -2627,10 +2472,6 @@ Any other true value causes errors to die.
 
 Debugging level.  Default is 0 (no debugging), or can be set to 1 (passed-in options), 2 (traces progress), 3 (more information), or 4 (include full search queries)
 
-=item job
-
-Optional FS::queue entry to receive status updates.
-
 =back
 
 Options are passed to the B<bill> and B<collect> methods verbatim, so all
@@ -2647,9 +2488,7 @@ sub bill_and_collect {
   #pre-printing invoices
 
   $options{'actual_time'} ||= time;
-  my $job = $options{'job'};
 
-  $job->update_statustext('0,cleaning expired packages') if $job;
   $error = $self->cancel_expired_pkgs( $options{actual_time} );
   if ( $error ) {
     $error = "Error expiring custnum ". $self->custnum. ": $error";
@@ -2666,7 +2505,6 @@ sub bill_and_collect {
     else                                                     { warn   $error; }
   }
 
-  $job->update_statustext('20,billing packages') if $job;
   $error = $self->bill( %options );
   if ( $error ) {
     $error = "Error billing custnum ". $self->custnum. ": $error";
@@ -2675,7 +2513,6 @@ sub bill_and_collect {
     else                                                     { warn   $error; }
   }
 
-  $job->update_statustext('50,applying payments and credits') if $job;
   $error = $self->apply_payments_and_credits;
   if ( $error ) {
     $error = "Error applying custnum ". $self->custnum. ": $error";
@@ -2684,7 +2521,6 @@ sub bill_and_collect {
     else                                                     { warn   $error; }
   }
 
-  $job->update_statustext('70,running collection events') if $job;
   unless ( $conf->exists('cancelled_cust-noevents')
            && ! $self->num_ncancelled_pkgs
   ) {
@@ -2696,7 +2532,6 @@ sub bill_and_collect {
       else                                                   { warn   $error; }
     }
   }
-  $job->update_statustext('100,finished') if $job;
 
   '';
 
@@ -2846,13 +2681,7 @@ sub bill {
   local $FS::UID::AutoCommit = 0;
   my $dbh = dbh;
 
-  warn "$me acquiring lock on customer ". $self->custnum. "\n"
-    if $DEBUG;
-
   $self->select_for_update; #mutex
-
-  warn "$me running pre-bill events for customer ". $self->custnum. "\n"
-    if $DEBUG;
 
   my $error = $self->do_cust_event(
     'debug'      => ( $options{'debug'} || 0 ),
@@ -2864,9 +2693,6 @@ sub bill {
     $dbh->rollback if $oldAutoCommit;
     return $error;
   }
-
-  warn "$me done running pre-bill events for customer ". $self->custnum. "\n"
-    if $DEBUG;
 
   #keep auto-charge and non-auto-charge line items separate
   my @passes = ( '', 'no_auto' );
@@ -3793,17 +3619,19 @@ sub collect {
     }
   }
 
-  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
-
-  #never want to roll back an event just because it returned an error
-  local $FS::UID::AutoCommit = 1; #$oldAutoCommit;
-
-  $self->do_cust_event(
+  my $error = $self->do_cust_event(
     'debug'      => ( $options{'debug'} || 0 ),
     'time'       => $invoice_time,
     'check_freq' => $options{'check_freq'},
     'stage'      => 'collect',
   );
+  if ( $error ) {
+    $dbh->rollback if $oldAutoCommit;
+    return $error;
+  }
+
+  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
+  '';
 
 }
 
@@ -3898,11 +3726,6 @@ sub do_cust_event {
     return $due_cust_event;
   }
 
-  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
-  #never want to roll back an event just because it or a different one
-  # returned an error
-  local $FS::UID::AutoCommit = 1; #$oldAutoCommit;
-
   foreach my $cust_event ( @$due_cust_event ) {
 
     #XXX lock event
@@ -3911,7 +3734,11 @@ sub do_cust_event {
     unless ( $cust_event->test_conditions( 'time' => $time ) ) {
       #don't leave stray "new/locked" records around
       my $error = $cust_event->delete;
-      return $error if $error;
+      if ( $error ) {
+        #gah, even with transactions
+        $dbh->commit if $oldAutoCommit; #well.
+        return $error;
+      }
       next;
     }
 
@@ -3920,16 +3747,20 @@ sub do_cust_event {
       warn "  running cust_event ". $cust_event->eventnum. "\n"
         if $DEBUG > 1;
 
+      
       #if ( my $error = $cust_event->do_event(%options) ) { #XXX %options?
       if ( my $error = $cust_event->do_event() ) {
         #XXX wtf is this?  figure out a proper dealio with return value
         #from do_event
-        return $error;
-      }
+	  # gah, even with transactions.
+	  $dbh->commit if $oldAutoCommit; #well.
+	  return $error;
+	}
     }
 
   }
 
+  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
   '';
 
 }
@@ -4408,7 +4239,6 @@ sub _bop_options {
   $options->{payment_gateway}->gatewaynum
     ? $options->{payment_gateway}->options
     : @{ $options->{payment_gateway}->get('options') };
-
 }
 
 sub _bop_defaults {
@@ -4435,6 +4265,14 @@ sub _bop_content {
   my ($self, $options) = @_;
   my %content = ();
 
+  $content{address} = exists($options->{'address1'})
+                        ? $options->{'address1'}
+                        : $self->address1;
+  my $address2 = exists($options->{'address2'})
+                   ? $options->{'address2'}
+                   : $self->address2;
+  $content{address} .= ", ". $address2 if length($address2);
+
   my $payip = exists($options->{'payip'}) ? $options->{'payip'} : $self->payip;
   $content{customer_ip} = $payip if length($payip);
 
@@ -4445,30 +4283,14 @@ sub _bop_content {
     (    $conf->exists('business-onlinepayment-email_customer')
       || $conf->exists('business-onlinepayment-email-override') );
       
-  my ($payname, $payfirst, $paylast);
-  if ( $options->{payname} && $options->{method} ne 'ECHECK' ) {
-    ($payname = $options->{payname}) =~
-      /^\s*([\w \,\.\-\']*)?\s+([\w\,\.\-\']+)\s*$/
-      or return "Illegal payname $payname";
-    ($payfirst, $paylast) = ($1, $2);
-  } else {
-    $payfirst = $self->getfield('first');
-    $paylast = $self->getfield('last');
-    $payname = "$payfirst $paylast";
-  }
+  $content{payfirst} = $self->getfield('first');
+  $content{paylast} = $self->getfield('last');
 
-  $content{last_name} = $paylast;
-  $content{first_name} = $payfirst;
+  $content{account_name} = "$content{payfirst} $content{paylast}"
+    if $options->{method} eq 'ECHECK';
 
-  $content{name} = $payname;
-
-  $content{address} = exists($options->{'address1'})
-                        ? $options->{'address1'}
-                        : $self->address1;
-  my $address2 = exists($options->{'address2'})
-                   ? $options->{'address2'}
-                   : $self->address2;
-  $content{address} .= ", ". $address2 if length($address2);
+  $content{name} = $options->{payname};
+  $content{name} = $content{account_name} if exists($content{account_name});
 
   $content{city} = exists($options->{city})
                      ? $options->{city}
@@ -4482,11 +4304,10 @@ sub _bop_content {
   $content{country} = exists($options->{country})
                         ? $options->{country}
                         : $self->country;
-
   $content{referer} = 'http://cleanwhisker.420.am/'; #XXX fix referer :/
   $content{phone} = $self->daytime || $self->night;
 
-  \%content;
+  (%content);
 }
 
 my %bop_method2payby = (
@@ -4562,8 +4383,13 @@ sub realtime_bop {
   # massage data
   ###
 
-  my $bop_content = $self->_bop_content(\%options);
-  return $bop_content unless ref($bop_content);
+  my (%bop_content) = $self->_bop_content(\%options);
+
+  if ( $options{method} ne 'ECHECK' ) {
+    $options{payname} =~ /^\s*([\w \,\.\-\']*)?\s+([\w\,\.\-\']+)\s*$/
+      or return "Illegal payname $options{payname}";
+    ($bop_content{payfirst}, $bop_content{paylast}) = ($1, $2);
+  }
 
   my @invoicing_list = $self->invoicing_list_emailonly;
   if ( $conf->exists('emailinvoiceautoalways')
@@ -4629,9 +4455,6 @@ sub realtime_bop {
     $content{account_type} = exists($options{'paytype'})
                                ? uc($options{'paytype'}) || 'CHECKING'
                                : uc($self->getfield('paytype')) || 'CHECKING';
-    $content{account_name} = $self->getfield('first'). ' '.
-                             $self->getfield('last');
-
     $content{customer_org} = $self->company ? 'B' : 'I';
     $content{state_id}       = exists($options{'stateid'})
                                  ? $options{'stateid'}
@@ -4716,7 +4539,7 @@ sub realtime_bop {
     'amount'         => $options{amount},
     #'invoice_number' => $options{'invnum'},
     'customer_id'    => $self->custnum,
-    %$bop_content,
+    %bop_content,
     'reference'      => $cust_pay_pending->paypendingnum, #for now
     'email'          => $email,
     %content, #after
@@ -4731,8 +4554,6 @@ sub realtime_bop {
   my $BOP_TESTING_SUCCESS = 1;
 
   unless ( $BOP_TESTING ) {
-    $transaction->test_transaction(1)
-      if $conf->exists('business-onlinepayment-test_transaction');
     $transaction->submit();
   } else {
     if ( $BOP_TESTING_SUCCESS ) {
@@ -4785,8 +4606,6 @@ sub realtime_bop {
 
     $capture->content( %capture );
 
-    $capture->test_transaction(1)
-      if $conf->exists('business-onlinepayment-test_transaction');
     $capture->submit();
 
     unless ( $capture->is_success ) {
@@ -4813,25 +4632,6 @@ sub realtime_bop {
     if ( $error ) {
       warn "WARNING: error removing cvv: $error\n";
     }
-  }
-
-  ###
-  # Tokenize
-  ###
-
-
-  if ( $transaction->can('card_token') && $transaction->card_token ) {
-
-    $self->card_token($transaction->card_token);
-
-    if ( $options{'payinfo'} eq $self->payinfo ) {
-      $self->payinfo($transaction->card_token);
-      my $error = $self->replace;
-      if ( $error ) {
-        warn "WARNING: error storing token: $error, but proceeding anyway\n";
-      }
-    }
-
   }
 
   ###
@@ -4957,7 +4757,7 @@ sub _realtime_bop_result {
        'paid'     => $cust_pay_pending->paid,
        '_date'    => '',
        'payby'    => $cust_pay_pending->payby,
-       'payinfo'  => $options{'payinfo'},
+       #'payinfo'  => $payinfo,
        'paybatch' => $paybatch,
        'paydate'  => $cust_pay_pending->paydate,
        'pkgnum'   => $cust_pay_pending->pkgnum,
@@ -5111,39 +4911,28 @@ sub _realtime_bop_result {
          && ! grep { $transaction->error_message =~ /$_/ }
                    $conf->config('emaildecline-exclude')
     ) {
+      my @templ = $conf->config('declinetemplate');
+      my $template = new Text::Template (
+        TYPE   => 'ARRAY',
+        SOURCE => [ map "$_\n", @templ ],
+      ) or return "($perror) can't create template: $Text::Template::ERROR";
+      $template->compile()
+        or return "($perror) can't compile template: $Text::Template::ERROR";
 
-      # Send a decline alert to the customer.
-      my $msgnum = $conf->config('decline_msgnum', $self->agentnum);
-      my $error = '';
-      if ( $msgnum ) {
-        my $msg_template = qsearchs('msg_template', { msgnum => $msgnum });
-        $error = $msg_template->send( 'cust_main' => $self );
-      }
-      else { #!$msgnum
+      my $templ_hash = {
+        'company_name'    =>
+          scalar( $conf->config('company_name', $self->agentnum ) ),
+        'company_address' =>
+          join("\n", $conf->config('company_address', $self->agentnum ) ),
+        'error'           => $transaction->error_message,
+      };
 
-        my @templ = $conf->config('declinetemplate');
-        my $template = new Text::Template (
-          TYPE   => 'ARRAY',
-          SOURCE => [ map "$_\n", @templ ],
-        ) or return "($perror) can't create template: $Text::Template::ERROR";
-        $template->compile()
-          or return "($perror) can't compile template: $Text::Template::ERROR";
-
-        my $templ_hash = {
-          'company_name'    =>
-            scalar( $conf->config('company_name', $self->agentnum ) ),
-          'company_address' =>
-            join("\n", $conf->config('company_address', $self->agentnum ) ),
-          'error'           => $transaction->error_message,
-        };
-
-        my $error = send_email(
-          'from'    => $conf->config('invoice_from', $self->agentnum ),
-          'to'      => [ grep { $_ ne 'POST' } $self->invoicing_list ],
-          'subject' => 'Your payment could not be processed',
-          'body'    => [ $template->fill_in(HASH => $templ_hash) ],
-        );
-      }
+      my $error = send_email(
+        'from'    => $conf->config('invoice_from', $self->agentnum ),
+        'to'      => [ grep { $_ ne 'POST' } $self->invoicing_list ],
+        'subject' => 'Your payment could not be processed',
+        'body'    => [ $template->fill_in(HASH => $templ_hash) ],
+      );
 
       $perror .= " (also received error sending decline notification: $error)"
         if $error;
@@ -5372,7 +5161,7 @@ sub realtime_refund_bop {
   my $self = shift;
 
   my %options = ();
-  if (ref($_[0]) eq 'HASH') {
+  if (ref($_[0]) ne 'HASH') {
     %options = %{$_[0]};
   } else {
     my $method = shift;
@@ -5504,8 +5293,6 @@ sub realtime_refund_bop {
       }
     }
     $void->content( 'action' => 'void', %content );
-    $void->test_transaction(1)
-      if $conf->exists('business-onlinepayment-test_transaction');
     $void->submit();
     if ( $void->is_success ) {
       my $error = $cust_pay->void($options{'reason'});
@@ -5608,8 +5395,6 @@ sub realtime_refund_bop {
   );
   warn join('', map { "  $_ => $sub_content{$_}\n" } keys %sub_content )
     if $DEBUG > 1;
-  $refund->test_transaction(1)
-    if $conf->exists('business-onlinepayment-test_transaction');
   $refund->submit();
 
   return "$processor error: ". $refund->error_message
@@ -6048,17 +5833,29 @@ sub total_owed_date {
   my $self = shift;
   my $time = shift;
 
-  my $custnum = $self->custnum;
+#  my $custnum = $self->custnum;
+#
+#  my $owed_sql = FS::cust_bill->owed_sql;
+#
+#  my $sql = "
+#    SELECT SUM($owed_sql) FROM cust_bill
+#      WHERE custnum = $custnum
+#        AND _date <= $time
+#  ";
+#
+#  my $sth = dbh->prepare($sql) or die dbh->errstr;
+#  $sth->execute() or die $sth->errstr;
+#
+#  return sprintf( '%.2f', $sth->fetchrow_arrayref->[0] );
 
-  my $owed_sql = FS::cust_bill->owed_sql;
-
-  my $sql = "
-    SELECT SUM($owed_sql) FROM cust_bill
-      WHERE custnum = $custnum
-        AND _date <= $time
-  ";
-
-  sprintf( "%.2f", $self->scalar_sql($sql) );
+  my $total_bill = 0;
+  foreach my $cust_bill (
+    grep { $_->_date <= $time }
+      qsearch('cust_bill', { 'custnum' => $self->custnum, } )
+  ) {
+    $total_bill += $cust_bill->owed;
+  }
+  sprintf( "%.2f", $total_bill );
 
 }
 
@@ -6128,18 +5925,9 @@ sub total_credited {
 
 sub total_unapplied_credits {
   my $self = shift;
-
-  my $custnum = $self->custnum;
-
-  my $unapplied_sql = FS::cust_credit->unapplied_sql;
-
-  my $sql = "
-    SELECT SUM($unapplied_sql) FROM cust_credit
-      WHERE custnum = $custnum
-  ";
-
-  sprintf( "%.2f", $self->scalar_sql($sql) );
-
+  my $total_credit = 0;
+  $total_credit += $_->credited foreach $self->cust_credit;
+  sprintf( "%.2f", $total_credit );
 }
 
 =item total_unapplied_credits_pkgnum PKGNUM
@@ -6166,18 +5954,9 @@ See L<FS::cust_pay/unapplied>.
 
 sub total_unapplied_payments {
   my $self = shift;
-
-  my $custnum = $self->custnum;
-
-  my $unapplied_sql = FS::cust_pay->unapplied_sql;
-
-  my $sql = "
-    SELECT SUM($unapplied_sql) FROM cust_pay
-      WHERE custnum = $custnum
-  ";
-
-  sprintf( "%.2f", $self->scalar_sql($sql) );
-
+  my $total_unapplied = 0;
+  $total_unapplied += $_->unapplied foreach $self->cust_pay;
+  sprintf( "%.2f", $total_unapplied );
 }
 
 =item total_unapplied_payments_pkgnum PKGNUM
@@ -6205,17 +5984,9 @@ customer.  See L<FS::cust_refund/unapplied>.
 
 sub total_unapplied_refunds {
   my $self = shift;
-  my $custnum = $self->custnum;
-
-  my $unapplied_sql = FS::cust_refund->unapplied_sql;
-
-  my $sql = "
-    SELECT SUM($unapplied_sql) FROM cust_refund
-      WHERE custnum = $custnum
-  ";
-
-  sprintf( "%.2f", $self->scalar_sql($sql) );
-
+  my $total_unapplied = 0;
+  $total_unapplied += $_->unapplied foreach $self->cust_refund;
+  sprintf( "%.2f", $total_unapplied );
 }
 
 =item balance
@@ -6227,7 +5998,12 @@ total_unapplied_credits minus total_unapplied_payments).
 
 sub balance {
   my $self = shift;
-  $self->balance_date_range;
+  sprintf( "%.2f",
+      $self->total_owed
+    + $self->total_unapplied_refunds
+    - $self->total_unapplied_credits
+    - $self->total_unapplied_payments
+  );
 }
 
 =item balance_date TIME
@@ -6242,13 +6018,19 @@ functions.
 
 sub balance_date {
   my $self = shift;
-  $self->balance_date_range(shift);
+  my $time = shift;
+  sprintf( "%.2f",
+        $self->total_owed_date($time)
+      + $self->total_unapplied_refunds
+      - $self->total_unapplied_credits
+      - $self->total_unapplied_payments
+  );
 }
 
-=item balance_date_range [ START_TIME [ END_TIME [ OPTION => VALUE ... ] ] ]
+=item balance_date_range START_TIME [ END_TIME [ OPTION => VALUE ... ] ]
 
-Returns the balance for this customer, optionally considering invoices with
-date earlier than START_TIME, and not later than END_TIME
+Returns the balance for this customer, only considering invoices with date
+earlier than START_TIME, and optionally not later than END_TIME
 (total_owed_date minus total_unapplied_credits minus total_unapplied_payments).
 
 Times are specified as SQL fragments or numeric
@@ -7312,8 +7094,6 @@ Returns a status string for this customer, currently:
 
 =item prospect - No packages have ever been ordered
 
-=item ordered - Recurring packages all are new (not yet billed).
-
 =item active - One or more recurring packages is active
 
 =item inactive - No active recurring packages, but otherwise unsuspended/uncancelled (the inactive status is new - previously inactive customers were mis-identified as cancelled)
@@ -7330,8 +7110,7 @@ sub status { shift->cust_status(@_); }
 
 sub cust_status {
   my $self = shift;
-  # prospect ordered active inactive suspended cancelled
-  for my $status ( FS::cust_main->statuses() ) {
+  for my $status (qw( prospect active inactive suspended cancelled )) {
     my $method = $status.'_sql';
     my $numnum = ( my $sql = $self->$method() ) =~ s/cust_main\.custnum/?/g;
     my $sth = dbh->prepare("SELECT $sql") or die dbh->errstr;
@@ -7366,7 +7145,6 @@ use vars qw(%statuscolor);
 tie %statuscolor, 'Tie::IxHash',
   'prospect'  => '7e0079', #'000000', #black?  naw, purple
   'active'    => '00CC00', #green
-  'ordered'   => '009999', #teal? cyan?
   'inactive'  => '0000CC', #blue
   'suspended' => 'FF9900', #yellow
   'cancelled' => 'FF0000', #red
@@ -7476,20 +7254,9 @@ sub select_count_pkgs_sql {
   $select_count_pkgs;
 }
 
-sub prospect_sql {
-  " 0 = ( $select_count_pkgs ) ";
-}
-
-=item ordered_sql
-
-Returns an SQL expression identifying ordered cust_main records (customers with
-recurring packages not yet setup).
-
-=cut
-
-sub ordered_sql {
-  " 0 < ( $select_count_pkgs AND ". FS::cust_pkg->ordered_sql. " ) ";
-}
+sub prospect_sql { "
+  0 = ( $select_count_pkgs )
+"; }
 
 =item active_sql
 
@@ -7498,9 +7265,10 @@ active recurring packages).
 
 =cut
 
-sub active_sql {
-  " 0 < ( $select_count_pkgs AND ". FS::cust_pkg->active_sql. " ) ";
-}
+sub active_sql { "
+  0 < ( $select_count_pkgs AND ". FS::cust_pkg->active_sql. "
+      )
+"; }
 
 =item inactive_sql
 
@@ -7589,10 +7357,10 @@ sub balance_sql { "
         WHERE cust_refund.custnum = cust_main.custnum     )
 "; }
 
-=item balance_date_sql [ START_TIME [ END_TIME [ OPTION => VALUE ... ] ] ]
+=item balance_date_sql START_TIME [ END_TIME [ OPTION => VALUE ... ] ]
 
-Returns an SQL fragment to retreive the balance for this customer, optionally
-considering invoices with date earlier than START_TIME, and not
+Returns an SQL fragment to retreive the balance for this customer, only
+considering invoices with date earlier than START_TIME, and optionally not
 later than END_TIME (total_owed_date minus total_unapplied_credits minus
 total_unapplied_payments).
 
@@ -7675,11 +7443,9 @@ Available options are:
 =cut
 
 sub unapplied_payments_date_sql {
-  my( $class, $start, $end, %opt ) = @_;
+  my( $class, $start, $end, ) = @_;
 
-  my $cutoff = $opt{'cutoff'};
-
-  my $unapp_pay    = FS::cust_pay->unapplied_sql($cutoff);
+  my $unapp_pay    = FS::cust_pay->unapplied_sql;
 
   my $pay_where = $class->_money_table_where( 'cust_pay', $start, $end,
                                                           'unapplied_date'=>1 );
@@ -7790,7 +7556,7 @@ sub search {
   # parse status
   ##
 
-  #prospect ordered active inactive suspended cancelled
+  #prospect active inactive suspended cancelled
   if ( grep { $params->{'status'} eq $_ } FS::cust_main->statuses() ) {
     my $method = $params->{'status'}. '_sql';
     #push @where, $class->$method();
@@ -8058,10 +7824,8 @@ sub email_search_result {
   my $subject = delete $params->{subject};
   my $html_body = delete $params->{html_body};
   my $text_body = delete $params->{text_body};
-  my $error = '';
 
-  my $job = delete $params->{'job'}
-    or die "email_search_result must run from the job queue.\n";
+  my $job = delete $params->{'job'};
 
   $params->{'payby'} = [ split(/\0/, $params->{'payby'}) ]
     unless ref($params->{'payby'});
@@ -8081,73 +7845,43 @@ sub email_search_result {
 
 
   my( $num, $last, $min_sec ) = (0, time, 5); #progresbar foo
-  my @retry_jobs = ();
-  my $success = 0;
 
   #eventually order+limit magic to reduce memory use?
   foreach my $cust_main ( qsearch($sql_query) ) {
 
-    #progressbar first, so that the count is right
-    $num++;
-    if ( time - $min_sec > $last ) {
-      my $error = $job->update_statustext(
-        int( 100 * $num / $num_cust )
-      );
-      die $error if $error;
-      $last = time;
-    }
-
     my $to = $cust_main->invoicing_list_emailonly_scalar;
+    next unless $to;
 
-    if( $to ) {
-      my @message = (
+    my $error = send_email(
+      generate_email(
         'from'      => $from,
         'to'        => $to,
         'subject'   => $subject,
         'html_body' => $html_body,
         'text_body' => $text_body,
-      );
+      )
+    );
+    return $error if $error;
 
-      $error = send_email( generate_email( @message ) );
-
-      if($error) {
-        # queue the sending of this message so that the user can see what we 
-        # tried to do, and retry if desired
-        my $queue = new FS::queue {
-          'job'        => 'FS::Misc::process_send_email',
-          'custnum'    => $cust_main->custnum,
-          'status'     => 'failed',
-          'statustext' => $error,
-        };
-        $queue->insert(@message);
-        push @retry_jobs, $queue;
-      }
-      else {
-        $success++;
+    if ( $job ) { #progressbar foo
+      $num++;
+      if ( time - $min_sec > $last ) {
+        my $error = $job->update_statustext(
+          int( 100 * $num / $num_cust )
+        );
+        die $error if $error;
+        $last = time;
       }
     }
 
-    if($success == 0 and 
-        (scalar(@retry_jobs) > 10 or $num == $num_cust)
-      ) {
-      # 10 is arbitrary, but if we have enough failures, that's 
-      # probably a configuration or network problem, and we 
-      # abort the batch and run away screaming.
-      # We NEVER do this if anything was successfully sent.
-      $_->delete foreach (@retry_jobs);
-      return "multiple failures: '$error'\n";
-    }
-  }
-
-  if(@retry_jobs) {
-    # fail the job, but with a status message that makes it clear
-    # something was sent.
-    return "Sent $success, failed ".scalar(@retry_jobs).". Failed attempts placed in job queue.\n";
   }
 
   return '';
 }
 
+use Storable qw(thaw);
+use Data::Dumper;
+use MIME::Base64;
 sub process_email_search_result {
   my $job = shift;
   #warn "$me process_re_X $method for job $job\n" if $DEBUG;
@@ -8770,9 +8504,6 @@ sub batch_charge {
 
 =item notify CUSTOMER_OBJECT TEMPLATE_NAME OPTIONS
 
-Deprecated.  Use event notification and message templates 
-(L<FS::msg_template>) instead.
-
 Sends a templated email notification to the customer (see L<Text::Template>).
 
 OPTIONS is a hash and may include
@@ -9067,35 +8798,14 @@ sub _agent_plandata {
 
 }
 
-=item queued_bill 'custnum' => CUSTNUM [ , OPTION => VALUE ... ]
-
-Subroutine (not a method), designed to be called from the queue.
-
-Takes a list of options and values.
-
-Pulls up the customer record via the custnum option and calls bill_and_collect.
-
-=cut
-
 sub queued_bill {
+  ## actual sub, not a method, designed to be called from the queue.
+  ## sets up the customer, and calls the bill_and_collect
   my (%args) = @_; #, ($time, $invoice_time, $check_freq, $resetup) = @_;
-
   my $cust_main = qsearchs( 'cust_main', { custnum => $args{'custnum'} } );
-  warn 'bill_and_collect custnum#'. $cust_main->custnum. "\n";#log custnum w/pid
-
-  $cust_main->bill_and_collect( %args );
-}
-
-sub process_bill_and_collect {
-  my $job = shift;
-  my $param = thaw(decode_base64(shift));
-  my $cust_main = qsearchs( 'cust_main', { custnum => $param->{'custnum'} } )
-      or die "custnum '$param->{custnum}' not found!\n";
-  $param->{'job'}   = $job;
-  $param->{'fatal'} = 1; # runs from job queue, will be caught
-  $param->{'retry'} = 1;
-
-  $cust_main->bill_and_collect( %$param );
+      $cust_main->bill_and_collect(
+        %args,
+      );
 }
 
 sub _upgrade_data { #class method
@@ -9106,7 +8816,6 @@ sub _upgrade_data { #class method
   $sth->execute or die $sth->errstr;
 
   local($ignore_expired_card) = 1;
-  local($skip_fuzzyfiles) = 1;
   $class->_upgrade_otaker(%opts);
 
 }

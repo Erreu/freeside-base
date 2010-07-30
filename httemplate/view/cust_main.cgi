@@ -4,22 +4,6 @@
           })
 %>
 <BR>
-% my @part_tag = $cust_main->part_tag;
-% if ( $conf->config('cust_tag-location') eq 'top' && @part_tag ) {
-<TABLE STYLE="margin-bottom:8px" CELLSPACING=2>
-%   foreach my $part_tag ( @part_tag ) {
-<TR>
-  <TD>
-      <FONT SIZE="+1"
-            <% length($part_tag->tagcolor)
-                 ? 'STYLE="background-color:#'.$part_tag->tagcolor.'"'
-                 : ''
-      %>><% $part_tag->tagname.': '. $part_tag->tagdesc |h %></FONT>
-  </TD>
-</TR>
-%   }
-</TABLE>
-% }
 
 <% include('/elements/menubar.html',
              { 'newstyle' => 1,
@@ -29,7 +13,7 @@
              %views,
           )
 %>
-<DIV CLASS="fstabcontainer">
+<BR>
 
 <% include('/elements/init_overlib.html') %>
 
@@ -90,9 +74,6 @@ function areyousure(href, message) {
   This customer's signup URL: <A HREF="<% $signupurl %>?ref=<% $custnum %>"><% $signupurl %>?ref=<% $custnum %></A><BR><BR>
 % } 
 
-%if ( $conf->exists('maestro-status_test') ) {
-  <A HREF="<% $p %>misc/maestro-customer_status-test.html?<% $custnum %>">Test maestro status</A><BR><BR>
-% } 
 
 <A NAME="cust_main"></A>
 <TABLE BORDER=0>
@@ -233,7 +214,6 @@ Comments
 <% include('cust_main/change_history.html', $cust_main ) %> 	 
 % }
 
-</DIV>
 <% include('/elements/footer.html') %>
 <%init>
 

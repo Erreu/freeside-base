@@ -108,6 +108,10 @@ my @where = ();
 #here is the agent virtualization
 push @where, $curuser->agentnums_sql( 'table'=>'cust_main' );
 
+#well, because cust_bill_pkg.cgi has it and without it the numbers don't match..
+push @where , " payby != 'COMP' "
+  unless $cgi->param('include_comp_cust');
+
 my %total = ();
 my %total_legacy = ();
 foreach my $agentnum (@agentnums) {

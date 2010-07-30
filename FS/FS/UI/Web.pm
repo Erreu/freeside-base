@@ -494,7 +494,6 @@ use JSON;
 use FS::UID qw(getotaker);
 use FS::Record qw(qsearchs);
 use FS::queue;
-use FS::CGI qw(rooturl);
 
 $DEBUG = 0;
 
@@ -566,7 +565,6 @@ sub start_job {
     }
   }
   $param{CurrentUser} = getotaker();
-  $param{RootURL} = rooturl($self->{cgi}->self_url);
   warn "FS::UI::Web::start_job\n".
        join('', map {
                       if ( ref($param{$_}) ) {
@@ -622,15 +620,13 @@ sub job_status {
   }
 
   my @return;
-  if ( $job && $job->status ne 'failed' && $job->status ne 'done' ) {
+  if ( $job && $job->status ne 'failed' ) {
     my ($progress, $action) = split ',', $job->statustext, 2; 
     $action ||= 'Server processing job';
     @return = ( 'progress', $progress, $action );
   } elsif ( !$job ) { #handle job gone case : job successful
                       # so close popup, redirect parent window...
     @return = ( 'complete' );
-  } elsif ( $job->status eq 'done' ) {
-    @return = ( 'done', $job->statustext, '' );
   } else {
     @return = ( 'error', $job ? $job->statustext : $jobnum );
   }

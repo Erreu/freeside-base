@@ -215,7 +215,7 @@ $report_packages{'Advanced package reports'} =  [ $fsurl.'search/report_cust_pkg
 
 tie my %report_inventory, 'Tie::IxHash',
   'Inventory by agent' => [ $fsurl.'search/report_agent_inventory.html', '' ],
-  'Inventory activity' => [ $fsurl.'search/report_h_inventory_item.html', '' ],
+  #'Inventory activity' => [ $fsurl.'search/report_h_inventory_item.html', '' ],
 ;
 
 tie my %report_rating, 'Tie::IxHash',
@@ -357,8 +357,6 @@ $tools_menu{'Quick payment entry'} =  [ $fsurl.'misc/batch-cust_pay.html', 'Ente
 $tools_menu{'Process payment batches'} = [ $fsurl.'search/pay_batch.cgi?magic=_date;open=1;intransit=1', 'Process credit card and electronic check batches' ]
   if ( $conf->exists('batch-enable') || $conf->config('batch-enable_payby') )
      && $curuser->access_right('Process batches');
-$tools_menu{'Process invoice batches'} = [ $fsurl.'search/bill_batch.cgi' ] 
-  if ( $conf->exists('invoice_print_pdf') );
 $tools_menu{'Job Queue'} =  [ $fsurl.'search/queue.html', 'View pending job queue' ]
   if $curuser->access_right('Job queue');
 $tools_menu{'Ticketing'} = [ \%tools_ticketing, 'Ticketing tools' ]
@@ -421,7 +419,6 @@ tie my %config_billing_rates, 'Tie::IxHash',
   'Rate plans' => [ $fsurl.'browse/rate.cgi', 'Manage rate plans' ],
   'Regions and prefixes' => [ $fsurl.'browse/rate_region.html', 'Manage regions and prefixes' ],
   'Usage classes'  => [ $fsurl.'browse/usage_class.html', 'Usage classes define groups of usage for taxation.' ],
-  'Time periods' => [ $fsurl.'browse/rate_time.html', 'Time periods define days and hours for rate plans' ],
   'Edit rates with Excel' => [ $fsurl.'misc/rate_edit_excel.html', 'Download and edit rates with Excel, then upload changes.' ], #"Edit with Excel" ?
 ;
 
@@ -473,18 +470,12 @@ tie my %config_phone, 'Tie::IxHash',
 ;
 
 tie my %config_misc, 'Tie::IxHash';
-$config_misc{'Message templates'} = [ $fsurl.'browse/msg_template.html', 'Templates for customer notices' ]
-  if $curuser->access_right('Edit templates')
-  || $curuser->access_right('Edit global templates')
-  || $curuser->access_right('Configuration');
-$config_misc{'Tags'} = [ $fsurl.'browse/part_tag.html', '' ]
-  if $curuser->access_right('Configuration');
 $config_misc{'Advertising sources'} = [ $fsurl.'browse/part_referral.html', 'Where a customer heard about your service.' ]
   if $curuser->access_right('Edit advertising sources')
   || $curuser->access_right('Edit global advertising sources');
 if ( $curuser->access_right('Configuration') ) {
   $config_misc{'Virtual fields'} = [ $fsurl.'browse/part_virtual_field.cgi', 'Locally defined fields', ];
-  $config_misc{'Error catalog'} = [ $fsurl.'browse/msgcat.cgi', 'Change error messages and other customizable labels' ];
+  $config_misc{'Message catalog'} = [ $fsurl.'browse/msgcat.cgi', 'Change error messages and other customizable labels' ];
 }
 $config_misc{'Inventory classes and inventory'} = [ $fsurl.'browse/inventory_class.html', 'Setup inventory classes and stock inventory' ]
   if $curuser->access_right('Edit inventory')
@@ -522,8 +513,7 @@ $config_menu{'Broadband'} = [ \%config_broadband, ''    ]
 $config_menu{'Phone'}  = [ \%config_phone, ''    ]
   if ( $curuser->access_right('Configuration') );
 $config_menu{'Miscellaneous'} = [ \%config_misc, ''    ]
-  if $curuser->access_right('Configuration' )
-  || $curuser->access_right('Edit advertising sources')
+  if $curuser->access_right('Edit advertising sources')
   || $curuser->access_right('Edit global advertising sources');
 
 

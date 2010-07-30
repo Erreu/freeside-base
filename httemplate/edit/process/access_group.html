@@ -1,3 +1,6 @@
+% if ( $conf->exists('disable_acl_changes') ) {
+  ACL changes disabled in public demo.
+% } else {
 <% include( 'elements/process.html',
                'table'       => 'access_group',
                'viewall_dir' => 'browse',
@@ -14,14 +17,12 @@
                },
            )
 %>
+% }
 <%init>
 
 die "access denied"
   unless $FS::CurrentUser::CurrentUser->access_right('Configuration');
 
-if ( FS::Conf->new->exists('disable_acl_changes') ) {
-  errorpage('ACL changes disabled in public demo.');
-  die "shouldn't be reached";
-}
+my $conf = new FS::Conf;
 
 </%init>

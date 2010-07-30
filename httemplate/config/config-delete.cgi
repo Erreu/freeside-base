@@ -1,17 +1,6 @@
 <%init>
-
-my $curuser = $FS::CurrentUser::CurrentUser;
-die "access denied\n" unless $curuser->access_right('Configuration');
-
-my $fsconf = new FS::Conf;
-if ( $fsconf->exists('disable_settings_changes') ) {
-  my @changers = split(/\s*,\s*/, $fsconf->config('disable_settings_changes'));
-  my %changers = map { $_=>1 } @changers;
-  unless ( $changers{$curuser->username} ) {
-    errorpage("Disabled in web demo");
-    die "shouldn't be reached";
-  }
-}
+die "access denied\n"
+  unless $FS::CurrentUser::CurrentUser->access_right('Configuration');
 
 $cgi->param('confnum') =~ /^(\d+)$/ or die "illegal or missing confnum";
 my $confnum = $1;

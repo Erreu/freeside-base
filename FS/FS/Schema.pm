@@ -960,30 +960,6 @@ sub tables_hashref {
       'unique' => [],
       'index' => [ ['disabled'] ],
     },
- 
-    'cust_tag' => {
-      'columns' => [
-        'custtagnum', 'serial', '', '', '', '',
-        'custnum',       'int', '', '', '', '',
-        'tagnum',        'int', '', '', '', '',
-      ],
-      'primary_key' => 'custtagnum',
-      'unique'      => [ [ 'custnum', 'tagnum' ] ],
-      'index'       => [ [ 'custnum' ] ],
-    },
-
-    'part_tag' => {
-      'columns' => [
-        'tagnum',    'serial',     '',      '', '', '',
-        'tagname',  'varchar',     '', $char_d, '', '',
-        'tagdesc',  'varchar', 'NULL', $char_d, '', '',
-        'tagcolor', 'varchar', 'NULL',       6, '', '',
-        'disabled',    'char', 'NULL',       1, '', '', 
-      ],
-      'primary_key' => 'tagnum',
-      'unique'      => [], #[ [ 'tagname' ] ], #?
-      'index'       => [ [ 'disabled' ] ],
-    },
 
     'cust_main_exemption' => {
       'columns' => [
@@ -1827,7 +1803,7 @@ sub tables_hashref {
     'cgp_rule_condition' => {
       'columns' => [
         'ruleconditionnum',  'serial',     '',      '', '', '',
-        'conditionname',    'varchar',     '', $char_d, '', '',
+        'condition',        'varchar',     '', $char_d, '', '',
         'op',               'varchar', 'NULL', $char_d, '', '',
         'params',           'varchar', 'NULL',     255, '', '',
         'rulenum',              'int',     '',      '', '', '',
@@ -2253,7 +2229,6 @@ sub tables_hashref {
         'conn_sec',        'int',     '',     '', '0', '',
         'min_charge',      'decimal', '', '10,5', '', '', #@money_type, '', '', 
         'sec_granularity', 'int',     '',     '', '', '', 
-        'ratetimenum',     'int', 'NULL',     '', '', '',
         #time period (link to table of periods)?
         'classnum',        'int', 'NULL',     '', '', '', 
       ],
@@ -2283,28 +2258,6 @@ sub tables_hashref {
       'primary_key' => 'prefixnum',
       'unique'      => [],
       'index'       => [ [ 'countrycode' ], [ 'npa' ], [ 'regionnum' ] ],
-    },
-
-    'rate_time' => {
-      'columns' => [
-        'ratetimenum', 'serial',      '',      '', '', '',
-        'ratetimename',   'varchar',      '', $char_d, '', '',
-      ],
-      'primary_key' => 'ratetimenum',
-      'unique'      => [],
-      'index'       => [],
-    },
-
-    'rate_time_interval' => {
-      'columns' => [
-        'intervalnum', 'serial', '', '', '', '',
-        'stime',          'int', '', '', '', '',
-        'etime',          'int', '', '', '', '',
-        'ratetimenum',    'int', '', '', '', '',
-      ],
-      'primary_key' => 'intervalnum',
-      'unique'      => [],
-      'index'       => [],
     },
 
     'usage_class' => {
@@ -2846,11 +2799,10 @@ sub tables_hashref {
 
     'svc_pbx' => {
       'columns' => [
-        'svcnum',           'int',     '',      '', '', '', 
-        'id',               'int', 'NULL',      '', '', '', 
-        'title',        'varchar', 'NULL', $char_d, '', '', 
-        'max_extensions',   'int', 'NULL',      '', '', '',
-        'max_simultaneous', 'int', 'NULL',      '', '', '',
+        'svcnum',         'int',     '',      '', '', '', 
+        'id',             'int', 'NULL',      '', '', '', 
+        'title',      'varchar', 'NULL', $char_d, '', '', 
+        'max_extensions', 'int', 'NULL',      '', '', '',
       ],
       'primary_key' => 'svcnum',
       'unique' => [],
@@ -2895,57 +2847,6 @@ sub tables_hashref {
       'unique'      => [],
       'index'       => [['listnum'],['svcnum'],['contactemailnum'],['email']],
     },
-
-    'bill_batch' => {
-      'columns' => [
-        'batchnum',         'serial',     '', '', '', '',
-        'status',             'char', 'NULL','1', '', '',
-        'pdf',                'blob', 'NULL', '', '', '',
-      ],
-      'primary_key' => 'batchnum',
-      'unique'      => [],
-      'index'       => [],
-    },
-
-    'cust_bill_batch' => {
-      'columns' => [
-        'billbatchnum',     'serial',     '', '', '', '',
-        'batchnum',            'int',     '', '', '', '',
-        'invnum',              'int',     '', '', '', '',
-      ],
-      'primary_key' => 'billbatchnum',
-      'unique'      => [],
-      'index'       => [ [ 'batchnum' ], [ 'invnum' ] ],
-    },
-
-    'cust_bill_batch_option' => {
-      'columns' => [
-        'optionnum', 'serial', '', '', '', '', 
-        'billbatchnum', 'int', '', '', '', '', 
-        'optionname', 'varchar', '', $char_d, '', '', 
-        'optionvalue', 'text', 'NULL', '', '', '', 
-      ],
-      'primary_key' => 'optionnum',
-      'unique'      => [],
-      'index'       => [ [ 'billbatchnum' ], [ 'optionname' ] ],
-    },
-
-    'msg_template' => {
-      'columns' => [
-        'msgnum',     'serial',     '',      '', '', '',
-        'msgname',   'varchar',     '', $char_d, '', '',
-        'agentnum',      'int', 'NULL',      '', '', '',
-        'subject',   'varchar', 'NULL',     512, '', '',
-        'mime_type', 'varchar',     '', $char_d, '', '',
-        'body',         'blob', 'NULL',      '', '', '',
-        'disabled',     'char', 'NULL',       1, '', '', 
-        'from_addr', 'varchar', 'NULL',     255, '', '',
-      ],
-      'primary_key' => 'msgnum',
-      'unique'      => [ ['msgname', 'mime_type'] ],
-      'index'       => [ ['agentnum'], ]
-    },
-
 
 
     # name type nullability length default local
