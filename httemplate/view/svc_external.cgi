@@ -23,6 +23,10 @@
 
 
 </TABLE></TD></TR></TABLE>
+<BR>
+% if ($conf->exists('svc_elec_features')) {
+<A HREF="<%$p%>edit/usage_elec_manual_input.cgi?<%$svcnum%>">Manually manipulate electric usage</A><BR>
+% }
 <BR><% joblisting({'svcnum'=>$svcnum}, 1) %>
 
 <% include('/elements/footer.html') %>

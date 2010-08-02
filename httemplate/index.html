@@ -19,7 +19,10 @@
 %  my %saw = ();
 %  my @custnums = grep { !$saw{$_}++ } map $_->[0], @{ $sth->fetchall_arrayref };
 %
-%  @custnums = splice(@custnums, 0, 10);
+%  my $curuser = $FS::CurrentUser::CurrentUser;
+%  my $number_of_customers =
+%    $curuser->option('dashboard_customer_history_length') || 10;
+%  @custnums = splice(@custnums, 0, $number_of_customers);
 %
 %  if ( @custnums ) {
 

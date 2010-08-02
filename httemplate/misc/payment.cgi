@@ -182,7 +182,7 @@
       <INPUT TYPE="hidden" NAME="paystate" VALUE="<% $paystate %>">
 %   }
 
-%   if ( $conf->exists('show_ss') ) {
+%   if ( $conf->exists('show_ss') && !$conf->exists('svc_elec_features') ) {
       <TR>
         <TD ALIGN="right">
           Account&nbsp;holder<BR>

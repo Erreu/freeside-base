@@ -145,16 +145,22 @@ sub insert {
 
   if ( $self->get('details') ) {
     foreach my $detail ( @{$self->get('details')} ) {
-      my $cust_bill_pkg_detail = new FS::cust_bill_pkg_detail {
-        'billpkgnum' => $self->billpkgnum,
-        'format'     => (ref($detail) ? $detail->[0] : '' ),
-        'detail'     => (ref($detail) ? $detail->[1] : $detail ),
-        'amount'     => (ref($detail) ? $detail->[2] : '' ),
-        'classnum'   => (ref($detail) ? $detail->[3] : '' ),
-        'phonenum'   => (ref($detail) ? $detail->[4] : '' ),
-        'duration'   => (ref($detail) ? $detail->[5] : '' ),
-        'regionname' => (ref($detail) ? $detail->[6] : '' ),
-      };
+      my $cust_bill_pkg_detail;
+      if (ref($detail) eq 'FS::cust_bill_pkg_detail') {
+        $cust_bill_pkg_detail = $detail;
+        $cust_bill_pkg_detail->billpkgnum($self->billpkgnum);
+      } else {
+        $cust_bill_pkg_detail = new FS::cust_bill_pkg_detail {
+          'billpkgnum' => $self->billpkgnum,
+          'format'     => (ref($detail) ? $detail->[0] : '' ),
+          'detail'     => (ref($detail) ? $detail->[1] : $detail ),
+          'amount'     => (ref($detail) ? $detail->[2] : '' ),
+          'classnum'   => (ref($detail) ? $detail->[3] : '' ),
+          'phonenum'   => (ref($detail) ? $detail->[4] : '' ),
+          'duration'   => (ref($detail) ? $detail->[5] : '' ),
+          'regionname' => (ref($detail) ? $detail->[6] : '' ),
+        };
+      }
       $error = $cust_bill_pkg_detail->insert;
       if ( $error ) {
         $dbh->rollback if $oldAutoCommit;
@@ -870,7 +876,11 @@ sub cust_bill_pkg_detail {
   my %hash = ( 'billpkgnum' => $self->billpkgnum );
   $hash{classnum} = $classnum if $classnum;
 
-  qsearch ( 'cust_bill_pkg_detail', { %hash  } ),
+  qsearch ({
+             'table'    => 'cust_bill_pkg_detail',
+             'hashref'  => { %hash  },
+             'order_by' => 'ORDER BY detailnum',
+          });
 
 }
 

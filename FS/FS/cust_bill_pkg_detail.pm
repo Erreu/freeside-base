@@ -57,6 +57,45 @@ inherits from FS::Record.  The following fields are currently supported:
 
 =item detail - detail description
 
+=item prev_date
+
+=item curr_date -
+
+=item prev_read -
+
+=item curr_read -
+
+=item tdsp -
+
+=item taxes -
+
+=item rate -
+
+=item gr_fee -
+
+=item energy_base -
+
+=item energy_charge -
+
+=item setup_fee -
+
+=item one_time_charge -
+
+=item one_time_description -
+
+=item balance -
+
+=item last_pay -
+
+=item last_pay_date -
+
+=item return_addr -
+
+=item bill_return_address -
+
+=item pkg_info -
+
+
 =back
 
 =head1 METHODS
@@ -141,7 +180,33 @@ sub check {
     || $self->ut_foreign_keyn('classnum', 'usage_class', 'classnum')
     || $self->$phonenum_check_method('phonenum')
     || $self->SUPER::check
-    ;
+    || $self->ut_numbern('prev_date')
+    || $self->ut_numbern('curr_date')
+    || $self->ut_floatn('prev_read')
+    || $self->ut_floatn('curr_read')
+    || $self->ut_money('tdsp')
+    || $self->ut_money('taxes')
+    || $self->ut_money('gr_fee')
+    || $self->ut_money('energy_base')
+    || $self->ut_money('energy_charge')
+    || $self->ut_money('setup_fee')
+    || $self->ut_money('one_time_charge')
+    || $self->ut_floatn('rate')
+    || $self->ut_floatn('discount1_rate')
+    || $self->ut_floatn('discount1_total')
+    || $self->ut_numbern('number_of_days')
+    || $self->ut_floatn('average_price')
+    || $self->ut_floatn('energy_usage')
+    || $self->ut_anything('one_time_description')
+    || $self->ut_money('balance')
+    || $self->ut_money('last_pay')
+    || $self->ut_numbern('last_pay_date')
+    || $self->ut_anything('return_addr')
+    || $self->ut_textn('bill_return_address')
+    || $self->ut_floatn('meter_multiplier')
+    || $self->ut_floatn('demanded_bill')
+    || $self->ut_floatn('measured_bill')
+  ;
 
 }
 
@@ -325,6 +390,7 @@ sub _upgrade_data { # class method
                          'hashref' => {},
                          'extra_sql' => 'WHERE invnum IS NOT NULL AND '.
                                         'pkgnum IS NOT NULL',
+                         'order_by' => 'ORDER BY detailnum',
                       });
 
     if (scalar(@cbpd)) {

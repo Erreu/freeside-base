@@ -31,6 +31,12 @@ my $cust_bill = qsearchs({
 });
 die "Invoice #$invnum not found!" unless $cust_bill;
 
+if ( $notice_name eq 'Record' ) {
+  $opt{base}='rec';
+} elsif ( $notice_name eq 'Record Ignoring DUE DATE' ) {
+  $opt{base}='rec';
+  $opt{ignore_due_date}=1;
+}
 my $pdf = $cust_bill->print_pdf(\%opt);
 
 http_header('Content-Type' => 'application/pdf' );

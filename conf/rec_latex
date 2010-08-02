@@ -1,0 +1,315 @@
+%% LyX 1.4.3-5 created this file.  For more info, see http://www.lyx.org/.
+%% Do not edit unless you really know what you are doing.
+\documentclass[english]{article}
+\usepackage{times}
+\usepackage[T1]{fontenc}
+\usepackage[latin1]{inputenc}
+\usepackage[bottom=1cm] {geometry}
+\usepackage{graphicx}
+\usepackage{multirow,colortbl}
+\geometry{verbose,letterpaper}
+\usepackage{array}
+\usepackage{calc}
+\usepackage{color}
+\thispagestyle{empty}
+\makeatletter
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% LyX specific LaTeX commands.
+%% Because html converters don't know tabularnewline
+\providecommand{\tabularnewline}{\\}
+\newcommand{\addspacefive}{&&&&\tabularnewline[-0.1in]}
+\newcommand{\addspaceseven}[1]{&&&&&&\tabularnewline[#1]}
+\newcommand{\addspacetwo}{&\tabularnewline[0.01in]}
+\usepackage{babel}
+\makeatother
+\addtolength{\hoffset}{-3.1cm}	
+%\addtolength{\voffset}{-2.75cm}		% top margin to top of header
+\setlength{\textheight}{10.9in}
+\begin{document}
+
+
+\begin{minipage}[t][0.25\totalheight]{0.30\columnwidth}%
+\vspace{0pt}
+\centering
+%\includegraphics[width=1\textwidth]{logo.eps} 
+%\includegraphics{logo.eps} 
+{{\includegraphics{[@-- $conf_dir --@]/logo}}}
+\end{minipage}
+\hspace{1.2in}
+\begin{minipage}[t][0.20\totalheight]{0.4\columnwidth}
+\vspace{0pt}
+\centering
+
+\large [@-- 
+         @array=split(/\n/, $returnaddress);
+         $help=1;
+         foreach $line(@array){
+           if($line eq ""){
+             $line ="~"
+           }
+           if($help == 1){
+             $OUT= "\\textbf{".$line."}";
+             $help=0;
+           }
+           else{
+             $OUT = $OUT."\\\\ ".$line;
+           }
+         }
+      --@]
+%\large \textbf{Addresse}\\ von ONPAC\\ Strasse 34der\\keine\\~\\ahnung
+\end{minipage}
+
+%\vspace{-0.1in}
+\vspace{-0.3in}
+\hspace{5.9in}
+\begin{minipage}[t][0.25\totalheight]{0.3\columnwidth}
+\vspace{0pt}
+\centering
+\normalsize
+Office Hours:\\
+Monday To Friday\\
+9:00 a.m - 5:00 p.m\\
+Customer Billing Support\\
+1-866-696-6722
+\end{minipage}
+\vspace{.8 in}
+
+\begin{minipage}[t][0.8\totalheight]{1\columnwidth}%
+\setlength{\arrayrulewidth}{0.8pt}
+%2.5 inch = 0.4203\textwidth
+
+\begin{tabular}{|>{\centering}p{0.1345\textwidth}|>{\centering}p{0.41\textwidth}|>{\centering}p{0.0606\textwidth}|>{\centering}p{0.2185\textwidth}|>{\centering}p{0.36\textwidth}|}
+\hline
+
+\rowcolor{black}
+\rule{0mm}{4mm}
+{\normalsize \textbf{\color{white}{ACCOUNT\#}}}&
+{\normalsize \textbf{\color{white}{CUSTOMER NAME}}}&
+{\normalsize \textbf{\color{white}{RATE}}}&
+{\normalsize \textbf{\color{white}{PHONE NUMBER}}}&
+{\normalsize \textbf{\color{white}{SERVICE ADDRESS}}}\tabularnewline[.2ex]
+\hline
+\addspacefive
+\normalsize [@-- $custnum --@] &
+\normalsize [@-- if($company){$company}
+		  else{$payname} --@]&
+\normalsize [@-- sprintf('%.3f',$rate) --@]&
+\normalsize [@-- $phone --@]&
+\normalsize [@-- $srvc_addr --@]\tabularnewline
+\hline
+\end{tabular}%
+\vspace{5mm}
+%~\newline
+%\Large{\textbf{STATEMENT SUMMARY}} \newline
+\Large{\textbf{ACCOUNT SUMMARY}} \newline
+\normalsize
+\vspace{3mm}
+\begin{tabular}{l l l}
+{{ESSID: [@--$esiid--@] }} &
+{{METER \#: [@--$meter_number--@] }} &
+{{SERVICE CODE: [@--$pkg_info--@]}}
+\end{tabular}
+%\vspace{3mm}
+%\normalsize {\textbf{ESSID: [@--$esiid--@] }} \newline
+%\normalsize {\textbf{METER \#: [@--$meter_number--@] }} \newline
+%\normalsize {\textbf{SERVICE CODE: [@--$pkg_info--@]}} \newline
+\large
+~\newline
+\vspace{3mm}
+%\begin{tabular}{|>{\centering}p{0.75in}>{\centering}p{0.75in}>{\centering}p{0.75in}>
+%{\centering}m{0.75in}|>{\centering}p{0.75in}>{\centering}p{0.75in}||>{\centering}p{0.75in}>{\centering}p{0.75in}|}
+\begin{tabular}{|>{\centering}p{0.75in}{r}>{\centering}p{0.50in}>
+{\centering}m{1.75in}|>{\centering}p{0.75in}{r}||>{\centering}p{0.75in}{r}|}
+
+\hline
+%Read Date&Usage&\# Days&Rate&Bill Date&Amount&PayDate&Amount \tabularnewline[0.2ex]
+\multicolumn{6}{|c||}{\textbf {STATEMENT}}&\multicolumn{2}{c|}{\textbf {PAYMENT}}\tabularnewline[0.2ex]
+%\hline
+\multicolumn{1}{|c}{Read Date}&\multicolumn{1}{c}{Usage}&\multicolumn{1}{c}{\# Days}
+&\multicolumn{1}{c}{Note}&\multicolumn{1}{c}{Bill Date}
+&\multicolumn{1}{c||}{Amount}&\multicolumn{1}{c}{PayDate}
+&\multicolumn{1}{c|}{Amount}\tabularnewline[0.2ex]
+\hline
+\normalsize
+[@-- 
+  use Date::Format;
+  $OUT='';
+  my $billlength=@total_bills;
+  my $paylength=@total_payments;
+  my $detaillength=@total_details;
+	
+  my $max =$billlength;
+  $max=$paylength if($paylength>$max);
+
+  for($i=0;$i<$max;$i=$i+1){
+    if($i <$detaillength){
+
+      if(@total_details[$i]->energy_usage>0){
+        $OUT.= '{\small '.time2str('%D',@total_details[$i]->curr_date)."}&";
+      }
+      else{
+        $OUT.="&";
+      }
+
+      $OUT.= '{\small '.sprintf('%.0f',@total_details[$i]->energy_usage)."}&";
+      $OUT.= '{\small '.@total_details[$i]->number_of_days."}&";
+      if (@total_details[$i]->curr_date) {
+        $OUT.= '&';
+      }
+      else {
+        $OUT.= '&';
+        #if (@total_details[$i]->one_time_description) {
+        #  $OUT.= '{\small '.lc (sprintf('%20s',@total_details[$i]->one_time_description))."}&";
+        #}
+        #else {
+        #  $OUT.= '&';
+        #}
+      }
+    }
+    else{
+      $OUT.="&&&";
+    }
+
+    if($i <$billlength){
+      $OUT.= '{\small '.time2str('%D',@total_bills[$i]->_date)."}&";
+      $OUT.= '{\small '.@total_bills[$i]->charged."}&";
+    }
+    else{
+      $OUT.="&&&";
+    }
+
+    if($i <$paylength){
+      $OUT.= '{\small '.time2str('%D',@total_payments[$i]->_date)."}&";
+      $OUT.= '{\small '.@total_payments[$i]->paid .'}';
+    }
+    else{
+      $OUT.="&";
+    }
+
+    $OUT.="\\small \\tabularnewline\n";
+  }
+
+  for(my $i=$max;$i<20;$i=$i+1){
+    $OUT.="&&&&&&&\\tabularnewline\n";
+  }
+	
+--@]
+	\hline
+	\end{tabular}
+\vspace{3mm}
+\large{\textbf{CURRENT BALANCE: [@-- $actual_balance --@]}}
+~\newline
+\normalsize
+\begin{tabular}{>{\centering}p{8in}}
+\hspace{3in}{\small{Please detach and return your payment payable to ONPAC Energy}}\tabularnewline[0.2ex]
+\end{tabular}
+%\begin{tabular}{|>{\raggedright}p{6.315in}|>{\centering}p{1.08in}|}
+%\vspace{-0.5cm}
+%\vspace{-0.5cm}
+%%\addspacetw
+%\textbf{ENERGY BASE}&
+%\textbf{4.95}\tabularnewline
+%\end{tabular}
+%\vspace{0.2in} #the delivery address
+\vspace{.4in}
+%\begin{tabular}{>{\centering}p{3.955in}c}
+\begin{tabular}{>{\centering}p{3.455in}c}
+
+
+\begin{tabular}{c}
+
+%\tabularnewline #move everything down
+\tabularnewline[8ex]
+\large \textbf{OnPAC Energy}\\
+\tabularnewline[-2ex]
+\textbf{ P.O. Box 831787, Richardson TX 75083-1787}\\
+\textbf{REP PUCT Number 10077}
+\tabularnewline[4ex]
+
+\setlength{\fboxrule}{1pt}
+\fbox{\fcolorbox{black}{black}{\parbox[c][1\totalheight]{0.4\columnwidth}{
+[@-- 
+    # print PAST DUE if ballance is greater than zero
+    $OUT = '';
+    if ($actual_balance > 0 && !ignore_due_date) {
+      $OUT = '\LARGE \centering {\textbf{\textcolor{white}{ACCOUNT \linebreak PAST DUE}}}';
+    }
+    else {
+      $OUT = '\LARGE \centering {\textbf{\textcolor{white}{ACCOUNT \linebreak SUMMARY}}}';
+    }
+ --@]
+}}}%
+\tabularnewline
+
+\end{tabular}&
+%\begin{tabular}{|>{\centering}p{1.3in}|>{\centering}p{0.78in}|>{\centering}p{1.05in}|}
+\begin{tabular}{|>{\centering}p{1.3in}|>{\centering}p{0.78in}|>{\centering}p{1.05in}|}
+\hline 
+&&\tabularnewline[-2ex]
+%\rowcolor{black}
+ACCOUNT NUMBER&
+DUE DATE&
+BALANCE \tabularnewline
+\hline
+\hline 
+&&\tabularnewline[-2ex]
+\normalsize \textbf{[@--$custnum--@]}&
+%\normalsize \textbf{[@--$due_date--@]}&
+[@--
+    # don't print the due date if balance is zero
+    $OUT = '';
+    if ($actual_balance > 0) {
+      $OUT = '\normalsize \textbf{' . $due_date . '}&';
+    }
+    else {
+      $OUT ='&';
+    }
+ --@]
+\normalsize \textbf{[@--$actual_balance--@]}\tabularnewline[0.3ex]
+\hline 
+&&\tabularnewline[-2ex]
+Billing Date&
+Rate Code&
+Meter \#\tabularnewline
+\hline 
+&&\tabularnewline[-2ex]
+%\textbf{[@--$date--@]}&
+[@--
+    # don't print the billing date if balance is zero
+    $OUT = '';
+    if ($actual_balance > 0) {
+      $OUT = '\textbf{'.$date.'}&';
+    }
+    else {
+      $OUT ='&';
+    }
+ --@]
+\textbf{[@--sprintf('%.3f',$rate)--@]}&
+\textbf{[@--$meter_number--@]}\tabularnewline
+\hline
+
+\end{tabular}\tabularnewline
+\end{tabular}
+
+\begin{tabular}{>{\raggedright}p{4.17in}l}
+%\tabularnewline[-0.08in]
+\tabularnewline[-.10in]
+\hspace{0.4in}\large{\textbf{[@-- $company --@]}}&
+\tabularnewline
+\hspace{0.4in}\large{\textbf{[@-- $payname --@]}}&
+\tabularnewline
+\hspace{0.4in}\large{\textbf{[@-- $address1 --@]}}&
+\hspace{0.4in} \sffamily{\large{*[@--$custnum--@]*}}\tabularnewline%[0.4ex]
+\hspace{0.4in}\large{\textbf{[@-- $city --@], [@-- $state --@]~~[@-- $zip --@]}}&
+%\hspace{0.6in}\large{\textbf{[@-- $address1 --@]}}&
+%\hspace{0.6in} \sffamily{\large{*[@--$custnum--@]*}}\tabularnewline%[0.4ex]
+%\hspace{0.6in}\large{\textbf{[@-- $city --@], [@-- $state --@]~~[@-- $zip --@]}}&
+\tabularnewline
+
+
+\end{tabular}
+
+\end{minipage}%
+
+
+\end{document}

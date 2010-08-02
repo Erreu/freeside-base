@@ -78,6 +78,15 @@
 
   <A HREF="<% $p %>view/cust_bill-pdf.cgi?<% $link %>">View typeset invoice PDF</A>
   <BR><BR>
+% if ( $conf->exists('svc_elec_features') ) { 
+% my $reclink = "invnum=$invnum";
+% $reclink .= ';template='. uri_escape($template) if $template;
+  <A HREF="<% $p %>view/cust_bill-pdf.cgi?<% "$reclink;notice_name=Record" %>">View Record</A><BR>
+  <A HREF="<% $p %>view/cust_bill-pdf.cgi?<% "$reclink;notice_name=Record Ignoring DUE DATE" %>">View Record Ignoring DUE DATE</A>
+<BR><BR>
+
+%   } 
+
 % } 
 
 % my $br = 0;

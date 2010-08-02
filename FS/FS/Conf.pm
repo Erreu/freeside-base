@@ -1156,6 +1156,13 @@ and customer address. Include units.',
   },
 
   {
+    'key'         => 'rec_latex',
+    'section'     => 'invoicing',
+    'description' => 'Optional LaTeX template for typeset PostScript statements when svc_elec_features are enabled.  See the <a href="http://www.freeside.biz/mediawiki/index.php/Freeside:1.7:Documentation:Administration#Typeset_.28LaTeX.29_invoice_templates">billing documentation</a> for details.',
+    'type'        => 'textarea',
+  },
+
+  {
     'key'         => 'invoice_email_pdf',
     'section'     => 'invoicing',
     'description' => 'Send PDF invoice as an attachment to emailed invoices.  By default, includes the plain text invoice as the email body, unless invoice_email_pdf_note is set.',
@@ -1181,7 +1188,7 @@ and customer address. Include units.',
     'section'     => 'invoicing',
     'description' => 'Optional default invoice term, used to calculate a due date printed on invoices.',
     'type'        => 'select',
-    'select_enum' => [ '', 'Payable upon receipt', 'Net 0', 'Net 10', 'Net 15', 'Net 20', 'Net 30', 'Net 45', 'Net 60' ],
+    'select_enum' => [ '', 'Payable upon receipt', 'Net 0', 'Net 10', 'Net 15', 'Net 16', 'Net 20', 'Net 30', 'Net 45', 'Net 60' ],
   },
 
   { 
@@ -3882,6 +3889,14 @@ and customer address. Include units.',
     'description' => 'Location where customer tags are displayed.',
     'type'        => 'select',
     'select_enum' => [ 'misc_info', 'top' ],
+  },
+
+  {
+    'key'         => 'svc_elec_features',
+    'section'     => '',
+    'description' => 'Enable electrical billing features',
+    'type'        => 'select',
+    'type'        => 'checkbox',
   },
 
   {

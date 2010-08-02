@@ -107,6 +107,7 @@ tie my %report_invoices_open, 'Tie::IxHash',
   'All open invoices' => [ $fsurl.'search/cust_bill.html?OPEN_date', 'All invoices with an unpaid balance' ],
   '15 day open invoices' => [ $fsurl.'search/cust_bill.html?OPEN15_date', 'Invoices 15 days or older with an unpaid balance' ],
   '30 day open invoices' => [ $fsurl.'search/cust_bill.html?OPEN30_date', 'Invoices 30 days or older with an unpaid balance' ],
+  '45 day open invoices' => [ $fsurl.'search/cust_bill.html?OPEN45_date', 'Invoices 45 days or older with an unpaid balance' ],
   '60 day open invoices' => [ $fsurl.'search/cust_bill.html?OPEN60_date', 'Invoices 60 days or older with an unpaid balance' ],
   '90 day open invoices' => [ $fsurl.'search/cust_bill.html?OPEN90_date', 'Invoices 90 days or older with an unpaid balance' ],
   '120 day open invoices' => [ $fsurl.'search/cust_bill.html?OPEN120_date', 'Invoices 120 days or older with an unpaid balance' ],
@@ -317,13 +318,42 @@ $report_menu{'SQL Query'}  = [ $fsurl.'search/report_sql.html', 'SQL Query' ]
 
 tie my %tools_importing, 'Tie::IxHash',
   'Customers' => [ $fsurl.'misc/cust_main-import.cgi', '' ],
-  'Customer comments from CSV file' => [ $fsurl.'misc/cust_main_note-import.html', '' ],
-  'One-time charges from CSV file' => [ $fsurl.'misc/cust_main-import_charges.cgi', '' ],
-  'Payments from CSV file' => [ $fsurl.'misc/cust_pay-import.cgi', '' ],
-  'Phone numbers (DIDs)' => [ $fsurl.'misc/phone_avail-import.html', '' ],
-  'Call Detail Records (CDRs)' => [ $fsurl.'misc/cdr-import.html', '' ],
-#  'Import call rates and regions' => [ $fsurl.'misc/rate-import.html', '' ],
 ;
+
+$tools_importing{'Old OnPAC customers'} = #dubious name
+  [ $fsurl.'misc/cust_main-import-oldonp.cgi', '' ]
+  if $conf->exists('svc_elec_features');
+
+$tools_importing{'Import Qualified LITEUP Customers'} =
+  [ $fsurl.'misc/qualified_liteup_customers.cgi', '' ]
+  if $conf->exists('svc_elec_features');
+
+$tools_importing{'Customer comments from CSV file'} =
+  [ $fsurl.'misc/cust_main_note-import.html', '' ];
+
+$tools_importing{'Import 810 transaction data'} =
+  [ $fsurl.'misc/transaction810-import.cgi', '' ]
+  if $conf->exists('svc_elec_features');
+
+$tools_importing{'Import OnPAC EDI data'} =
+  [ $fsurl.'misc/cust_edi_data-onp.cgi', '' ]
+  if $conf->exists('svc_elec_features');
+
+$tools_importing{'One-time charges from CSV file'} =
+  [ $fsurl.'misc/cust_main-import_charges.cgi', '' ];
+
+$tools_importing{'Payments from CSV file'} =
+  [ $fsurl.'misc/cust_pay-import.cgi', '' ];
+
+$tools_importing{'Phone numbers (DIDs)'} =
+  [ $fsurl.'misc/phone_avail-import.html', '' ];
+
+$tools_importing{'Call Detail Records (CDRs)'} =
+  [ $fsurl.'misc/cdr-import.html', '' ];
+
+#$tools_importing{'Import call rates and regions'} =
+#  [ $fsurl.'misc/rate-import.html', '' ];
+
 if ( $conf->exists('enable_taxproducts') ) {
   if ( $conf->exists('taxdatadirectdownload') ) {
       $tools_importing{'Tax rates from vendor site'} =

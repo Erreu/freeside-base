@@ -528,3 +528,16 @@ FS/part_tag.pm
 t/part_tag.t
 FS/svc_CGP_Mixin.pm
 FS/svc_CGPRule_Mixin.pm
+FS/elec_general.pm
+t/elec_general.t
+FS/svc_elec.pm
+t/svc_elec.t
+FS/usage_elec.pm
+t/usage_elec.t
+FS/transaction810.pm
+t/transaction810.t
+FS/transaction867.pm
+t/transaction867.t
+FS/usage_elec_transaction867.pm
+t/usage_elec_transaction867.t
+

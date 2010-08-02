@@ -53,6 +53,22 @@ Interface
       </SELECT>
     </TD>
   </TR>
+
+  <TR>
+    <TH ALIGN="right">Dashboard customer history: </TH>
+    <TD COLSPAN=2>
+      <SELECT NAME="dashboard_customer_history_length">
+%       foreach my $view ( qw( 5 10 15 20 25 ) ) {
+%         my $selected =
+%           $customer_views{$view} eq
+%               $curuser->option('dashboard_customer_history_length')
+%             ? 'SELECTED'
+%             : '';
+          <OPTION VALUE="<%$view%>" <%$selected%>><%$view%></OPTION>
+%       }
+      </SELECT>
+    </TD>
+  </TR>
   
   <TR>
     <TH ALIGN="right" COLSPAN=1>Disable HTML editor for customer notes: </TH>

@@ -22,6 +22,7 @@ use Data::Dumper;
 use Tie::IxHash;
 use Digest::MD5 qw(md5_base64);
 use Date::Format;
+use Date::Parse;
 #use Date::Manip;
 use File::Temp qw( tempfile );
 use String::Approx qw(amatch);
@@ -71,6 +72,10 @@ use FS::type_pkgs;
 use FS::payment_gateway;
 use FS::agent_payment_gateway;
 use FS::banned_pay;
+use FS::transaction810;
+use FS::transaction867;
+use FS::usage_elec;
+use FS::usage_elec_transaction867;
 use FS::TicketSystem;
 
 @EXPORT_OK = qw( smart_search );
@@ -2204,6 +2209,9 @@ sub _cust_pkg {
 # This should be generalized to use config options to determine order.
 sub sort_packages {
   
+  return $a->pkgnum <=> $b->pkgnum
+    if $conf->exists('svc_elec_features');
+
   my $locationsort = ( $a->locationnum || 0 ) <=> ( $b->locationnum || 0 );
   return $locationsort if $locationsort;
 
@@ -2873,22 +2881,33 @@ sub bill {
 
   my %cust_bill_pkg = map { $_ => [] } @passes;
 
+  # some values we may need for elec billing
+  my $elec_hash = { 'pkgnum' => 0, 'rate' => 0, 'detail' => ' ' };
+  
   ###
   # find the packages which are due for billing, find out how much they are
   # & generate invoice database.
   ###
 
-  my %total_setup   = map { my $z = 0; $_ => \$z; } @passes;
-  my %total_recur   = map { my $z = 0; $_ => \$z; } @passes;
+  my %total_setup    = map { my $z = 0; $_ => \$z; } @passes;
+  my %total_recur    = map { my $z = 0; $_ => \$z; } @passes;
+
+  ###
+  # XXX this looks to be redundant in that we have cust_pkg_discount
+  # and cust_bill_pkg_discount which should be able to factor this out
+  ###
+  my %total_discount = map { my $z = 0; $_ => \$z; } @passes;
 
   my %taxlisthash = map { $_ => {} } @passes;
 
   my @precommit_hooks = ();
 
   $options{'pkg_list'} ||= [ $self->ncancelled_pkgs ];  #param checks?
+  $options{'elec_hash'} = $elec_hash;
   foreach my $cust_pkg ( @{ $options{'pkg_list'} } ) {
 
     next if $options{'not_pkgpart'}->{$cust_pkg->pkgpart};
+    next if $conf->exists('svc_elec_features') && $cust_pkg->susp; # eh?
 
     warn "  bill package ". $cust_pkg->pkgnum. "\n" if $DEBUG > 1;
 
@@ -2914,6 +2933,7 @@ sub bill {
                             'line_items'          => $cust_bill_pkg{$pass},
                             'setup'               => $total_setup{$pass},
                             'recur'               => $total_recur{$pass},
+                            'discount'            => $total_discount{$pass},
                             'tax_matrix'          => $taxlisthash{$pass},
                             'time'                => $time,
                             'real_pkgpart'        => $real_pkgpart,
@@ -2928,6 +2948,63 @@ sub bill {
 
   } #foreach my $cust_pkg
 
+
+  my $average_price = 0;
+  my $total_recur = 0; $total_recur += ${ $total_recur{$_} } foreach @passes;
+  $average_price = $total_recur/$elec_hash->{energy_usage}
+    if $elec_hash->{energy_usage};
+
+  my $round4 = sub { int( shift() * 10000 + .5 ) / 10000 }; #very weird
+  $elec_hash->{average_price} = &$round4($average_price);
+  $elec_hash->{balance} = $self->balance;
+  $elec_hash->{last_pay} = 0;
+  $elec_hash->{last_pay_date} = 0;
+
+  # XXX this is a roundabout way to get this info on the invoice
+  my $last_payment = qsearchs({
+                                'table'     => 'cust_pay',
+                                'hashref'   => { 'op' => '=',
+                                                 'custnum' => $self->custnum,
+                                               },
+                                'extra_sql' => 'ORDER BY _date DESC',
+                             });
+
+  if (defined($last_payment)) {
+    $elec_hash->{last_pay} = $last_payment->paid;
+    $elec_hash->{last_pay_date} = $last_payment->date;
+  }
+
+  # XXX whoa
+  my $returnaddress;
+  if ( length($conf->config_orbase('invoice_latexreturnaddress')) ) {
+    $returnaddress = join("\n", $conf->config_orbase('invoice_latexreturnaddress'));
+  } else {
+    $returnaddress = '~';
+  }
+  $elec_hash->{returnaddress} = $returnaddress;
+
+  # XXX again? need to get rid of this loop
+  if ($conf->exists('svc_elec_features')) {
+    foreach my $cust_pkg ($self->ncancelled_pkgs) {
+      next if $cust_pkg->susp;
+      next unless $cust_pkg->bill;
+
+      my @svc_external = grep { $_->title =~ /esiid/i }
+                         grep { ref($_) eq 'FS::svc_external' }
+                         map { $_->svc_x }
+                         $cust_pkg->cust_svc;
+      next unless @svc_external;
+      my $rate = $svc_external[0]->cust_svc->cust_pkg->part_pkg->option('rate');
+      $elec_hash->{rate} = $rate unless $elec_hash->{rate};
+      $elec_hash->{pkg_info} =
+        $svc_external[0]->cust_svc->cust_pkg->part_pkg->pkg;
+      $elec_hash->{esiid} = $svc_external[0]->id;
+      my $transaction867 =
+        qsearchs('transaction867', {'esiid' => $elec_hash->{esiid} });
+      $elec_hash->{meter_number} = $transaction867->meter_no if $transaction867;
+    }
+  }
+  
   #if the customer isn't on an automatic payby, everything can go on a single
   #invoice anyway?
   #if ( $cust_main->payby !~ /^(CARD|CHEK)$/ ) {
@@ -2965,6 +3042,7 @@ sub bill {
                                 'line_items'          => \@cust_bill_pkg,
                                 'setup'               => $total_setup{$pass},
                                 'recur'               => $total_recur{$pass},
+                                'discount'            => $total_discount{$pass},
                                 'tax_matrix'          => $taxlisthash{$pass},
                                 'time'                => $time,
                                 'real_pkgpart'        => $real_pkgpart,
@@ -2988,11 +3066,15 @@ sub bill {
       return $listref_or_error;
     }
 
+    my $total_tax = 0; # per pass?
     foreach my $taxline ( @$listref_or_error ) {
       ${ $total_setup{$pass} } =
         sprintf('%.2f', ${ $total_setup{$pass} } + $taxline->setup );
+      $total_tax = sprintf('%.2f', $total_tax + $taxline->setup );
       push @cust_bill_pkg, $taxline;
     }
+    $elec_hash->{taxes} = $total_tax;
+    
 
     #add tax adjustments
     warn "adding tax adjustments...\n" if $DEBUG > 2;
@@ -3022,7 +3104,7 @@ sub bill {
 
     }
 
-    my $charged = sprintf('%.2f', ${ $total_setup{$pass} } + ${ $total_recur{$pass} } );
+    my $charged = sprintf('%.2f', ${ $total_setup{$pass} } + ${ $total_recur{$pass} } - ${ $total_discount{$pass} });
 
     my @cust_bill = $self->cust_bill;
     my $balance = $self->balance;
@@ -3048,6 +3130,16 @@ sub bill {
     if ( $error ) {
       $dbh->rollback if $oldAutoCommit;
       return "can't create invoice for customer #". $self->custnum. ": $error";
+    }
+
+    if ( $conf->exists('svc_elec_features') ) {
+      my $pkgnum = delete($elec_hash->{pkgnum});
+      my $cust_bill_pkg_detail = new FS::cust_bill_pkg_detail $elec_hash;
+      foreach my $cust_bill_pkg( @cust_bill_pkg ) {
+        next unless $cust_bill_pkg->pkgnum == $pkgnum;
+        push @{$cust_bill_pkg->get('details')}, $cust_bill_pkg_detail;
+        last;
+      }
     }
 
     foreach my $cust_bill_pkg ( @cust_bill_pkg ) {
@@ -3262,6 +3354,7 @@ sub _make_lines {
   my $cust_bill_pkgs = $params{line_items} or die "no line buffer specified";
   my $total_setup = $params{setup} or die "no setup accumulator specified";
   my $total_recur = $params{recur} or die "no recur accumulator specified";
+  my $total_discount = $params{discount} or die "no discount accumulator specified";
   my $taxlisthash = $params{tax_matrix} or die "no tax accumulator specified";
   my $time = $params{'time'} or die "no time specified";
   my (%options) = %{$params{options}};
@@ -3270,6 +3363,7 @@ sub _make_lines {
   my $real_pkgpart = $params{real_pkgpart};
   my %hash = $cust_pkg->hash;
   my $old_cust_pkg = new FS::cust_pkg \%hash;
+  my $elec_hash = $options{elec_hash};
 
   my @details = ();
   my @discounts = ();
@@ -3314,6 +3408,25 @@ sub _make_lines {
     $cust_pkg->setfield('start_date', '')
       if $cust_pkg->start_date;
 
+    if ( $setup != 0 ) {
+      my $value = $elec_hash->{one_time_charge} || 0;
+      my $string = $elec_hash->{one_time_description} || '';
+      $string = '/'. $string if $string;
+      $elec_hash->{one_time_charge} = sprintf('%.2f', $setup+$value);
+      ### or should we be using $part_pkg below?
+      $elec_hash->{one_time_description} = $cust_pkg->part_pkg->pkg. $string;
+    } else {
+      $elec_hash->{setup_fee} = $setup;
+    }
+  }
+
+  my $is_energypkg;
+  if ( $conf->exists('svc_elec_features') ) {
+    $is_energypkg = 1
+      if grep { $_->title =~ /esiid/i }
+         grep { ref($_) eq 'FS::svc_external' }
+         map { $_->svc_x }
+         $cust_pkg->cust_svc;
   }
 
   ###
@@ -3324,10 +3437,13 @@ sub _make_lines {
   my $recur = 0;
   my $unitrecur = 0;
   my $sdate;
+  my $testdate = $conf->exists('svc_elec_features') 
+                 ? ( $cust_pkg->getfield('last_bill') || 0 )
+                 : ( $cust_pkg->getfield('bill') || 0 );
   if (     ! $cust_pkg->get('susp')
        and ! $cust_pkg->get('start_date')
        and ( $part_pkg->getfield('freq') ne '0'
-             && ( $cust_pkg->getfield('bill') || 0 ) <= $time
+             && $testdate <= $time
            )
         || ( $part_pkg->plan eq 'voip_cdr'
               && $part_pkg->option('bill_every_call')
@@ -3365,9 +3481,53 @@ sub _make_lines {
     return "$@ running $method for $cust_pkg\n"
       if ( $@ );
 
+    if ($recur != 0) {
+      my $lastbilldate = $cust_pkg->last_bill || 0;
+
+      if ($is_energypkg) {
+        my $vrate = $cust_pkg->part_pkg->option('vrate', 'quiet');
+        my $rate = $cust_pkg->part_pkg->option('rate');
+        my %var_rate;
+        if ($vrate) {
+          foreach my $rate_frame ( split(';',$vrate) ) {
+            my ($period, $period_rate) = split(':', $rate_frame);
+            my ($yr,$mo) = split('-',$period);
+            $var_rate{$yr}{$mo} = $period_rate;
+          }
+          my @cust_svc = grep { $_->title =~ /esiid/ }
+             map { $_->svc_x }
+             $cust_pkg->cust_svc('svc_external');
+          my $cust_svc = $cust_svc[0] if @cust_svc;
+          # XXX ok: these lines are clearly bunk as they return the empty list
+          my @usage_elecs =
+            qsearch( 'usage_elec',
+                     { 'svcnum' => $cust_svc->svcnum,
+                       '_date'  => { op => '>', 'value' => $lastbilldate },
+                       'extra_sql' => 'ORDER BY _date_',
+                     }
+                   );
+          if(defined($usage_elecs[0])) {
+            my $usage_enddate_year =
+              time2str('%Y', $usage_elecs[0]->curr_date);
+            my $usage_enddate_month =
+              time2str('%m', $usage_elecs[0]->curr_date);
+            $rate = $var_rate{$usage_enddate_year}{$usage_enddate_month}
+              if exists($var_rate{$usage_enddate_year}{$usage_enddate_month});
+          }
+        }
+
+        $elec_hash->{rate} = $rate;
+         
+        $elec_hash->{discount1_rate} =$part_pkg->option('rate1_discount');
+      }
+    }
+
     if ( $increment_next_bill ) {
 
-      my $next_bill = $part_pkg->add_freq($sdate);
+      # this is probably better handled differently than svc_elect_feature
+      # is this a recur_temporality issue? 
+      my $next_bill =
+        $part_pkg->add_freq($conf->exists('svc_elec_feature') ? $time : $sdate);
       return "unparsable frequency: ". $part_pkg->freq
         if $next_bill == -1;
   
@@ -3408,6 +3568,9 @@ sub _make_lines {
         if $error; #just in case
     }
   
+    $cust_pkg->last_bill($time)
+      if $conf->exists('svc_elec_features') && $part_pkg->option('rate');
+
     $setup = sprintf( "%.2f", $setup );
     $recur = sprintf( "%.2f", $recur );
     if ( $setup < 0 && ! $conf->exists('allow_negative_charges') ) {
@@ -3451,6 +3614,29 @@ sub _make_lines {
         #$cust_bill_pkg->edate( $time ) if $options{cancel};
       }
 
+      if ($conf->exists('svc_elec_features')) {
+        if( $recur != 0 ){
+          my  $cust_svc=qsearchs('cust_svc',{'pkgnum' => $cust_pkg->pkgnum});
+
+          if ($is_energypkg) {
+            my $lastbilldate = $cust_pkg->last_bill || 0;
+            my  $usage_elec = qsearchs ({
+              'table'     => 'usage_elec',
+              'hashref'   => { 'svcnum'    => $cust_svc->svcnum,
+                               '_date'     => { 'op' => '>',
+                                                'value' => $lastbilldate,
+                                              },
+                             },
+              'extra_sql' => 'ORDER BY _date'
+            });
+            if ($usage_elec) {
+              $cust_bill_pkg->sdate($usage_elec->prev_date);
+              $cust_bill_pkg->edate($usage_elec->curr_date);
+            }
+          }
+        }
+      }
+
       $cust_bill_pkg->pkgpart_override($part_pkg->pkgpart)
         unless $part_pkg->pkgpart == $real_pkgpart;
 
@@ -3470,6 +3656,99 @@ sub _make_lines {
     } #if $setup != 0 || $recur != 0
       
   } #if $line_items
+
+  # logically here?  might need to be before taxes?
+  if ($is_energypkg) {
+    if($recur != 0 and $cust_pkg->pkgnum) {
+      my $vrate = $cust_pkg->part_pkg->option('vrate', 'quiet');
+      my $pkg_rate = $cust_pkg->part_pkg->option('rate');
+      my %var_rate;
+
+      # a bit of extra bunk
+      my  $cust_svc=qsearchs('cust_svc',{'pkgnum' => $cust_pkg->pkgnum});
+      my $lastbilldate = $cust_pkg->last_bill || 0;
+
+      if ($vrate) {
+        foreach my $rate_frame ( split(';',$vrate) ) {
+          my ($period, $period_rate) = split(':', $rate_frame);
+          my ($yr,$mo) = split('-',$period);
+          $var_rate{$yr}{$mo} = $period_rate;
+        }
+        # XXX ok: these lines are clearly bunk as they return the empty list
+        my @usage_elecs =
+          qsearch( 'usage_elec',
+                   { 'svcnum' => $cust_svc->svcnum,
+                     '_date'  => { op => '>', 'value' => $lastbilldate },
+                     'extra_sql' => 'ORDER BY _date_',
+                   }
+                 );
+        if(defined($usage_elecs[0])) {
+          my $usage_enddate_year =
+            time2str('%Y', $usage_elecs[0]->curr_date);
+          my $usage_enddate_month =
+            time2str('%m', $usage_elecs[0]->curr_date);
+          $pkg_rate = $var_rate{$usage_enddate_year}{$usage_enddate_month}
+            if exists($var_rate{$usage_enddate_year}{$usage_enddate_month});
+        }
+      }
+      $elec_hash->{rate} = $pkg_rate unless $elec_hash->{rate};
+      my $late_fee = $part_pkg->option('penalty') || 0;
+      my $pkg_gr_fee = $part_pkg->option('gr_fee') || 0;
+      my $pkg_basic_fee = $part_pkg->option('base_fee') || 0;
+      $elec_hash->{'pkgnum'} = $cust_pkg->pkgnum;
+      my $usage_elec = qsearchs({
+        'table' => 'usage_elec',
+        'hashref' => { 'svcnum' => $cust_svc->svcnum,
+                       '_date'  => { 'op' => '>', 'value' => $lastbilldate },
+                     },
+        'extra_sql' => 'ORDER BY _date',
+      });
+      if ($usage_elec) {
+        my $usage_elec_transaction867 =
+          qsearchs( 'usage_elec_transaction867',
+                    {'usage_elec_id' => $usage_elec->id}
+                  );
+        $elec_hash->{note} = $usage_elec_transaction867->note
+          if $usage_elec_transaction867;
+
+        my $usagefromelec = $usage_elec->getUsage;
+
+        my $round = sub { sprintf('%.2f', int( shift() * 100 + .5 ) / 100) };
+        if ( $elec_hash->{discount1_rate} ) {
+          $elec_hash->{discount1_total} =
+            &$round($elec_hash->{discount1_rate} * $usagefromelec);
+          $$total_discount += $elec_hash->{discount1_total};
+        }
+
+        my $charge = &$round($usagefromelec * $pkg_rate);
+        $elec_hash->{meter_number} = $usage_elec->meter_number;
+        $elec_hash->{energy_base} = sprintf('%.2f', $pkg_basic_fee);
+        $elec_hash->{energy_charge} =
+          sprintf('%.2f', $usagefromelec * $elec_hash->{rate});
+        $elec_hash->{tdsp} = $usage_elec->tdsp;
+        $elec_hash->{number_of_days} = $usage_elec->getNumberOfDays;
+        $elec_hash->{energy_usage} = $usagefromelec;
+        $elec_hash->{demanded_bill} = $usage_elec->billed_demand;
+        $elec_hash->{measured_bill} = $usage_elec->measured_demand;
+        $elec_hash->{meter_multiplier} = $usage_elec->meter_multiplier;
+
+        $elec_hash->{balance} = 0;
+        my $thistdsp = $usage_elec->tdsp;
+        $elec_hash->{gr_fee} =
+          sprintf('%.2f', ($charge+$thistdsp+$pkg_basic_fee) * $pkg_gr_fee);
+        $elec_hash->{last_pay} = 0;
+        $elec_hash->{last_pay_date} = 0;
+        $elec_hash->{taxes} = 0;
+        $elec_hash->{prev_date} = $usage_elec->prev_date;
+        $elec_hash->{curr_date} = $usage_elec->curr_date;
+        $elec_hash->{prev_read} = $usage_elec->prev_read;
+        $elec_hash->{curr_read} = $usage_elec->curr_read;
+        $late_fee = $late_fee * # a rate i guess
+          sprintf('%.2f', ($charge+$thistdsp+$pkg_basic_fee+$elec_hash->{gr_fee}));
+        $elec_hash->{late_fee} = $late_fee;
+      }
+    }
+  }
 
   '';
 
@@ -8740,7 +9019,12 @@ sub batch_charge {
     }
 
     if ( $row{'amount'} > 0 ) {
-      my $error = $cust_main->charge($row{'amount'}, $row{'pkg'});
+      my @args = ();
+      if (exists($row{taxclass})){
+        push @args, sprintf("\$%.2f", $row{amount});
+        push @args, $row{taxclass};
+      }
+      my $error = $cust_main->charge($row{'amount'}, $row{'pkg'}, @args);
       if ( $error ) {
         $dbh->rollback if $oldAutoCommit;
         return $error;
@@ -9096,6 +9380,490 @@ sub process_bill_and_collect {
   $param->{'retry'} = 1;
 
   $cust_main->bill_and_collect( %$param );
+}
+
+# This import script was written to import old OnPAC customer from the 
+# previous billing database into freeside
+# coder: Cal Tran
+# dob: 3/20/06
+
+=item batch_import_onp
+
+=cut
+
+sub batch_import_onp {
+  my $param = shift;
+  #warn join('-',keys %$param);
+  my $fh = $param->{filehandle};
+  my $agentnum = $param->{agentnum};
+
+  my $refnum = $param->{refnum};
+  my $pkgpart = $param->{pkgpart};
+
+  my $debug = 1;
+  #my @fields = @{$param->{fields}};
+  my $format = $param->{'format'};
+  my (@fields, @incoming_fields);
+  my $payby;
+  if ( $format eq 'simple' ) {
+    @fields = qw( cust_pkg.setup dayphone first last
+                  address1 address2 city state zip comments );
+    $payby = 'BILL';
+  } elsif ( $format eq 'extended' ) {
+    @fields = qw( agent_custid refnum
+                  last first address1 address2 city state zip country
+                  daytime night
+                  ship_last ship_first ship_address1 ship_address2
+                  ship_city ship_state ship_zip ship_country
+                  payinfo paycvv paydate
+                  invoicing_list
+                  cust_pkg.pkgpart
+                  svc_acct.username svc_acct._password 
+                );
+    @incoming_fields = qw( custnum
+                           name address1 address2 citystate zip
+                           ss
+                           daytime night
+                           ship_name ship_address1 ship_address2 
+                           ship_citystate ship_zip
+                           newcustdate
+                         );
+    # mapping notes of incoming_field
+    # legend: incoming_field = field         
+    # *custnum     - this is not map to any of the original field
+    # name           = last, first
+    # address1       = address1
+    # address2       = address2
+    # citystate      = city state
+    # zip            = zip          
+    # ss             - this is not map to any of the original field
+    # daytime        = daytime
+    # night          = night
+    # ship_name      = ship_last, ship_first
+    # ship_address1  = ship_address1
+    # ship_address2  = ship_address2
+    # ship_citystate = ship_city ship_state
+    # ship_zip       = ship_zip          
+    # * newcustdate - this is not map to any of the original field
+
+    $payby = 'BILL';
+
+  } else {
+    die "unknown format $format";
+  }
+
+  eval "use Text::CSV_XS;";
+  die $@ if $@;
+
+  my $csv = new Text::CSV_XS;
+  #warn $csv;
+  #warn $fh;
+
+  my $imported = 0;
+  #my $columns;
+
+  local $SIG{HUP} = 'IGNORE';
+  local $SIG{INT} = 'IGNORE';
+  local $SIG{QUIT} = 'IGNORE';
+  local $SIG{TERM} = 'IGNORE';
+  local $SIG{TSTP} = 'IGNORE';
+  local $SIG{PIPE} = 'IGNORE';
+
+  my $oldAutoCommit = $FS::UID::AutoCommit;
+  local $FS::UID::AutoCommit = 0;
+  my $dbh = dbh;
+  
+  #while ( $columns = $csv->getline($fh) ) {
+  my $line;
+  while ( defined($line=<$fh>) ) {
+
+    $csv->parse($line) or do {
+      $dbh->rollback if $oldAutoCommit;
+      return "can't parse: ". $csv->error_input();
+    };
+
+    my @columns = $csv->fields();
+    my $inpstr = $debug ? join ('|',@columns) : '';
+    #warn join('-',@columns);
+
+    my %cust_main = (
+      agentnum => $agentnum,
+      refnum   => 1,
+      country  => $conf->config('countrydefault') || 'US',
+      daytime  =>'',
+      night    =>'',
+      ship_country  => $conf->config('countrydefault') || 'US',
+      payby    => $payby, #default
+      paydate  => '12/2037', #default
+    );
+    my $billtime = time;
+    my %cust_pkg = ( pkgpart => $pkgpart );
+    my %svc_acct = ();
+
+    # getting rid of all leading and trailing spaces
+    foreach my $value (@columns) {
+      $value =~ s/^\s*(.*?)\s*$/$1/;
+    }
+
+    foreach my $field ( @incoming_fields ) {
+
+      if ($field eq 'custnum') {
+        ### verify custnum correctness
+        my $cn = $columns[0];
+        # note: If the custnum is null, then we are assuming that 
+        # the custnum is fill in from the system
+        next if !$cn;
+
+        return "error: custnum '$cn' need to be a 9 digit number.<br>$inpstr" 
+                                                         if ($cn !~ /^\d{9}$/); 
+
+        return "error: custnum '$cn' must start with a 9 or 1.<br>$inpstr" 
+                                                         if ($cn !~ /^(1|9)/); 
+ 
+        $cust_main{$field} = shift @columns;
+      }
+      elsif ( $field =~ /^(name|ship_name)$/ ) {
+        my ($last,$first) = split (/,/,$columns[0]);
+        $last =~ s/\s*$//;  # remove trailing spaces
+        $first =~ s/^\s*//; # remove leading spaces
+
+        if ($field eq 'name') {
+          $cust_main{'last'} = $last;
+          $cust_main{'first'} = $first;
+        }
+        else {
+          $cust_main{'ship_last'} = $last;
+          $cust_main{'ship_first'} = $first;
+        }
+
+        shift @columns;
+
+      }
+      elsif ($field =~ /^(citystate|ship_citystate)$/) {
+
+        #if ( $columns[0] =~ /(.*?)\s([a-zA-Z]{2})$/ ) { #use for any state
+        if ( $columns[0] =~ /(.*)\s(TX)$/i ) { # TX only
+          my ($city,$state) = (uc $1,uc $2);
+          $city =~ s/\s*$//;  # remove trailing spaces
+
+          if ($field eq 'citystate') {
+            $cust_main{'city'} = $city;
+            $cust_main{'state'} = $state;
+          }
+          else {
+            $cust_main{'ship_city'} = $city;
+            $cust_main{'ship_state'} = $state;
+          }
+        }
+        else {
+          return "error: Field city_state '".$columns[0]."',don't match"
+                ." format 'city state'. I.E. SUGAR LAND TX"
+                ."<br>$inpstr";
+        }
+
+        shift @columns;
+     
+      }
+      elsif ( $field =~ /^(zip|ship_zip)$/ ) {
+        if ( $columns[0] =~ /^(\d{5}|\d{9})$/ ) {
+          my $zipcode = $1;
+          # cludge.  Because the system is not accepting a straight
+          # 9 digit zipcode.  Need to have in format ddddd-dddd
+          $zipcode =~ s/^(\d{5})(\d{4})$/$1\-$2/;
+          $cust_main{$field} = $zipcode;
+        }
+        else {
+          return "error: Zip code '".$columns[0]."' need to be in the format "
+                ."of 5 digit or 9 digit. I.E. 75227 or 752271212"
+                ."<br>$inpstr";
+        }
+        shift @columns;
+      }
+      elsif ( $field eq 'ss' ) {
+        if ($columns[0]) { #ignore if blak
+          if ( $columns[0] =~ /^\d{9}$/ ) {
+            # verify social security number format
+            $cust_main{$field} = $columns[0];
+          }
+          else {
+            return "error: Social Security number ".$columns[0]."' need to be in" 
+                  ." the format of 9 digit. No dash or non digit character are"
+                  ." allowed.  I.E. 512342898"
+                  ."<br>$inpstr";
+          }
+        }
+        shift @columns;
+      }
+      elsif ( $field =~ /^(daytime|night)$/ ) {
+        if ( $columns[0] ) { #ignore if blank
+          if ( $columns[0] =~ /^(\d{3})(\d{3})(\d{4})$/ ) {
+            # duplicate the ph # to service address too
+            $cust_main{$field} = $cust_main{"ship_$field"}= "$1\-$2\-$3";
+          }
+          else {
+            return "error: Phone number ".$columns[0]."' need to be in the format "
+                  ."of 10 digit. No dash or non digit character are allowed."
+                  ." I.E. 8179072171"
+                  ."<br>$inpstr";
+          }
+        }
+        shift @columns;
+
+      }
+      elsif ( $field eq 'newcustdate' ) {
+
+        # string format coming in is in the form of m/d/yyyy
+        if ($columns[0] =~ /^\d{1,2}\/\d{1,2}\/\d{4}$/) {
+          my($month, $day, $year) = split(/\//,$columns[0]);
+
+          # pad month and day with a '0' if they are single digit
+          $month =~ s/^(\d)$/0$1/;
+          $day   =~ s/^(\d)$/0$1/;
+ 
+          my $date = str2time("${year}${month}${day}");
+        
+          $cust_main{'signupdate'} = $date;
+        }
+        else {
+          return "error: Time '".$columns[0]."' format is not correct."
+                ." Accepted format is m/d/yyyy i.e. 3/5/2002."
+                ."<br>$inpstr";
+        }
+        shift @columns;
+
+      }
+      else {
+        $cust_main{$field} = shift @columns; 
+      }
+
+    } #foreach
+
+    my $cust_main = new FS::cust_main ( \%cust_main );
+
+    use Tie::RefHash;
+    tie my %hash, 'Tie::RefHash'; #this part is important
+
+    my $invoicing_list = [];
+    my $error = $cust_main->insert( \%hash, $invoicing_list );
+
+    if ( $error ) {
+      $dbh->rollback if $oldAutoCommit;
+      return "can't insert customer for $line: $error";
+    }
+
+    if ( $format eq 'simple' ) {
+
+      #false laziness w/bill.cgi
+      $error = $cust_main->bill( 'time' => $billtime );
+      if ( $error ) {
+        $dbh->rollback if $oldAutoCommit;
+        return "can't bill customer for $line: $error";
+      }
+  
+      $cust_main->apply_payments;
+      $cust_main->apply_credits;
+  
+      $error = $cust_main->collect();
+      if ( $error ) {
+        $dbh->rollback if $oldAutoCommit;
+        return "can't collect customer for $line: $error";
+      }
+
+    }
+
+    $imported++;
+  }
+
+  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
+
+  return "Empty file!" unless $imported;
+
+  ''; #no error
+
+} # sub batch_import_onp
+
+
+# This import script was written to import and process 810 & 867 edi
+# data for customer
+# coder: Cal Tran
+# dob: 3/11/08
+
+=item batch_edidata_onp
+
+=cut
+
+sub batch_edidata_onp {
+  my $param = shift;
+  #warn join('-',keys %$param);
+  my $fh = $param->{filehandle};
+  my $agentnum = $param->{agentnum};
+
+  my $refnum = $param->{refnum};
+  my $pkgpart = $param->{pkgpart};
+
+  my $debug = 1;
+  #my @fields = @{$param->{fields}};
+  my $format = $param->{'format'};
+  my (@fields, @incoming_fields);
+  my $payby;
+  if ( $format eq 'simple' ) {
+    @fields = qw( cust_pkg.setup dayphone first last
+                  address1 address2 city state zip comments );
+    $payby = 'BILL';
+  } 
+  elsif ( $format eq 'extended' ) {
+
+  }
+  else {
+    die "unknown format $format";
+  }
+
+  eval "use Text::CSV_XS;";
+  die $@ if $@;
+
+  my $csv = new Text::CSV_XS;
+  #warn $csv;
+  #warn $fh;
+
+  my $imported = 0;
+  #my $columns;
+
+  local $SIG{HUP} = 'IGNORE';
+  local $SIG{INT} = 'IGNORE';
+  local $SIG{QUIT} = 'IGNORE';
+  local $SIG{TERM} = 'IGNORE';
+  local $SIG{TSTP} = 'IGNORE';
+  local $SIG{PIPE} = 'IGNORE';
+
+  my $dbh = dbh;
+  my $return_msg;
+  
+  #while ( $columns = $csv->getline($fh) ) {
+  my $line;
+  while ( defined($line=<$fh>) ) {
+
+    $csv->parse($line) or do {
+      return "ERROR can't parse: ". $csv->error_input();
+    };
+
+    my @columns = $csv->fields();
+    my $inpstr = $debug ? join ('|',@columns) : '';
+    #warn join('-',@columns);
+
+    # getting rid of all leading and trailing spaces
+    foreach my $value (@columns) {
+      $value =~ s/^\s*(.*?)\s*$/$1/;
+    }
+
+    my $esiid = $columns[3];
+
+    ### check for matching of 810 usage and 867 usage
+    my $usage_match_810_867;
+    if ($columns[11] == $columns[31]) {
+      $usage_match_810_867 = 0;
+    } 
+    else {
+      $usage_match_810_867 = 'FALSE';
+    };
+
+
+    my @svc_external = qsearch ( 'svc_external', { 'id'    => $esiid } );
+
+    return "ERROR fail: No one own ESIID $esiid!" unless @svc_external;
+
+    my $cust_main;
+    my $cust_pkg;
+
+    foreach my $svcexternal (@svc_external) {
+      my $cust_svc  = qsearchs ( 'cust_svc', { 'svcnum'    => $svcexternal->svcnum} );
+      unless ($cust_svc) {
+        return "ERROR fail1";
+      }
+
+      $cust_pkg  = qsearchs ( 'cust_pkg', { 'pkgnum'    => $cust_svc->pkgnum} );
+      unless ($cust_pkg) {
+        return "ERROR fail2";
+      }
+
+      # don't process any package unless it is active
+      next if ($cust_pkg->status() ne "active");
+       
+      $cust_main  = qsearchs ( 'cust_main', { 'custnum'    => $cust_pkg->custnum} );
+      unless ($cust_main) {
+        return "ERROR fail3";
+        #return "can't insert customer for $line: $error";
+      }
+
+      # don't process any customer that is not active
+      next if ($cust_main->status() ne "active");
+
+      my $svc_num = $svcexternal->svcnum;
+      my $firstname = $cust_main->first;
+      my $lastname = $cust_main->last;
+      my $custnum = $cust_main->custnum;
+      my $balance = $cust_main->balance;
+      my $lastbilled = time2str('%D',$cust_pkg->get('last_bill'));
+
+      # note - the empty column that is after $lastbilled is later used tostore
+      # the last reading from usage_elec
+      my $easy_view = join(',',$usage_match_810_867, $firstname, $lastname, $custnum,
+                               $svc_num,$balance, $lastbilled,'--',
+                               '**',
+         # 13-start date 14-end date 28-prev read 29-curr read
+                               $columns[13], $columns[14], $columns[28], 
+         # 29-curr read 6-tdsp
+                               $columns[29], $columns[6],
+         # 30 - meter multiplier 31-867 usage 21-measured demand
+                               $columns[30], $columns[31], $columns[21], 
+         # 20 - billed demand
+                               $columns[20], '','','',
+                               '**',
+                               @columns
+         );
+
+      if ($return_msg) {
+        $return_msg .= "\n$easy_view";
+      }
+      else {
+        $return_msg = "$easy_view";
+      }
+
+    } #foreach svc_external
+
+  }
+
+  return($return_msg); 
+
+  ''; #no error
+
+} # sub batch_edidata_onp
+
+sub insert_test_value{
+  my $time = time;
+
+	 my $oldAutoCommit = $FS::UID::AutoCommit;
+  local $FS::UID::AutoCommit = 0;
+  my $dbh = dbh;
+	my $transaction810 = new FS::usage_elec({
+		'prev_date'=>'1',
+		'curr_date'=>'1',
+		'prev_read'=>'1',
+		'curr_read'=>'1',
+		'tdsp'=>'1',
+		'svcnum'=>'10',
+		'meter_multiplier'=>'1',
+		'measured_demand'=>'1',
+		'billed_demand'=>'1',
+
+		
+	});
+
+    my $error=$transaction810->insert;
+	if ( $error ) {
+      $dbh->rollback if $oldAutoCommit;
+      return "error applying prepaid card (transaction rolled back): $error";
+      
+    }
 }
 
 sub _upgrade_data { #class method

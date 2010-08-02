@@ -36,6 +36,8 @@ use FS::part_bill_event;
 use FS::payby;
 use FS::bill_batch;
 use FS::cust_bill_batch;
+use FS::usage_elec qw(most_current_date);
+use FS::cust_bill_pkg_detail; #ugh
 
 @ISA = qw( FS::cust_main_Mixin FS::Record );
 
@@ -49,6 +51,13 @@ FS::UID->install_callback( sub {
   $date_format  = $conf->config('date_format') || '%x';  
   $rdate_format = $conf->config('date_format') || '%m/%d/%Y';  
 } );
+
+# i think this is cruft
+sub usage_elec{
+  warn "$me: usage_elec has been called\n";
+  my $self = shift;
+  qsearch('usage_elec',{ 'cust_nr' => $self->custnum});
+}
 
 =head1 NAME
 
@@ -2051,7 +2060,7 @@ sub print_latex {
   $params{'time'} = $today if $today;
   $params{'template'} = $template if $template;
   $params{$_} = $opt{$_} 
-    foreach grep $opt{$_}, qw( unsquealch_cdr notice_name );
+    foreach grep $opt{$_}, qw(unsquealch_cdr notice_name base ignore_due_date);
 
   $template ||= $self->_agent_template;
 
@@ -2100,6 +2109,7 @@ Non optional options include
 
 Optional options include
 
+base - a value used for the name of the template. defaults to 'invoice'
 template - a value used as a suffix for a configuration template
 
 time - a value used to control the printing of overdue messages.  The
@@ -2129,6 +2139,15 @@ sub print_generic {
   die "Unknown format: $format"
     unless $format =~ /^(latex|html|template)$/;
 
+  # this weirdness switches to the most recent invoice under some circumstances
+  if ( $conf->exists('svc_elec_features') && ($params{base} =~ /^rec/i) ) {
+    $self = qsearchs({
+      'table' => 'cust_bill',
+      'hashref' => { 'custnum' => $self->custnum },
+      'order_by' => 'ORDER BY invnum DESC LIMIT 1',
+    });
+  }
+
   my $cust_main = $self->cust_main;
   $cust_main->payname( $cust_main->first. ' '. $cust_main->getfield('last') )
     unless $cust_main->payname
@@ -2141,7 +2160,8 @@ sub print_generic {
 
   #create the template
   my $template = $params{template} ? $params{template} : $self->_agent_template;
-  my $templatefile = "invoice_$format";
+  my $templatefile = $params{base} || 'invoice'; #base only used for 'rec'
+  $templatefile .= "_$format";
   $templatefile .= "_$template"
     if length($template);
   my @invoice_template = map "$_\n", $conf->config($templatefile)
@@ -2343,9 +2363,12 @@ sub print_generic {
     'notice_name'     => ($params{'notice_name'} || 'Invoice'),#escape_function?
     'current_charges' => sprintf("%.2f", $self->charged),
     'duedate'         => $self->due_date2str($rdate_format), #date_format?
+    'due_date'        => $self->due_date2str($rdate_format), #date_format?
+    'ignore_due_date' => ($params{'ignore_due_date'} || ''),
 
     #customer info
     'custnum'         => $cust_main->display_custnum,
+    'phone'           => $cust_main->daytime,
     'agent_custid'    => &$escape_function($cust_main->agent_custid),
     ( map { $_ => &$escape_function($cust_main->$_()) } qw(
       payname company address1 address2 city state zip fax
@@ -2379,6 +2402,121 @@ sub print_generic {
     'total_pages'     => 1,
 
   );
+
+  my @last_cust_bill_pkg_details = ();
+  if ($conf->exists('svc_elec_features')) {
+
+    $invoice_data{date} = time2str('%D', $self->_date);  # date_format?
+
+    # get the detail records sorted by detailnum
+    # too inefficient? 
+    @last_cust_bill_pkg_details =
+      sort { $a->detailnum <=> $b->detailnum }
+      map { $_->cust_bill_pkg_detail }
+      $self->cust_bill_pkg;
+
+    # save a copy of  the last if there is one
+    my $last_cust_bill_pkg_detail;
+    if (scalar(@last_cust_bill_pkg_details)) {
+      $last_cust_bill_pkg_detail = pop @last_cust_bill_pkg_details;
+      push @last_cust_bill_pkg_details, $last_cust_bill_pkg_detail;
+    }
+
+    foreach my $method ( qw( last_pay setup_fee prev_read one_time_charge
+                             curr_read energy_charge energy_base tdsp gr_fee
+                             taxes esiid late_fee average_price 
+                             meter_multplier meter_number ) )
+    {
+      $invoice_data{$method} = $last_cust_bill_pkg_detail
+                               ? $last_cust_bill_pkg_detail->$method
+                               : '';
+    }
+
+    foreach my $method ( qw( prev_date curr_date last_pay_date ) )
+    {
+      $invoice_data{$method} =
+        $last_cust_bill_pkg_detail
+          ? time2str('%D', $last_cust_bill_pkg_detail->$method)
+          : '';
+    }
+
+    foreach my $method ( qw( one_time_description pkg_info note ) )
+    {
+      $invoice_data{$method} =
+        $last_cust_bill_pkg_detail
+          ? &$escape_function($last_cust_bill_pkg_detail->$method)
+          : '';
+    }
+
+    $invoice_data{$_} = ''
+      foreach qw( discount2_total discount2_description discount2_pkgnum
+                  bill_return_address usage numberOfDays balance rate
+                  previousbill_numberOfDays previousbill_totalUsage
+                  lastyear_numberOfDays lastyear_totalUsage
+                  billed_demand measured_demand );
+
+    if ($last_cust_bill_pkg_detail) {
+      $invoice_data{bill_return_address} =
+        $last_cust_bill_pkg_detail->bill_return_addr;
+      $invoice_data{usage} = $last_cust_bill_pkg_detail->energy_usage;
+      $invoice_data{numberOfDays} = $last_cust_bill_pkg_detail->number_of_days;
+      $invoice_data{balance} =
+        sprintf("%.2f", $last_cust_bill_pkg_detail->balance);
+      $invoice_data{actual_balance} = sprintf("%.2f", $cust_main->balance);
+      $invoice_data{rate} = sprintf("%.6f", $last_cust_bill_pkg_detail->rate);
+      $invoice_data{amount_due} =
+        sprintf("%.2f", $self->charged + $last_cust_bill_pkg_detail->balance);
+      $invoice_data{bill_charged} = $invoice_data{current_charges};
+      $invoice_data{billed_demand} = $last_cust_bill_pkg_detail->demanded_bill;
+      $invoice_data{measured_demand} =
+        $last_cust_bill_pkg_detail->measured_bill;
+      $invoice_data{total_discount1} =
+        sprintf('%.2f', $last_cust_bill_pkg_detail->discount1_total)
+        if  $last_cust_bill_pkg_detail->discount1_total
+    }
+
+    if (scalar(@last_cust_bill_pkg_details) > 1) {
+      $invoice_data{previousbill_numberOfDays} =
+        &$escape_function($last_cust_bill_pkg_details[1]->number_of_days);
+      $invoice_data{previousbill_totalUsage} =
+        &$escape_function($last_cust_bill_pkg_details[1]->energy_usage);
+    }
+
+    if (scalar(@last_cust_bill_pkg_details) > 11) {
+      $invoice_data{lastyear_numberOfDays} =
+        &$escape_function($last_cust_bill_pkg_details[11]->number_of_days);
+      $invoice_data{lastyear_totalUsage} =
+        &$escape_function($last_cust_bill_pkg_details[11]->energy_usage);
+    }
+
+    #-ctran 4/11/07 : Manipulatinng the Service address to be input
+    #into latex pdf invoice.  The database table cust_main call the
+    #service address as ship address.  Here I will combine the ship_address1,
+    #ship_address2, and ship_zip to form service address.
+    #-ctran 4/15/07 : If service address is empty, use address1 form cust_main,
+    #this is the mailing address.
+
+    my ($ship_addr1, $ship_addr2) = ($cust_main->ship_address1,
+                                     $cust_main->ship_address2);
+    $ship_addr1 .= ", $ship_addr2" if $ship_addr2;
+
+    # we have a total of 30 character for the service address location,
+    # so address will consist 19 chars, zip 9 chars, ', ' 2 chars = 30
+
+    my $service_addrs;
+    if ($ship_addr1) {
+      if ( (length($ship_addr1)) > 30 ) {
+        $service_addrs = substr($ship_addr1,0,28) . "...";
+      } else {
+        $service_addrs = $ship_addr1;
+      }
+      $service_addrs .= ", ".$cust_main->ship_zip if ($cust_main->ship_zip);
+    } else {
+      $service_addrs = substr($cust_main->address1,0,30);
+    }
+    $invoice_data{srvc_addr} = &$escape_function($service_addrs);
+
+  }
 
   $invoice_data{finance_section} = '';
   if ( $conf->config('finance_pkgclass') ) {
@@ -2506,6 +2644,8 @@ sub print_generic {
   my $other_money_char = $other_money_chars{$format};
   $invoice_data{'dollar'} = $other_money_char;
 
+  my $dash = $conf->exists('svc_elec_features') ? '*'x20 : '-----------';
+
   my @detail_items = ();
   my @total_items = ();
   my @buf = ();
@@ -2515,6 +2655,31 @@ sub print_generic {
   $invoice_data{'total_items'} = \@total_items;
   $invoice_data{'buf'} = \@buf;
   $invoice_data{'sections'} = \@sections;
+
+  # for some kind of statement
+  my @bills = qsearch({
+    'table' => 'cust_bill',
+    'hashref' => { 'custnum' => $self->custnum },
+    'order_by' => 'ORDER BY _date DESC LIMIT 19',
+  });
+  @bills = reverse(@bills);
+
+  #what about multiple details?  original code seems not to care
+  my @bill_details = ();
+  push @bill_details,
+    map { $_->cust_bill_pkg_detail }
+    map { $_->cust_bill_pkg }
+    @bills;
+
+  my @pays = reverse( qsearch({ 'table' => 'cust_pay',
+                                'hashref' => { 'custnum' => $self->custnum },
+                                'order_by' => 'ORDER BY _date DESC LIMIT 19',
+                              })
+                    );
+
+  $invoice_data{'total_bills'} = \@bills;
+  $invoice_data{'total_payments'} = \@pays;
+  $invoice_data{'total_details'} = \@bill_details;
 
   my $previous_section = { 'description' => 'Previous Charges',
                            'subtotal'    => $other_money_char.
@@ -2613,7 +2778,7 @@ sub print_generic {
   }
 
   if ( @pr_cust_bill && !$conf->exists('disable_previous_balance') ) {
-    push @buf, ['','-----------'];
+    push @buf, ['', $dash];
     push @buf, [ 'Total Previous Balance',
                  $money_char. sprintf("%10.2f", $pr_total) ];
     push @buf, ['',''];
@@ -2668,6 +2833,18 @@ sub print_generic {
       $detail->{'description'} = &$escape_function($line_item->{'description'});
       if ( exists $line_item->{'ext_description'} ) {
         @{$detail->{'ext_description'}} = @{$line_item->{'ext_description'}};
+
+        if ($conf->exists('svc_elec_features')) {
+          if ( grep { /DISCOUNT2/i } @{$line_item->{'ext_description'}} ) {
+            $invoice_data{'discount2_total'} = $line_item->{'amount'};
+            $invoice_data{'discount2_pkgnum'} = $detail->{'ref'};
+
+            #want the bare description
+            $invoice_data{'discount2_description'} = &$escape_function($_->desc)
+              foreach $self->cust_bill_pkg_pkgnum($detail->{'ref'});
+          }
+        }
+
       }
       $detail->{'amount'} = ( $old_latex ? '' : $money_char ).
                               $line_item->{'amount'};
@@ -2683,8 +2860,9 @@ sub print_generic {
                  );
     }
 
+
     if ( $section->{'description'} ) {
-      push @buf, ( ['','-----------'],
+      push @buf, ( ['', $dash],
                    [ $section->{'description'}. ' sub-total',
                       $money_char. sprintf("%10.2f", $section->{'subtotal'})
                    ],
@@ -2757,7 +2935,7 @@ sub print_generic {
   }
   $invoice_data{'taxtotal'} = sprintf('%.2f', $taxtotal);
 
-  push @buf,['','-----------'];
+  push @buf,['', $dash];
   push @buf,[( $conf->exists('disable_previous_balance') 
                ? 'Total Charges'
                : 'Total New Charges'
@@ -2791,7 +2969,7 @@ sub print_generic {
     }else{
       push @total_items, $total;
     }
-    push @buf,['','-----------'];
+    push @buf,['', $dash];
     push @buf,[$item,
                $money_char.
                sprintf( '%10.2f', $amount )
@@ -2886,7 +3064,7 @@ sub print_generic {
       }else{
         push @total_items, $total;
       }
-      push @buf,['','-----------'];
+      push @buf,['', $dash];
       push @buf,[$self->balance_due_msg, $money_char. 
         sprintf("%10.2f", $balance_due ) ];
     }

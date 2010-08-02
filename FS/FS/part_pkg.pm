@@ -1418,6 +1418,7 @@ foreach my $INC ( @INC ) {
       warn "no %info hash found in FS::part_pkg::$mod, skipping\n";
       next;
     }
+
     warn "got plan info from FS::part_pkg::$mod: $info\n" if $DEBUG;
     if ( exists($info->{'disabled'}) && $info->{'disabled'} ) {
       warn "skipping disabled plan FS::part_pkg::$mod" if $DEBUG;
@@ -1432,8 +1433,16 @@ tie %plans, 'Tie::IxHash',
   sort { $info{$a}->{'weight'} <=> $info{$b}->{'weight'} }
   keys %info;
 
-sub plan_info {
-  \%plans;
+sub plan_info { 
+  my $conf = new FS::Conf;
+  return \%plans unless $conf->exists('svc_elec_features');
+
+  tie my %result, 'Tie::IxHash',
+    map { $_ => $plans{$_} }
+    grep { $plans{$_}{svc_elec_compatible} }
+    keys %plans;
+
+  \%result;
 }
 
 

@@ -593,6 +593,38 @@ sub tables_hashref {
         'phonenum', 'varchar', 'NULL', 15, '', '',
         'regionname', 'varchar', 'NULL', $char_d, '', '',
         'detail',  'varchar', '', 255, '', '', 
+        # seems suboptimal to store below values here
+        'prev_date','int','NULL','','0','',
+        'curr_date','int','NULL','','0','',
+        'prev_read','decimal','NULL','14,4','0','',
+        'curr_read','decimal','NULL','14,4','0','',
+        'number_of_days','int','NULL','','','',
+        'energy_usage','decimal','NULL','14,4','','',
+        'tdsp','decimal','NULL','10,2','0','',
+        'taxes','decimal','NULL','10,2','','',
+        'gr_fee','decimal','NULL','10,2','0','',
+        'rate','decimal','NULL','10,6','','',
+        'discount1_rate','decimal','NULL','10,6','','',
+        'discount1_total','decimal','NULL','10,2','','',
+        'energy_base','decimal','NULL','10,2','','',
+        'energy_charge','decimal','NULL','10,2','','',
+        'setup_fee','decimal','NULL','10,2','0','',
+        'one_time_charge','decimal','NULL','10,2','0','',
+        'one_time_description','varchar','NULL','150','','',
+        'demanded_bill','decimal','NULL','14,4','0','',
+        'measured_bill','decimal','NULL','14,4','0','',
+        'meter_multiplier','real','NULL','','0','',
+        'balance',@money_type,'0','',
+        'average_price','decimal','NULL','10,4','0','',
+        'pkg_info','varchar','NULL','255','','',
+        'note','varchar','NULL','255','','',
+        'meter_number','varchar','NULL','255','','',
+        'esiid','varchar','NULL','255','','',
+        'late_fee','decimal','NULL','14,4','0','',
+        'last_pay',@money_type,'0','',
+        'last_pay_date','int','NULL','','','',
+        'return_addr','varchar','NULL',150,'','',
+        'bill_return_address','varchar','NULL',150,'','',
       ],
       'primary_key' => 'detailnum',
       'unique' => [],
@@ -2188,13 +2220,123 @@ sub tables_hashref {
     'svc_external' => {
       'columns' => [
         'svcnum', 'int', '', '', '', '', 
-        'id',     'int', 'NULL', '', '', '', 
+        'id',     'varchar', 'NULL', $char_d, '', '', 
         'title',  'varchar', 'NULL', $char_d, '', '', 
       ],
       'primary_key' => 'svcnum',
       'unique'      => [],
       'index'       => [],
     },
+
+    'usage_elec_transaction867' => {
+      'columns'=> [
+        'id','serial','','','','',
+       'usage_elec_id','serial','','','','',
+       'note','varchar','NULL','255','','',
+       ],
+       'primary_key'=> 'id',
+       'unique' => [],
+       'index'=>[['usage_elec_id']],
+      },
+
+    'usage_elec' => {
+      'columns' => [
+       'id', 'serial', '',      '', '', '',
+       'prev_date', @date_type, '', '',
+       'curr_date', @date_type,'','',
+       'prev_read', 'decimal', '14,4',     '', '', '',
+       'curr_read', 'decimal', '14,4',     '', '', '',
+       'tdsp', @money_type, '', '',
+       'meter_multiplier','real','','','','',
+       'total_usage','decimal','14,4','','','',
+       'measured_demand','decimal','14,4','','','',
+       'billed_demand','decimal','14,4','','','',
+       'svcnum', 'int', '', '', '', '',
+        '_date',@date_type,'','',
+        'meter_number','varchar','255','','','',
+      ],
+       'primary_key' => 'id',
+       'unique'      => [],
+        'index'       => [['svcnum']],
+     },
+
+# -nguyen
+    'elec_general' => {
+      'columns' => [
+       'id', 'serial', '',      '', '', '',
+       'esiid','int','','','','',
+      ],
+       'primary_key' => 'id',
+       'unique'      => [],
+        'index'       => [],
+     },
+
+    'trading_rep_profile' => {
+      'columns' => [
+       'id',                     'serial',     '',       '',         '', '',
+       'company_name',           'varchar',    'NULL',   $char_d,    '', '',
+       'duns_num',               'int',        '',       '',         '', '',
+       'company_type',           'varchar',    'NULL',   $char_d,    '', '',
+       'puct_license_num',       'int',        '',       '',         '', '',
+       'active',                 'int',        '',       '',         '', '',
+       'start_date',             @date_type,   '',       '',
+       'end_date',               @date_type,   '',       '',
+      ],
+       'primary_key' => 'id',
+       'unique'      => [ ['duns_num'] ],
+        'index'       => [],
+     },
+
+
+    'transaction810' => {
+      'columns' => [
+        'id',                     'serial',     '',       '',         '', '',
+        'tdsp_duns',              'varchar',    'NULL',   $char_d,    '', '',
+        'inv_num',                'varchar',    'NULL',   $char_d,    '', '',
+        'ref_identification',     'varchar',    'NULL',   $char_d,    '', '',
+        'esiid',                  'varchar',    'NULL',   $char_d,    '', '',
+        'tdsp',                   'int',        '',       '',         '', '',
+        'due_date',               'int',        '',       '',         '', '', 
+        'inv_date',               'int',        '',       '',         '', '',
+        'usage_kwatts',           'real',       '',       '',         '', '',
+        'srvc_from_date',         'int',        '',       '',         '', '',
+        'srvc_to_date',           'int',        '',       '',         '', '',
+        'puct_fund',              'int',        '',       '',         '', '',
+        'billed_demand',          'real',       '',       '',         '', '',
+        'measured_demand',        'real',       'NULL',   '',         '', '',
+        'bill_status',            'char',       '',       2,          '', '',
+        'type_of_bill',           'int',        '',       '',         '', '', # bool 0/1
+        'ack_997',                'int',        '',       '',         '', '', # bool 0/1
+        'processed',              'int',        '',       '',         '', '', # bool 0/1
+      ],
+       'primary_key' => 'id',
+       'unique'      => [ ['inv_num'] ],
+        'index'       => [ ['id'], ['tdsp_duns'], ['inv_num'], ['esiid'] ],
+     },
+
+     'transaction867' => {
+       'columns' => [
+       'id',                       'serial',     '',       '',         '', '',
+       'tdsp_duns',                'int',                  '',       '',   '', '',
+       'ref_identification',       'varchar',    '',       $char_d,    '', '',
+       'esiid',                    'varchar',    '',       $char_d,    '', '',
+       'trans_creation_date',      'int',        '',       '',       '', '', 
+       'meter_no',                 'varchar',    '',       $char_d,    '', '',
+       'srvc_period_start_date',   'int',        '',       '',         '', '',
+       'srvc_period_end_date',     'int',        '',       '',         '', '',
+       'prev_read_kwatts',         'real',       '',       '',         '', '',
+       'curr_read_kwatts',         'real',       '',       '',         '', '',
+       'meter_multiplier',         'real',       '',       '',         '', '',
+       'usage_kwatts',             'real',       '',       '',         '', '',
+       'measured_demand',          'real',       'NULL',   '',         '', '',
+       'ack_997',                  'int',        '',       '',         '', '', # bool 0/1
+       'processed',                'int',        '',       '',         '', '', # bool 0/1
+      ],
+       'primary_key' => 'id',
+       'unique'      => [ ['ref_identification'] ],
+        'index'       => [],
+     },
+
 
     'cust_pay_refund' => {
       'columns' => [
@@ -2842,6 +2984,21 @@ sub tables_hashref {
       'primary_key' => 'pkgrefnum',
       'unique'      => [ [ 'pkgnum', 'refnum' ] ],
       'index'       => [ [ 'pkgnum' ], [ 'refnum' ] ],
+    },
+
+#-- nguyen
+    'svc_elec' => {
+      'columns' => [
+        'id', 'serial', '',      '', '', '',
+        'esiid','int','','','','',
+        'svcnum',      'int',         '',      '', '', '',
+        'countrycode', 'varchar',     '',       3, '', '',
+        'phonenum',    'varchar',     '',      15, '', '',  #12 ?
+        'pin',         'varchar', 'NULL', $char_d, '', '',
+      ],
+      'primary_key' => 'svcnum',
+      'unique' => [],
+      'index'  => [ [ 'countrycode', 'phonenum' ] ],
     },
 
     'svc_pbx' => {

@@ -248,6 +248,12 @@ if ( -e $addl_handler_use_file ) {
   use FS::rate_time_interval;
   use FS::msg_template;
   use FS::part_tag;
+  use FS::elec_general;
+  use FS::svc_elec;
+  use FS::usage_elec;
+  use FS::transaction810;
+  use FS::transaction867;
+  use FS::usage_elec_transaction867;
   # Sammath Naur
 
   if ( $FS::Mason::addl_handler_use ) {
