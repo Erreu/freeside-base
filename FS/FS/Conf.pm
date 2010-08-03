@@ -3450,7 +3450,6 @@ and customer address. Include units.',
     'per_agent'   => 1,
   },
 
-
   {
     'key'         => 'selfservice-menu_top_image',
     'section'     => 'self-service',
@@ -3790,6 +3789,20 @@ and customer address. Include units.',
     'description' => 'Location where customer tags are displayed.',
     'type'        => 'select',
     'select_enum' => [ 'misc_info', 'top' ],
+  },
+
+  {
+    'key'         => 'cust_main-custom_link',
+    'section'     => 'UI',
+    'description' => 'URL to use as source for the "Custom" tab in the View Customer page.  The custnum will be appended.',
+    'type'        => 'text',
+  },
+
+  {
+    'key'         => 'cust_main-custom_title',
+    'section'     => 'UI',
+    'description' => 'Title for the "Custom" tab in the View Customer page.',
+    'type'        => 'text',
   },
 
   { key => "apacheroot", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
