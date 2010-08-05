@@ -179,6 +179,7 @@ if ( $curuser->access_right('Financial reports') ) {
   $report_packages{'separator2'} =  '';
 }
 $report_packages{'All customer packages'} =  [ $fsurl.'search/cust_pkg.cgi?pkgnum', 'List all customer packages', ];
+$report_packages{'Package summary'} = [ $fsurl.'search/cust_pkg_summary.html', 'Show package sales summary', ];
 $report_packages{'Suspended customer packages'} =  [ $fsurl.'search/cust_pkg.cgi?magic=suspended', 'List suspended packages' ];
 $report_packages{'Customer packages with unconfigured services'} =  [ $fsurl.'search/cust_pkg.cgi?APKG_pkgnum', 'List packages which have provisionable services' ];
 $report_packages{'FCC Form 477 packages'} =  [ $fsurl.'search/report_477.html', 'Summarize packages by census tract for particular types' ]
@@ -267,6 +268,7 @@ $report_menu{'Usage'} =  [ \%report_rating,    'Usage reports'  ]
 $report_menu{'Tickets'}   = [ \%report_ticketing, 'Ticket reports' ]
   if $conf->config('ticket_system')
   ;#&& FS::TicketSystem->access_right(\%session, 'Something');
+    'Package Costs Report' => [ $fsurl.'graph/report_cust_pkg_cost.html', 'Package setup and recurring costs graph' ],
 $report_menu{'Billing events'} =  [ \%report_bill_event, 'Billing events' ]
   if $curuser->access_right('Billing event reports');
 $report_menu{'Financial'}  = [ \%report_financial, 'Financial reports' ]
@@ -356,6 +358,8 @@ if ( $curuser->access_right('Configuration') ) {
 }
 
 tie my %config_agent, 'Tie::IxHash',
+$tools_menu{'Process invoice batches'} = [ $fsurl.'search/bill_batch.cgi' ] 
+  if ( $conf->exists('invoice_print_pdf') );
   'Agent types' => [ $fsurl.'browse/agent_type.cgi', 'Agent types define groups of package definitions that you can then assign to particular agents' ],
   'Agents'      => [ $fsurl.'browse/agent.cgi', 'Agents are resellers of your service. Agents may be limited to a subset of your full offerings (via their type)' ],
   'Agent payment gateways'         => [ $fsurl.'browse/payment_gateway.html', 'Credit card and electronic check processors for agent overrides' ];
