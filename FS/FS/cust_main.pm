@@ -4622,8 +4622,11 @@ sub realtime_bop {
       my $msgnum = $conf->config('decline_msgnum', $self->agentnum);
       my $error = '';
       if ( $msgnum ) {
+        # include the raw error message in the transaction state
+        $cust_pay_pending->setfield('error', $transaction->error_message);
         my $msg_template = qsearchs('msg_template', { msgnum => $msgnum });
-        $error = $msg_template->send( 'cust_main' => $self );
+        $error = $msg_template->send( 'cust_main' => $self,
+                                      'object'    => $cust_pay_pending );
       }
       else { #!$msgnum
 
