@@ -2993,6 +2993,7 @@ sub print_ps {
 
   my ($file, $lfile) = $self->print_latex(@_);
   my $ps = generate_ps($file);
+  unlink($file.'.tex');
   unlink($lfile);
 
   $ps;
@@ -3021,6 +3022,7 @@ sub print_pdf {
 
   my ($file, $lfile) = $self->print_latex(@_);
   my $pdf = generate_pdf($file);
+  unlink($file.'.tex');
   unlink($lfile);
 
   $pdf;
