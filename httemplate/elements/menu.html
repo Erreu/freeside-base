@@ -358,8 +358,6 @@ if ( $curuser->access_right('Configuration') ) {
 }
 
 tie my %config_agent, 'Tie::IxHash',
-$tools_menu{'Process invoice batches'} = [ $fsurl.'search/bill_batch.cgi' ] 
-  if ( $conf->exists('invoice_print_pdf') );
   'Agent types' => [ $fsurl.'browse/agent_type.cgi', 'Agent types define groups of package definitions that you can then assign to particular agents' ],
   'Agents'      => [ $fsurl.'browse/agent.cgi', 'Agents are resellers of your service. Agents may be limited to a subset of your full offerings (via their type)' ],
   'Agent payment gateways'         => [ $fsurl.'browse/payment_gateway.html', 'Credit card and electronic check processors for agent overrides' ];
