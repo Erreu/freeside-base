@@ -9423,6 +9423,8 @@ I<from> - the email sender (default is invoice_from)
 I<to> - comma-separated scalar or arrayref of recipients 
    (default is invoicing_list)
 
+I<bcc> - blind-copy recipient address (default is none)
+
 I<subject> - The subject line of the sent email notification
    (default is "Notice from company_name")
 
@@ -9499,6 +9501,7 @@ sub notify {
 
   send_email(from => $from,
              to => $to,
+             bcc => $options{bcc},
              subject => $subject,
              body => $notify_template->fill_in( PACKAGE =>
                                                 'FS::notify_template::_template'                                              ),

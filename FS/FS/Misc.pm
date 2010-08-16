@@ -58,6 +58,10 @@ Sender address, required
 
 Recipient address, required
 
+=item bcc
+
+Blind copy address, optional
+
 =item subject
 
 email subject, required
@@ -91,6 +95,7 @@ sub generate_email {
   my %return = (
     'from'    => $args{'from'},
     'to'      => $args{'to'},
+    'bcc'     => $args{'bcc'},
     'subject' => $args{'subject'},
   );
 
@@ -237,7 +242,7 @@ sub send_email {
 #         join("\n", map { "  $_: ". $options{$_} } keys %options ). "\n"
   }
 
-  my $to = ref($options{to}) ? join(', ', @{ $options{to} } ) : $options{to};
+  my @to = ref($options{to}) ? @{ $options{to} } : ( $options{to} );
 
   my @mimeargs = ();
   my @mimeparts = ();
@@ -296,7 +301,7 @@ sub send_email {
 
   my $message = MIME::Entity->build(
     'From'       => $options{'from'},
-    'To'         => $to,
+    'To'         => join(', ', @to),
     'Sender'     => $options{'from'},
     'Reply-To'   => $options{'from'},
     'Date'       => time2str("%a, %d %b %Y %X %z", time),
@@ -355,9 +360,12 @@ sub send_email {
     $smtp_opt{'ssl'} = 1 if defined($enc) && $enc eq 'tls';
     $transport = Email::Sender::Transport::SMTP->new( %smtp_opt );
   }
-  
+ 
+  push @to, $options{bcc} if defined($options{bcc});
   local $@; # just in case
-  eval { sendmail($message, { transport => $transport }) };
+  eval { sendmail($message, { transport => $transport,
+                              from      => $options{from},
+                              to        => \@to }) };
  
   if(ref($@) and $@->isa('Email::Sender::Failure')) {
     return ($@->code ? $@->code.' ' : '').$@->message

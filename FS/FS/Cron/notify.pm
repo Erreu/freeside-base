@@ -115,6 +115,7 @@ END
                                               'package'    => $packages[0],
                                               'recurdate'  => $recurdates[0],
                                             },
+                          'bcc'        => $conf->config('impending_recur_bcc'),
                         );
     } #if $msgnum
     warn "Error notifying, custnum ". $cust_main->custnum. ": $error" if $error;
