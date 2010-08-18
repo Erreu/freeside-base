@@ -2749,7 +2749,13 @@ sub bill {
     my $real_pkgpart = $cust_pkg->pkgpart;
     my %hash = $cust_pkg->hash;
 
-    foreach my $part_pkg ( $cust_pkg->part_pkg->self_and_bill_linked ) {
+    # we could implement this bit as FS::part_pkg::has_hidden, but we already
+    # suffer from performance issues
+    $options{has_hidden} = 0;
+    my @part_pkg = $cust_pkg->part_pkg->self_and_bill_linked;
+    $options{has_hidden} = 1 if ($part_pkg[1] && $part_pkg[1]->hidden);
+ 
+    foreach my $part_pkg ( @part_pkg ) {
 
       $cust_pkg->set($_, $hash{$_}) foreach qw ( setup last_bill bill );
 
@@ -2774,6 +2780,8 @@ sub bill {
 
   } #foreach my $cust_pkg
 
+  @cust_bill_pkg = _omit_zero_value_bundles(@cust_bill_pkg);
+
   unless ( @cust_bill_pkg ) { #don't create an invoice w/o line items
     #but do commit any package date cycling that happened
     $dbh->commit or die $dbh->errstr if $oldAutoCommit;
@@ -2795,7 +2803,14 @@ sub bill {
     } elsif ( $postal_pkg ) {
 
       my $real_pkgpart = $postal_pkg->pkgpart;
-      foreach my $part_pkg ( $postal_pkg->part_pkg->self_and_bill_linked ) {
+      # we could implement this bit as FS::part_pkg::has_hidden, but we alre
+ady
+      # suffer from performance issues
+      $options{has_hidden} = 0;
+      my @part_pkg = $postal_pkg->part_pkg->self_and_bill_linked;
+      $options{has_hidden} = 1 if ($part_pkg[1] && $part_pkg[1]->hidden);
+ 
+      foreach my $part_pkg ( @part_pkg ) {
         my %postal_options = %options;
         delete $postal_options{cancel};
         my $error =
@@ -2815,6 +2830,9 @@ sub bill {
           return $error;
         }
       }
+
+      # it's silly to have a zero value postal_pkg, but....
+      @cust_bill_pkg = _omit_zero_value_bundles(@cust_bill_pkg);
 
     }
 
@@ -3037,6 +3055,27 @@ sub bill {
   ''; #no error
 }
 
+#discard bundled packages of 0 value
+sub _omit_zero_value_bundles {
+
+  my @cust_bill_pkg = ();
+  my @cust_bill_pkg_bundle = ();
+  my $sum = 0;
+
+  foreach my $cust_bill_pkg ( @_ ) {
+    if (scalar(@cust_bill_pkg_bundle) && !$cust_bill_pkg->pkgpart_override) {
+      push @cust_bill_pkg, @cust_bill_pkg_bundle if $sum > 0;
+      @cust_bill_pkg_bundle = ();
+      $sum = 0;
+    }
+    $sum += $cust_bill_pkg->setup + $cust_bill_pkg->recur;
+    push @cust_bill_pkg_bundle, $cust_bill_pkg;
+  }
+  push @cust_bill_pkg, @cust_bill_pkg_bundle if $sum > 0;
+
+  (@cust_bill_pkg);
+
+}
 
 sub _make_lines {
   my ($self, %params) = @_;
@@ -3177,7 +3216,7 @@ sub _make_lines {
   # If $cust_pkg has been modified, update it (if we're a real pkgpart)
   ###
 
-  if ( $lineitems ) {
+  if ( $lineitems || $options{has_hidden} ) {
 
     if ( $cust_pkg->modified && $cust_pkg->pkgpart == $real_pkgpart ) {
       # hmm.. and if just the options are modified in some weird price plan?
@@ -3201,7 +3240,10 @@ sub _make_lines {
       return "negative recur $recur for pkgnum ". $cust_pkg->pkgnum;
     }
 
-    if ( $setup != 0 || $recur != 0 ) {
+    if ( $setup != 0 ||
+         $recur != 0 ||
+         !$part_pkg->hidden && $options{has_hidden} ) #include some $0 lines
+    {
 
       warn "    charges (setup=$setup, recur=$recur); adding line items\n"
         if $DEBUG > 1;
@@ -3358,16 +3400,15 @@ sub _handle_taxes {
  
   my @display = ();
   my $separate = $conf->exists('separate_usage');
-  my $usage_mandate = $cust_pkg->part_pkg->option('usage_mandate', 'Hush!');
-  if ( $separate || $cust_bill_pkg->hidden || $usage_mandate ) {
+  my $temp_pkg = new FS::cust_pkg { pkgpart => $real_pkgpart };
+  my $usage_mandate = $temp_pkg->part_pkg->option('usage_mandate', 'Hush!');
+  my $section = $temp_pkg->part_pkg->categoryname;
+  if ( $separate || $section || $usage_mandate ) {
 
-    my $temp_pkg = new FS::cust_pkg { pkgpart => $real_pkgpart };
-    my %hash = $cust_bill_pkg->hidden  # maybe for all bill linked?
-               ? (  'section' => $temp_pkg->part_pkg->categoryname )
-               : ();
+    my %hash = ( 'section' => $section );
 
-    my $section = $cust_pkg->part_pkg->option('usage_section', 'Hush!');
-    my $summary = $cust_pkg->part_pkg->option('summarize_usage', 'Hush!');
+    $section = $temp_pkg->part_pkg->option('usage_section', 'Hush!');
+    my $summary = $temp_pkg->part_pkg->option('summarize_usage', 'Hush!');
     if ( $separate ) {
       push @display, new FS::cust_bill_pkg_display { type => 'S', %hash };
       push @display, new FS::cust_bill_pkg_display { type => 'R', %hash };
@@ -3389,8 +3430,10 @@ sub _handle_taxes {
       $hash{post_total} = 'Y';
     }
 
-    $hash{section} = $section if ($separate || $usage_mandate);
-    push @display, new FS::cust_bill_pkg_display { type => 'U', %hash };
+    if ($separate || $usage_mandate) {
+      $hash{section} = $section if ($separate || $usage_mandate);
+      push @display, new FS::cust_bill_pkg_display { type => 'U', %hash };
+    }
 
   }
   $cust_bill_pkg->set('display', \@display);
@@ -3441,6 +3484,9 @@ sub _handle_taxes {
         
         $taxlisthash->{ $totname } ||= [ $tot ];
         push @{ $taxlisthash->{ $totname  } }, $hashref_or_error->{amount};
+
+        # it's silly to have a zero value postal_pkg, but....
+        @cust_bill_pkg = _omit_zero_value_bundles(@cust_bill_pkg);
 
       }
     }
