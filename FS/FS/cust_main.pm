@@ -3485,9 +3485,6 @@ sub _handle_taxes {
         $taxlisthash->{ $totname } ||= [ $tot ];
         push @{ $taxlisthash->{ $totname  } }, $hashref_or_error->{amount};
 
-        # it's silly to have a zero value postal_pkg, but....
-        @cust_bill_pkg = _omit_zero_value_bundles(@cust_bill_pkg);
-
       }
     }
 
