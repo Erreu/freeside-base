@@ -2340,7 +2340,8 @@ sub print_generic {
       qsearchs('pkg_class', { classnum => $conf->config('finance_pkgclass') });
     $invoice_data{finance_section} = $pkg_class->categoryname;
   } 
- $invoice_data{finance_amount} = '0.00';
+  $invoice_data{finance_amount} = '0.00';
+  $invoice_data{finance_section} ||= 'Finance Charges'; #avoid config confusion
 
   my $countrydefault = $conf->config('countrydefault') || 'US';
   my $prefix = $cust_main->has_ship_address ? 'ship_' : '';
@@ -3313,6 +3314,7 @@ sub _items_sections {
   if ( $summarypage ) {
     @sections = grep { exists($subtotal{$_}) || ! _pkg_category($_)->disabled }
                 map { $_->categoryname } qsearch('pkg_category', {});
+    push @sections, '' if exists($subtotal{''});
   } else {
     @sections = keys %subtotal;
   }
