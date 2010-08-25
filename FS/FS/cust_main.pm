@@ -2803,8 +2803,7 @@ sub bill {
     } elsif ( $postal_pkg ) {
 
       my $real_pkgpart = $postal_pkg->pkgpart;
-      # we could implement this bit as FS::part_pkg::has_hidden, but we alre
-ady
+      # we could implement this bit as FS::part_pkg::has_hidden, but we already
       # suffer from performance issues
       $options{has_hidden} = 0;
       my @part_pkg = $postal_pkg->part_pkg->self_and_bill_linked;
