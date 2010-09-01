@@ -4,7 +4,7 @@ use strict;
 use vars qw( @ISA @EXPORT_OK $DEBUG );
 use Exporter;
 use FS::UID qw( dbh driver_name );
-use FS::Record qw(qsearch);
+use FS::Record qw(qsearch qsearchs);
 use FS::cust_main;
 use FS::cust_pkg;
 
@@ -106,7 +106,9 @@ END
     my $msgnum = $conf->config('impending_recur_msgnum',$cust_main->agentnum);
     if ( $msgnum ) {
       my $msg_template = qsearchs('msg_template', { msgnum => $msgnum });
-      $error = $msg_template->send($cust_main);
+      $cust_main->setfield('packages', \\@packages);
+      $cust_main->setfield('recurdates', \\@recurdates);
+      $error = $msg_template->send('cust_main' => $cust_main);
     }
     else {
       $error = $cust_main->notify( 'impending_recur_template',
