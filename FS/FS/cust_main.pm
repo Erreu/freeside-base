@@ -3215,7 +3215,7 @@ sub _make_lines {
   # If $cust_pkg has been modified, update it (if we're a real pkgpart)
   ###
 
-  if ( $lineitems || $options{has_hidden} ) {
+  if ( $lineitems ) {
 
     if ( $cust_pkg->modified && $cust_pkg->pkgpart == $real_pkgpart ) {
       # hmm.. and if just the options are modified in some weird price plan?
