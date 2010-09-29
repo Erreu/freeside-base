@@ -9803,9 +9803,13 @@ sub queued_bill {
 sub _upgrade_data { #class method
   my ($class, %opts) = @_;
 
-  my $sql = 'UPDATE h_cust_main SET paycvv = NULL WHERE paycvv IS NOT NULL';
-  my $sth = dbh->prepare($sql) or die dbh->errstr;
-  $sth->execute or die $sth->errstr;
+  foreach my $sql (
+    'UPDATE h_cust_main SET paycvv = NULL WHERE paycvv IS NOT NULL',
+    'UPDATE cust_main SET signupdate = (SELECT signupdate FROM h_cust_main WHERE h_cust_main.custnum = cust_main.custnum ORDER BY historynum ASC LIMIT 1) WHERE signupdate IS NULL',
+  ) {
+    my $sth = dbh->prepare($sql) or die dbh->errstr;
+    $sth->execute or die $sth->errstr;
+  }
 
 }
 
