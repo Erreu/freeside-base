@@ -14,3 +14,14 @@ a:link, a:visited {
 
 /* a:focus { background-color: #ccccee } */
 
+/* 2.1 look, whatever */
+.fsdisabled {
+  background-color: #dddddd;
+  color: #666666;
+  border: 1px solid #999999;
+  padding: 1px;
+	 -moz-border-radius: 2px;
+	 -webkit-border-radius: 2px;
+	 border-radius: 2px;
+}
+
