@@ -194,6 +194,10 @@
                             },
                             { 'field'      => 'bill_dst_pkgpart',
                               'type'       => 'select-part_pkg',
+                              'extra_sql'  => sub { $pkgpart
+                                                     ? "AND pkgpart != $pkgpart"
+                                                     : ''
+                                                  },
                               'm2_label'   => 'Include line item(s) from package',
                               'm2m_method' => 'bill_part_pkg_link',
                               'm2m_dstcol' => 'dst_pkgpart',
@@ -216,6 +220,10 @@
                             { 'field'      => 'svc_dst_pkgpart',
                               'label'      => 'Also include services from package: ',
                               'type'       => 'select-part_pkg',
+                              'extra_sql'  => sub { $pkgpart
+                                                     ? "AND pkgpart != $pkgpart"
+                                                     : ''
+                                                  },
                               'm2_label'   => 'Include services of package: ',
                               'm2m_method' => 'svc_part_pkg_link',
                               'm2m_dstcol' => 'dst_pkgpart',
@@ -292,6 +300,8 @@ my @taxproductnums = ( qw( setup recur ), sort (keys %taxproductnums) );
 my %options = ();
 my $recur_disabled = 1;
 
+my $pkgpart = '';
+
 my $error_callback = sub {
   my($cgi, $object, $fields, $opt ) = @_;
 
@@ -324,6 +334,8 @@ my $error_callback = sub {
   #$cgi->param($_, $options{$_}) foreach (qw( setup_fee recur_fee ));
   $object->set($_ => scalar($cgi->param($_)) )
     foreach (qw( setup_fee recur_fee ));
+
+  $pkgpart = $object->pkgpart;
 
 };
 
@@ -373,6 +385,8 @@ my $edit_callback = sub {
 
   $object->set($_ => $object->option($_))
     foreach (qw( setup_fee recur_fee ));
+
+  $pkgpart = $object->pkgpart;
 
 };
 
