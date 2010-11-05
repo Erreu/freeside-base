@@ -179,8 +179,6 @@ function samechanged(what) {
 
     <% include('cust_main/first_pkg.html', $cust_main,
                  'pkgpart_svcpart' => $pkgpart_svcpart,
-                 'disable_empty'   =>
-                   scalar( $cgi->param('lock_pkgpart') =~ /^(\d+)$/ ),
                  #svc_acct
                  'username'        => $username,
                  'password'        => $password,
@@ -309,18 +307,11 @@ if ( $cgi->param('error') ) {
   $stateid = '';
   $payinfo = '';
 
-  if ( $cgi->param('lock_pkgpart') =~ /^(\d+)$/ ) {
-    my $pkgpart = $1;
-    my $part_pkg = qsearchs('part_pkg', { 'pkgpart' => $pkgpart } )
-      or die "unknown pkgpart $pkgpart";
-    my $svcpart = $part_pkg->svcpart;
-    $pkgpart_svcpart = $pkgpart.'_'.$svcpart;
-  }
-
 }
 
-my %keep = map { $_=>1 } qw( error tagnum lock_agentnum lock_pkgpart );
-$cgi->delete( grep !$keep{$_}, $cgi->param );
+my $error = $cgi->param('error');
+$cgi->delete_all();
+$cgi->param('error', $error);
 
 my $title = $custnum ? 'Edit Customer' : 'Add Customer';
 $title .= ": ". $cust_main->name if $custnum;

@@ -263,13 +263,13 @@ sub delete {
 
 }
 
-=item replace [ OLD_RECORD ]
+=item replace OLD_RECORD
 
-You can, but probably shouldn't modify invoices...
+Replaces the OLD_RECORD with this one in the database.  If there is an error,
+returns the error, otherwise returns false.
 
-Replaces the OLD_RECORD with this one in the database, or, if OLD_RECORD is not
-supplied, replaces this record.  If there is an error, returns the error,
-otherwise returns false.
+Only printed may be changed.  printed is normally updated by calling the
+collect method of a customer object (see L<FS::cust_main>).
 
 =cut
 
@@ -280,11 +280,11 @@ otherwise returns false.
 
 sub replace_check {
   my( $new, $old ) = ( shift, shift );
-  return "Can't modify closed invoice" if $old->closed =~ /^Y/i;
+  return "Can't change custnum!" unless $old->custnum == $new->custnum;
   #return "Can't change _date!" unless $old->_date eq $new->_date;
-  return "Can't change _date" unless $old->_date == $new->_date;
-  return "Can't change charged" unless $old->charged == $new->charged
-                                    || $old->charged == 0;
+  return "Can't change _date!" unless $old->_date == $new->_date;
+  return "Can't change charged!" unless $old->charged == $new->charged
+                                     || $old->charged == 0;
 
   '';
 }
@@ -2291,12 +2291,10 @@ sub print_generic {
   my $nbsp = $nbsps{$format};
 
   my %escape_functions = ( 'latex'    => \&_latex_escape,
-                           'html'     => \&_html_escape_nbsp,#\&encode_entities,
+                           'html'     => \&encode_entities,
                            'template' => sub { shift },
                          );
   my $escape_function = $escape_functions{$format};
-  my $escape_function_nonbsp = ($format eq 'html')
-                                 ? \&_html_escape : $escape_function;
 
   my %date_formats = ( 'latex'    => '%b %o, %Y',
                        'html'     => '%b&nbsp;%o,&nbsp;%Y',
@@ -2600,7 +2598,7 @@ sub print_generic {
   my $extra_lines = ();
   if ( $multisection ) {
     ($extra_sections, $extra_lines) =
-      $self->_items_extra_usage_sections($escape_function_nonbsp, $format)
+      $self->_items_extra_usage_sections($escape_function, $format)
       if $conf->exists('usage_class_as_a_section', $cust_main->agentnum);
 
     push @$extra_sections, $adjust_section if $adjust_section->{sort_weight};
@@ -2609,13 +2607,13 @@ sub print_generic {
     push @sections,
       $self->_items_sections( $late_sections,      # this could stand a refactor
                               $summarypage,
-                              $escape_function_nonbsp,
+                              $escape_function,
                               $extra_sections,
                               $format,             #bah
                             );
     if ($conf->exists('svc_phone_sections')) {
       my ($phone_sections, $phone_lines) =
-        $self->_items_svc_phone_sections($escape_function_nonbsp, $format);
+        $self->_items_svc_phone_sections($escape_function, $format);
       push @{$late_sections}, @$phone_sections;
       push @detail_items, @$phone_lines;
     }
@@ -3164,18 +3162,6 @@ sub _latex_escape {
   my $value = shift;
   $value =~ s/([#\$%&~_\^{}])( )?/"\\$1". ( ( defined($2) && length($2) ) ? "\\$2" : '' )/ge;
   $value =~ s/([<>])/\$$1\$/g;
-  $value;
-}
-
-sub _html_escape {
-  my $value = shift;
-  encode_entities($value);
-  $value;
-}
-
-sub _html_escape_nbsp {
-  my $value = _html_escape(shift);
-  $value =~ s/ +/&nbsp;/g;
   $value;
 }
 
@@ -4100,20 +4086,15 @@ sub _items_cust_bill_pkg {
           unless ( $cust_pkg->part_pkg->hide_svc_detail
                 || $cust_bill_pkg->hidden )
           {
-
             push @d, map &{$escape_function}($_),
-                         $cust_pkg->h_labels_short($self->_date)
-              unless $cust_bill_pkg->pkgpart_override; #don't redisplay services
-
+                         $cust_pkg->h_labels_short($self->_date);
             if ( $multilocation ) {
               my $loc = $cust_pkg->location_label;
-              $loc = substr($loc, 0, 50). '...'
+              $loc = substr($desc, 0, 50). '...'
                 if $format eq 'latex' && length($loc) > 50;
               push @d, &{$escape_function}($loc);
             }
-
           }
-
           push @d, $cust_bill_pkg->details(%details_opt)
             if $cust_bill_pkg->recur == 0;
 
@@ -4162,20 +4143,17 @@ sub _items_cust_bill_pkg {
                 || $cust_bill_pkg->hidden
                 || $is_summary && $type && $type eq 'U' )
           {
-
             push @d, map &{$escape_function}($_),
                          $cust_pkg->h_labels_short(@dates)
                                                    #$cust_bill_pkg->edate,
                                                    #$cust_bill_pkg->sdate)
-              unless $cust_bill_pkg->pkgpart_override; #don't redisplay services
-
+            ;
             if ( $multilocation ) {
               my $loc = $cust_pkg->location_label;
-              $loc = substr($loc, 0, 50). '...'
+              $loc = substr($desc, 0, 50). '...'
                 if $format eq 'latex' && length($loc) > 50;
               push @d, &{$escape_function}($loc);
             }
-
           }
 
           push @d, $cust_bill_pkg->details(%details_opt)

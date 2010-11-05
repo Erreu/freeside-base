@@ -80,8 +80,8 @@ my %substitutions = (
   ],
   'cust_pkg' => [
     '$pkgnum'         => 'Package#',
-    '$pkg'            => 'Package description',
-    '$pkg_label'      => 'Description + comment',
+    '$pkg_label'      => 'Package label (short)',
+    '$pkg_label_long' => 'Package label (long)',
     '$status'         => 'Status',
     '$statuscolor'    => 'Status color code',
     '$start_ymd'      => 'Start date',
@@ -96,10 +96,8 @@ my %substitutions = (
     '$location_label' => 'Service location',
   ],
   'svc_acct'  => [
-    '$svcnum'         => 'Service#',
     '$username'       => 'Login name',
     '$password'       => 'Password',
-    '$domain'         => 'Domain name',
   ],
   'cust_pay'  => [
     '$paynum'         => 'Payment#',

@@ -77,16 +77,7 @@ my $widget = new HTML::Widgets::SelectLayers(
                       ? $optinfo->{default}
                       : ''
                     );
-      # 'freeform': disables table formatting of options.  Instead, each 
-      # option can define "before" and "after" strings which are inserted 
-      # around the selector.
-      my $freeform = $optinfo->{freeform};
-      if ( $freeform ) {
-        $html .= $optinfo->{before} || '';
-      }
-      else {
-        $html .= qq!<TR><TD ALIGN="right">$label</TD><TD>!;
-      }
+      $html .= qq!<TR><TD ALIGN="right">$label</TD><TD>!;
       if ( $type eq 'select' ) {
         my $size = defined($optinfo->{size}) ? " SIZE=" . $optinfo->{size} : '';
         my $multi = defined($optinfo->{multi}) ? ' MULTIPLE' : '';
@@ -117,7 +108,7 @@ my $widget = new HTML::Widgets::SelectLayers(
         $html .= qq!<TEXTAREA NAME="$option" COLS=80 ROWS=8 WRAP="virtual">!.
                  encode_entities($value). '</TEXTAREA>';
       } elsif ( $type eq 'text' ) {
-        $html .= qq!<INPUT TYPE="text" NAME="$option" VALUE="!. #"
+        $html .= qq!<INPUT TYPE="text" NAME="$option" VALUE="!.
                  encode_entities($value). '" SIZE=64>';
       } elsif ( $type eq 'checkbox' ) {
         $html .= qq!<INPUT TYPE="checkbox" NAME="$option" VALUE="1"!;
@@ -126,12 +117,7 @@ my $widget = new HTML::Widgets::SelectLayers(
       } else {
         $html .= "unknown type $type";
       }
-      if ( $freeform ) {
-        $html .= $optinfo->{after} || '';
-      }
-      else {
-        $html .= '</TD></TR>';
-      }
+      $html .= '</TD></TR>';
     }
     $html .= '</TABLE>';
 

@@ -26,7 +26,7 @@
 
 % if ( $cust_bill->owed > 0
 %      && scalar( grep $payby{$_}, qw(BILL CASH WEST MCRD) )
-%      && $curuser->access_right(['Post payment', 'Post check payment', 'Post cash payment'])
+%      && $curuser->access_right('Post payment')
 %      && ! $conf->exists('pkg-balances')
 %    )
 % {
@@ -34,22 +34,22 @@
 
       Post 
 
-%     if ( $payby{'BILL'} && $curuser->access_right(['Post payment', 'Post check payment']) ) { 
+%     if ( $payby{'BILL'} ) { 
           <% $s++ ? ' | ' : '' %>
           <A HREF="<% $p %>edit/cust_pay.cgi?payby=BILL;invnum=<% $invnum %>">check</A>
 %     } 
 
-%     if ( $payby{'CASH'} && $curuser->access_right(['Post payment', 'Post cash payment']) ) { 
+%     if ( $payby{'CASH'} ) { 
           <% $s++ ? ' | ' : '' %>
           <A HREF="<% $p %>edit/cust_pay.cgi?payby=CASH;invnum=<% $invnum %>">cash</A>
 %     } 
 
-%     if ( $payby{'WEST'} && $curuser->access_right(['Post payment']) ) { 
+%     if ( $payby{'WEST'} ) { 
           <% $s++ ? ' | ' : '' %>
           <A HREF="<% $p %>edit/cust_pay.cgi?payby=WEST;invnum=<% $invnum %>">Western Union</A>
 %     } 
 
-%     if ( $payby{'MCRD'} && $curuser->access_right(['Post payment']) ) { 
+%     if ( $payby{'MCRD'} ) { 
           <% $s++ ? ' | ' : '' %>
           <A HREF="<% $p %>edit/cust_pay.cgi?payby=MCRD;invnum=<% $invnum %>">manual credit card</A>
 %     } 
@@ -117,13 +117,12 @@ if ( $query =~ /^((.+)-)?(\d+)$/ ) {
   $notice_name = $cgi->param('notice_name');
 }
 
-my $conf = new FS::Conf;
-
 my %opt = (
-  'unsquelch_cdr' => $conf->exists('voip-cdr_email'),
-  'template'      => $template,
-  'notice_name'   => $notice_name,
+  'template'    => $template,
+  'notice_name' => $notice_name,
 );
+
+my $conf = new FS::Conf;
 
 my @payby =  grep /\w/, $conf->config('payby');
 #@payby = (qw( CARD DCRD CHEK DCHK LECB BILL CASH WEST COMP ))

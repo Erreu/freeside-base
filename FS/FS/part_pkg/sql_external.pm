@@ -24,10 +24,6 @@ use DBI;
                                    'subscription',
                          'default' => '1',
                        },
-    'add_full_period'=> { 'name' => 'When prorating first month, also bill '.
-                                    'for one full period after that',
-                          'type' => 'checkbox',
-                       },
 
     'recur_method'  => { 'name' => 'Recurring fee method',
                          #'type' => 'radio',
@@ -49,7 +45,7 @@ use DBI;
                },
   },
   'fieldorder' => [qw( setup_fee recur_fee unused_credit recur_method cutoff_day
-                      add_full_period datasrc db_username db_password query 
+                       datasrc db_username db_password query 
                   )],
   'weight' => '58',
 );

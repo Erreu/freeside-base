@@ -33,10 +33,6 @@ tie %options, 'Tie::IxHash',
     default => join("\n",
     ),
   },
-  'success_regexp' => {
-    label  => 'Success Regexp',
-    default => '',
-  },
 ;
 
 %info = (
@@ -75,7 +71,6 @@ sub _export_command {
   $self->http_queue( $svc_x->svcnum,
     $self->option('method'),
     $self->option('url'),
-    $self->option('success_regexp'),
     map {
       /^\s*(\S+)\s+(.*)$/ or /()()/;
       my( $field, $value_expression ) = ( $1, $2 );
@@ -100,7 +95,6 @@ sub _export_replace {
   $self->http_queue( $new->svcnum,
     $self->option('method'),
     $self->option('url'),
-    $self->option('success_regexp'),
     map {
       /^\s*(\S+)\s+(.*)$/ or /()()/;
       my( $field, $value_expression ) = ( $1, $2 );
@@ -120,7 +114,7 @@ sub http_queue {
 }
 
 sub http {
-  my($method, $url, $success_regexp, @data) = @_;
+  my($method, $url, @data) = @_;
 
   $method = lc($method);
 
@@ -139,11 +133,6 @@ sub http {
   my $response = $ua->request($req);
 
   die $response->error_as_HTML if $response->is_error;
-
-  if(length($success_regexp) > 1) {
-    my $response_content = $response->content;
-    die $response_content unless $response_content =~ /$success_regexp/;
-  }
 
 }
 

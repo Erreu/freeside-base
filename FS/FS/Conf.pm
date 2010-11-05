@@ -395,7 +395,6 @@ sub verify_config_item {
 
   } else {
 
-    no warnings 'uninitialized';
     $error .= "$key fails binary comparison; "
       unless scalar($self->config_binary($key)) eq scalar($compat->config_binary($key));
 
@@ -1182,7 +1181,7 @@ and customer address. Include units.',
     'section'     => 'invoicing',
     'description' => 'Optional default invoice term, used to calculate a due date printed on invoices.',
     'type'        => 'select',
-    'select_enum' => [ '', 'Payable upon receipt', 'Net 0', 'Net 10', 'Net 15', 'Net 20', 'Net 30', 'Net 45', 'Net 60', 'Net 90' ],
+    'select_enum' => [ '', 'Payable upon receipt', 'Net 0', 'Net 10', 'Net 15', 'Net 20', 'Net 30', 'Net 45', 'Net 60' ],
   },
 
   { 
@@ -1623,20 +1622,6 @@ and customer address. Include units.',
     'key'         => 'username-colon',
     'section'     => 'username',
     'description' => 'Allow the colon character (:) in usernames.',
-    'type'        => 'checkbox',
-  },
-
-  { 
-    'key'         => 'username-slash',
-    'section'     => 'username',
-    'description' => 'Allow the slash character (/) in usernames.  When using, make sure to set "Home directory" to fixed and blank in all svc_acct service definitions.',
-    'type'        => 'checkbox',
-  },
-
-  { 
-    'key'         => 'username-equals',
-    'section'     => 'username',
-    'description' => 'Allow the equal sign character (=) in usernames.',
     'type'        => 'checkbox',
   },
 
@@ -2319,15 +2304,7 @@ and customer address. Include units.',
   {
     'key'         => 'global_unique-pbx_title',
     'section'     => '',
-    'description' => 'Global phone number uniqueness control: none (check uniqueness per exports), enabled (check across all services), or disabled (no duplicate checking).',
-    'type'        => 'select',
-    'select_enum' => [ 'enabled', 'disabled' ],
-  },
-
-  {
-    'key'         => 'global_unique-pbx_id',
-    'section'     => '',
-    'description' => 'Global PBX id uniqueness control: none (check uniqueness per exports), enabled (check across all services), or disabled (no duplicate checking).',
+    'description' => 'Global phone number uniqueness control: enabled (usual setting - svc_pbx.title must be unique), or disabled turns off duplicate checking for this field.',
     'type'        => 'select',
     'select_enum' => [ 'enabled', 'disabled' ],
   },
@@ -2499,7 +2476,7 @@ and customer address. Include units.',
   {
     'key'         => 'address1-search',
     'section'     => 'UI',
-    'description' => 'Enable the ability to search the address1 field from the quick customer search.  Not recommended in most cases as it tends to bring up too many search results - use explicit address searching from the advanced customer search instead.',
+    'description' => 'Enable the ability to search the address1 field from customer search.',
     'type'        => 'checkbox',
   },
 
@@ -2654,13 +2631,6 @@ and customer address. Include units.',
   },
 
   {
-    'key'         => 'cust_pkg-large_pkg_size',
-    'section'     => 'UI',
-    'description' => "In customer view, summarize packages with more than this many services.  Set to zero to never summarize packages.",
-    'type'        => 'text',
-  },
-
-  {
     'key'         => 'svc_acct-edit_uid',
     'section'     => 'shell',
     'description' => 'Allow UID editing.',
@@ -2705,7 +2675,7 @@ and customer address. Include units.',
   {
     'key'         => 'voip-cdr_email',
     'section'     => '',
-    'description' => 'Include the call details on emailed invoices (and HTML invoices viewed in the backend), even if the customer is configured for not printing them on the invoices.',
+    'description' => 'Include the call details on emailed invoices even if the customer is configured for not printing them on the invoices.',
     'type'        => 'checkbox',
   },
 
@@ -2747,7 +2717,7 @@ and customer address. Include units.',
   {
     'key'         => 'tax-pkg_address',
     'section'     => 'billing',
-    'description' => 'By default, tax calculations are done based on the billing address.  Enable this switch to calculate tax based on the package address instead (when present).',
+    'description' => 'By default, tax calculations are done based on the billing address.  Enable this switch to calculate tax based on the package address instead (when present).  Note that this option is currently incompatible with vendor data taxation enabled by enable_taxproducts.',
     'type'        => 'checkbox',
   },
 
@@ -4019,13 +3989,6 @@ and customer address. Include units.',
     'section'     => 'UI',
     'description' => 'Title for the "Custom" tab in the View Customer page.',
     'type'        => 'text',
-  },
-
-  {
-    'key'         => 'part_pkg-default_suspend_bill',
-    'section'     => 'billing',
-    'description' => 'Default the "Continue recurring billing while suspended" flag to on for new package definitions.',
-    'type'        => 'checkbox',
   },
 
   { key => "apacheroot", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },

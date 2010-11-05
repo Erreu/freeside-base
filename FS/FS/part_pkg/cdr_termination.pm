@@ -58,10 +58,6 @@ tie my %temporalities, 'Tie::IxHash',
                                    'subscription',
                          'default' => '1',
                        },
-    'add_full_period'=> { 'name' => 'When prorating first month, also bill '.
-                                    'for one full period after that',
-                          'type' => 'checkbox',
-                        },
 
     'recur_method'  => { 'name' => 'Recurring fee method',
                          #'type' => 'radio',
@@ -94,7 +90,6 @@ tie my %temporalities, 'Tie::IxHash',
   'fieldorder' => [qw(
                        setup_fee recur_fee
                        recur_temporality unused_credit recur_method cutoff_day
-                       add_full_period
                        output_format usage_section summarize_usage usage_mandate
                      )
                   ],

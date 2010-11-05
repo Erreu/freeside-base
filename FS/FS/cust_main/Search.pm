@@ -203,7 +203,7 @@ sub smart_search {
     } elsif ( ! $NameParse->parse($value) ) {
 
       my %name = $NameParse->components;
-      $first = $name{'given_name_1'} || $name{'initials_1'}; #wtf NameParse, Ed?
+      $first = $name{'given_name_1'};
       $last  = $name{'surname_1'};
 
     }
@@ -422,8 +422,6 @@ HASHREF.  Valid parameters are
 
 =item status
 
-=item address
-
 =item cancelled_pkgs
 
 bool
@@ -490,19 +488,7 @@ sub search {
     #push @where, $class->$method();
     push @where, FS::cust_main->$method();
   }
-
-  ##
-  # address
-  ##
-  if ( $params->{'address'} =~ /\S/ ) {
-    my $address = dbh->quote('%'. lc($params->{'address'}). '%');
-    push @where, '('. join(' OR ',
-                             map "LOWER($_) LIKE $address",
-                               qw(address1 address2 ship_address1 ship_address2)
-                          ).
-                 ')';
-  }
-
+  
   ##
   # parse cancelled package checkbox
   ##
@@ -520,13 +506,6 @@ sub search {
     if $params->{'no_censustract'};
 
   ##
-  # parse with hardcoded tax location checkbox
-  ##
-
-  push @where, "geocode is not null"
-    if $params->{'with_geocode'};
-
-  ##
   # dates
   ##
 
@@ -541,12 +520,10 @@ sub search {
       "cust_main.$field >= $beginning",
       "cust_main.$field <= $ending";
 
+    # XXX: do this for mysql and/or pull it out of here
     if(defined $hour) {
-      if ($dbh->{Driver}->{Name} =~ /Pg/i) {
+      if ($dbh->{Driver}->{Name} eq 'Pg') {
         push @where, "extract(hour from to_timestamp(cust_main.$field)) = $hour";
-      }
-      elsif( $dbh->{Driver}->{Name} =~ /mysql/i) {
-        push @where, "hour(from_unixtime(cust_main.$field)) = $hour"
       }
       else {
         warn "search by time of day not supported on ".$dbh->{Driver}->{Name}." databases";
@@ -658,21 +635,6 @@ sub search {
     push @where,
       "cust_main.custbatch = '$1'";
   }
-  
-  if ( $params->{'tagnum'} ) {
-    my @tagnums = ref( $params->{'tagnum'} ) ? @{ $params->{'tagnum'} } : ( $params->{'tagnum'} );
-
-    @tagnums = grep /^(\d+)$/, @tagnums;
-
-    if ( @tagnums ) {
-	my $tags_where = "0 < (select count(1) from cust_tag where " 
-		. " cust_tag.custnum = cust_main.custnum and tagnum in ("
-		. join(',', @tagnums) . "))";
-
-	push @where, $tags_where;
-    }
-  }
-
 
   ##
   # setup queries, subs, etc. for the search
@@ -689,7 +651,7 @@ sub search {
 
   my $count_query = "SELECT COUNT(*) FROM cust_main $extra_sql";
 
-  my @select = (
+  my $select = join(', ', 
                  'cust_main.custnum',
                  FS::UI::Web::cust_sql_fields($params->{'cust_fields'}),
                );
@@ -701,10 +663,10 @@ sub search {
 
     if ($dbh->{Driver}->{Name} eq 'Pg') {
 
-      push @select, "array_to_string(array(select pkg from cust_pkg left join part_pkg using ( pkgpart ) where cust_main.custnum = cust_pkg.custnum $pkgwhere),'|') as magic";
+      $select .= ", array_to_string(array(select pkg from cust_pkg left join part_pkg using ( pkgpart ) where cust_main.custnum = cust_pkg.custnum $pkgwhere),'|') as magic";
 
     }elsif ($dbh->{Driver}->{Name} =~ /^mysql/i) {
-      push @select, "GROUP_CONCAT(pkg SEPARATOR '|') as magic";
+      $select .= ", GROUP_CONCAT(pkg SEPARATOR '|') as magic";
       $addl_from .= " LEFT JOIN part_pkg using ( pkgpart )";
     }else{
       warn "warning: unknown database type ". $dbh->{Driver}->{Name}. 
@@ -727,21 +689,6 @@ sub search {
     }
 
   }
-
-  if ( $params->{'with_geocode'} ) {
-
-    unshift @extra_headers, 'Tax location override', 'Calculated tax location';
-    unshift @extra_fields, sub { my $c = shift; $c->get('geocode'); },
-                           sub { my $c = shift;
-                                 $c->set('geocode', '');
-                                 $c->geocode('cch'); #XXX only cch right now
-                               };
-    push @select, 'geocode';
-    push @select, 'zip' unless grep { $_ eq 'zip' } @select;
-    push @select, 'ship_zip' unless grep { $_ eq 'ship_zip' } @select;
-  }
-
-  my $select = join(', ', @select);
 
   my $sql_query = {
     'table'         => 'cust_main',

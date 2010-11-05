@@ -22,7 +22,6 @@ $DEBUG = 0;
 tie my %cdr_svc_method, 'Tie::IxHash',
   'svc_phone.phonenum' => 'Phone numbers (svc_phone.phonenum)',
   'svc_pbx.title'      => 'PBX name (svc_pbx.title)',
-  'svc_pbx.svcnum'     => 'Freeside service # (svc_pbx.svcnum)',
 ;
 
 tie my %rating_method, 'Tie::IxHash',
@@ -71,10 +70,7 @@ tie my %granularity, 'Tie::IxHash', FS::rate_detail::granularities();
                                    'subscription',
                          'default' => '1',
                        },
-    'add_full_period'=> { 'name' => 'When prorating first month, also bill '.
-                                    'for one full period after that',
-                          'type' => 'checkbox',
-                        },
+
     'recur_method'  => { 'name' => 'Recurring fee method',
                          #'type' => 'radio',
                          #'options' => \%recur_method,
@@ -222,13 +218,9 @@ tie my %granularity, 'Tie::IxHash', FS::rate_detail::granularities();
                        },
     #eofalse
 
-    'bill_every_call' => { 'name' => 'Generate an invoice immediately for every call (as well any setup fee, upon first payment).  Useful for prepaid.',
+    'bill_every_call' => { 'name' => 'Generate an invoice immediately for every call.  Useful for prepaid.',
                            'type' => 'checkbox',
                          },
-
-    'bill_inactive_svcs' => { 'name' => 'Bill for all phone numbers that were active during the billing period',
-                              'type' => 'checkbox',
-                            },
 
     'count_available_phones' => { 'name' => 'Consider for tax purposes the number of lines to be svc_phones that may be provisioned rather than those that actually are.',
                            'type' => 'checkbox',
@@ -261,7 +253,6 @@ tie my %granularity, 'Tie::IxHash', FS::rate_detail::granularities();
   'fieldorder' => [qw(
                        setup_fee recur_fee recur_temporality unused_credit
                        recur_method cutoff_day
-                       add_full_period
                        cdr_svc_method
                        rating_method ratenum min_charge sec_granularity
                        ignore_unrateable
@@ -282,7 +273,7 @@ tie my %granularity, 'Tie::IxHash', FS::rate_detail::granularities();
                        use_duration
                        411_rewrite
                        output_format usage_mandate summarize_usage usage_section
-                       bill_every_call bill_inactive_svcs
+                       bill_every_call
                        count_available_phones
                      )
                   ],
@@ -369,35 +360,18 @@ sub calc_usage {
 
   my($svc_table, $svc_field) = split('\.', $cdr_svc_method);
 
-  my @cust_svc;
-  if( $self->option('bill_inactive_svcs',1) ) {
-    #XXX in this mode do we need to restrict the set of CDRs by date also?
-    @cust_svc = $cust_pkg->h_cust_svc($$sdate, $last_bill);
-  }
-  else {
-    @cust_svc = $cust_pkg->cust_svc;
-  }
-  @cust_svc = grep { $_->part_svc->svcdb eq $svc_table } @cust_svc;
+  foreach my $cust_svc (
+    grep { $_->part_svc->svcdb eq $svc_table } $cust_pkg->cust_svc
+  ) {
 
-  foreach my $cust_svc (@cust_svc) {
-
-    my $svc_x;
-    if( $self->option('bill_inactive_svcs',1) ) {
-      $svc_x = $cust_svc->h_svc_x($$sdate, $last_bill);
-    }
-    else {
-      $svc_x = $cust_svc->svc_x;
-    }
-    my %options = (
+    my $svc_x = $cust_svc->svc_x;
+    foreach my $cdr (
+      $svc_x->get_cdrs(
         'disable_src'    => $self->option('disable_src'),
         'default_prefix' => $self->option('default_prefix'),
         'status'         => '',
         'for_update'     => 1,
-      );  # $last_bill, $$sdate )
-    $options{'by_svcnum'} = 1 if $svc_field eq 'svcnum';
-
-    foreach my $cdr (
-      $svc_x->get_cdrs( %options )
+      )  # $last_bill, $$sdate )
     ) {
       if ( $DEBUG > 1 ) {
         warn "rating CDR $cdr\n".
@@ -727,7 +701,7 @@ sub calc_usage {
         if ( $charge > 0 ) {
           #just use FS::cust_bill_pkg_detail objects?
           my $call_details;
-          my $phonenum = $svc_x->phonenum;
+          my $phonenum = $cust_svc->svc_x->phonenum;
 
           if ( scalar(@call_details) == 1 ) {
             $call_details =

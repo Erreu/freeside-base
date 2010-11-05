@@ -9,7 +9,6 @@ use vars qw( $DEBUG $me $conf $skip_fuzzyfiles
              $username_ampersand $username_letter $username_letterfirst
              $username_noperiod $username_nounderscore $username_nodash
              $username_uppercase $username_percent $username_colon
-             $username_slash $username_equals
              $password_noampersand $password_noexclamation
              $warning_template $warning_from $warning_subject $warning_mimetype
              $warning_cc
@@ -75,8 +74,6 @@ FS::UID->install_callback( sub {
   $username_ampersand = $conf->exists('username-ampersand');
   $username_percent = $conf->exists('username-percent');
   $username_colon = $conf->exists('username-colon');
-  $username_slash = $conf->exists('username-slash');
-  $username_equals = $conf->exists('username-equals');
   $password_noampersand = $conf->exists('password-noexclamation');
   $password_noexclamation = $conf->exists('password-noexclamation');
   $dirhash = $conf->config('dirhash') || 0;
@@ -1243,14 +1240,16 @@ sub check {
   }
 
   my $ulen = $usernamemax || $self->dbdef_table->column('username')->length;
-
-  $recref->{username} =~ /^([a-z0-9_\-\.\&\%\:\/\=]{$usernamemin,$ulen})$/i
-    or return gettext('illegal_username'). " ($usernamemin-$ulen): ". $recref->{username};
-  $recref->{username} = $1;
-
-  unless ( $username_uppercase ) {
-    $recref->{username} =~ /[A-Z]/ and return gettext('illegal_username');
+  if ( $username_uppercase ) {
+    $recref->{username} =~ /^([a-z0-9_\-\.\&\%\:]{$usernamemin,$ulen})$/i
+      or return gettext('illegal_username'). " ($usernamemin-$ulen): ". $recref->{username};
+    $recref->{username} = $1;
+  } else {
+    $recref->{username} =~ /^([a-z0-9_\-\.\&\%\:]{$usernamemin,$ulen})$/
+      or return gettext('illegal_username'). " ($usernamemin-$ulen): ". $recref->{username};
+    $recref->{username} = $1;
   }
+
   if ( $username_letterfirst ) {
     $recref->{username} =~ /^[a-z]/ or return gettext('illegal_username');
   } elsif ( $username_letter ) {
@@ -1273,12 +1272,6 @@ sub check {
   }
   unless ( $username_colon ) {
     $recref->{username} =~ /\:/ and return gettext('illegal_username');
-  }
-  unless ( $username_slash ) {
-    $recref->{username} =~ /\// and return gettext('illegal_username');
-  }
-  unless ( $username_equals ) {
-    $recref->{username} =~ /\=/ and return gettext('illegal_username');
   }
 
   $recref->{popnum} =~ /^(\d*)$/ or return "Illegal popnum: ".$recref->{popnum};
@@ -1359,7 +1352,7 @@ sub check {
     }
   }
   $self->getfield('finger') =~
-    /^([µ_0123456789aAáÁàÀâÂåÅäÄãÃªæÆbBcCçÇdDðÐeEéÉèÈêÊëËfFgGhHiIíÍìÌîÎïÏjJkKlLmMnNñÑoOóÓòÒôÔöÖõÕøØºpPqQrRsSßtTuUúÚùÙûÛüÜvVwWxXyYýÝÿzZþÞ \t\!\@\#\$\%\&\(\)\-\+\;\'\"\,\.\?\/\*\<\>]*)$/
+    /^([\w \t\!\@\#\$\%\&\(\)\-\+\;\'\"\,\.\?\/\*\<\>]*)$/
       or return "Illegal finger: ". $self->getfield('finger');
   $self->setfield('finger', $1);
 

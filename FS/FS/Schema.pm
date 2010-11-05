@@ -831,8 +831,8 @@ sub tables_hashref {
         'last',      'varchar',     '', $char_d, '', '', 
 #        'middle',    'varchar', 'NULL', $char_d, '', '', 
         'first',     'varchar',     '', $char_d, '', '', 
-        'title',     'varchar', 'NULL', $char_d, '', '', #eg Head Bottle Washer
-        'comment',   'varchar', 'NULL', $char_d, '', '', 
+        'title',     'varchar',     '', $char_d, '', '', #eg Head Bottle Washer
+        'comment',   'varchar',     '', $char_d, '', '', 
         'disabled',     'char', 'NULL',       1, '', '', 
       ],
       'primary_key' => 'contactnum',
@@ -844,13 +844,13 @@ sub tables_hashref {
 
     'contact_phone' => {
       'columns' => [
-        'contactphonenum', 'serial',     '', '', '', '',
-        'contactnum',         'int',     '', '', '', '',
-        'phonetypenum',       'int',     '', '', '', '',
-        'countrycode',    'varchar',     '',  3, '', '', 
-        'phonenum',       'varchar',     '', 14, '', '', 
-        'extension',      'varchar', 'NULL',  7, '', '',
-        #?#'comment',        'varchar',     '', $char_d, '', '', 
+        'contactphonenum', 'serial', '', '', '', '',
+        'contactnum',         'int', '', '', '', '',
+        'phonetypenum',       'int', '', '', '', '',
+        'countrycode',    'varchar', '',  3, '', '', 
+        'phonenum',       'varchar', '', 14, '', '', 
+        'extension',      'varchar', '',  7, '', '',
+        #?#'comment',   'varchar',     '', $char_d, '', '', 
       ],
       'primary_key' => 'contactphonenum',
       'unique'      => [],
@@ -1194,11 +1194,10 @@ sub tables_hashref {
         'reason',    'varchar',   'NULL', $char_d, '', '', 
         'otaker',   'varchar', 'NULL', 32, '', '', 
         'usernum',   'int', 'NULL', '', '', '',
-        'void_usernum',   'int', 'NULL', '', '', '',
       ],
       'primary_key' => 'paynum',
       'unique' => [],
-      'index' => [ [ 'custnum' ], [ 'usernum' ], [ 'void_usernum' ] ],
+      'index' => [ [ 'custnum' ], [ 'usernum' ], ],
     },
 
     'cust_bill_pay' => {
@@ -1304,7 +1303,6 @@ sub tables_hashref {
         'adjourn',        @date_type,             '', '', 
         'cancel',         @date_type,             '', '', 
         'expire',         @date_type,             '', '', 
-        'contract_end',   @date_type,             '', '',
         'change_date',    @date_type,             '', '',
         'change_pkgnum',       'int', 'NULL', '', '', '',
         'change_pkgpart',      'int', 'NULL', '', '', '',
@@ -2970,18 +2968,7 @@ sub tables_hashref {
       'index'       => [ ['agentnum'], ]
     },
 
-    'svc_cert' => {
-      'columns' => [
-        'svcnum',            'int',     '',            '', '', '', 
-        'recnum',   'int',      '',  '', '', '', 
-        'something', 'text', '', '', '', '',
-        #XXX more fields
-      ],
-      'primary_key' => 'svcnum',
-      'unique' => [],
-      'index'  => [], #recnum
-    },
-   
+
 
     # name type nullability length default local
 

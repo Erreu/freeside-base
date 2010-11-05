@@ -204,9 +204,7 @@
 %  if ( $cgi->param('search_cust') ) {
 %    $sortby = \*company_sort;
 %    $orderby = "ORDER BY LOWER(company || ' ' || last || ' ' || first )";
-%    push @cust_main, smart_search( 'search' => $cgi->param('search_cust'),
-%                                   'no_fuzzy_on_exact' => 1, #pref?
-%                                 );
+%    push @cust_main, smart_search( 'search' => $cgi->param('search_cust') );
 %  }
 %
 %  @cust_main = grep { $_->ncancelled_pkgs || ! $_->all_pkgs } @cust_main

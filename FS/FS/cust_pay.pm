@@ -264,36 +264,6 @@ sub insert {
   }
   #eslaf
 
-  #bill setup fees for voip_cdr bill_every_call packages
-  #some false laziness w/search in freeside-cdrd
-  my $addl_from =
-    'LEFT JOIN part_pkg USING ( pkgpart ) '.
-    "LEFT JOIN part_pkg_option
-       ON ( cust_pkg.pkgpart = part_pkg_option.pkgpart
-            AND part_pkg_option.optionname = 'bill_every_call' )";
-
-  my $extra_sql = " AND plan = 'voip_cdr' AND optionvalue = '1' ".
-                  " AND ( cust_pkg.setup IS NULL OR cust_pkg.setup = 0 ) ";
-
-  my @cust_pkg = qsearch({
-    'table'     => 'cust_pkg',
-    'addl_from' => $addl_from,
-    'hashref'   => { 'custnum' => $self->custnum,
-                     'susp'    => '',
-                     'cancel'  => '',
-                   },
-    'extra_sql' => $extra_sql,
-  });
-
-  if ( @cust_pkg ) {
-    warn "voip_cdr bill_every_call packages found; billing customer\n";
-    my $bill_error = $self->cust_main->bill_and_collect( 'fatal' => 'return' );
-    if ( $bill_error ) {
-      warn "WARNING: Error billing customer: $bill_error\n";
-    }
-  }
-  #end of billing setup fees for voip_cdr bill_every_call packages
-
   $dbh->commit or die $dbh->errstr if $oldAutoCommit;
 
   #payment receipt
@@ -431,17 +401,14 @@ sub delete {
 
 }
 
-=item replace [ OLD_RECORD ]
+=item replace OLD_RECORD
 
 You can, but probably shouldn't modify payments...
-
-Replaces the OLD_RECORD with this one in the database, or, if OLD_RECORD is not
-supplied, replaces this record.  If there is an error, returns the error,
-otherwise returns false.
 
 =cut
 
 sub replace {
+  #return "Can't modify payment!"
   my $self = shift;
   return "Can't modify closed payment" if $self->closed =~ /^Y/i;
   $self->SUPER::replace(@_);
@@ -833,10 +800,9 @@ sub _upgrade_data {  #class method
     my $h_cust_pay = $cust_pay->h_search('insert');
     if ( $h_cust_pay ) {
       next if $cust_pay->otaker eq $h_cust_pay->history_user;
-      #$cust_pay->otaker($h_cust_pay->history_user);
-      $cust_pay->set('otaker', $h_cust_pay->history_user);
+      $cust_pay->otaker($h_cust_pay->history_user);
     } else {
-      $cust_pay->set('otaker', 'legacy');
+      $cust_pay->otaker('legacy');
     }
 
     delete $FS::payby::hash{'COMP'}->{cust_pay}; #quelle kludge

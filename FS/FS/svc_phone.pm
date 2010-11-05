@@ -547,8 +547,6 @@ with the chosen prefix.
 
 =item disable_src => 1: Only match on "charged_party", not "src".
 
-=item by_svcnum: not supported for svc_phone
-
 =back
 
 =cut

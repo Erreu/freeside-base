@@ -166,13 +166,7 @@ Customer object (required).
 =item object
 
 Additional context object (currently, can be a cust_main, cust_pkg, 
-cust_bill, svc_acct, cust_pay, or cust_pay_pending).  If the object 
-is a svc_acct, its cust_pkg will be fetched and used for substitution.
-
-As a special case, this may be an arrayref of two objects.  Both 
-objects will be available for substitution, with their field names 
-prefixed with 'new_' and 'old_' respectively.  This is used in the 
-rt_ticket export when exporting "replace" events.
+cust_bill, svc_acct, cust_pay, or cust_pay_pending object).
 
 =item to
 
@@ -197,37 +191,15 @@ sub prepare {
   # create substitution table
   ###  
   my %hash;
-  my @objects = ($cust_main);
-  my @prefixes = ('');
-  my $svc;
-  if( ref $object ) {
-    if( ref($object) eq 'ARRAY' ) {
-      # [new, old], for provisioning tickets
-      push @objects, $object->[0], $object->[1];
-      push @prefixes, 'new_', 'old_';
-      $svc = $object->[0] if $object->[0]->isa('FS::svc_Common');
-    }
-    else {
-      push @objects, $object;
-      push @prefixes, '';
-      $svc = $object if $object->isa('FS::svc_Common');
-    }
-  }
-  if( $svc ) {
-    push @objects, $svc->cust_svc->cust_pkg;
-    push @prefixes, '';
-  }
-
-  foreach my $obj (@objects) {
-    my $prefix = shift @prefixes;
+  foreach my $obj ($cust_main, $object || ()) {
     foreach my $name (@{ $subs->{$obj->table} }) {
       if(!ref($name)) {
         # simple case
-        $hash{$prefix.$name} = $obj->$name();
+        $hash{$name} = $obj->$name();
       }
       elsif( ref($name) eq 'ARRAY' ) {
         # [ foo => sub { ... } ]
-        $hash{$prefix.($name->[0])} = $name->[1]->($obj);
+        $hash{$name->[0]} = $name->[1]->($obj);
       }
       else {
         warn "bad msg_template substitution: '$name'\n";
@@ -368,7 +340,7 @@ sub substitutions {
     ],
     # next_bill_date
     'cust_pkg'  => [qw( 
-      pkgnum pkg pkg_label pkg_label_long
+      pkgnum pkg_label pkg_label_long
       location_label
       status statuscolor
     
@@ -394,9 +366,7 @@ sub substitutions {
     
     # for welcome and limit warning messages
     'svc_acct' => [qw(
-      svcnum
       username
-      domain
       ),
       [ password          => sub { shift->getfield('_password') } ],
     ],

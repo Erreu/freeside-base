@@ -856,14 +856,15 @@ sub _make_lines {
   my $recur = 0;
   my $unitrecur = 0;
   my $sdate;
-  if (     ! $cust_pkg->start_date
-       and ( ! $cust_pkg->susp || $part_pkg->option('suspend_bill') )
-       and
-            ( $part_pkg->freq ne '0' && ( $cust_pkg->bill || 0 ) <= $time )
-         || ( $part_pkg->plan eq 'voip_cdr'
-               && $part_pkg->option('bill_every_call')
-            )
-         || $options{cancel}
+  if (     ! $cust_pkg->get('susp')
+       and ! $cust_pkg->get('start_date')
+       and ( $part_pkg->getfield('freq') ne '0'
+             && ( $cust_pkg->getfield('bill') || 0 ) <= $time
+           )
+        || ( $part_pkg->plan eq 'voip_cdr'
+              && $part_pkg->option('bill_every_call')
+           )
+        || ( $options{cancel} )
   ) {
 
     # XXX should this be a package event?  probably.  events are called
@@ -1047,14 +1048,18 @@ sub _handle_taxes {
        )
     {
 
+      if ( $conf->exists('tax-pkg_address') && $cust_pkg->locationnum ) {
+        return "fatal: Can't (yet) use tax-pkg_address with taxproducts";
+      }
+
       foreach my $class (@classes) {
-        my $err_or_ref = $self->_gather_taxes( $part_pkg, $class, $cust_pkg );
+        my $err_or_ref = $self->_gather_taxes( $part_pkg, $class );
         return $err_or_ref unless ref($err_or_ref);
         $taxes{$class} = $err_or_ref;
       }
 
       unless (exists $taxes{''}) {
-        my $err_or_ref = $self->_gather_taxes( $part_pkg, '', $cust_pkg );
+        my $err_or_ref = $self->_gather_taxes( $part_pkg, '' );
         return $err_or_ref unless ref($err_or_ref);
         $taxes{''} = $err_or_ref;
       }
@@ -1221,18 +1226,11 @@ sub _gather_taxes {
   my $self = shift;
   my $part_pkg = shift;
   my $class = shift;
-  my $cust_pkg = shift;
 
   local($DEBUG) = $FS::cust_main::DEBUG if $FS::cust_main::DEBUG > $DEBUG;
 
-  my $geocode;
-  if ( $cust_pkg->locationnum && $conf->exists('tax-pkg_address') ) {
-    $geocode = $cust_pkg->cust_location->geocode('cch');
-  } else {
-    $geocode = $self->geocode('cch');
-  }
-
   my @taxes = ();
+  my $geocode = $self->geocode('cch');
 
   my @taxclassnums = map { $_->taxclassnum }
                      $part_pkg->part_pkg_taxoverride($class);

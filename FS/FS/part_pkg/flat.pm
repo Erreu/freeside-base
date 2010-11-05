@@ -11,20 +11,14 @@ use List::Util qw(min); # max);
 use FS::UI::bytecount;
 use FS::Conf;
 use FS::part_pkg;
+use FS::cust_bill_pkg_discount;
 
-@ISA = qw(FS::part_pkg 
-          FS::part_pkg::prorate_Mixin
-          FS::part_pkg::discount_Mixin);
+@ISA = qw(FS::part_pkg FS::part_pkg::prorate_Mixin);
 
 tie my %temporalities, 'Tie::IxHash',
   'upcoming'  => "Upcoming (future)",
   'preceding' => "Preceding (past)",
 ;
-
-tie my %contract_years, 'Tie::IxHash', (
-  '' => '(none)',
-  map { $_*12 => $_ } (1..5),
-);
 
 %usage_fields = (
 
@@ -123,11 +117,6 @@ tie my %contract_years, 'Tie::IxHash', (
                        },
     'adjourn_months'=> { 'name' => 'Auto-add a suspension date this number of months out',
                        },
-    'contract_end_months'=> { 
-                        'name' => 'Auto-add a contract end date this number of years out',
-                        'type' => 'select',
-                        'select_options' => \%contract_years,
-                      },
     #used in cust_pkg.pm so could add to any price plan where it made sense
     'start_1st'     => { 'name' => 'Auto-add a start date to the 1st, ignoring the current month.',
                          'type' => 'checkbox',
@@ -136,9 +125,6 @@ tie my %contract_years, 'Tie::IxHash', (
                                     'with the customer\'s other packages',
                           'type' => 'checkbox',
                         },
-    'suspend_bill' => { 'name' => 'Continue recurring billing while suspended',
-                        'type' => 'checkbox',
-                      },
     'unsuspend_adjust_bill' => 
                         { 'name' => 'Adjust next bill date forward when '.
                                     'unsuspending',
@@ -155,9 +141,8 @@ tie my %contract_years, 'Tie::IxHash', (
   'fieldorder' => [ qw( setup_fee recur_fee
                         recur_temporality unused_credit
                         expire_months adjourn_months
-                        contract_end_months
                         start_1st sync_bill_date
-                        suspend_bill unsuspend_adjust_bill
+                        unsuspend_adjust_bill
                       ),
                     @usage_fieldorder, @usage_recharge_fieldorder,
                     qw( externalid ),
@@ -195,23 +180,100 @@ sub calc_recur {
   return 0
     if $self->option('recur_temporality', 1) eq 'preceding' && $last_bill == 0;
 
-  my $charge = $self->base_recur($cust_pkg);
-  if ( $self->option('sync_bill_date',1) ) {
-    my $next_bill = $cust_pkg->cust_main->next_bill_date;
-    if ( defined($next_bill) and $next_bill != $$sdate ) {
-      my $cutoff_day = (localtime($next_bill))[3];
-      $charge = $self->calc_prorate(@_, $cutoff_day);
+  if( $self->option('sync_bill_date',1) ) {
+    return $self->calc_prorate(@_);
+  }
+  else {
+    my $charge = $self->base_recur($cust_pkg);
+    $charge *= $param->{freq_override} if $param->{freq_override};
+    my $discount = $self->calc_discount($cust_pkg, $sdate, $details, $param);
+
+    return sprintf('%.2f', $charge - $discount);
+  }
+}
+
+sub calc_discount {
+  my($self, $cust_pkg, $sdate, $details, $param ) = @_;
+
+  my $br = $self->base_recur($cust_pkg);
+
+  my $tot_discount = 0;
+  #UI enforces just 1 for now, will need ordering when they can be stacked
+
+  if ( $param->{freq_override} ) {
+    my $real_part_pkg = new FS::part_pkg { $self->hash };
+    $real_part_pkg->pkgpart($param->{real_pkgpart} || $self->pkgpart);
+    my @discount = grep { $_->months == $param->{freq_override} }
+                   map { $_->discount }
+                   $real_part_pkg->part_pkg_discount;
+    my $discount = shift @discount;
+    $param->{months} = $param->{freq_override} unless $param->{months};
+    my $error;
+    if ($discount) {
+      if ($discount->months == $param->{months}) {
+        $cust_pkg->discountnum($discount->discountnum);
+        $error = $cust_pkg->insert_discount;
+      } else {
+        $cust_pkg->discountnum(-1);
+        foreach ( qw( amount percent months ) ) {
+          my $method = "discountnum_$_";
+          $cust_pkg->$method($discount->$_);
+        }
+        $error = $cust_pkg->insert_discount;
+      }
+      die "error discounting using part_pkg_discount: $error" if $error;
     }
   }
-  elsif ( $param->{freq_override} ) {
-    # XXX not sure if this should be mutually exclusive with sync_bill_date.
-    # Given the very specific problem that freq_override is meant to 'solve',
-    # it probably should.
-    $charge *= $param->{freq_override} if $param->{freq_override};
+
+  my @cust_pkg_discount = $cust_pkg->cust_pkg_discount_active;
+  foreach my $cust_pkg_discount ( @cust_pkg_discount ) {
+     my $discount = $cust_pkg_discount->discount;
+     #UI enforces one or the other (for now?  probably for good)
+     my $amount = 0;
+     $amount += $discount->amount
+       if $cust_pkg->pkgpart == $param->{real_pkgpart};
+     $amount += sprintf('%.2f', $discount->percent * $br / 100 );
+
+     my $chg_months = $param->{'months'} || $cust_pkg->part_pkg->freq;
+     
+     my $months = $discount->months
+                    ? min( $chg_months,
+                           $discount->months - $cust_pkg_discount->months_used )
+                    : $chg_months;
+
+     my $error = $cust_pkg_discount->increment_months_used($months)
+       if $cust_pkg->pkgpart == $param->{real_pkgpart};
+     die "error discounting: $error" if $error;
+
+     $amount *= $months;
+     $amount = sprintf('%.2f', $amount);
+
+     next unless $amount > 0;
+
+     #record details in cust_bill_pkg_discount
+     my $cust_bill_pkg_discount = new FS::cust_bill_pkg_discount {
+       'pkgdiscountnum' => $cust_pkg_discount->pkgdiscountnum,
+       'amount'         => $amount,
+       'months'         => $months,
+     };
+     push @{ $param->{'discounts'} }, $cust_bill_pkg_discount;
+
+     #add details on discount to invoice
+     my $conf = new FS::Conf;
+     my $money_char = $conf->config('money_char') || '$';  
+     $months = sprintf('%.2f', $months) if $months =~ /\./;
+
+     my $d = 'Includes ';
+     $d .= $discount->name. ' ' if $discount->name;
+     $d .= 'discount of '. $discount->description_short;
+     $d .= " for $months month". ( $months!=1 ? 's' : '' );
+     $d .= ": $money_char$amount" if $months != 1 || $discount->percent;
+     push @$details, $d;
+
+     $tot_discount += $amount;
   }
 
-  my $discount = $self->calc_discount($cust_pkg, $sdate, $details, $param);
-  return sprintf('%.2f', $charge - $discount);
+  sprintf('%.2f', $tot_discount);
 }
 
 sub base_recur {

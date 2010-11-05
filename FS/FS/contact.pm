@@ -2,12 +2,10 @@ package FS::contact;
 
 use strict;
 use base qw( FS::Record );
-use FS::Record qw( qsearch qsearchs dbh );
+use FS::Record qw( qsearch qsearchs );
 use FS::prospect_main;
 use FS::cust_main;
 use FS::cust_location;
-use FS::contact_phone;
-use FS::contact_email;
 
 =head1 NAME
 
@@ -98,59 +96,7 @@ otherwise returns false.
 
 =cut
 
-sub insert {
-  my $self = shift;
-
-  local $SIG{INT} = 'IGNORE';
-  local $SIG{QUIT} = 'IGNORE';
-  local $SIG{TERM} = 'IGNORE';
-  local $SIG{TSTP} = 'IGNORE';
-  local $SIG{PIPE} = 'IGNORE';
-
-  my $oldAutoCommit = $FS::UID::AutoCommit;
-  local $FS::UID::AutoCommit = 0;
-  my $dbh = dbh;
-
-  my $error = $self->SUPER::insert;
-  if ( $error ) {
-    $dbh->rollback if $oldAutoCommit;
-    return $error;
-  }
-
-  foreach my $pf ( grep { /^phonetypenum(\d+)$/ && $self->get($_) =~ /\S/ }
-                        keys %{ $self->hashref } ) {
-    $pf =~ /^phonetypenum(\d+)$/ or die "wtf (daily, the)";
-    my $phonetypenum = $1;
-
-    my $contact_phone = new FS::contact_phone {
-      'contactnum' => $self->contactnum,
-      'phonetypenum' => $phonetypenum,
-      _parse_phonestring( $self->get($pf) ),
-    };
-    $error = $contact_phone->insert;
-    if ( $error ) {
-      $dbh->rollback if $oldAutoCommit;
-      return $error;
-    }
-  }
-
-  if ( $self->get('emailaddress') =~ /\S/ ) {
-    my $contact_email = new FS::contact_email {
-      'contactnum'   => $self->contactnum,
-      'emailaddress' => $self->get('emailaddress'),
-    };
-    $error = $contact_email->insert;
-    if ( $error ) {
-      $dbh->rollback if $oldAutoCommit;
-      return $error;
-    }
-  }
-
-  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
-
-  '';
-
-}
+# the insert method can be inherited from FS::Record
 
 =item delete
 
@@ -160,8 +106,6 @@ Delete this record from the database.
 
 # the delete method can be inherited from FS::Record
 
-# XXX delete contact_phone, contact_email
-
 =item replace OLD_RECORD
 
 Replaces the OLD_RECORD with this one in the database.  If there is an error,
@@ -169,76 +113,7 @@ returns the error, otherwise returns false.
 
 =cut
 
-sub replace {
-  my $self = shift;
-
-  local $SIG{INT} = 'IGNORE';
-  local $SIG{QUIT} = 'IGNORE';
-  local $SIG{TERM} = 'IGNORE';
-  local $SIG{TSTP} = 'IGNORE';
-  local $SIG{PIPE} = 'IGNORE';
-
-  my $oldAutoCommit = $FS::UID::AutoCommit;
-  local $FS::UID::AutoCommit = 0;
-  my $dbh = dbh;
-
-  my $error = $self->SUPER::replace(@_);
-  if ( $error ) {
-    $dbh->rollback if $oldAutoCommit;
-    return $error;
-  }
-
-  foreach my $pf ( grep { /^phonetypenum(\d+)$/ && $self->get($_) }
-                        keys %{ $self->hashref } ) {
-    $pf =~ /^phonetypenum(\d+)$/ or die "wtf (daily, the)";
-    my $phonetypenum = $1;
-
-    my %cp = ( 'contactnum'   => $self->contactnum,
-               'phonetypenum' => $phonetypenum,
-             );
-    my $contact_phone = qsearchs('contact_phone', \%cp)
-                        || new FS::contact_phone   \%cp;
-
-    my %cpd = _parse_phonestring( $self->get($pf) );
-    $contact_phone->set( $_ => $cpd{$_} ) foreach keys %cpd;
-
-    my $method = $contact_phone->contactphonenum ? 'replace' : 'insert';
-
-    $error = $contact_phone->$method;
-    if ( $error ) {
-      $dbh->rollback if $oldAutoCommit;
-      return $error;
-    }
-  }
-
-  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
-
-  '';
-
-}
-
-#i probably belong in contact_phone.pm
-sub _parse_phonestring {
-  my $value = shift;
-
-  my($countrycode, $extension) = ('1', '');
-
-  #countrycode
-  if ( $value =~ s/^\s*\+\s*(\d+)// ) {
-    $countrycode = $1;
-  } else {
-    $value =~ s/^\s*1//;
-  }
-  #extension
-  if ( $value =~ s/\s*(ext|x)\s*(\d+)\s*$//i ) {
-     $extension = $2;
-  }
-
-  ( 'countrycode' => $countrycode,
-    'phonenum'    => $value,
-    'extension'   => $extension,
-  );
-}
+# the replace method can be inherited from FS::Record
 
 =item check
 
@@ -289,6 +164,8 @@ sub line {
 =back
 
 =head1 BUGS
+
+The author forgot to customize this manpage.
 
 =head1 SEE ALSO
 

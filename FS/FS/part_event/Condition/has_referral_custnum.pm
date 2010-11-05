@@ -38,13 +38,11 @@ sub condition {
 }
 
 sub condition_sql {
-  my( $class, $table ) = @_;
+  #my( $class, $table ) = @_;
 
-  my $sql = FS::cust_main->active_sql;
-  $sql =~ s/cust_main.custnum/cust_main.referral_custnum/;
-  $sql = 'cust_main.referral_custnum IS NOT NULL AND ('.
-          $class->condition_sql_option('active') . ' IS NULL OR '.$sql.')';
-  return $sql;
+  "cust_main.referral_custnum IS NOT NULL";
+
+  #XXX a bit harder to check active status here
 }
 
 1;

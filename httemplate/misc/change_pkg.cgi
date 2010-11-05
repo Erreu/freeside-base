@@ -2,7 +2,7 @@
 
 <% include('/elements/error.html') %>
 
-<FORM NAME="OrderPkgForm" ACTION="<% $p %>edit/process/change-cust_pkg.html" METHOD=POST>
+<FORM ACTION="<% $p %>edit/process/change-cust_pkg.html" METHOD=POST>
 <INPUT TYPE="hidden" NAME="pkgnum" VALUE="<% $pkgnum %>">
 
 <% ntable('#cccccc') %>
@@ -31,16 +31,8 @@
 
 </TABLE>
 
-<% include( '/elements/standardize_locations.html',
-            'form'       => "OrderPkgForm",
-            'onlyship'   => 1,
-            'no_company' => 1,
-            'callback'   => 'document.OrderPkgForm.submit();',
-          )
-%>
-
 <BR>
-<INPUT NAME="submitButton" TYPE="button" VALUE="Change package" onClick="this.disabled=true; standardize_locations();">
+<INPUT TYPE="submit" VALUE="Change package">
 
 </FORM>
 </BODY>

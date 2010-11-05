@@ -4,9 +4,9 @@ use strict;
 use vars qw( @ISA %info %recur_method );
 use Tie::IxHash;
 use Time::Local;
-use FS::part_pkg::flat;
+use FS::part_pkg::prorate;
 
-@ISA = qw(FS::part_pkg::flat);
+@ISA = qw(FS::part_pkg::prorate);
 
 %info = ( 'disabled' => 1 ); #recur_Common not a usable price plan directly
 
@@ -15,11 +15,6 @@ tie %recur_method, 'Tie::IxHash',
   'prorate'      => 'Charge a prorated fee the first time (selectable billing date)',
   'subscription' => 'Charge the full fee for the first partial period (selectable billing date)',
 ;
-
-sub base_recur {
-  my $self = shift;
-  $self->option('recur_fee', 1) || 0;
-}
 
 sub calc_recur_Common {
   my $self = shift;
@@ -30,37 +25,32 @@ sub calc_recur_Common {
   if ( $param->{'increment_next_bill'} ) {
 
     my $recur_method = $self->option('recur_method', 1) || 'anniversary';
-    
-    $charges = $self->base_recur;
-
-    if ( $recur_method eq 'prorate' ) {
-      my $cutoff_day = $self->option('cutoff_day') || 1;
-      $charges = $self->calc_prorate(@_, $cutoff_day);
-    }
-    elsif ( $recur_method eq 'anniversary' and 
-            $self->option('sync_bill_date',1) ) {
-      my $next_bill = $cust_pkg->cust_main->next_bill_date;
-      if ( defined($next_bill) ) {
-        my $cutoff_day = (localtime($next_bill))[3];
-        $charges = $self->calc_prorate(@_, $cutoff_day);
-      }
+                  
+    if ( $recur_method eq 'prorate' 
+        or ($recur_method eq 'anniversary' and $self->option('sync_bill_date',1))
+      ) {
+      $charges = $self->calc_prorate(@_);
     } 
-    elsif ( $recur_method eq 'subscription' ) {
+    else {
 
-      my $cutoff_day = $self->option('cutoff_day', 1) || 1;
-      my ($day, $mon, $year) = ( localtime($$sdate) )[ 3..5 ];
+      $charges = $self->option('recur_fee');
 
-      if ( $day < $cutoff_day ) {
-        if ( $mon == 0 ) { $mon=11; $year--; }
-        else { $mon--; }
-      }
+      if ( $recur_method eq 'subscription' ) {
 
-      $$sdate = timelocal(0, 0, 0, $cutoff_day, $mon, $year);
+        my $cutoff_day = $self->option('cutoff_day', 1) || 1;
+        my ($day, $mon, $year) = ( localtime($$sdate) )[ 3..5 ];
 
-    }#$recur_method eq 'subscription'
+        if ( $day < $cutoff_day ) {
+          if ( $mon == 0 ) { $mon=11; $year--; }
+          else { $mon--; }
+        }
 
+        $$sdate = timelocal(0, 0, 0, $cutoff_day, $mon, $year);
+
+      }#$recur_method eq 'subscription'
     $charges -= $self->calc_discount( $cust_pkg, $sdate, $details, $param );
 
+    }#$recur_method eq 'prorate' or ...
   }#increment_next_bill
 
   return $charges;

@@ -32,7 +32,6 @@ my $acl_edit        = $curuser->access_right($edit);
 my $acl_edit_global = $curuser->access_right($edit_global);
 my $acl_config      = $curuser->access_right('Configuration'); #to edit services
                                                                #and agent types
-                                                               #and bulk change
 
 die "access denied"
   unless $acl_edit || $acl_edit_global;
@@ -97,13 +96,6 @@ $select = "
   *,
 
   ( $count_cust_pkg
-      AND ( setup IS NULL OR setup = 0 )
-      AND ( cancel IS NULL OR cancel = 0 )
-      AND ( susp IS NULL OR susp = 0 )
-  ) AS num_not_yet_billed,
-
-  ( $count_cust_pkg
-      AND setup IS NOT NULL AND setup != 0
       AND ( cancel IS NULL OR cancel = 0 )
       AND ( susp IS NULL OR susp = 0 )
   ) AS num_active,
@@ -317,7 +309,6 @@ if ( $acl_edit_global ) {
 #if ( $cgi->param('active') ) {
   push @header, 'Customer<BR>packages';
   my %col = (
-    'not yet billed'  => '009999', #teal? cyan?
     'active'          => '00CC00',
     'suspended'       => 'FF9900',
     'cancelled'       => 'FF0000',
@@ -326,8 +317,8 @@ if ( $acl_edit_global ) {
   );
   my $cust_pkg_link = $p. 'search/cust_pkg.cgi?pkgpart=';
   push @fields, sub { my $part_pkg = shift;
-                        [
-                        map( {
+                      [
+                        map {
                               my $magic = $_;
                               my $label = $_;
                               if ( $magic eq 'active' && $part_pkg->freq == 0 ) {
@@ -335,7 +326,6 @@ if ( $acl_edit_global ) {
                                 #$label = 'one-time charge',
                                 $label = 'charge',
                               }
-                              $label= 'not yet billed' if $magic eq 'not_yet_billed';
                           
                               [
                                 {
@@ -360,24 +350,8 @@ if ( $acl_edit_global ) {
                                             ),
                                 },
                               ],
-                            } (qw( not_yet_billed active suspended cancelled ))
-                          ),
-                      ($acl_config ? 
-                        [ {}, 
-                          { 'data'  => '<FONT SIZE="-1">[ '.
-                              include('/elements/popup_link.html',
-                                'label'       => 'change',
-                                'action'      => "${p}edit/bulk-cust_pkg.html?".
-                                                 'pkgpart='.$part_pkg->pkgpart,
-                                'actionlabel' => 'Change Packages',
-                                'width'       => 569,
-                                'height'      => 210,
-                              ).' ]</FONT>',
-                            'align' => 'left',
-                          } 
-                        ] : () ),
-                      ]; 
-  };
+                            } (qw( active suspended cancelled ))
+                      ]; };
   $align .= 'r';
 #}
 

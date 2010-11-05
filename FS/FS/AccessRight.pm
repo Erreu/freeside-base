@@ -113,7 +113,6 @@ tie my %rights, 'Tie::IxHash',
     'View customer history',
     'Cancel customer',
     'Complimentary customer', #aka users-allow_comp 
-    'Merge customer',
     { rightname=>'Delete customer', desc=>"Enable customer deletions. Be very careful! Deleting a customer will remove all traces that this customer ever existed! It should probably only be used when auditing a legacy database. Normally, you cancel all of a customer's packages if they cancel service." }, #aka. deletecustomers
     'Bill customer now', #NEW
     'Bulk send customer notices', #NEW
@@ -183,16 +182,15 @@ tie my %rights, 'Tie::IxHash',
   # customer payment rights
   ###
   'Customer payment rights' => [
-    { rightname=>'Post payment', desc=>'Make check or cash payments.' },
-    'Post check payment',
-    'Post cash payment',
+    'Post payment',
     'Post payment batch',
     'Apply payment', #NEWNEW
     { rightname=>'Unapply payment', desc=>'Enable "unapplication" of unclosed payments from specific invoices.' }, #aka. unapplypayments
-    { rightname=>'Process payment', desc=>'Process credit card or e-check payments' },
-    'Process credit card payment',
-    'Process Echeck payment',
+    'Process payment',
+    { rightname=>'Refund payment', desc=>'Enable refund of existing customer payments.' },
+
     { rightname=>'Delete payment', desc=>'Enable deletion of unclosed payments. Be very careful!  Only delete payments that were data-entry errors, not adjustments.' }, #aka. deletepayments Optionally specify one or more comma-separated email addresses to be notified when a payment is deleted.
+  
   ],
   
   ###
@@ -204,12 +202,7 @@ tie my %rights, 'Tie::IxHash',
     { rightname=>'Unapply credit', desc=>'Enable "unapplication" of unclosed credits.' }, #aka unapplycredits
     { rightname=>'Delete credit', desc=>'Enable deletion of unclosed credits. Be very careful!  Only delete credits that were data-entry errors, not adjustments.' }, #aka. deletecredits Optionally specify one or more comma-separated email addresses to be notified when a credit is deleted.
     { rightname=>'Post refund', desc=>'Enable posting of check and cash refunds.' },
-    'Post check refund',
-    'Post cash refund',
 #    { rightname=>'Process refund', desc=>'Enable processing of generic credit card/ACH refunds (i.e. not associated with a specific prior payment).' },
-    { rightname=>'Refund payment', desc=>'Enable refund of existing customer credit card or e-check payments.' },
-    'Refund credit card payment',
-    'Refund Echeck payment',
     'Delete refund', #NEW
     'Add on-the-fly credit reason', #NEW
   ],
@@ -353,8 +346,6 @@ sub default_superuser_rights {
     'Redownload resolved batches',
     'Raw SQL',
     'Configuration download',
-    'View customers of all agents',
-    'View/link unlinked services',
   );
 
   no warnings 'uninitialized';

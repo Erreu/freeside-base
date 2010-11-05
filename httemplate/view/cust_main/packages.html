@@ -57,9 +57,7 @@ Current packages
     <TD ALIGN="right">
       <A HREF="<%$p%>search/report_cust_pkg.html?custnum=<% $cust_main->custnum %>">Package reports</A><BR>
       Service reports:
-        <A HREF="<%$p%>search/report_svc_acct.html?custnum=<% $cust_main->custnum %>">accounts</A><BR>
-      Usage reports:
-        <A HREF="<%$p%>search/report_cdr.html?custnum=<% $cust_main->custnum %>">CDRs</A>
+        <A HREF="<%$p%>search/report_svc_acct.html?custnum=<% $cust_main->custnum %>">accounts</A>
     </TD>
   </TR>
 
@@ -163,7 +161,6 @@ my %conf_opt = (
   'legacy_link'               => $conf->exists('legacy_link'),
   'svc_broadband-manage_link' => scalar($conf->config('svc_broadband-manage_link')),
   'maestro-status_test'       => $conf->exists('maestro-status_test'),
-  'cust_pkg-large_pkg_size'   => $conf->config('cust_pkg-large_pkg_size'),
 );
 
 #subroutines

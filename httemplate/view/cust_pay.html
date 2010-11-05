@@ -2,10 +2,7 @@
 
   <% include('/elements/header-popup.html', "$thing Receipt" ) %>
 
-  <div align="center">
-    <A HREF="javascript:self.parent.location = '<% $pr_link %>'">Print</A> | 
-    <A HREF="javascript:self.location = '<% $email_link %>'">Re-email</A>
-  </div><BR>
+  <CENTER><A HREF="javascript:self.parent.location = '<% $pr_link %>'">Print</A></CENTER><BR>
 
 % } elsif ( $link eq 'print' ) { 
 
@@ -18,12 +15,7 @@
      )
   %>
   <BR><BR>
-% } elsif ( $link eq 'email' ) {
-%  if ( $email_error ) {
-      <% include('/elements/header-popup.html', "Error re-emailing receipt: $email_error" ) %>
-%  } else {
-      <% include('/elements/header-popup.html', "Re-emailed receipt" ) %>
-%  }
+
 % } else { 
 
   <% include('/elements/header.html', "$thing Receipt", menubar(
@@ -34,7 +26,7 @@
 
 % }
 
-% unless ($link =~ /^(popup|email)$/ ) {
+% unless ($link eq 'popup' ) {
   <% include('/elements/small_custview.html',
                $custnum,
                scalar($conf->config('countrydefault')),
@@ -118,14 +110,9 @@
     window.print();
   </SCRIPT>
 
-% } elsif ( $link eq 'email' ) {
-
-    <SCRIPT TYPE="text/javascript">
-      window.top.location.reload();
-    </SCRIPT>
-
 % }
-% if ( $link =~ /^(popup|print|email)$/ ) { 
+
+% if ( $link =~ /^(popup|print)$/ ) { 
     </BODY>
   </HTML>
 % } else {
@@ -162,7 +149,6 @@ my $cust_pay = qsearchs({
 die "$thing #$paynum not found!" unless $cust_pay;
 
 my $pr_link = "${p}view/cust_pay.html?link=print;paynum=$paynum;void=$void";
-my $email_link = "${p}view/cust_pay.html?link=email;paynum=$paynum;void=$void";
 
 my $custnum = $cust_pay->custnum;
 my $display_custnum = $cust_pay->cust_main->display_custnum;
@@ -172,15 +158,5 @@ my $conf = new FS::Conf;
 my $money_char = $conf->config('money_char') || '$';
 
 tie my %payby, 'Tie::IxHash', FS::payby->payby2longname;
-
-my $email_error;
-
-if ( $link eq 'email' ) {
-    my $email_error = $cust_pay->send_receipt(
-	'manual' => 1,
-    );
-
-    warn "can't send payment receipt/statement: $email_error" if $email_error;
-}
 
 </%init>

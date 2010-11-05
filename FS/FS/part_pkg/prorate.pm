@@ -79,15 +79,6 @@ use FS::part_pkg::flat;
                                     'package recharge',
                           'type' => 'checkbox',
                         },
-    'add_full_period'=> { 'name' => 'When prorating first month, also bill '.
-                                    'for one full period after that',
-                          'type' => 'checkbox',
-                        },
-    'prorate_round_day'=> {
-                          'name' => 'When prorating first month, round to '.
-                                    'the nearest full day',
-                          'type' => 'checkbox',
-                        },
 
     #it would be better if this had to be turned on, its confusing
     'externalid' => { 'name'   => 'Optional External ID',
@@ -98,16 +89,14 @@ use FS::part_pkg::flat;
                     'seconds', 'upbytes', 'downbytes', 'totalbytes',
                     'recharge_amount', 'recharge_seconds', 'recharge_upbytes',
                     'recharge_downbytes', 'recharge_totalbytes',
-                    'usage_rollover', 'recharge_reset', 'add_full_period',
-                    'prorate_round_day', 'externalid', ],
+                    'usage_rollover', 'recharge_reset', 'externalid', ],
   'freq' => 'm',
   'weight' => 20,
 );
 
 sub calc_recur {
   my $self = shift;
-  my $cutoff_day = $self->option('cutoff_day') || 1;
-  return $self->calc_prorate(@_, $cutoff_day) - $self->calc_discount(@_);
+  $self->calc_prorate(@_);
 }
 
 1;

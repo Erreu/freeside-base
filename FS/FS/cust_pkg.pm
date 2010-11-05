@@ -153,10 +153,6 @@ date
 
 date
 
-=item contract_end
-
-date
-
 =item cancel
 
 date
@@ -263,7 +259,7 @@ sub insert {
     $self->start_date( timelocal_nocheck(0,0,0,1,$mon,$year) );
   }
 
-  foreach my $action ( qw(expire adjourn contract_end) ) {
+  foreach my $action ( qw(expire adjourn) ) {
     my $months = $self->part_pkg->option("${action}_months",1);
     if($months and !$self->$action) {
       my $start = $self->start_date || $self->setup || time;
@@ -1118,7 +1114,7 @@ Options are:
 
 =over 4
 
-=item locationnum
+=item locaitonnum
 
 New locationnum, to change the location for this package.
 
@@ -1135,15 +1131,9 @@ New pkgpart (see L<FS::part_pkg>).
 
 New refnum (see L<FS::part_referral>).
 
-=item keep_dates
-
-Set to true to transfer billing dates (start_date, setup, last_bill, bill, 
-susp, adjourn, cancel, expire, and contract_end) to the new package.
-
 =back
 
-At least one of locationnum, cust_location, pkgpart, refnum must be specified 
-(otherwise, what's the point?)
+At least one option must be specified (otherwise, what's the point?)
 
 Returns either the new FS::cust_pkg object or a scalar error.
 
@@ -1201,13 +1191,6 @@ sub change {
     $opt->{'locationnum'} = $opt->{'cust_location'}->locationnum;
   }
 
-  if ( $opt->{'keep_dates'} ) {
-    foreach my $date ( qw(setup bill last_bill susp adjourn cancel expire 
-                          start_date contract_end ) ) {
-      $hash{$date} = $self->getfield($date);
-    }
-  }
-
   # Create the new package.
   my $cust_pkg = new FS::cust_pkg {
     custnum      => $self->custnum,
@@ -1257,7 +1240,7 @@ sub change {
                                                  ? ()
                                                  : ( 'null' => 1 )
                                    )
-      if $part_pkg->can('reset_usage') && ! $part_pkg->option('usage_rollover',1);
+      if $part_pkg->can('reset_usage') && ! $part_pkg->option('usage_rollover');
 
     if ($error) {
       $dbh->rollback if $oldAutoCommit;
@@ -1285,60 +1268,6 @@ sub change {
 
   $cust_pkg;
 
-}
-
-use Data::Dumper;
-use Storable 'thaw';
-use MIME::Base64;
-sub process_bulk_cust_pkg {
-  my $job = shift;
-  my $param = thaw(decode_base64(shift));
-  warn Dumper($param) if $DEBUG;
-
-  my $old_part_pkg = qsearchs('part_pkg', 
-                              { pkgpart => $param->{'old_pkgpart'} });
-  my $new_part_pkg = qsearchs('part_pkg',
-                              { pkgpart => $param->{'new_pkgpart'} });
-  die "Must select a new package type\n" unless $new_part_pkg;
-  #my $keep_dates = $param->{'keep_dates'} || 0;
-  my $keep_dates = 1; # there is no good reason to turn this off
-
-  local $SIG{HUP} = 'IGNORE';
-  local $SIG{INT} = 'IGNORE';
-  local $SIG{QUIT} = 'IGNORE';
-  local $SIG{TERM} = 'IGNORE';
-  local $SIG{TSTP} = 'IGNORE';
-  local $SIG{PIPE} = 'IGNORE';
-
-  my $oldAutoCommit = $FS::UID::AutoCommit;
-  local $FS::UID::AutoCommit = 0;
-  my $dbh = dbh;
-
-  my @cust_pkgs = qsearch('cust_pkg', { 'pkgpart' => $param->{'old_pkgpart'} } );
-
-  my $i = 0;
-  foreach my $old_cust_pkg ( @cust_pkgs ) {
-    $i++;
-    $job->update_statustext(int(100*$i/(scalar @cust_pkgs)));
-    if ( $old_cust_pkg->getfield('cancel') ) {
-      warn '[process_bulk_cust_pkg ] skipping canceled pkgnum '.
-        $old_cust_pkg->pkgnum."\n"
-        if $DEBUG;
-      next;
-    }
-    warn '[process_bulk_cust_pkg] changing pkgnum '.$old_cust_pkg->pkgnum."\n"
-      if $DEBUG;
-    my $error = $old_cust_pkg->change(
-      'pkgpart'     => $param->{'new_pkgpart'},
-      'keep_dates'  => $keep_dates
-    );
-    if ( !ref($error) ) { # change returns the cust_pkg on success
-      $dbh->rollback;
-      die "Error changing pkgnum ".$old_cust_pkg->pkgnum.": '$error'\n";
-    }
-  }
-  $dbh->commit if $oldAutoCommit;
-  return;
 }
 
 =item last_bill
@@ -1879,7 +1808,7 @@ Class method that returns the list of possible status strings for packages
 =cut
 
 tie my %statuscolor, 'Tie::IxHash', 
-  'not yet billed'  => '009999', #teal? cyan?
+  'not yet billed'  => '000000',
   'one-time charge' => '000000',
   'active'          => '00CC00',
   'suspended'       => 'FF9900',
@@ -2609,22 +2538,6 @@ sub cancel_sql {
   "cust_pkg.cancel IS NOT NULL AND cust_pkg.cancel != 0";
 }
 
-=item status_sql
-
-Returns an SQL expression to give the package status as a string.
-
-=cut
-
-sub status_sql {
-"CASE
-  WHEN cust_pkg.cancel IS NOT NULL THEN 'cancelled'
-  WHEN cust_pkg.susp IS NOT NULL THEN 'suspended'
-  WHEN cust_pkg.setup IS NULL THEN 'not yet billed'
-  WHEN ".onetime_sql()." THEN 'one-time charge'
-  ELSE 'active'
-END"
-}
-
 =item search HASHREF
 
 (Class method)
@@ -2893,7 +2806,7 @@ sub search {
       "NOT (".FS::cust_pkg->onetime_sql . ")";
   }
   else {
-    foreach my $field (qw( setup last_bill bill adjourn susp expire contract_end cancel )) {
+    foreach my $field (qw( setup last_bill bill adjourn susp expire cancel )) {
 
       next unless exists($params->{$field});
 
@@ -3318,9 +3231,6 @@ sub bulk_change {
 sub _upgrade_data {  # class method
   my ($class, %opts) = @_;
   $class->_upgrade_otaker(%opts);
-  my $sql =('UPDATE cust_pkg SET contract_end = NULL WHERE contract_end = -1');
-  my $sth = dbh->prepare($sql);
-  $sth->execute or die $sth->errstr;
 }
 
 =back
