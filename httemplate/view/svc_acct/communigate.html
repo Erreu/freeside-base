@@ -32,6 +32,14 @@
   <% include('/view/elements/tr.html', label=>'Add trailer to sent mail',
                         value=>$svc_acct->cgp_addmailtrailer ? 'YES' : 'NO' ) %>
 
+% my $archive_after = $svc_acct->cgp_archiveafter;
+% $archive_after =
+%   $archive_after
+%     ? ( $archive_after / 86400 ). ' days'
+%     : ( $archive_after eq '0' ? 'Never' : 'default (730 days)' );
+  <% include('/view/elements/tr.html', label=>'Archive messages after',
+                        value=>$archive_after, ) %>
+
 %# preferences
 
   <% include('/view/elements/tr.html', label=>'Message delete method',
@@ -54,17 +62,16 @@
                         value=>$svc_acct->cgp_sendmdnmode ) %>
 
 %# vacation message
-%#XXX finish me... do we need to search for specific rules
-%# (and hide them?)  need to see what CGP gives back after we've added a rule
   <% include('/elements/init_overlib.html') %>
 
   <TR>
     <TD ALIGN="right">Vacation message</TD>
     <TD BGCOLOR="#FFFFFF">
+      <% $vacation_rule ? 'Active' : '' %>
       <% include('/elements/popup_link.html',
                    'action' => $p.'edit/cgp_rule-vacation.html?'.
                                  'svcnum='. $svc_acct->svcnum,
-                   'label'  => '(add)', #XXX (edit)
+                   'label'  => $vacation_rule ? '(edit)' : '(add)',
                    'actionlabel' => 'Vacation message',
                    'width'  => 600,
                    'height' => 300,
@@ -75,15 +82,15 @@
   </TR>
 
 %# redirect all mail
-%#XXX finish me...
 
   <TR>
     <TD ALIGN="right">Redirect all mail</TD>
     <TD BGCOLOR="#FFFFFF">
+      <% $redirect_rule ? 'Active' : '' %>
       <% include('/elements/popup_link.html',
                    'action' => $p.'edit/cgp_rule-redirect_all.html?'.
                                  'svcnum='. $svc_acct->svcnum,
-                   'label'  => '(add)', #XXX (edit)
+                   'label'  => $redirect_rule ? '(edit)' : '(add)',
                    'actionlabel' => 'Redirect all mail',
                    'width' => 763,
                    #'height'
@@ -100,6 +107,13 @@
             )
   %>
 
+%# RPOP
+
+  <% include('/view/elements/tr.html', label=>'Remote POP accounts',
+               value=>$rpop_link,
+            )
+  %>
+
 <%init>
 
 my %opt = @_;
@@ -109,7 +123,20 @@ my %opt = @_;
 my $svc_acct = $opt{'svc_acct'};
 #my $part_svc = $opt{'part_svc'};
 
-my $rule_link = qq(<A HREF="${p}browse/cgp_rule.html?svcnum=).
+my $rule_link = qq(<A HREF="${p}browse/cgp_rule.html?svcnum=). #"dum vim
                       $svc_acct->svcnum. '">View/edit mail rules</A>';
+
+my $rpop_link = qq(<A HREF="${p}browse/acct_snarf.html?svcnum=). #"dee vim
+                      $svc_acct->svcnum. '">View/edit remote POP accounts</A>';
+
+my $vacation_rule = qsearchs('cgp_rule', { 'svcnum' => $svc_acct->svcnum,
+                                           'name'   => '#Vacation'
+                                         }
+                            );
+
+my $redirect_rule = qsearchs('cgp_rule', { 'svcnum' => $svc_acct->svcnum,
+                                           'name'   => '#Redirect'
+                                         }
+                            );
 
 </%init>

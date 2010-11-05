@@ -44,7 +44,7 @@ Examples:
                 'name_singular'  => $name_singular,
                 'query'          => $sql_query,
                 'count_query'    => $count_query,
-                'count_addl'     => [ '$%.2f total '.$opt{name_verb}, ],
+                'count_addl'     => \@count_addl,
                 'redirect_empty' => $opt{'redirect_empty'},
                 'header'         => \@header,
                 'fields'         => \@fields,
@@ -68,7 +68,10 @@ my $table = $opt{'table'} || 'cust_'.$opt{'thing'};
 my $amount_field = $opt{'amount_field'};
 my $name_singular = $opt{'name_singular'};
 
-my $title = "\u$name_singular Search Results";
+my $unapplied = $cgi->param('unapplied');
+my $title = '';
+$title = 'Unapplied ' if $unapplied;
+$title .= "\u$name_singular Search Results";
 
 my $link = '';
 if (    ( $curuser->access_right('View invoices') #XXX for now
@@ -100,6 +103,36 @@ my $cust_link = sub {
     : '';
 };
 
+# only valid for $table == 'cust_pay' atm
+my  $tax_names = '';
+if ( $cgi->param('tax_names') ) {
+  if ( dbh->{Driver}->{Name} eq 'Pg' ) {
+
+    $tax_names = "
+      array_to_string(
+        array(
+          SELECT itemdesc
+            FROM cust_bill_pay
+            LEFT JOIN cust_bill_pay_pkg USING ( billpaynum )
+            LEFT JOIN cust_bill_pkg USING ( billpkgnum )
+              WHERE cust_bill_pkg.pkgnum = 0
+                AND cust_bill_pay.paynum = cust_pay.paynum
+        ), '|'
+      ) AS tax_names"
+    ;
+
+  } elsif ( dbh->{Driver}->{Name} =~ /^mysql/i ) {
+
+    $tax_names = "GROUP_CONCAT(itemdesc SEPARATOR '|') AS tax_names";
+
+  } else {
+
+    warn "warning: unknown database type ". dbh->{Driver}->{Name}.
+         "omitting tax name information from report.";
+
+  }
+}
+
 my @header = ();
 my @fields = ();
 my $align = '';
@@ -113,14 +146,24 @@ if ( $opt{'pre_header'} ) {
 
 push @header, "\u$name_singular",
               'Amount',
-              'Date',
 ;
-$align .= 'rrr';
-push @links, '', '', '';
+$align .= 'rr';
+push @links, '', '';
 push @fields, 'payby_payinfo_pretty',
               sub { sprintf('$%.2f', shift->$amount_field() ) },
-              sub { time2str('%b %d %Y', shift->_date ) },
 ;
+
+if ( $unapplied ) {
+  push @header, 'Unapplied';
+  $align .= 'r';
+  push @links, '';
+  push @fields, sub { sprintf('$%.2f', shift->unapplied_amount) };
+}
+
+push @header, 'Date';
+$align .= 'r';
+push @links, '';
+push @fields, sub { time2str('%b %d %Y', shift->_date ) };
 
 unless ( $opt{'disable_by'} ) {
   push @header, 'By';
@@ -130,6 +173,22 @@ unless ( $opt{'disable_by'} ) {
                       $o = 'auto billing'          if $o eq 'fs_daily';
                       $o = 'customer self-service' if $o eq 'fs_selfservice';
                       $o;
+                    };
+}
+
+if ( $tax_names ) {
+  push @header, ('Tax names', 'Tax province');
+  $align .= 'cc';
+  push @links, ('','');
+  push @fields, sub { join (' + ', map { /^(.*?)(, \w\w)?$/; $1 }
+                                   split('\|', shift->tax_names)
+                           );
+                    };
+  push @fields, sub { join (' + ', map { if (/^(?:.*)(?:, )(\w\w)$/){ $1 }
+                                         else { () }
+                                       }
+                                   split('\|', shift->tax_names)
+                           );
                     };
 }
 
@@ -146,10 +205,17 @@ push @header, @{ $opt{'addl_header'} }
 push @fields, @{ $opt{'addl_fields'} }
   if $opt{'addl_fields'};
 
-my( $count_query, $sql_query );
+my( $count_query, $sql_query, @count_addl );
 if ( $cgi->param('magic') ) {
 
   my @search = ();
+  my @select = (
+    "$table.*",
+    FS::UI::Web::cust_sql_fields(),
+    'cust_main.custnum AS cust_main_custnum',
+  );
+  push @select, $tax_names if $tax_names;
+
   my $orderby;
   if ( $cgi->param('magic') eq '_date' ) {
 
@@ -245,8 +311,8 @@ if ( $cgi->param('magic') ) {
       push @search, "$table.payinfo = '$1'";
     }
 
-    if ( $cgi->param('otaker') =~ /^(\w+)$/ ) {
-      push @search, "$table.otaker = '$1'";
+    if ( $cgi->param('usernum') =~ /^(\d+)$/ ) {
+      push @search, "$table.usernum = $1";
     }
 
     #for cust_pay_pending...  statusNOT=done
@@ -282,6 +348,13 @@ if ( $cgi->param('magic') ) {
     die "unknown search magic: ". $cgi->param('magic');
   }
 
+  #unapplied payment/refund
+  if ( $unapplied ) {
+    push @select, '(' . "FS::$table"->unapplied_sql . ') AS unapplied_amount';
+    push @search, "FS::$table"->unapplied_sql . ' > 0';
+
+  }
+
   #for the history search
   if ( $cgi->param('history_action') =~ /^([\w,]+)$/ ) {
     my @history_action = split(/,/, $1);
@@ -300,22 +373,49 @@ if ( $cgi->param('magic') ) {
   #here is the agent virtualization
   push @search, $curuser->agentnums_sql;
 
+  my $addl_from = ' LEFT JOIN cust_main USING ( custnum ) ';
+  my $group_by = '';
+
+  if ( $cgi->param('tax_names') ) {
+    if ( dbh->{Driver}->{Name} eq 'Pg' ) {
+
+      0;#twiddle thumbs
+
+    } elsif ( dbh->{Driver}->{Name} =~ /^mysql/i ) {
+
+      $addl_from .= "LEFT JOIN cust_bill_pay USING ( paynum )
+                     LEFT JOIN cust_bill_pay_pkg USING ( billpaynum )
+                     LEFT JOIN cust_bill_pkg USING ( billpkgnum ) AS tax_names";
+      $group_by  .= "GROUP BY $table.*,cust_main_custnum,".
+                    FS::UI::Web::cust_sql_fields();
+      push @search,
+       "( cust_bill_pkg.pkgnum = 0 OR cust_bill_pkg.pkgnum is NULL )";
+
+    } else {
+
+      warn "warning: unknown database type ". dbh->{Driver}->{Name}.
+           "omitting tax name information from report.";
+
+    }
+  }
+
   my $search = ' WHERE '. join(' AND ', @search);
 
-  $count_query = "SELECT COUNT(*), SUM($amount_field) ".
-                 "FROM $table LEFT JOIN cust_main USING ( custnum )".
-                 $search;
+  $count_query = "SELECT COUNT(*), SUM($amount_field) ";
+  $count_query .= ', SUM(' . "FS::$table"->unapplied_sql . ') ' 
+    if $unapplied;
+  $count_query .= "FROM $table $addl_from".
+                  "$search $group_by";
+
+  @count_addl = ( '$%.2f total '.$opt{name_verb} );
+  push @count_addl, '$%.2f unapplied' if $unapplied;
 
   $sql_query = {
     'table'     => $table,
-    'select'    => join(', ',
-                     "$table.*",
-                     'cust_main.custnum as cust_main_custnum',
-                     FS::UI::Web::cust_sql_fields(),
-                   ),
+    'select'    => join(', ', @select),
     'hashref'   => {},
-    'extra_sql' => "$search ORDER BY $orderby",
-    'addl_from' => 'LEFT JOIN cust_main USING ( custnum )',
+    'extra_sql' => "$search $group_by ORDER BY $orderby",
+    'addl_from' => $addl_from,
   };
 
 } else {
@@ -331,6 +431,7 @@ if ( $cgi->param('magic') ) {
   $count_query = "SELECT COUNT(*), SUM($amount_field) FROM $table".
                  "  WHERE payinfo = '$payinfo' AND payby = '$payby'".
                  "  AND ". $curuser->agentnums_sql;
+  @count_addl = ( '$%.2f total '.$opt{name_verb} );
 
   $sql_query = {
     'table'     => $table,
@@ -341,5 +442,8 @@ if ( $cgi->param('magic') ) {
   };
 
 }
+
+# for consistency
+$title = join('',map {ucfirst} split(/\b/,$title));
 
 </%init>

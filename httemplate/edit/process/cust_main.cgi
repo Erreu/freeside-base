@@ -73,6 +73,10 @@ if ( defined($cgi->param('same')) && $cgi->param('same') eq "Y" ) {
   );
 }
 
+if ( $cgi->param('no_credit_limit') ) {
+  $new->setfield('credit_limit', '');
+}
+
 $new->tagnum( [ $cgi->param('tagnum') ] );
 
 my %usedatetime = ( 'birthdate' => 1 );
@@ -245,6 +249,11 @@ if ( $new->custnum eq '' ) {
     $new_account = $old_account if $new_account =~ /xx/;
     $new_aba     = $old_aba     if $new_aba     =~ /xx/;
     $new->payinfo($new_account.'@'.$new_aba);
+  }
+
+  if ( ! $conf->exists('cust_main-edit_signupdate') or
+       ! $new->signupdate ) {
+    $new->signupdate($old->signupdate);
   }
 
   warn "$me calling $new -> replace( $old, \ @invoicing_list )" if $DEBUG;

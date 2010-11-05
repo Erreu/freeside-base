@@ -12,7 +12,7 @@ use FS::svc_domain;
 $FS::svc_domain::whois_hack = 1;
 
 @ISA = qw( Exporter );
-@EXPORT_OK = qw( upgrade upgrade_sqlradius );
+@EXPORT_OK = qw( upgrade_schema upgrade_config upgrade upgrade_sqlradius );
 
 $DEBUG = 1;
 
@@ -33,7 +33,23 @@ database upgrades.
 
 =over 4
 
-=item
+=item upgrade_config
+
+=cut
+
+#config upgrades
+sub upgrade_config {
+  my %opt = @_;
+
+  my $conf = new FS::Conf;
+
+  $conf->touch('payment_receipt')
+    if $conf->exists('payment_receipt_email')
+    || $conf->config('payment_receipt_msgnum');
+
+}
+
+=item upgrade
 
 =cut
 
@@ -86,6 +102,9 @@ sub upgrade {
 
 }
 
+=item upgrade_data
+
+=cut
 
 sub upgrade_data {
   my %opt = @_;
@@ -159,6 +178,67 @@ sub upgrade_data {
 
     #migrate to templates
     'msg_template' => [],
+
+  ;
+
+  \%hash;
+
+}
+
+=item upgrade_schema
+
+=cut
+
+sub upgrade_schema {
+  my %opt = @_;
+
+  my $data = upgrade_schema_data(%opt);
+
+  my $oldAutoCommit = $FS::UID::AutoCommit;
+  local $FS::UID::AutoCommit = 0;
+  local $FS::UID::AutoCommit = 0;
+
+  foreach my $table ( keys %$data ) {
+
+    my $class = "FS::$table";
+    eval "use $class;";
+    die $@ if $@;
+
+    if ( $class->can('_upgrade_schema') ) {
+      warn "Upgrading $table schema...\n";
+
+      my $start = time;
+
+      $class->_upgrade_schema(%opt);
+
+      if ( $oldAutoCommit ) {
+        warn "  committing\n";
+        dbh->commit or die dbh->errstr;
+      }
+      
+      #warn "\e[1K\rUpgrading $table... done in ". (time-$start). " seconds\n";
+      warn "  done in ". (time-$start). " seconds\n";
+
+    } else {
+      warn "WARNING: asked for schema upgrade of $table,".
+           " but FS::$table has no _upgrade_schema method\n";
+    }
+
+  }
+
+}
+
+=item upgrade_schema_data
+
+=cut
+
+sub upgrade_schema_data {
+  my %opt = @_;
+
+  tie my %hash, 'Tie::IxHash', 
+
+    #fix classnum character(1)
+    'cust_bill_pkg_detail' => [],
 
   ;
 

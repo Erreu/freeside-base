@@ -285,7 +285,7 @@ sub check {
 #  ;
 #  return $error if $error;
 
-  for my $f ( grep { $self->$_ =~ /[a-z ]/i } qw( startdate enddate ) ) {
+  for my $f ( grep { $self->$_ =~ /\D/ } qw(startdate answerdate enddate)){
     $self->$f( str2time($self->$f) );
   }
 
@@ -548,14 +548,20 @@ sub export_formats {
   my $conf = new FS::Conf;
   my $date_format = $conf->config('date_format') || '%m/%d/%Y';
 
+  # This is now smarter, and shows the call duration in the 
+  # largest units that accurately reflect the granularity.
   my $duration_sub = sub {
     my($cdr, %opt) = @_;
-    if ( $opt{minutes} ) {
-      $opt{minutes}. ( $opt{granularity} ? 'm' : ' call' );
-    } else {
-      #config if anyone really wants decimal minutes back
-      #sprintf('%.2fm', $cdr->billsec / 60 );
-      int($cdr->billsec / 60).'m '. ($cdr->billsec % 60).'s';
+    my $sec = $opt{seconds} || $cdr->billsec;
+    if ( length($opt{granularity}) && 
+         $opt{granularity} == 0 ) { #per call
+      return '1 call';
+    }
+    elsif ( $opt{granularity} == 60 ) {#full minutes
+      return sprintf("%.0fm",$sec/60);
+    }
+    else { #anything else
+      return sprintf("%dm %ds", $sec/60, $sec%60);
     }
   };
 
@@ -768,8 +774,11 @@ sub _cdr_date_parse {
 
   if ( $date =~ /^\s*(\d{4})\D(\d{1,2})\D(\d{1,2})\D+(\d{1,2})\D(\d{1,2})\D(\d{1,2})(\D|$)/ ) {
     ($year, $mon, $day, $hour, $min, $sec) = ( $1, $2, $3, $4, $5, $6 );
-  } elsif ( $date  =~ /^\s*(\d{1,2})\D(\d{1,2})\D(\d{4})\s+(\d{1,2})\D(\d{1,2})\D(\d{1,2})(\D|$)/ ) {
+  } elsif ( $date  =~ /^\s*(\d{1,2})\D(\d{1,2})\D(\d{4})\s+(\d{1,2})\D(\d{1,2})(?:\D(\d{1,2}))?(\D|$)/ ) {
+    # 8/26/2010 12:20:01
+    # optionally without seconds
     ($mon, $day, $year, $hour, $min, $sec) = ( $1, $2, $3, $4, $5, $6 );
+    $sec = 0 if !defined($sec);
   } elsif ( $date  =~ /^\s*(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d+\.\d+)(\D|$)/ ) {
     # broadsoft: 20081223201938.314
     ($year, $mon, $day, $hour, $min, $sec) = ( $1, $2, $3, $4, $5, $6 );

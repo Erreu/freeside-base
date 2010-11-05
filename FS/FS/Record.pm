@@ -350,7 +350,8 @@ sub qsearch {
   my @bind_type = ();
   my $dbh = dbh;
   foreach my $stable ( @stable ) {
-    my $record      = shift @record;
+    #stop altering the caller's hashref
+    my $record      = { %{ shift(@record) || {} } };#and be liberal in receipt
     my $select      = shift @select;
     my $extra_sql   = shift @extra_sql;
     my $extra_param = shift @extra_param;
@@ -1611,6 +1612,8 @@ Class method for batch imports.  Available params:
 
 =item table
 
+=item format - usual way to specify import, with this format string selecting data from the formats and format_* info hashes
+
 =item formats
 
 =item format_types
@@ -1622,6 +1625,10 @@ Class method for batch imports.  Available params:
 =item format_fixedlength_formats
 
 =item format_row_callbacks
+
+=item fields - Alternate way to specify import, specifying import fields directly as a listref
+
+=item postinsert_callback
 
 =item params
 
@@ -1635,8 +1642,6 @@ FS::queue object, will be updated with progress
 
 csv, xls or fixedlength
 
-=item format
-
 =item empty_ok
 
 =back
@@ -1647,21 +1652,64 @@ sub batch_import {
   my $param = shift;
 
   warn "$me batch_import call with params: \n". Dumper($param)
-  ;#  if $DEBUG;
+    if $DEBUG;
 
   my $table   = $param->{table};
-  my $formats = $param->{formats};
 
   my $job     = $param->{job};
   my $file    = $param->{file};
-  my $format  = $param->{'format'};
   my $params  = $param->{params} || {};
 
-  die "unknown format $format" unless exists $formats->{ $format };
+  my( $type, $header, $sep_char, $fixedlength_format, $row_callback, @fields );
+  my $postinsert_callback = '';
+  if ( $param->{'format'} ) {
 
-  my $type = $param->{'format_types'}
-             ? $param->{'format_types'}{ $format }
-             : $param->{type} || 'csv';
+    my $format  = $param->{'format'};
+    my $formats = $param->{formats};
+    die "unknown format $format" unless exists $formats->{ $format };
+
+    $type = $param->{'format_types'}
+            ? $param->{'format_types'}{ $format }
+            : $param->{type} || 'csv';
+
+
+    $header = $param->{'format_headers'}
+               ? $param->{'format_headers'}{ $param->{'format'} }
+               : 0;
+
+    $sep_char = $param->{'format_sep_chars'}
+                  ? $param->{'format_sep_chars'}{ $param->{'format'} }
+                  : ',';
+
+    $fixedlength_format =
+      $param->{'format_fixedlength_formats'}
+        ? $param->{'format_fixedlength_formats'}{ $param->{'format'} }
+        : '';
+
+    $row_callback =
+      $param->{'format_row_callbacks'}
+        ? $param->{'format_row_callbacks'}{ $param->{'format'} }
+        : '';
+
+    @fields = @{ $formats->{ $format } };
+
+  } elsif ( $param->{'fields'} ) {
+
+    $type = ''; #infer from filename
+    $header = 0;
+    $sep_char = ',';
+    $fixedlength_format = '';
+    $row_callback = '';
+    @fields = @{ $param->{'fields'} };
+
+    $postinsert_callback = $param->{'postinsert_callback'}
+      if $param->{'postinsert_callback'}
+
+  } else {
+    die "neither format nor fields specified";
+  }
+
+  #my $file    = $param->{file};
 
   unless ( $type ) {
     if ( $file =~ /\.(\w+)$/i ) {
@@ -1675,25 +1723,6 @@ sub batch_import {
       if $param->{'default_csv'} && $type ne 'xls';
   }
 
-  my $header = $param->{'format_headers'}
-                 ? $param->{'format_headers'}{ $param->{'format'} }
-                 : 0;
-
-  my $sep_char = $param->{'format_sep_chars'}
-                   ? $param->{'format_sep_chars'}{ $param->{'format'} }
-                   : ',';
-
-  my $fixedlength_format =
-    $param->{'format_fixedlength_formats'}
-      ? $param->{'format_fixedlength_formats'}{ $param->{'format'} }
-      : '';
-
-  my $row_callback =
-    $param->{'format_row_callbacks'}
-      ? $param->{'format_row_callbacks'}{ $param->{'format'} }
-      : '';
-
-  my @fields = @{ $formats->{ $format } };
 
   my $row = 0;
   my $count;
@@ -1757,6 +1786,7 @@ sub batch_import {
   local $FS::UID::AutoCommit = 0;
   my $dbh = dbh;
 
+  #my $params  = $param->{params} || {};
   if ( $param->{'batch_namecol'} && $param->{'batch_namevalue'} ) {
     my $batch_col   = $param->{'batch_keycol'};
 
@@ -1774,7 +1804,8 @@ sub batch_import {
 
     $params->{ $batch_col } = $batch_value;
   }
-  
+
+  #my $job     = $param->{job};
   my $line;
   my $imported = 0;
   my( $last, $min_sec ) = ( time, 5 ); #progressbar foo
@@ -1832,6 +1863,7 @@ sub batch_import {
 
     }
 
+    #my $table   = $param->{table};
     my $class = "FS::$table";
 
     my $record = $class->new( \%hash );
@@ -1840,7 +1872,13 @@ sub batch_import {
     while ( scalar(@later) ) {
       my $sub = shift @later;
       my $data = shift @later;
-      &{$sub}($record, $data, $conf, $param); # $record->&{$sub}($data, $conf);
+      eval {
+        &{$sub}($record, $data, $conf, $param); # $record->&{$sub}($data, $conf)
+      };
+      if ( $@ ) {
+        $dbh->rollback if $oldAutoCommit;
+        return "can't insert record". ( $line ? " for $line" : '' ). ": $@";
+      }
       last if exists( $param->{skiprow} );
     }
     next if exists( $param->{skiprow} );
@@ -1855,6 +1893,15 @@ sub batch_import {
     $row++;
     $imported++;
 
+    if ( $postinsert_callback ) {
+      my $error = &{$postinsert_callback}($record, $param);
+      if ( $error ) {
+        $dbh->rollback if $oldAutoCommit;
+        return "postinsert_callback error". ( $line ? " for $line" : '' ).
+               ": $error";
+      }
+    }
+
     if ( $job && time - $min_sec > $last ) { #progress bar
       $job->update_statustext( int(100 * $imported / $count) );
       $last = time;
@@ -1862,9 +1909,12 @@ sub batch_import {
 
   }
 
-  $dbh->commit or die $dbh->errstr if $oldAutoCommit;;
+  unless ( $imported || $param->{empty_ok} ) {
+    $dbh->rollback if $oldAutoCommit;
+    return "Empty file!";
+  }
 
-  return "Empty file!" unless $imported || $param->{empty_ok};
+  $dbh->commit or die $dbh->errstr if $oldAutoCommit;;
 
   ''; #no error
 
@@ -2121,7 +2171,7 @@ sub ut_text {
   #warn "notexist ". \&notexist. "\n";
   #warn "AUTOLOAD ". \&AUTOLOAD. "\n";
   $self->getfield($field)
-    =~ /^([\w \!\@\#\$\%\&\(\)\-\+\;\:\'\"\,\.\?\/\=\[\]\<\>]+)$/
+    =~ /^([µ_0123456789aAáÁàÀâÂåÅäÄãÃªæÆbBcCçÇdDðÐeEéÉèÈêÊëËfFgGhHiIíÍìÌîÎïÏjJkKlLmMnNñÑoOóÓòÒôÔöÖõÕøØºpPqQrRsSßtTuUúÚùÙûÛüÜvVwWxXyYýÝÿzZþÞ \!\@\#\$\%\&\(\)\-\+\;\:\'\"\,\.\?\/\=\[\]\<\>]+)$/
       or return gettext('illegal_or_empty_text'). " $field: ".
                  $self->getfield($field);
   $self->setfield($field,$1);
@@ -2138,11 +2188,8 @@ May be null.  If there is an error, returns the error, otherwise returns false.
 
 sub ut_textn {
   my($self,$field)=@_;
-  $self->getfield($field)
-    =~ /^([\w \!\@\#\$\%\&\(\)\-\+\;\:\'\"\,\.\?\/\=\[\]]*)$/
-      or return gettext('illegal_text'). " $field: ". $self->getfield($field);
-  $self->setfield($field,$1);
-  '';
+  return $self->setfield($field, '') if $self->getfield($field) =~ /^$/;
+  $self->ut_text($field);
 }
 
 =item ut_alpha COLUMN
@@ -2411,7 +2458,9 @@ May not be null.
 
 sub ut_name {
   my( $self, $field ) = @_;
-  $self->getfield($field) =~ /^([\w \,\.\-\']+)$/
+#  warn "ut_name allowed alphanumerics: +(sort grep /\w/, map { chr() } 0..255), "\n";
+  #$self->getfield($field) =~ /^([\w \,\.\-\']+)$/
+  $self->getfield($field) =~ /^([µ_0123456789aAáÁàÀâÂåÅäÄãÃªæÆbBcCçÇdDðÐeEéÉèÈêÊëËfFgGhHiIíÍìÌîÎïÏjJkKlLmMnNñÑoOóÓòÒôÔöÖõÕøØºpPqQrRsSßtTuUúÚùÙûÛüÜvVwWxXyYýÝÿzZþÞ \,\.\-\']+)$/
     or return gettext('illegal_name'). " $field: ". $self->getfield($field);
   $self->setfield($field,$1);
   '';
@@ -2801,23 +2850,25 @@ sub h_date {
   $h ? $h->history_date : '';
 }
 
-=item scalar_sql SQL
+=item scalar_sql SQL [ PLACEHOLDER, ... ]
 
-A class method with a propensity for becoming an instance method.  This
-method executes the sql statement represented by SQL and returns a scalar
-representing the result.  Don't ask for rows -- you get the first column
-of the first row.  Don't give me bogus SQL or I'll die on you.
+A class or object method.  Executes the sql statement represented by SQL and
+returns a scalar representing the result: the first column of the first row.
 
-Returns an empty string in the event of no rows.
+Dies on bogus SQL.  Returns an empty string if no row is returned.
+
+Typically used for statments which return a single value such as "SELECT
+COUNT(*) FROM table WHERE something" OR "SELECT column FROM table WHERE key = ?"
 
 =cut
 
 sub scalar_sql {
-  my($self, $sql ) = ( shift, shift );
+  my($self, $sql) = (shift, shift);
   my $sth = dbh->prepare($sql) or die dbh->errstr;
-  $sth->execute
+  $sth->execute(@_)
     or die "Unexpected error executing statement $sql: ". $sth->errstr;
-  $sth->fetchrow_arrayref->[0] || '';
+  my $scalar = $sth->fetchrow_arrayref->[0];
+  defined($scalar) ? $scalar : '';
 }
 
 =back

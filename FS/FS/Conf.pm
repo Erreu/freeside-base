@@ -395,6 +395,7 @@ sub verify_config_item {
 
   } else {
 
+    no warnings 'uninitialized';
     $error .= "$key fails binary comparison; "
       unless scalar($self->config_binary($key)) eq scalar($compat->config_binary($key));
 
@@ -1181,7 +1182,7 @@ and customer address. Include units.',
     'section'     => 'invoicing',
     'description' => 'Optional default invoice term, used to calculate a due date printed on invoices.',
     'type'        => 'select',
-    'select_enum' => [ '', 'Payable upon receipt', 'Net 0', 'Net 10', 'Net 15', 'Net 20', 'Net 30', 'Net 45', 'Net 60' ],
+    'select_enum' => [ '', 'Payable upon receipt', 'Net 0', 'Net 10', 'Net 15', 'Net 20', 'Net 30', 'Net 45', 'Net 60', 'Net 90' ],
   },
 
   { 
@@ -1237,6 +1238,13 @@ and customer address. Include units.',
     'key'         => 'invoice_send_receipts',
     'section'     => 'deprecated',
     'description' => '<b>DEPRECATED</b>, this used to send an invoice copy on payments and credits.  See the payment_receipt_email and XXXX instead.',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'payment_receipt',
+    'section'     => 'notification',
+    'description' => 'Send payment receipts.',
     'type'        => 'checkbox',
   },
 
@@ -1308,7 +1316,12 @@ and customer address. Include units.',
     'editlist_parts' => [ { type=>'text' },
                           { type=>'immutable', value=>'IN' },
                           { type=>'select',
-                            select_enum=>{ map { $_=>$_ } qw(A CNAME MX NS TXT)} },
+                            select_enum => {
+                              map { $_=>$_ }
+                                  #@{ FS::domain_record->rectypes }
+                                  qw(A AAAA CNAME MX NS PTR SPF SRV TXT)
+                            },
+                          },
                           { type=> 'text' }, ],
   },
 
@@ -1361,7 +1374,20 @@ and customer address. Include units.',
     'key'         => 'referraldefault',
     'section'     => 'UI',
     'description' => 'Default referral, specified by refnum',
-    'type'        => 'text',
+    'type'        => 'select-sub',
+    'options_sub' => sub { require FS::Record;
+                           require FS::part_referral;
+                           map { $_->refnum => $_->referral }
+                               FS::Record::qsearch( 'part_referral', 
+			                            { 'disabled' => '' }
+						  );
+			 },
+    'option_sub'  => sub { require FS::Record;
+                           require FS::part_referral;
+                           my $part_referral = FS::Record::qsearchs(
+			     'part_referral', { 'refnum'=>shift } );
+                           $part_referral ? $part_referral->referral : '';
+			 },
   },
 
 #  {
@@ -1600,6 +1626,20 @@ and customer address. Include units.',
     'type'        => 'checkbox',
   },
 
+  { 
+    'key'         => 'username-slash',
+    'section'     => 'username',
+    'description' => 'Allow the slash character (/) in usernames.  When using, make sure to set "Home directory" to fixed and blank in all svc_acct service definitions.',
+    'type'        => 'checkbox',
+  },
+
+  { 
+    'key'         => 'username-equals',
+    'section'     => 'username',
+    'description' => 'Allow the equal sign character (=) in usernames.',
+    'type'        => 'checkbox',
+  },
+
   {
     'key'         => 'safe-part_bill_event',
     'section'     => 'UI',
@@ -1762,6 +1802,7 @@ and customer address. Include units.',
     'select_hash' => [
                        'svc_acct'  => 'Account (svc_acct)',
                        'svc_phone' => 'Phone number (svc_phone)',
+                       'svc_pbx'   => 'PBX (svc_pbx)',
                      ],
   },
 
@@ -2220,6 +2261,32 @@ and customer address. Include units.',
   },
 
   {
+    'key'         => 'selfservice-agent_signup',
+    'section'     => 'self-service',
+    'description' => 'Allow agent signup via self-service.',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'selfservice-agent_signup-agent_type',
+    'section'     => 'self-service',
+    'description' => 'Agent type when allowing agent signup via self-service.',
+    'type'        => 'select-sub',
+    'options_sub' => sub { require FS::Record;
+                           require FS::agent_type;
+			   map { $_->typenum => $_->atype }
+                               FS::Record::qsearch('agent_type', {} ); # disabled=>'' } );
+			 },
+    'option_sub'  => sub { require FS::Record;
+                           require FS::agent_type;
+			   my $agent = FS::Record::qsearchs(
+			     'agent_type', { 'typenum'=>shift }
+			   );
+                           $agent_type ? $agent_type->atype : '';
+			 },
+  },
+
+  {
     'key'         => 'card_refund-days',
     'section'     => 'billing',
     'description' => 'After a payment, the number of days a refund link will be available for that payment.  Defaults to 120.',
@@ -2252,7 +2319,15 @@ and customer address. Include units.',
   {
     'key'         => 'global_unique-pbx_title',
     'section'     => '',
-    'description' => 'Global phone number uniqueness control: enabled (usual setting - svc_pbx.title must be unique), or disabled turns off duplicate checking for this field.',
+    'description' => 'Global phone number uniqueness control: none (check uniqueness per exports), enabled (check across all services), or disabled (no duplicate checking).',
+    'type'        => 'select',
+    'select_enum' => [ 'enabled', 'disabled' ],
+  },
+
+  {
+    'key'         => 'global_unique-pbx_id',
+    'section'     => '',
+    'description' => 'Global PBX id uniqueness control: none (check uniqueness per exports), enabled (check across all services), or disabled (no duplicate checking).',
     'type'        => 'select',
     'select_enum' => [ 'enabled', 'disabled' ],
   },
@@ -2424,7 +2499,7 @@ and customer address. Include units.',
   {
     'key'         => 'address1-search',
     'section'     => 'UI',
-    'description' => 'Enable the ability to search the address1 field from customer search.',
+    'description' => 'Enable the ability to search the address1 field from the quick customer search.  Not recommended in most cases as it tends to bring up too many search results - use explicit address searching from the advanced customer search instead.',
     'type'        => 'checkbox',
   },
 
@@ -2579,6 +2654,13 @@ and customer address. Include units.',
   },
 
   {
+    'key'         => 'cust_pkg-large_pkg_size',
+    'section'     => 'UI',
+    'description' => "In customer view, summarize packages with more than this many services.  Set to zero to never summarize packages.",
+    'type'        => 'text',
+  },
+
+  {
     'key'         => 'svc_acct-edit_uid',
     'section'     => 'shell',
     'description' => 'Allow UID editing.',
@@ -2623,7 +2705,7 @@ and customer address. Include units.',
   {
     'key'         => 'voip-cdr_email',
     'section'     => '',
-    'description' => 'Include the call details on emailed invoices even if the customer is configured for not printing them on the invoices.',
+    'description' => 'Include the call details on emailed invoices (and HTML invoices viewed in the backend), even if the customer is configured for not printing them on the invoices.',
     'type'        => 'checkbox',
   },
 
@@ -2665,7 +2747,7 @@ and customer address. Include units.',
   {
     'key'         => 'tax-pkg_address',
     'section'     => 'billing',
-    'description' => 'By default, tax calculations are done based on the billing address.  Enable this switch to calculate tax based on the package address instead (when present).  Note that this option is currently incompatible with vendor data taxation enabled by enable_taxproducts.',
+    'description' => 'By default, tax calculations are done based on the billing address.  Enable this switch to calculate tax based on the package address instead (when present).',
     'type'        => 'checkbox',
   },
 
@@ -3111,6 +3193,26 @@ and customer address. Include units.',
   },
 
   {
+    'key'         => 'prepayment_discounts-credit_type',
+    'section'     => 'billing',
+    'description' => 'Enables the offering of prepayment discounts and establishes the credit reason type.',
+    'type'        => 'select-sub',
+    'options_sub' => sub { require FS::Record;
+                           require FS::reason_type;
+                           map { $_->typenum => $_->type }
+                               FS::Record::qsearch('reason_type', { class=>'R' } );
+                         },
+    'option_sub'  => sub { require FS::Record;
+                           require FS::reason_type;
+                           my $reason_type = FS::Record::qsearchs(
+                             'reason_type', { 'typenum' => shift }
+                           );
+                           $reason_type ? $reason_type->type : '';
+                         },
+
+  },
+
+  {
     'key'         => 'cust_main-agent_custid-format',
     'section'     => '',
     'description' => 'Enables searching of various formatted values in cust_main.agent_custid',
@@ -3199,7 +3301,7 @@ and customer address. Include units.',
     'section'     => 'UI',
     'description' => 'The year to use in census tract lookups',
     'type'        => 'select',
-    'select_enum' => [ qw( 2009 2008 2007 2006 ) ],
+    'select_enum' => [ qw( 2010 2009 2008 ) ],
   },
 
   {
@@ -3245,6 +3347,13 @@ and customer address. Include units.',
   },
 
   {
+    'key'         => 'cust_main-title-display_custnum',
+    'section'     => 'UI',
+    'description' => 'Add the display_custom (agent_custid or custnum) to the title on customer view pages.',
+    'type'        => 'checkbox',
+  },
+
+  {
     'key'         => 'cust_bill-default_agent_invid',
     'section'     => 'UI',
     'description' => 'Display the agent_invid field when available instead of the invnum field.',
@@ -3266,6 +3375,13 @@ and customer address. Include units.',
     'section'     => 'UI',
     'description' => 'Default area code for customers.',
     'type'        => 'text',
+  },
+
+  {
+    'key'         => 'order_pkg-no_start_date',
+    'section'     => 'UI',
+    'description' => 'Don\'t set a default start date for new packages.',
+    'type'        => 'checkbox',
   },
 
   {
@@ -3891,6 +4007,26 @@ and customer address. Include units.',
     'type'        => 'checkbox',
   },
 
+  {
+    'key'         => 'cust_main-custom_link',
+    'section'     => 'UI',
+    'description' => 'URL to use as source for the "Custom" tab in the View Customer page.  The custnum will be appended.',
+    'type'        => 'text',
+  },
+
+  {
+    'key'         => 'cust_main-custom_title',
+    'section'     => 'UI',
+    'description' => 'Title for the "Custom" tab in the View Customer page.',
+    'type'        => 'text',
+  },
+
+  {
+    'key'         => 'part_pkg-default_suspend_bill',
+    'section'     => 'billing',
+    'description' => 'Default the "Continue recurring billing while suspended" flag to on for new package definitions.',
+    'type'        => 'checkbox',
+  },
 
   { key => "apacheroot", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
   { key => "apachemachine", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },

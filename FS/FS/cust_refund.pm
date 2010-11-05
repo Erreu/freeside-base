@@ -7,6 +7,7 @@ use vars qw( @encrypted_fields );
 use Business::CreditCard;
 use FS::UID qw(getotaker);
 use FS::Record qw( qsearch qsearchs dbh );
+use FS::CurrentUser;
 use FS::cust_credit;
 use FS::cust_credit_refund;
 use FS::cust_pay_refund;
@@ -237,12 +238,17 @@ sub delete {
 
 =item replace OLD_RECORD
 
-Modifying a refund?  Well, don't say I didn't warn you.
+You can, but probably shouldn't modify refunds... 
+
+Replaces the OLD_RECORD with this one in the database, or, if OLD_RECORD is not
+supplied, replaces this record.  If there is an error, returns the error,
+otherwise returns false.
 
 =cut
 
 sub replace {
   my $self = shift;
+  return "Can't modify closed refund" if $self->closed =~ /^Y/i;
   $self->SUPER::replace(@_);
 }
 
@@ -256,7 +262,7 @@ returns the error, otherwise returns false.  Called by the insert method.
 sub check {
   my $self = shift;
 
-  $self->otaker(getotaker) unless $self->otaker;
+  $self->usernum($FS::CurrentUser::CurrentUser->usernum) unless $self->usernum;
 
   my $error =
     $self->ut_numbern('refundnum')

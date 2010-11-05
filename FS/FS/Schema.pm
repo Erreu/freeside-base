@@ -570,6 +570,7 @@ sub tables_hashref {
         'itemdesc',         'varchar', 'NULL', $char_d, '', '', 
         'itemcomment',      'varchar', 'NULL', $char_d, '', '', 
         'section',          'varchar', 'NULL', $char_d, '', '', 
+        'freq',             'varchar', 'NULL', $char_d, '', '',
         'quantity',             'int', 'NULL',      '', '', '',
         'unitsetup',           @money_typen,            '', '', 
         'unitrecur',           @money_typen,            '', '', 
@@ -767,6 +768,7 @@ sub tables_hashref {
         'squelch_cdr','char', 'NULL', 1, '', '', 
         'cdr_termination_percentage', 'decimal', 'NULL', '', '', '',
         'invoice_terms', 'varchar', 'NULL', $char_d, '', '',
+        'credit_limit', @money_typen, '', '',
         'archived', 'char', 'NULL', 1, '', '',
         'email_csv_cdr', 'char', 'NULL', 1, '', '',
       ],
@@ -829,8 +831,8 @@ sub tables_hashref {
         'last',      'varchar',     '', $char_d, '', '', 
 #        'middle',    'varchar', 'NULL', $char_d, '', '', 
         'first',     'varchar',     '', $char_d, '', '', 
-        'title',     'varchar',     '', $char_d, '', '', #eg Head Bottle Washer
-        'comment',   'varchar',     '', $char_d, '', '', 
+        'title',     'varchar', 'NULL', $char_d, '', '', #eg Head Bottle Washer
+        'comment',   'varchar', 'NULL', $char_d, '', '', 
         'disabled',     'char', 'NULL',       1, '', '', 
       ],
       'primary_key' => 'contactnum',
@@ -842,13 +844,13 @@ sub tables_hashref {
 
     'contact_phone' => {
       'columns' => [
-        'contactphonenum', 'serial', '', '', '', '',
-        'contactnum',         'int', '', '', '', '',
-        'phonetypenum',       'int', '', '', '', '',
-        'countrycode',    'varchar', '',  3, '', '', 
-        'phonenum',       'varchar', '', 14, '', '', 
-        'extension',      'varchar', '',  7, '', '',
-        #?#'comment',   'varchar',     '', $char_d, '', '', 
+        'contactphonenum', 'serial',     '', '', '', '',
+        'contactnum',         'int',     '', '', '', '',
+        'phonetypenum',       'int',     '', '', '', '',
+        'countrycode',    'varchar',     '',  3, '', '', 
+        'phonenum',       'varchar',     '', 14, '', '', 
+        'extension',      'varchar', 'NULL',  7, '', '',
+        #?#'comment',        'varchar',     '', $char_d, '', '', 
       ],
       'primary_key' => 'contactphonenum',
       'unique'      => [],
@@ -1192,10 +1194,11 @@ sub tables_hashref {
         'reason',    'varchar',   'NULL', $char_d, '', '', 
         'otaker',   'varchar', 'NULL', 32, '', '', 
         'usernum',   'int', 'NULL', '', '', '',
+        'void_usernum',   'int', 'NULL', '', '', '',
       ],
       'primary_key' => 'paynum',
       'unique' => [],
-      'index' => [ [ 'custnum' ], [ 'usernum' ], ],
+      'index' => [ [ 'custnum' ], [ 'usernum' ], [ 'void_usernum' ] ],
     },
 
     'cust_bill_pay' => {
@@ -1289,6 +1292,7 @@ sub tables_hashref {
         'pkgnum',           'serial',     '', '', '', '', 
         'custnum',             'int',     '', '', '', '', 
         'pkgpart',             'int',     '', '', '', '', 
+        'pkgbatch',        'varchar', 'NULL', $char_d, '', '',
         'locationnum',         'int', 'NULL', '', '', '',
         'otaker',          'varchar', 'NULL', 32, '', '', 
         'usernum',             'int', 'NULL', '', '', '',
@@ -1300,6 +1304,7 @@ sub tables_hashref {
         'adjourn',        @date_type,             '', '', 
         'cancel',         @date_type,             '', '', 
         'expire',         @date_type,             '', '', 
+        'contract_end',   @date_type,             '', '',
         'change_date',    @date_type,             '', '',
         'change_pkgnum',       'int', 'NULL', '', '', '',
         'change_pkgpart',      'int', 'NULL', '', '', '',
@@ -1310,7 +1315,8 @@ sub tables_hashref {
       ],
       'primary_key' => 'pkgnum',
       'unique' => [],
-      'index' => [ ['custnum'], ['pkgpart'], [ 'locationnum' ], [ 'usernum' ],
+      'index' => [ ['custnum'], ['pkgpart'], [ 'pkgbatch' ], [ 'locationnum' ],
+                   [ 'usernum' ],
                    [ 'start_date' ], ['setup'], ['last_bill'], ['bill'],
                    ['susp'], ['adjourn'], ['expire'], ['cancel'],
                    ['change_date'],
@@ -1510,6 +1516,17 @@ sub tables_hashref {
     # XXX somewhat borked unique: we don't really want a hidden and unhidden
     # it turns out we'd prefer to use svc, bill, and invisibill (or something)
 
+    'part_pkg_discount' => {
+      'columns' => [
+        'pkgdiscountnum', 'serial',   '',      '', '', '',
+        'pkgpart',        'int',      '',      '', '', '',
+        'discountnum',    'int',      '',      '', '', '', 
+      ],
+      'primary_key' => 'pkgdiscountnum',
+      'unique' => [ [ 'pkgpart', 'discountnum' ] ],
+      'index'  => [],
+    },
+
     'part_pkg_taxclass' => {
       'columns' => [
         'taxclassnum',  'serial', '',       '', '', '',
@@ -1698,7 +1715,8 @@ sub tables_hashref {
         'cgp_rpopallowed',    'char', 'NULL',       1, '', '', #RPOPAllowed
         'cgp_mailtoall',      'char', 'NULL',       1, '', '', #MailToAll
         'cgp_addmailtrailer', 'char', 'NULL',       1, '', '', #AddMailTrailer
-        #XXX archive messages, mailing lists
+        'cgp_archiveafter',    'int', 'NULL',      '', '', '', #ArchiveMessagesAfter
+        #XXX mailing lists
         #preferences
         'cgp_deletemode',     'varchar', 'NULL', $char_d, '', '',#DeleteMode
         'cgp_emptytrash',     'varchar', 'NULL', $char_d, '', '',#EmptyTrash
@@ -1708,7 +1726,6 @@ sub tables_hashref {
         'cgp_prontoskinname', 'varchar', 'NULL', $char_d, '', '',#ProntoSkinName
         'cgp_sendmdnmode',    'varchar', 'NULL', $char_d, '', '',#SendMDNMode
         #mail
-#vacation message, redirect all mail, mail rules
         #XXX RPOP settings
       ],
       'primary_key' => 'svcnum',
@@ -1770,7 +1787,7 @@ sub tables_hashref {
         'acct_def_cgp_rpopallowed',       'char', 'NULL',       1,  '', '', 
         'acct_def_cgp_mailtoall',         'char', 'NULL',       1,  '', '', 
         'acct_def_cgp_addmailtrailer',    'char', 'NULL',       1,  '', '', 
-        #XXX archive messages
+        'acct_def_cgp_archiveafter',       'int', 'NULL',      '',  '', '',
         #preferences
         'acct_def_cgp_deletemode',     'varchar', 'NULL', $char_d,  '', '',
         'acct_def_cgp_emptytrash',     'varchar', 'NULL', $char_d,  '', '',
@@ -1779,8 +1796,6 @@ sub tables_hashref {
         'acct_def_cgp_skinname',       'varchar', 'NULL', $char_d,  '', '',
         'acct_def_cgp_prontoskinname', 'varchar', 'NULL', $char_d,  '', '',
         'acct_def_cgp_sendmdnmode',    'varchar', 'NULL', $char_d,  '', '',
-        #mail
-        #XXX rules, archive rule, spam foldering rule(s)
       ],
       'primary_key' => 'svcnum',
       'unique' => [ ],
@@ -1795,6 +1810,7 @@ sub tables_hashref {
         'recaf',     'char',    '',  2, '', '', 
         'rectype',   'varchar',    '',  5, '', '', 
         'recdata',   'varchar', '',  255, '', '', 
+        'ttl',       'int',     'NULL', '', '', '',
       ],
       'primary_key' => 'recnum',
       'unique'      => [],
@@ -2173,12 +2189,18 @@ sub tables_hashref {
 
     'acct_snarf' => {
       'columns' => [
-        'snarfnum',  'int', '', '', '', '', 
-        'svcnum',    'int', '', '', '', '', 
-        'machine',   'varchar', '', 255, '', '', 
-        'protocol',  'varchar', '', $char_d, '', '', 
-        'username',  'varchar', '', $char_d, '', '', 
-        '_password', 'varchar', '', $char_d, '', '', 
+        'snarfnum',    'serial',     '',      '', '', '', 
+        'snarfname',  'varchar', 'NULL', $char_d, '', '', 
+        'svcnum',         'int',     '',      '', '', '', 
+        'machine',    'varchar',     '',     255, '', '', 
+        'protocol',   'varchar',     '', $char_d, '', '', 
+        'username',   'varchar',     '', $char_d, '', '', 
+        '_password',  'varchar',     '', $char_d, '', '', 
+        'check_freq',     'int', 'NULL',      '', '', '', 
+        'leavemail',     'char', 'NULL',       1, '', '', 
+        'apop',          'char', 'NULL',       1, '', '', 
+        'tls',           'char', 'NULL',       1, '', '', 
+        'mailbox',    'varchar', 'NULL', $char_d, '', '', 
       ],
       'primary_key' => 'snarfnum',
       'unique' => [],
@@ -2249,12 +2271,11 @@ sub tables_hashref {
         'orig_regionnum',  'int', 'NULL',     '', '', '', 
         'dest_regionnum',  'int',     '',     '', '', '', 
         'min_included',    'int',     '',     '', '', '', 
-        'conn_charge',     @money_type, '0', '', #'decimal','','10,5','0','',
+        'conn_charge',     'decimal', '', '10,4', '0', '',
         'conn_sec',        'int',     '',     '', '0', '',
         'min_charge',      'decimal', '', '10,5', '', '', #@money_type, '', '', 
         'sec_granularity', 'int',     '',     '', '', '', 
         'ratetimenum',     'int', 'NULL',     '', '', '',
-        #time period (link to table of periods)?
         'classnum',        'int', 'NULL',     '', '', '', 
       ],
       'primary_key' => 'ratedetailnum',
@@ -2487,6 +2508,8 @@ sub tables_hashref {
         'accountcode', 'varchar',  '',      20, \"''", '',
         'uniqueid',    'varchar',  '',      32, \"''", '',
         'userfield',   'varchar',  '',     255, \"''", '',
+
+        'max_callers', 'int',  'NULL',      '',    '', '',
 
         ###
         # fields for unitel/RSLCOM/convergent that don't map well to asterisk
@@ -2940,13 +2963,25 @@ sub tables_hashref {
         'body',         'blob', 'NULL',      '', '', '',
         'disabled',     'char', 'NULL',       1, '', '', 
         'from_addr', 'varchar', 'NULL',     255, '', '',
+        'bcc_addr',  'varchar', 'NULL',     255, '', '',
       ],
       'primary_key' => 'msgnum',
       'unique'      => [ ['msgname', 'mime_type'] ],
       'index'       => [ ['agentnum'], ]
     },
 
-
+    'svc_cert' => {
+      'columns' => [
+        'svcnum',            'int',     '',            '', '', '', 
+        'recnum',   'int',      '',  '', '', '', 
+        'something', 'text', '', '', '', '',
+        #XXX more fields
+      ],
+      'primary_key' => 'svcnum',
+      'unique' => [],
+      'index'  => [], #recnum
+    },
+   
 
     # name type nullability length default local
 

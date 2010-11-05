@@ -45,6 +45,7 @@
                             'agentnum'         => 'Agent',
                             'setup_fee'        => 'Setup fee',
                             'recur_fee'        => 'Recurring fee',
+                            'discountnum'      => 'Offer discounts for longer terms',
                             'bill_dst_pkgpart' => 'Include line item(s) from package',
                             'svc_dst_pkgpart'  => 'Include services of package',
                             'report_option'    => 'Report classes',
@@ -94,6 +95,7 @@
                                 type  => 'selectlayers-select',
                                 options => [ keys %plan_labels ],
                                 labels  => \%plan_labels,
+                                onchange => 'aux_planchanged(what);',
                               },
                               { field => 'setup_fee',
                                 type  => 'money',
@@ -195,6 +197,21 @@
                               'multiple' => 1,
                             },
 
+                            { 'type'    => 'tablebreak-tr-title',
+                              'value'   => 'Term discounts',
+                            },
+                            { 'field'      => 'discountnum',
+                              'type'       => 'select-table',
+                              'table'      => 'discount',
+                              'name_col'   => 'name',
+                              'hashref'    => { %$discountnum_hashref },
+                              #'extra_sql'  => 'AND (months IS NOT NULL OR months != 0)',
+                              'empty_label'=> 'Select discount',
+                              'm2_label'   => 'Offer discounts for longer terms',
+                              'm2m_method' => 'part_pkg_discount',
+                              'm2m_dstcol' => 'discountnum',
+                              'm2_error_callback' => $discount_error_callback,
+                            },
 
                             { 'type'    => 'tablebreak-tr-title',
                               'value'   => 'Pricing add-ons',
@@ -202,6 +219,10 @@
                             },
                             { 'field'      => 'bill_dst_pkgpart',
                               'type'       => 'select-part_pkg',
+                              'extra_sql'  => sub { $pkgpart
+                                                     ? "AND pkgpart != $pkgpart"
+                                                     : ''
+                                                  },
                               'm2_label'   => 'Include line item(s) from package',
                               'm2m_method' => 'bill_part_pkg_link',
                               'm2m_dstcol' => 'dst_pkgpart',
@@ -224,6 +245,10 @@
                             { 'field'      => 'svc_dst_pkgpart',
                               'label'      => 'Also include services from package: ',
                               'type'       => 'select-part_pkg',
+                              'extra_sql'  => sub { $pkgpart
+                                                     ? "AND pkgpart != $pkgpart"
+                                                     : ''
+                                                  },
                               'm2_label'   => 'Include services of package: ',
                               'm2m_method' => 'svc_part_pkg_link',
                               'm2m_dstcol' => 'dst_pkgpart',
@@ -300,6 +325,8 @@ my @taxproductnums = ( qw( setup recur ), sort (keys %taxproductnums) );
 my %options = ();
 my $recur_disabled = 1;
 
+my $pkgpart = '';
+
 my $error_callback = sub {
   my($cgi, $object, $fields, $opt ) = @_;
 
@@ -332,6 +359,8 @@ my $error_callback = sub {
   #$cgi->param($_, $options{$_}) foreach (qw( setup_fee recur_fee ));
   $object->set($_ => scalar($cgi->param($_)) )
     foreach (qw( setup_fee recur_fee ));
+
+  $pkgpart = $object->pkgpart;
 
 };
 
@@ -382,16 +411,21 @@ my $edit_callback = sub {
   $object->set($_ => $object->option($_))
     foreach (qw( setup_fee recur_fee ));
 
+  $pkgpart = $object->pkgpart;
+
 };
 
 my $new_callback = sub {
   my( $cgi, $object, $fields ) = @_;
 
   my $conf = new FS::Conf; 
+
   if ( $conf->exists('agent_defaultpkg') ) {
     #my @all_agent_types = map {$_->typenum} qsearch('agent_type',{});
     @agent_type = map {$_->typenum} qsearch('agent_type',{});
   }
+
+  $options{'suspend_bill'}=1 if $conf->exists('part_pkg-default_suspend_bill');
 
 };
 
@@ -424,6 +458,23 @@ my $clone_callback = sub {
     foreach (qw( setup_fee recur_fee ));
 
   $recur_disabled = $object->freq ? 0 : 1;
+};
+
+my $discount_error_callback = sub {
+  my( $cgi, $object ) = @_;
+  map {
+        if ( /^discountnum(\d+)$/ &&
+             ( my $discountnum = $cgi->param("discountnum$1") ) )
+        {
+          new FS::part_pkg_discount {
+            'pkgpart'     => $object->pkgpart,
+            'discountnum' => $discountnum,
+          };
+        } else {
+          ();
+        }
+      }
+  $cgi->param;
 };
 
 my $m2_error_callback_maker = sub {
@@ -480,6 +531,22 @@ my $javascript = <<'END';
         what.form.agent_type.disabled = true;
         //what.form.agent_type.style.backgroundColor = '#dddddd';
         what.form.agent_type.style.visibility = 'hidden';
+      }
+
+    }
+
+    function aux_planchanged(what) {
+
+      alert('called!');
+      var plan = what.options[what.selectedIndex].value;
+      var table = document.getElementById('TableNumber7') // XXX NOT ROBUST
+
+      if ( plan == 'flat' || plan == 'prorate' || plan == 'subscription' ) {
+        //table.disabled = false;
+        table.style.visibility = '';
+      } else {
+        //table.disabled = true;
+        table.style.visibility = 'hidden';
       }
 
     }
@@ -735,5 +802,10 @@ my $field_callback = sub {
     $fieldref->{layer_values_callback} = $taxproduct_values;
   }
 };
+
+my $discountnum_hashref = {
+                            'disabled' => '',
+                            'months' => { 'op' => '>', 'value' => 1 },
+                          };
 
 </%init>

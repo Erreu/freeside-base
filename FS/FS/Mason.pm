@@ -3,6 +3,7 @@ package FS::Mason;
 use strict;
 use vars qw( @ISA @EXPORT_OK $addl_handler_use );
 use Exporter;
+use Carp;
 use File::Slurp qw( slurp );
 use HTML::Mason 1.27; #http://www.masonhq.com/?ApacheModPerl2Redirect
 use HTML::Mason::Interp;
@@ -111,6 +112,8 @@ if ( -e $addl_handler_use_file ) {
                                         #selectlayers.html
   use Locale::Country;
   use Business::US::USPS::WebTools::AddressStandardization;
+  use LWP::UserAgent;
+  use Storable qw( nfreeze thaw );
   use FS;
   use FS::UID qw( getotaker dbh datasrc driver_name );
   use FS::Record qw( qsearch qsearchs fields dbdef
@@ -123,7 +126,7 @@ if ( -e $addl_handler_use_file ) {
   use FS::UI::Web::small_custview qw(small_custview);
   use FS::UI::bytecount;
   use FS::Msgcat qw(gettext geterror);
-  use FS::Misc qw( send_email send_fax
+  use FS::Misc qw( send_email send_fax ocr_image
                    states_hash counties cities state_label
                  );
   use FS::Misc::eps2png qw( eps2png );
@@ -139,12 +142,14 @@ if ( -e $addl_handler_use_file ) {
   use FS::cust_bill_pay;
   use FS::cust_credit;
   use FS::cust_credit_bill;
-  use FS::cust_main qw(smart_search);
+  use FS::cust_main;
+  use FS::cust_main::Search qw(smart_search);
   use FS::cust_main::Import;
   use FS::cust_main_county;
   use FS::cust_location;
   use FS::cust_pay;
   use FS::cust_pkg;
+  use FS::cust_pkg::Import;
   use FS::part_pkg_taxclass;
   use FS::cust_pkg_reason;
   use FS::cust_refund;
@@ -248,6 +253,8 @@ if ( -e $addl_handler_use_file ) {
   use FS::rate_time_interval;
   use FS::msg_template;
   use FS::part_tag;
+  use FS::acct_snarf;
+  use FS::part_pkg_discount;
   # Sammath Naur
 
   if ( $FS::Mason::addl_handler_use ) {
@@ -359,6 +366,7 @@ if ( -e $addl_handler_use_file ) {
   
   sub include {
     use vars qw($m);
+    #carp #should just switch to <& &> syntax
     $m->scomp(@_);
   }
 
@@ -448,7 +456,7 @@ sub mason_interps {
     RT::LoadConfig();
   }
 
-  # A hook supporting strange legacy ways people have added stuff on
+  # A hook supporting strange legacy ways people (well, SG) have added stuff on
 
   my @addl_comp_root = ();
   my $addl_comp_root_file = '%%%FREESIDE_CONF%%%/addl_comp_root.pl';
@@ -463,17 +471,20 @@ sub mason_interps {
     }
   }
 
+  my $fs_comp_root =
+    scalar(@addl_comp_root)
+      ? [
+          [ 'freeside'=>'%%%FREESIDE_DOCUMENT_ROOT%%%' ],
+          @addl_comp_root,
+        ]
+      : '%%%FREESIDE_DOCUMENT_ROOT%%%';
+
   my %interp = (
     request_class        => $request_class,
     data_dir             => '%%%MASONDATA%%%',
     error_mode           => 'output',
     error_format         => 'html',
     ignore_warnings_expr => '.',
-    comp_root            => [
-                              [ 'freeside'=>'%%%FREESIDE_DOCUMENT_ROOT%%%'    ],
-                              [ 'rt'      =>'%%%FREESIDE_DOCUMENT_ROOT%%%/rt' ],
-                              @addl_comp_root,
-                            ],
   );
 
   $interp{out_method} = $opt{outbuf} if $mode eq 'standalone' && $opt{outbuf};
@@ -490,6 +501,7 @@ sub mason_interps {
 
   my $fs_interp = new HTML::Mason::Interp (
     %interp,
+    comp_root    => $fs_comp_root,
     escape_flags => { 'js_string' => $js_string_sub,
                       'defang'    => sub {
                         ${$_[0]} = $html_defang->defang(${$_[0]});
@@ -502,6 +514,10 @@ sub mason_interps {
 
   my $rt_interp = new HTML::Mason::Interp (
     %interp,
+    comp_root    => [
+                      [ 'rt'       => '%%%FREESIDE_DOCUMENT_ROOT%%%/rt' ],
+                      [ 'freeside' => '%%%FREESIDE_DOCUMENT_ROOT%%%'    ],
+                    ],
     escape_flags => { 'h'         => \&RT::Interface::Web::EscapeUTF8,
                       'js_string' => $js_string_sub,
                     },

@@ -185,9 +185,14 @@ foreach my $svcdb ( FS::part_svc->svc_tables() ) {
       ];
   }
 
-  if ( $svcdb eq 'svc_acct' ) {
+  if ( $svcdb eq 'svc_acct' || $svcdb eq 'svc_broadband' ) {
     $report_svc{"Advanced $lcsname reports"} = 
       [ $fsurl."search/report_$svcdb.html", '' ];
+  }
+
+  if ( $svcdb eq 'svc_phone' ) {
+    $report_svc{"Avaialble phone numbers (DIDs)"} =
+      [ $fsurl."search/phone_avail.html", '' ];
   }
 
   $report_services{$name} = [ \%report_svc, $longname ];
@@ -207,7 +212,9 @@ if ( $curuser->access_right('Financial reports') ) {
   $report_packages{'separator2'} =  '';
 }
 $report_packages{'All customer packages'} =  [ $fsurl.'search/cust_pkg.cgi?pkgnum', 'List all customer packages', ];
+$report_packages{'Package summary'} = [ $fsurl.'search/cust_pkg_summary.html', 'Show package sales summary', ];
 $report_packages{'Suspended customer packages'} =  [ $fsurl.'search/cust_pkg.cgi?magic=suspended', 'List suspended packages' ];
+$report_packages{'Suspension summary'} = [ $fsurl.'search/cust_pkg_susp.html', 'Show suspension activity', ];
 $report_packages{'Customer packages with unconfigured services'} =  [ $fsurl.'search/cust_pkg.cgi?APKG_pkgnum', 'List packages which have provisionable services' ];
 $report_packages{'FCC Form 477 packages'} =  [ $fsurl.'search/report_477.html', 'Summarize packages by census tract for particular types' ]
   if $conf->exists('cust_main-require_censustract');
@@ -257,6 +264,7 @@ $report_payments{'Pending Payments'} = [ $fsurl.'search/cust_pay_pending.html?ma
   if $curuser->access_right('View customer pending payments');
 $report_payments{'Voided Payments'} = [ $fsurl.'search/report_cust_pay.html?void=1', 'Voided payment report (by type and/or date range)' ]
   if $curuser->access_right('View customer pending payments');
+$report_payments{'Unapplied Payments'} = [ $fsurl.'search/report_cust_pay.html?unapplied=1', 'Unapplied payment report (by type and/or date range)' ];
 $report_payments{'Payment Batches'} = [ $fsurl.'search/pay_batch.html', 'Payment batches (by status and/or date range)' ]
   if $conf->exists('batch-enable') || $conf->config('batch-enable_payby');
 $report_payments{'Unapplied Payment Aging'} = [ $fsurl.'search/report_unapplied_cust_pay.html', 'Unapplied payment aging report' ];
@@ -270,7 +278,9 @@ if($curuser->access_right('Financial reports')) {
     'Rated Call Sales Report' => [ $fsurl.'graph/report_cust_bill_pkg_detail.html', 'Sales report and graph (by agent, package class, usage class and/or date range)' ],
     'Employee Commission Report' => [ $fsurl.'search/report_employee_commission.html', '' ],
     'Credit Report' => [ $fsurl.'search/report_cust_credit.html', 'Credit report (by employee and/or date range)' ],
+    'Unapplied Credits' => [ $fsurl.'search/report_cust_credit.html?unapplied=1', 'Unapplied credit report (by type and/or date range)' ],
     'Refund Report' => [ $fsurl.'search/report_cust_refund.html', 'Refund report (by type and/or date range)' ],
+    'Unapplied Refunds' => [ $fsurl.'search/report_cust_refund.html?unapplied=1', 'Unapplied refund report (by type and/or date range)' ],
     'Package Costs Report' => [ $fsurl.'graph/report_cust_pkg_cost.html', 'Package setup and recurring costs graph' ],
   );
   $report_financial{'A/R Aging'} = [ $fsurl.'search/report_receivables.html', 'Accounts Receivable Aging report' ];
@@ -317,6 +327,7 @@ $report_menu{'SQL Query'}  = [ $fsurl.'search/report_sql.html', 'SQL Query' ]
 
 tie my %tools_importing, 'Tie::IxHash',
   'Customers' => [ $fsurl.'misc/cust_main-import.cgi', '' ],
+  'Customer packages' => [ $fsurl.'misc/cust_pkg-import.html', '' ],
   'Customer comments from CSV file' => [ $fsurl.'misc/cust_main_note-import.html', '' ],
   'One-time charges from CSV file' => [ $fsurl.'misc/cust_main-import_charges.cgi', '' ],
   'Payments from CSV file' => [ $fsurl.'misc/cust_pay-import.cgi', '' ],
@@ -358,11 +369,13 @@ $tools_menu{'Process payment batches'} = [ $fsurl.'search/pay_batch.cgi?magic=_d
   if ( $conf->exists('batch-enable') || $conf->config('batch-enable_payby') )
      && $curuser->access_right('Process batches');
 $tools_menu{'Process invoice batches'} = [ $fsurl.'search/bill_batch.cgi' ] 
-  if ( $conf->exists('invoice_print_pdf') );
+  if $conf->exists('invoice_print_pdf');
 $tools_menu{'Job Queue'} =  [ $fsurl.'search/queue.html', 'View pending job queue' ]
   if $curuser->access_right('Job queue');
 $tools_menu{'Ticketing'} = [ \%tools_ticketing, 'Ticketing tools' ]
   if $conf->config('ticket_system');
+$tools_menu{'Business card scan'} = [ $fsurl.'edit/prospect_main-upload.html' ]
+  if $curuser->access_right('New prospect');
 $tools_menu{'Time Queue'} =  [ $fsurl.'search/report_timeworked.html', 'View pending support time' ]
   if $curuser->access_right('Time queue');
 $tools_menu{'Attachments'} = [ $fsurl.'browse/cust_attachment.html', 'View customer attachments' ]
@@ -398,7 +411,7 @@ if ( $curuser->access_right('Configuration') ) {
 
   #package grouping sub-menu?
   $config_pkg{'Package classes'} =  [ $fsurl.'browse/pkg_class.html', 'Package classes define groups of packages, for taxation, ordering convenience and reporting.' ];
-  $config_pkg{'Package categories'} =  [ $fsurl.'browse/pkg_category.html', 'Package categories define groups of package classes.' ];
+  $config_pkg{'Package categories'} =  [ $fsurl.'browse/pkg_category.html', 'Package categories define groups of package classes, for invoice sections.' ];
   $config_pkg{'Package report classes'} =  [ $fsurl.'browse/part_pkg_report_option.html', 'Package classes define optional groups of packages for reporting only.' ];
   #eo package grouping sub-menu
 
@@ -531,8 +544,8 @@ my $wiki = 'http://www.freeside.biz/mediawiki/index.php';
 my $doc_link = $conf->config('support-key')
                  ? "$wiki/Supported:Documentation"
                  : $curuser->access_right('Configuration')
-                   ? "$wiki/Freeside:1.9:Documentation"
-                   : "$wiki/Freeside:1.9:Documentation:User";
+                   ? "$wiki/Freeside:2.1:Documentation"
+                   : "$wiki/Freeside:2.1:Documentation:User";
 
 eval "use RT;"
   if $conf->config('ticket_system') eq 'RT_Internal';

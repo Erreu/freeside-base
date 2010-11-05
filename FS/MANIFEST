@@ -68,7 +68,12 @@ FS/cust_bill_pkg_detail.pm
 FS/cust_credit.pm
 FS/cust_credit_bill.pm
 FS/cust_main.pm
+FS/cust_main/Billing.pm
+FS/cust_main/Billing_Realtime.pm
 FS/cust_main/Import.pm
+FS/cust_main/Packages.pm
+FS/cust_main/Search.pm
+FS/cust_main/_Marketgear.pm
 FS/cust_main_Mixin.pm
 FS/cust_main_county.pm
 FS/cust_main_invoice.pm
@@ -528,3 +533,7 @@ FS/part_tag.pm
 t/part_tag.t
 FS/svc_CGP_Mixin.pm
 FS/svc_CGPRule_Mixin.pm
+FS/svc_cert.pm
+t/svc_cert.t
+FS/part_pkg_discount.pm
+t/part_pkg_discount.t

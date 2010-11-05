@@ -123,8 +123,8 @@ RT_PATH = /opt/rt3
 FREESIDE_PATH = `pwd`
 PERL_INC_DEV_KLUDGE = /usr/local/share/perl/5.10.1/
 
-VERSION=2.1.1cvs
-TAG=freeside_2_1_1
+VERSION=2.1.2cvs
+TAG=freeside_2_1_2
 
 DEBVERSION = `echo ${VERSION} | perl -pe 's/(\d)([a-z])/\1~\2/'`-1
 
@@ -210,7 +210,7 @@ perl-modules:
 	" blib/lib/FS/part_export/*.pm;\
 	perl -p -i -e "\
 	  s|%%%FREESIDE_CACHE%%%|${FREESIDE_CACHE}|g;\
-	" blib/lib/FS/cust_main/*.pm;\
+	" blib/lib/FS/cust_main/*.pm blib/lib/FS/cust_pkg/*.pm;\
 	perl -p -i -e "\
 	  s|%%%FREESIDE_CONF%%%|${FREESIDE_CONF}|g;\
 	  s|%%%FREESIDE_LOG%%%|${FREESIDE_LOG}|g;\

@@ -4,10 +4,15 @@ config.layout.in
  etc/RT_Config.pm.in
  etc/RT_Config.pm
  etc/RT_SiteConfig.pm
+ etc/schema.Pg
+ etc/schema.mysql-4.1
+
  lib/RT/Config.pm
+lib/RT/CustomField.pm #CheckMandatoryFields
 lib/RT/CustomField_Overlay.pm #customfield date patch
 lib/RT/Interface/Web.pm #customfield date patch
 lib/RT/Interface/Web_Vendor.pm
+ lib/RT/Interface/Web/Handler.pm #freeside comp_root for dashboard emails
  lib/RT/Record.pm #and customfield date patch
 lib/RT/SearchBuilder.pm #need DBIx::SearchBuilder >= 1.36 for Pg 8.1+
 lib/RT/Transaction_Overlay.pm
@@ -18,15 +23,15 @@ lib/RT/Tickets_Overlay.pm #customfield date patch
 lib/RT/URI/freeside.pm
 lib/RT/URI/freeside/Internal.pm
 lib/RT/URI/freeside/XMLRPC.pm
+
+ share/html/autohandler #Footer getting appended where unwelcome
+ share/html/Admin/CustomFields/Modify.html #CheckMandatoryFields
  share/html/Admin/Users/Modify.html
- share/html/Elements/ColumnMap
  share/html/Elements/CollectionList
 share/html/Elements/EditCustomFieldDate #customfield date patch (NEW)
  share/html/Elements/Header
  share/html/Elements/PageLayout
  #html/Elements/QuickCreate
- share/html/Elements/RefreshHomepage
- share/html/Elements/RT__CustomField/ColumnMap
  share/html/Elements/RT__Ticket/ColumnMap
  share/html/Elements/ShowCustomFieldDate #customfield date patch (NEW)
  share/html/Elements/SelectDate
@@ -40,6 +45,7 @@ share/html/Elements/ShowLink_Checklist
 share/html/Ticket/Checklist.html
  share/html/Ticket/Display.html
 share/html/Ticket/Elements/AddCustomers
+ share/html/Ticket/Elements/CheckMandatoryFields
 share/html/Ticket/Elements/EditCustomers
 share/html/Ticket/Elements/ShowCustomers
 share/html/Ticket/Elements/ShowMembers_Checklist
@@ -47,7 +53,6 @@ share/html/Ticket/Elements/ShowMembers_Checklist
  share/html/Ticket/Elements/ShowSummary
  share/html/Ticket/Elements/ShowTransactionAttachments
  share/html/Ticket/Elements/Tabs
- share/html/Ticket/Graph/index.html
 share/html/Ticket/ModifyCustomers.html
  html/NoAuth/css/3.5-default/main.css
  html/NoAuth/css/3.5-default/misc.css
@@ -66,3 +71,6 @@ share/html/Elements/EditCustomers
  share/html/Widgets/TitleBoxEnd
 
 share/html/Callbacks/RTx-Checklist/*
+
+share/html/Callbacks/CheckMandatoryFields/*
+

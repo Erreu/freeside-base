@@ -9,6 +9,7 @@ use vars qw( $DEBUG $me $conf $skip_fuzzyfiles
              $username_ampersand $username_letter $username_letterfirst
              $username_noperiod $username_nounderscore $username_nodash
              $username_uppercase $username_percent $username_colon
+             $username_slash $username_equals
              $password_noampersand $password_noexclamation
              $warning_template $warning_from $warning_subject $warning_mimetype
              $warning_cc
@@ -47,6 +48,7 @@ use FS::part_export;
 use FS::svc_forward;
 use FS::svc_www;
 use FS::cdr;
+use FS::acct_snarf;
 
 $DEBUG = 0;
 $me = '[FS::svc_acct]';
@@ -73,6 +75,8 @@ FS::UID->install_callback( sub {
   $username_ampersand = $conf->exists('username-ampersand');
   $username_percent = $conf->exists('username-percent');
   $username_colon = $conf->exists('username-colon');
+  $username_slash = $conf->exists('username-slash');
+  $username_equals = $conf->exists('username-equals');
   $password_noampersand = $conf->exists('password-noexclamation');
   $password_noexclamation = $conf->exists('password-noexclamation');
   $dirhash = $conf->config('dirhash') || 0;
@@ -100,7 +104,7 @@ FS::UID->install_callback( sub {
 );
 
 @saltset = ( 'a'..'z' , 'A'..'Z' , '0'..'9' , '.' , '/' );
-@pw_set = ( 'a'..'z', 'A'..'Z', '0'..'9', '(', ')', '#', '!', '.', ',' );
+@pw_set = ( 'a'..'z', 'A'..'Z', '0'..'9', '(', ')', '#', '.', ',' );
 
 sub _cache {
   my $self = shift;
@@ -440,7 +444,28 @@ sub table_info {
         'cgp_addmailtrailer' => { label => 'Add trailer to sent mail',
                                   type  => 'checkbox',
                                 },
-        #XXX archive messages, mailing lists
+        'cgp_archiveafter'   => {
+          label       => 'Archive messages after',
+          type        => 'select',
+          select_hash => [ 
+                           -2 => 'default(730 days)',
+                           0 => 'Never',
+                           86400 => '24 hours',
+                           172800 => '2 days',
+                           259200 => '3 days',
+                           432000 => '5 days',
+                           604800 => '7 days',
+                           1209600 => '2 weeks',
+                           2592000 => '30 days',
+                           7776000 => '90 days',
+                           15552000 => '180 days',
+                           31536000 => '365 days',
+                           63072000 => '730 days',
+                         ],
+          disable_inventory => 1,
+          disable_select    => 1,
+        },
+        #XXX mailing lists
 
         #preferences
         'cgp_deletemode' => { 
@@ -494,7 +519,6 @@ sub table_info {
         },
 
         #mail
-        #XXX vacation message, redirect all mail, mail rules
         #XXX RPOP settings
 
     },
@@ -1190,6 +1214,7 @@ sub check {
               || $self->ut_enum('cgp_rpopallowed', [ '', 'Y' ])
               || $self->ut_enum('cgp_mailtoall', [ '', 'Y' ])
               || $self->ut_enum('cgp_addmailtrailer', [ '', 'Y' ])
+              || $self->ut_snumbern('cgp_archiveafter')
               #preferences
               || $self->ut_alphasn('cgp_deletemode')
               || $self->ut_enum('cgp_emptytrash', $self->cgp_emptytrash_values)
@@ -1198,7 +1223,6 @@ sub check {
               || $self->ut_textn('cgp_skinname')
               || $self->ut_textn('cgp_prontoskinname')
               || $self->ut_alphan('cgp_sendmdnmode')
-              #XXX vacation message, redirect all mail, mail rules
               #XXX RPOP settings
   ;
   return $error if $error;
@@ -1219,16 +1243,14 @@ sub check {
   }
 
   my $ulen = $usernamemax || $self->dbdef_table->column('username')->length;
-  if ( $username_uppercase ) {
-    $recref->{username} =~ /^([a-z0-9_\-\.\&\%\:]{$usernamemin,$ulen})$/i
-      or return gettext('illegal_username'). " ($usernamemin-$ulen): ". $recref->{username};
-    $recref->{username} = $1;
-  } else {
-    $recref->{username} =~ /^([a-z0-9_\-\.\&\%\:]{$usernamemin,$ulen})$/
-      or return gettext('illegal_username'). " ($usernamemin-$ulen): ". $recref->{username};
-    $recref->{username} = $1;
-  }
 
+  $recref->{username} =~ /^([a-z0-9_\-\.\&\%\:\/\=]{$usernamemin,$ulen})$/i
+    or return gettext('illegal_username'). " ($usernamemin-$ulen): ". $recref->{username};
+  $recref->{username} = $1;
+
+  unless ( $username_uppercase ) {
+    $recref->{username} =~ /[A-Z]/ and return gettext('illegal_username');
+  }
   if ( $username_letterfirst ) {
     $recref->{username} =~ /^[a-z]/ or return gettext('illegal_username');
   } elsif ( $username_letter ) {
@@ -1251,6 +1273,12 @@ sub check {
   }
   unless ( $username_colon ) {
     $recref->{username} =~ /\:/ and return gettext('illegal_username');
+  }
+  unless ( $username_slash ) {
+    $recref->{username} =~ /\// and return gettext('illegal_username');
+  }
+  unless ( $username_equals ) {
+    $recref->{username} =~ /\=/ and return gettext('illegal_username');
   }
 
   $recref->{popnum} =~ /^(\d*)$/ or return "Illegal popnum: ".$recref->{popnum};
@@ -1331,7 +1359,7 @@ sub check {
     }
   }
   $self->getfield('finger') =~
-    /^([\w \t\!\@\#\$\%\&\(\)\-\+\;\'\"\,\.\?\/\*\<\>]*)$/
+    /^([µ_0123456789aAáÁàÀâÂåÅäÄãÃªæÆbBcCçÇdDğĞeEéÉèÈêÊëËfFgGhHiIíÍìÌîÎïÏjJkKlLmMnNñÑoOóÓòÒôÔöÖõÕøØºpPqQrRsSßtTuUúÚùÙûÛüÜvVwWxXyYıİÿzZşŞ \t\!\@\#\$\%\&\(\)\-\+\;\'\"\,\.\?\/\*\<\>]*)$/
       or return "Illegal finger: ". $self->getfield('finger');
   $self->setfield('finger', $1);
 
@@ -1909,17 +1937,27 @@ sub email {
 =item acct_snarf
 
 Returns an array of FS::acct_snarf records associated with the account.
-If the acct_snarf table does not exist or there are no associated records,
-an empty list is returned
 
 =cut
 
 sub acct_snarf {
   my $self = shift;
-  return () unless dbdef->table('acct_snarf');
-  eval "use FS::acct_snarf;";
-  die $@ if $@;
-  qsearch('acct_snarf', { 'svcnum' => $self->svcnum } );
+  qsearch({
+    'table'    => 'acct_snarf',
+    'hashref'  => { 'svcnum' => $self->svcnum },
+    #'order_by' => 'ORDER BY priority ASC',
+  });
+}
+
+=item cgp_rpop_hashref
+
+Returns an arrayref of RPOP data suitable for Communigate Pro API commands.
+
+=cut
+
+sub cgp_rpop_hashref {
+  my $self = shift;
+  { map { $_->snarfname => $_->cgp_hashref } $self->acct_snarf };
 }
 
 =item decrement_upbytes OCTETS

@@ -240,7 +240,7 @@
 %        qq!<INPUT TYPE="hidden" NAME="BILL_exp_year" VALUE="2037">!.
 %
 %        qq!<TR><TD ALIGN="right" WIDTH="200">Attention </TD>!.
-%          qq!<TD WIDTH="408"><INPUT TYPE="text" NAME="BILL_payname" VALUE="!. ( $payby eq 'BILL' ? $cust_main->payname : '' ). qq!"></TD></TR>!.
+%          qq!<TD WIDTH="408"><INPUT TYPE="text" NAME="BILL_payname" VALUE="!. encode_entities( $payby eq 'BILL' ? $cust_main->payname : '' ). qq!"></TD></TR>!.
 %
 %        '<TR><TD>&nbsp;</TD></TR>'.
 %        '<TR><TD>&nbsp;</TD></TR>'.
@@ -415,6 +415,18 @@
                      'curr_value' => $cust_main->invoice_terms,
                   )
         %>
+      </TD>
+    </TR>
+    <TR>
+      <TD ALIGN="right" WIDTH="200">Credit limit </TD>
+      <TD WIDTH="408">
+        <SCRIPT TYPE="text/javascript">
+function toggle(obj) {
+  obj.form.credit_limit.disabled = obj.checked;
+}
+        </SCRIPT>
+        <INPUT TYPE="text" NAME="credit_limit" VALUE=<% sprintf('"%.2f"', $cust_main->credit_limit) %><% length($cust_main->credit_limit) ? '' : ' DISABLED' %>>
+        <INPUT TYPE="checkbox" NAME="no_credit_limit" VALUE=1 onclick="toggle(this)"<% length($cust_main->credit_limit) ? '' : ' CHECKED'%>> Unlimited
       </TD>
     </TR>
 

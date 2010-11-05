@@ -204,7 +204,9 @@
 %  if ( $cgi->param('search_cust') ) {
 %    $sortby = \*company_sort;
 %    $orderby = "ORDER BY LOWER(company || ' ' || last || ' ' || first )";
-%    push @cust_main, smart_search( 'search' => $cgi->param('search_cust') );
+%    push @cust_main, smart_search( 'search' => $cgi->param('search_cust'),
+%                                   'no_fuzzy_on_exact' => 1, #pref?
+%                                 );
 %  }
 %
 %  @cust_main = grep { $_->ncancelled_pkgs || ! $_->all_pkgs } @cust_main
@@ -270,7 +272,7 @@
 %      $cgi->param('offset', 0);
 %      print qq!( <a href="!. $cgi->self_url. qq!">hide!;
 %    }
-%    print ' cancelled customers</a> )';
+%    print ' canceled customers</a> )';
 %  }
 %
 %  if ( $cgi->param('referral_custnum') ) {
@@ -634,7 +636,7 @@
 %  }
 %
 %  if ( $last_type{'Fuzzy'} || $last_type{'All'} ) {
-%    push @cust_main, FS::cust_main->fuzzy_search( { 'last' => $last } );
+%    push @cust_main, FS::cust_main::Search->fuzzy_search( { 'last' => $last } );
 %  }
 %
 %  #if ($last_type{'Sound-alike'}) {
@@ -681,7 +683,7 @@
 %  }
 %
 %  if ( $company_type{'Fuzzy'} || $company_type{'All'} ) {
-%    push @cust_main, FS::cust_main->fuzzy_search( { 'company' => $company } );
+%    push @cust_main, FS::cust_main::Search->fuzzy_search( { 'company' => $company } );
 %  }
 %
 %  if ($company_type{'Sound-alike'}) {

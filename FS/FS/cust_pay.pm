@@ -12,6 +12,7 @@ use Text::Template;
 use FS::UID qw( getotaker );
 use FS::Misc qw( send_email );
 use FS::Record qw( dbh qsearch qsearchs );
+use FS::CurrentUser;
 use FS::payby;
 use FS::cust_main_Mixin;
 use FS::payinfo_transaction_Mixin;
@@ -140,6 +141,10 @@ For backwards-compatibility and convenience, if the additional field invnum
 is defined, an FS::cust_bill_pay record for the full amount of the payment
 will be created.  In this case, custnum is optional.
 
+If the additional field discount_term is defined then a prepayment discount
+is taken for that length of time.  It is an error for the customer to owe
+after this payment is made.
+
 A hash of optional arguments may be passed.  Currently "manual" is supported.
 If true, a payment receipt is sent instead of a statement when
 'payment_receipt_email' configuration option is set.
@@ -182,6 +187,51 @@ sub insert {
     return "error inserting cust_pay: $error";
   }
 
+  if ( my $credit_type = $conf->config('prepayment_discounts-credit_type') ) {
+    if ( my $months = $self->discount_term ) {
+      #hmmm... error handling
+      my ($credit, $savings, $total) = 
+        $cust_main->discount_term_values($months);
+      my $cust_credit = new FS::cust_credit {
+        'custnum' => $self->custnum,
+        'amount'  => $credit,
+        'reason'  => 'customer chose to prepay for discount',
+      };
+      $error = $cust_credit->insert('reason_type' => $credit_type);
+      if ( $error ) {
+        $dbh->rollback if $oldAutoCommit;
+        return "error inserting cust_pay: $error";
+      }
+      my @pkgs = $cust_main->_discount_pkgs_and_bill;
+      my $cust_bill = shift(@pkgs);
+      @pkgs = &FS::cust_main::Billing::_discountable_pkgs_at_term($months, @pkgs);
+      $_->bill($_->last_bill) foreach @pkgs;
+      $error = $cust_main->bill( 
+        'recurring_only' => 1,
+        'time'           => $cust_bill->invoice_date,
+        'no_usage_reset' => 1,
+        'pkg_list'       => \@pkgs,
+        'freq_override'   => $months,
+      );
+      if ( $error ) {
+        $dbh->rollback if $oldAutoCommit;
+        return "error inserting cust_pay: $error";
+      }
+      $error = $cust_main->apply_payments_and_credits;
+      if ( $error ) {
+        $dbh->rollback if $oldAutoCommit;
+        return "error inserting cust_pay: $error";
+      }
+      my $new_balance = $cust_main->balance;
+      if ($new_balance > 0) {
+        $dbh->rollback if $oldAutoCommit;
+        return "balance after prepay discount attempt: $new_balance";
+      }
+      
+    }
+
+  }
+
   if ( $self->invnum ) {
     my $cust_bill_pay = new FS::cust_bill_pay {
       'invnum' => $self->invnum,
@@ -213,6 +263,36 @@ sub insert {
       if @errors;
   }
   #eslaf
+
+  #bill setup fees for voip_cdr bill_every_call packages
+  #some false laziness w/search in freeside-cdrd
+  my $addl_from =
+    'LEFT JOIN part_pkg USING ( pkgpart ) '.
+    "LEFT JOIN part_pkg_option
+       ON ( cust_pkg.pkgpart = part_pkg_option.pkgpart
+            AND part_pkg_option.optionname = 'bill_every_call' )";
+
+  my $extra_sql = " AND plan = 'voip_cdr' AND optionvalue = '1' ".
+                  " AND ( cust_pkg.setup IS NULL OR cust_pkg.setup = 0 ) ";
+
+  my @cust_pkg = qsearch({
+    'table'     => 'cust_pkg',
+    'addl_from' => $addl_from,
+    'hashref'   => { 'custnum' => $self->custnum,
+                     'susp'    => '',
+                     'cancel'  => '',
+                   },
+    'extra_sql' => $extra_sql,
+  });
+
+  if ( @cust_pkg ) {
+    warn "voip_cdr bill_every_call packages found; billing customer\n";
+    my $bill_error = $self->cust_main->bill_and_collect( 'fatal' => 'return' );
+    if ( $bill_error ) {
+      warn "WARNING: Error billing customer: $bill_error\n";
+    }
+  }
+  #end of billing setup fees for voip_cdr bill_every_call packages
 
   $dbh->commit or die $dbh->errstr if $oldAutoCommit;
 
@@ -351,14 +431,17 @@ sub delete {
 
 }
 
-=item replace OLD_RECORD
+=item replace [ OLD_RECORD ]
 
 You can, but probably shouldn't modify payments...
+
+Replaces the OLD_RECORD with this one in the database, or, if OLD_RECORD is not
+supplied, replaces this record.  If there is an error, returns the error,
+otherwise returns false.
 
 =cut
 
 sub replace {
-  #return "Can't modify payment!"
   my $self = shift;
   return "Can't modify closed payment" if $self->closed =~ /^Y/i;
   $self->SUPER::replace(@_);
@@ -374,7 +457,7 @@ returns the error, otherwise returns false.  Called by the insert method.
 sub check {
   my $self = shift;
 
-  $self->otaker(getotaker) unless ($self->otaker);
+  $self->usernum($FS::CurrentUser::CurrentUser->usernum) unless $self->usernum;
 
   my $error =
     $self->ut_numbern('paynum')
@@ -387,6 +470,7 @@ sub check {
     || $self->ut_enum('closed', [ '', 'Y' ])
     || $self->ut_foreign_keyn('pkgnum', 'cust_pkg', 'pkgnum')
     || $self->payinfo_check()
+    || $self->ut_numbern('discount_term')
   ;
   return $error if $error;
 
@@ -397,6 +481,9 @@ sub check {
            || qsearchs( 'cust_main', { 'custnum' => $self->custnum } );
 
   $self->_date(time) unless $self->_date;
+
+  return "invalid discount_term"
+   if ($self->discount_term && $self->discount_term < 2);
 
 #i guess not now, with cust_pay_pending, if we actually make it here, we _do_ want to record it
 #  # UNIQUE index should catch this too, without race conditions, but this
@@ -446,24 +533,31 @@ sub send_receipt {
 
   my $conf = new FS::Conf;
 
+  return '' unless $conf->exists('payment_receipt');
+
   my @invoicing_list = $cust_main->invoicing_list_emailonly;
   return '' unless @invoicing_list;
 
   $cust_bill ||= ($cust_main->cust_bill)[-1]; #rather inefficient though?
 
+  my $error = '';
+
   if (    ( exists($opt->{'manual'}) && $opt->{'manual'} )
-       || ! $conf->exists('invoice_html_statement') # XXX msg_template
+       || ! $conf->exists('invoice_html_statement')
        || ! $cust_bill
-     ) {
+     )
+  {
 
-    my $error = '';
-
-    if( $conf->exists('payment_receipt_msgnum') ) {
+    if ( $conf->exists('payment_receipt_msgnum')
+         && $conf->config('payment_receipt_msgnum')
+       )
+    {
       my $msg_template = 
           FS::msg_template->by_key($conf->config('payment_receipt_msgnum'));
       $error = $msg_template->send('cust_main'=> $cust_main, 'object'=> $self);
-    }
-    elsif ( $conf->exists('payment_receipt_email') ) {
+
+    } elsif ( $conf->exists('payment_receipt_email') ) {
+
       my $receipt_template = new Text::Template (
         TYPE   => 'ARRAY',
         SOURCE => [ map "$_\n", $conf->config('payment_receipt_email') ],
@@ -506,22 +600,27 @@ sub send_receipt {
         'body'    => [ $receipt_template->fill_in( HASH => \%fill_in ) ],
       );
 
-    } 
-    else { # no payment_receipt_msgnum or payment_receipt_email
+    } else {
 
-      my $queue = new FS::queue {
-         'paynum' => $self->paynum,
-         'job'    => 'FS::cust_bill::queueable_email',
-      };
+      warn "payment_receipt is on, but no payment_receipt_msgnum or invoice_html_statement is configured\n";
 
-      $queue->insert(
-        'invnum'   => $cust_bill->invnum,
-        'template' => 'statement',
-      );
     }
+
+  } else { #not manual
+
+    my $queue = new FS::queue {
+       'paynum' => $self->paynum,
+       'job'    => 'FS::cust_bill::queueable_email',
+    };
+
+    $error = $queue->insert(
+      'invnum'   => $cust_bill->invnum,
+      'template' => 'statement',
+    );
+
+  }
   
     warn "send_receipt: $error\n" if $error;
-  } #$opt{manual} || no invoice_html_statement || customer has no invoices
 }
 
 =item cust_bill_pay
@@ -734,9 +833,10 @@ sub _upgrade_data {  #class method
     my $h_cust_pay = $cust_pay->h_search('insert');
     if ( $h_cust_pay ) {
       next if $cust_pay->otaker eq $h_cust_pay->history_user;
-      $cust_pay->otaker($h_cust_pay->history_user);
+      #$cust_pay->otaker($h_cust_pay->history_user);
+      $cust_pay->set('otaker', $h_cust_pay->history_user);
     } else {
-      $cust_pay->otaker('legacy');
+      $cust_pay->set('otaker', 'legacy');
     }
 
     delete $FS::payby::hash{'COMP'}->{cust_pay}; #quelle kludge
@@ -795,7 +895,9 @@ sub _upgrade_data {  #class method
   # otaker->usernum upgrade
   ###
 
+  delete $FS::payby::hash{'COMP'}->{cust_pay}; #quelle kludge
   $class->_upgrade_otaker(%opts);
+  $FS::payby::hash{'COMP'}->{cust_pay} = ''; #restore it
 
 }
 

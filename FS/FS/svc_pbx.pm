@@ -253,22 +253,27 @@ sub check {
   $self->SUPER::check;
 }
 
-#XXX this is a way-too simplistic implementation
-# at the very least, title should be unique across exports that need that or
-# controlled by a conf setting or something
 sub _check_duplicate {
   my $self = shift;
 
   my $conf = new FS::Conf;
-  return '' if $conf->config('global_unique-pbx_title') eq 'disabled';
-
+  
   $self->lock_table;
 
-  if ( qsearchs( 'svc_pbx', { 'title' => $self->title } ) ) {
-    return "Name in use";
-  } else {
-    return '';
+  foreach my $field ('title', 'id') {
+    my $global_unique = $conf->config("global_unique-pbx_$field");
+    # can be 'disabled', 'enabled', or empty.
+    # if empty, check per exports; if not empty or disabled, check 
+    # globally.
+    next if $global_unique eq 'disabled';
+    my @dup = $self->find_duplicates(
+      ($global_unique ? 'global' : 'export') , $field
+    );
+    next if !@dup;
+    return "duplicate $field '".$self->getfield($field).
+           "': conflicts with svcnum ".$dup[0]->svcnum;
   }
+  return '';
 }
 
 =item get_cdrs
@@ -292,6 +297,9 @@ with the chosen prefix.
 
 =item disable_src => 1: No-op for svc_pbx CDR processing.
 
+=item by_svcnum => 1: Select CDRs where the svcnum field matches, instead of 
+title/charged_party.  Normally this field is set after processing.
+
 =back
 
 =cut
@@ -307,18 +315,24 @@ sub get_cdrs {
   
   my $for_update = $options{'for_update'} ? 'FOR UPDATE' : '';
 
-  my $title = $self->title;
-
-  my $prefix = $options{'default_prefix'};
-
-  my @orwhere =  map " $_ = '$title'        ", @fields;
-  push @orwhere, map " $_ = '$prefix$title' ", @fields
-    if length($prefix);
-  if ( $prefix =~ /^\+(\d+)$/ ) {
-    push @orwhere, map " $_ = '$1$title' ", @fields
+  if ( $options{'by_svcnum'} ) {
+    $hash{'svcnum'} = $self->svcnum;
   }
+  else {
+    #matching by title
+    my $title = $self->title;
 
-  push @where, ' ( '. join(' OR ', @orwhere ). ' ) ';
+    my $prefix = $options{'default_prefix'};
+
+    my @orwhere =  map " $_ = '$title'        ", @fields;
+    push @orwhere, map " $_ = '$prefix$title' ", @fields
+      if length($prefix);
+    if ( $prefix =~ /^\+(\d+)$/ ) {
+      push @orwhere, map " $_ = '$1$title' ", @fields
+    }
+
+    push @where, ' ( '. join(' OR ', @orwhere ). ' ) ';
+  }
 
   if ( $options{'begin'} ) {
     push @where, 'startdate >= '. $options{'begin'};
@@ -327,7 +341,8 @@ sub get_cdrs {
     push @where, 'startdate < '.  $options{'end'};
   }
 
-  my $extra_sql = ( keys(%hash) ? ' AND ' : ' WHERE ' ). join(' AND ', @where );
+  my $extra_sql = ( keys(%hash) ? ' AND ' : ' WHERE ' ). join(' AND ', @where )
+    if @where;
 
   my @cdrs =
     qsearch( {

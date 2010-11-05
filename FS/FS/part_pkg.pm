@@ -16,9 +16,11 @@ use FS::type_pkgs;
 use FS::part_pkg_option;
 use FS::pkg_class;
 use FS::agent;
+use FS::part_pkg_taxrate;
 use FS::part_pkg_taxoverride;
 use FS::part_pkg_taxproduct;
 use FS::part_pkg_link;
+use FS::part_pkg_discount;
 
 @ISA = qw( FS::m2m_Common FS::option_Common );
 $DEBUG = 0;
@@ -809,32 +811,34 @@ sub freq_pretty {
   }
 }
 
-=item add_freq TIMESTAMP
+=item add_freq TIMESTAMP [ FREQ ]
 
-Adds the frequency of this package to the provided timestamp and returns
-the resulting timestamp, or -1 if the frequency of this package could not be
-parsed (shouldn't happen).
+Adds a billing period of some frequency to the provided timestamp and 
+returns the resulting timestamp, or -1 if the frequency could not be 
+parsed (shouldn't happen).  By default, the frequency of this package 
+will be used; to override this, pass a different frequency as a second 
+argument.
 
 =cut
 
 sub add_freq {
-  my( $self, $date ) = @_;
-  my $freq = $self->freq;
+  my( $self, $date, $freq ) = @_;
+  $freq = $self->freq unless $freq;
 
   #change this bit to use Date::Manip? CAREFUL with timezones (see
   # mailing list archive)
   my ($sec,$min,$hour,$mday,$mon,$year) = (localtime($date) )[0,1,2,3,4,5];
 
-  if ( $self->freq =~ /^\d+$/ ) {
-    $mon += $self->freq;
+  if ( $freq =~ /^\d+$/ ) {
+    $mon += $freq;
     until ( $mon < 12 ) { $mon -= 12; $year++; }
-  } elsif ( $self->freq =~ /^(\d+)w$/ ) {
+  } elsif ( $freq =~ /^(\d+)w$/ ) {
     my $weeks = $1;
     $mday += $weeks * 7;
-  } elsif ( $self->freq =~ /^(\d+)d$/ ) {
+  } elsif ( $freq =~ /^(\d+)d$/ ) {
     my $days = $1;
     $mday += $days;
-  } elsif ( $self->freq =~ /^(\d+)h$/ ) {
+  } elsif ( $freq =~ /^(\d+)h$/ ) {
     my $hours = $1;
     $hour += $hours;
   } else {
@@ -937,6 +941,8 @@ sub _part_pkg_link {
   qsearch({ table    => 'part_pkg_link',
             hashref  => { 'src_pkgpart' => $self->pkgpart,
                           'link_type'   => $type,
+                          #protection against infinite recursive links
+                          'dst_pkgpart' => { op=>'!=', value=> $self->pkgpart },
                         },
             order_by => "ORDER BY hidden",
          });
@@ -1121,6 +1127,18 @@ sub part_pkg_taxrate {
              'extra_sql' => $extra_sql,
              'order_by'  => $order_by,
          } );
+}
+
+=item part_pkg_discount
+
+Returns the package to discount m2m records (see L<FS::part_pkg_discount>)
+for this package.
+
+=cut
+
+sub part_pkg_discount {
+  my $self = shift;
+  qsearch('part_pkg_discount', { 'pkgpart' => $self->pkgpart });
 }
 
 =item _rebless

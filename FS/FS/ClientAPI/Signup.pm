@@ -26,6 +26,15 @@ use FS::payby;
 $DEBUG = 0;
 $me = '[FS::ClientAPI::Signup]';
 
+sub clear_cache {
+  warn "$me clear_cache called\n" if $DEBUG;
+  my $cache = new FS::ClientAPI_SessionCache( {
+      'namespace' => 'FS::ClientAPI::Signup',
+  } );
+  $cache->clear();
+  return {};
+}
+
 sub signup_info {
   my $packet = shift;
 
@@ -84,13 +93,37 @@ sub signup_info {
 
     my @agent_fields = qw( agentnum agent );
 
+    my @bools = qw( emailinvoiceonly security_phrase );
+
+    my @signup_bools = qw( no_company recommend_daytime recommend_email );
+
+    my @signup_server_scalars = qw( default_pkgpart default_svcpart );
+
+    my @selfservice_textareas = qw( head body_header body_footer );
+
+    my @selfservice_scalars = qw(
+      body_bgcolor box_bgcolor
+      text_color link_color vlink_color hlink_color alink_color
+      font title_color title_align title_size menu_bgcolor menu_fontsize
+    );
+
+    #XXX my @selfservice_bools = qw(
+    #  menu_skipblanks menu_skipheadings menu_nounderline
+    #);
+
+    #my $selfservice_binaries = qw(
+    #  title_left_image title_right_image
+    #  menu_top_image menu_body_image menu_bottom_image
+    #);
+
     $signup_info_cache = {
+
       'cust_main_county' => [ map $_->hashref,
                                   qsearch('cust_main_county', {} )
                             ],
 
       'agent' => [ map { my $agent = $_;
-                         map { $_ => $agent->get($_) } @agent_fields;
+                         +{ map { $_ => $agent->get($_) } @agent_fields }
                        }
                        qsearch('agent', { 'disabled' => '' } )
                  ],
@@ -111,48 +144,49 @@ sub signup_info {
 
       'payby' => [ $conf->config('signup_server-payby') ],
 
+      'payby_longname' => [ map { FS::payby->longname($_) } 
+                            $conf->config('signup_server-payby') ],
+
       'card_types' => card_types(),
 
-      'paytypes' => [ @FS::cust_main::paytypes ],
+      ( map { $_ => $conf->exists("signup-$_") } @signup_bools ),
 
-      'cvv_enabled' => 1,
+      ( map { $_ => scalar($conf->config("signup_server-$_")) }
+            @signup_server_scalars
+      ),
 
-      'stateid_enabled' => $conf->exists('show_stateid'),
+      ( map { $_ => join("\n", $conf->config("selfservice-$_")) }
+            @selfservice_textareas
+      ),
+      ( map { $_ => scalar($conf->config("selfservice-$_")) }
+            @selfservice_scalars
+      ),
 
-      'paystate_enabled' => $conf->exists('show_bankstate'),
+      #( map { $_ => scalar($conf->config_binary("selfservice-$_")) }
+      #      @selfservice_binaries
+      #),
 
-      'ship_enabled' => 1,
-
-      'msgcat' => $msgcat,
-
-      'label' => $label,
-
-      'statedefault' => scalar($conf->config('statedefault')) || 'CA',
-
-      'countrydefault' => scalar($conf->config('countrydefault')) || 'US',
-
-      'refnum' => scalar($conf->config('signup_server-default_refnum')),
-
-      'default_pkgpart' => scalar($conf->config('signup_server-default_pkgpart')),
-
-      'signup_service' => $svc_x,
-      'default_svcpart' => scalar($conf->config('signup_server-default_svcpart')),
-
-      'head'         => join("\n", $conf->config('selfservice-head') ),
-      'body_header'  => join("\n", $conf->config('selfservice-body_header') ),
-      'body_footer'  => join("\n", $conf->config('selfservice-body_footer') ),
-      'body_bgcolor' => scalar( $conf->config('selfservice-body_bgcolor') ),
-      'box_bgcolor'  => scalar( $conf->config('selfservice-box_bgcolor')  ),
-
-      'company_name'   => scalar($conf->config('company_name')),
-
+      'agentnum2part_pkg'  => $agentnum2part_pkg,
+      'svc_acct_pop'       => [ map $_->hashref, qsearch('svc_acct_pop',{} ) ],
+      'nomadix'            => $conf->exists('signup_server-nomadix'),
+      'payby'              => [ $conf->config('signup_server-payby') ],
+      'card_types'         => card_types(),
+      'paytypes'           => [ @FS::cust_main::paytypes ],
+      'cvv_enabled'        => 1,
+      'stateid_enabled'    => $conf->exists('show_stateid'),
+      'paystate_enabled'   => $conf->exists('show_bankstate'),
+      'ship_enabled'       => 1,
+      'msgcat'             => $msgcat,
+      'label'              => $label,
+      'statedefault'       => scalar($conf->config('statedefault')) || 'CA',
+      'countrydefault'     => scalar($conf->config('countrydefault')) || 'US',
+      'refnum'             => scalar($conf->config('signup_server-default_refnum')),
+      'signup_service'     => $svc_x,
+      'company_name'       => scalar($conf->config('company_name')),
       #per-agent?
       'agent_ship_address' => scalar($conf->exists('agent-ship_address')),
-
-      'no_company'        => scalar($conf->exists('signup-no_company')),
-      'require_phone'     => scalar($conf->exists('cust_main-require_phone')),
-      'recommend_daytime' => scalar($conf->exists('signup-recommend_daytime')),
-      'recommend_email'   => scalar($conf->exists('signup-recommend_email')),
+      'require_phone'      => scalar($conf->exists('cust_main-require_phone')),
+      'logo'               => scalar($conf->config_binary('logo.png')),
 
     };
 
@@ -356,7 +390,7 @@ sub signup_info {
         #( map { $_ => scalar( $conf->config($_, $agentnum) ) }
         #  qw( company_name ) ),
         ( map { $_ => scalar( $conf->config("selfservice-$_", $agentnum ) ) }
-          qw( body_bgcolor box_bgcolor) ),
+          qw( body_bgcolor box_bgcolor menu_bgcolor ) ),
         ( map { $_ => join("\n", $conf->config("selfservice-$_", $agentnum ) ) }
           qw( head body_header body_footer ) ),
       };
@@ -383,9 +417,14 @@ sub signup_info {
     my $agent_signup_info = { %$signup_info };
     delete $agent_signup_info->{agentnum2part_pkg};
     $agent_signup_info->{'agent'} = $session->{'agent'};
-    $agent_signup_info;
-  } else {
-    $signup_info;
+    return $agent_signup_info;
+  } 
+  elsif ( exists $packet->{'keys'} ) {
+    my @keys = @{ $packet->{'keys'} };
+    return { map { $_ => $signup_info->{$_} } @keys };
+  }
+  else {
+    return $signup_info;
   }
 
 }
@@ -433,6 +472,9 @@ sub new_customer {
     return { 'error' => gettext('no_access_number_selected') }
       unless $packet->{'popnum'} || !scalar(qsearch('svc_acct_pop',{} ));
 
+  }
+  elsif ( $svc_x eq 'svc_pbx' ) {
+    #possibly some validation will be needed
   }
 
   my $agentnum;
@@ -567,24 +609,27 @@ sub new_customer {
       push @acct_snarf, $acct_snarf;
     }
     $svc->child_objects( \@acct_snarf );
-
     push @svc, $svc;
 
   } elsif ( $svc_x eq 'svc_phone' ) {
 
-    my $svc = new FS::svc_phone ( {
+    push @svc, new FS::svc_phone ( {
       'svcpart' => $svcpart,
        map { $_ => $packet->{$_} }
          qw( countrycode phonenum sip_password pin ),
     } );
 
-    push @svc, $svc;
+  } elsif ( $svc_x eq 'svc_pbx' ) {
 
+    push @svc, new FS::svc_pbx ( {
+        'svcpart' => $svcpart,
+        map { $_ => $packet->{$_} } 
+          qw( id title ),
+        } );
+  
   } else {
     die "unknown signup service $svc_x";
   }
-  my $y = $svc[0]->setdefault; # arguably should be in new method
-  return { 'error' => $y } if $y && !ref($y);
 
   if ($packet->{'mac_addr'} && $conf->exists('signup_server-mac_addr_svcparts'))
   {
@@ -603,15 +648,16 @@ sub new_customer {
       '_password' => '', #blank as requested (set passwordmin to 0)
     };
 
-    my $y = $svc->setdefault; # arguably should be in new method
-    return { 'error' => $y } if $y && !ref($y);
-
     push @svc, $svc;
 
   }
 
-  #$error = $svc->check;
-  #return { 'error' => $error } if $error;
+  foreach my $svc ( @svc ) {
+    my $y = $svc->setdefault; # arguably should be in new method
+    return { 'error' => $y } if $y && !ref($y);
+    #$error = $svc->check;
+    #return { 'error' => $error } if $error;
+  }
 
   #setup a job dependancy to delay provisioning
   my $placeholder = new FS::queue ( {
@@ -638,14 +684,14 @@ sub new_customer {
 
   if ( $conf->exists('signup_server-realtime') ) {
 
-    #warn "[fs_signup_server] Billing customer...\n" if $Debug;
+    #warn "$me Billing customer...\n" if $Debug;
 
     my $bill_error = $cust_main->bill;
-    #warn "[fs_signup_server] error billing new customer: $bill_error"
+    #warn "$me error billing new customer: $bill_error"
     #  if $bill_error;
 
     $bill_error = $cust_main->apply_payments_and_credits;
-    #warn "[fs_signup_server] error applying payments and credits for".
+    #warn "$me error applying payments and credits for".
     #     " new customer: $bill_error"
     #  if $bill_error;
 
@@ -653,7 +699,7 @@ sub new_customer {
        method        => FS::payby->payby2bop( $packet->{payby} ),
        depend_jobnum => $placeholder->jobnum,
     );
-    #warn "[fs_signup_server] error collecting from new customer: $bill_error"
+    #warn "$me error collecting from new customer: $bill_error"
     #  if $bill_error;
 
     if ($bill_error && ref($bill_error) eq 'HASH') {
@@ -664,6 +710,11 @@ sub new_customer {
                amount => $cust_main->balance,
              };
     }
+
+    $bill_error = $cust_main->apply_payments_and_credits;
+    #warn "$me error applying payments and credits for".
+    #     " new customer: $bill_error"
+    #  if $bill_error;
 
     if ( $cust_main->balance > 0 ) {
 
@@ -700,14 +751,25 @@ sub new_customer {
 
   my %return = ( 'error'          => '',
                  'signup_service' => $svc_x,
+                 'custnum'        => $cust_main->custnum,
                );
 
-  if ( $svc_x eq 'svc_acct' ) {
-    $return{$_} = $svc[0]->$_() for qw( username _password );
-  } elsif ( $svc_x eq 'svc_phone' ) {
-    $return{$_} = $svc[0]->$_() for qw( countrycode phonenum sip_password pin );
-  } else {
-    die "unknown signup service $svc_x";
+  if ( $svc[0] ) {
+
+    $return{'svcnum'} = $svc[0]->svcnum;
+
+    if ( $svc_x eq 'svc_acct' ) {
+      $return{$_} = $svc[0]->$_() for qw( username _password );
+    } elsif ( $svc_x eq 'svc_phone' ) {
+      $return{$_} = $svc[0]->$_() for qw(countrycode phonenum sip_password pin);
+    } elsif ( $svc_x eq 'svc_pbx' ) {
+      #$return{$_} = $svc[0]->$_() for qw( ) #nothing yet
+     } else {
+      return {'error' => "configuration error: unknown signup service $svc_x"};
+      #die "unknown signup service $svc_x";
+      # return an error that's visible to someone somewhere
+    }
+
   }
 
   return \%return;

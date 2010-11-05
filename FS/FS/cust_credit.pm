@@ -2,11 +2,14 @@ package FS::cust_credit;
 
 use strict;
 use base qw( FS::otaker_Mixin FS::cust_main_Mixin FS::Record );
-use vars qw( $conf $unsuspendauto $me $DEBUG $otaker_upgrade_kludge );
+use vars qw( $conf $unsuspendauto $me $DEBUG
+             $otaker_upgrade_kludge $ignore_empty_reasonnum
+           );
 use Date::Format;
 use FS::UID qw( dbh getotaker );
 use FS::Misc qw(send_email);
 use FS::Record qw( qsearch qsearchs dbdef );
+use FS::CurrentUser;
 use FS::cust_main;
 use FS::cust_pkg;
 use FS::cust_refund;
@@ -20,6 +23,7 @@ $me = '[ FS::cust_credit ]';
 $DEBUG = 0;
 
 $otaker_upgrade_kludge = 0;
+$ignore_empty_reasonnum = 0;
 
 #ask FS::UID to run this stuff for us later
 $FS::UID::callback{'FS::cust_credit'} = sub { 
@@ -266,14 +270,17 @@ sub delete {
 
 }
 
-=item replace OLD_RECORD
+=item replace [ OLD_RECORD ]
 
 You can, but probably shouldn't modify credits... 
+
+Replaces the OLD_RECORD with this one in the database, or, if OLD_RECORD is not
+supplied, replaces this record.  If there is an error, returns the error,
+otherwise returns false.
 
 =cut
 
 sub replace {
-  #return "Can't modify credit!"
   my $self = shift;
   return "Can't modify closed credit" if $self->closed =~ /^Y/i;
   $self->SUPER::replace(@_);
@@ -290,7 +297,7 @@ methods.
 sub check {
   my $self = shift;
 
-  $self->otaker(getotaker) unless ($self->otaker);
+  $self->usernum($FS::CurrentUser::CurrentUser->usernum) unless $self->usernum;
 
   my $error =
     $self->ut_numbern('crednum')
@@ -299,12 +306,15 @@ sub check {
     || $self->ut_money('amount')
     || $self->ut_alphan('otaker')
     || $self->ut_textn('reason')
-    || $self->ut_foreign_key('reasonnum', 'reason', 'reasonnum')
     || $self->ut_textn('addlinfo')
     || $self->ut_enum('closed', [ '', 'Y' ])
     || $self->ut_foreign_keyn('pkgnum', 'cust_pkg', 'pkgnum')
     || $self->ut_foreign_keyn('eventnum', 'cust_event', 'eventnum')
   ;
+  return $error if $error;
+
+  my $method = $ignore_empty_reasonnum ? 'ut_foreign_keyn' : 'ut_foreign_key';
+  $error = $self->$method('reasonnum', 'reason', 'reasonnum');
   return $error if $error;
 
   return "amount must be > 0 " if $self->amount <= 0;
@@ -551,6 +561,7 @@ sub _upgrade_data {  # class method
   }
 
   local($otaker_upgrade_kludge) = 1;
+  local($ignore_empty_reasonnum) = 1;
   $class->_upgrade_otaker(%opts);
 
 }

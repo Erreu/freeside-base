@@ -61,6 +61,8 @@ L<FS::ClientAPI_SessionCache> - ClientAPI session cache
 
 L<FS::Pony> - A pony
 
+L<FS::cust_main::Search> - Customer searching
+
 L<FS::cust_main::Import> - Batch customer importing
 
 =head2 Database record classes
@@ -261,6 +263,12 @@ L<FS::contact_email> - Contact email class
 L<FS::prospect_main> - Prospect class
 
 L<FS::cust_main> - Customer class
+
+L<FS::cust_main::Billing> - Customer billing class
+
+L<FS::cust_main::Billing_Realtime> - Customer real-time billing class
+
+L<FS::cust_main::Packages> - Customer packages class
 
 L<FS::cust_location> - Customer location class
 

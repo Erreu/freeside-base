@@ -46,6 +46,12 @@ Payment
   <TD><INPUT TYPE="text" NAME="paid" VALUE="<% $paid %>" SIZE=8 MAXLENGTH=8> by <B><% FS::payby->payname($payby) %></B></TD>
 </TR>
 
+  <% include('/elements/tr-select-discount_term.html',
+               'custnum' => $custnum,
+               'cgi'     => $cgi
+            )
+  %>
+
 % if ( $payby eq 'BILL' ) { 
   <TR>
     <TD ALIGN="right">Check #</TD>
@@ -103,9 +109,6 @@ my $conf = new FS::Conf;
 my $money_char  = $conf->config('money_char')  || '$';
 my $date_format = $conf->config('date_format') || '%m/%d/%Y';
 
-die "access denied"
-  unless $FS::CurrentUser::CurrentUser->access_right('Post payment');
-
 my($link, $linknum, $paid, $payby, $payinfo, $_date);
 if ( $cgi->param('error') ) {
   $link     = $cgi->param('link');
@@ -131,6 +134,13 @@ if ( $cgi->param('error') ) {
 } else {
   die "illegal query ". $cgi->keywords;
 }
+
+my @rights = ('Post payment');
+push @rights, 'Post check payment' if $payby eq 'BILL';
+push @rights, 'Post cash payment'  if $payby eq 'CASH';
+
+die "access denied"
+  unless $FS::CurrentUser::CurrentUser->access_right(\@rights);
 
 my $paybatch = "webui-$_date-$$-". rand() * 2**32;
 

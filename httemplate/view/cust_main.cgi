@@ -1,5 +1,5 @@
 <% include('/elements/header.html', {
-             'title' => "Customer: ". $cust_main->name,
+             'title' => $title,
              'nobr'  => 1,
           })
 %>
@@ -57,11 +57,28 @@ function areyousure(href, message) {
                 'color'       => '#ff0000',
                 'cust_main'   => $cust_main,
                 'width'       => 616, #make room for reasons
+                'height'      => 366,
               }
             )
   %> | 
 
 % }
+
+% if ( $curuser->access_right('Merge customer') ) {
+
+  <% include( '/elements/popup_link-cust_main.html',
+              { 'action'      => $p. 'misc/merge_cust.html',
+                'label'       => 'Merge&nbsp;this&nbsp;customer',
+                'actionlabel' => 'Merge customer',
+                #'color'       => '#ff0000',
+                'cust_main'   => $cust_main,
+                'width'       => 480,
+                'height'      => 192,
+              }
+            )
+  %> | 
+
+% } 
 
 % if ( $conf->exists('deletecustomers')
 %        && $curuser->access_right('Delete customer')
@@ -233,6 +250,10 @@ Comments
 <% include('cust_main/change_history.html', $cust_main ) %> 	 
 % }
 
+% if ( $view eq 'custom' ) { 
+<% include('cust_main/custom.html', $cust_main ) %>
+% }
+
 </DIV>
 <% include('/elements/footer.html') %>
 <%init>
@@ -261,6 +282,11 @@ my $cust_main = qsearchs( {
 });
 die "Customer not found!" unless $cust_main;
 
+my $title = $cust_main->name;
+$title = '('. $cust_main->display_custnum. ") $title"
+  if $conf->exists('cust_main-title-display_custnum');
+$title = "Customer: $title";
+
 #false laziness w/pref/pref.html and Conf.pm (cust_main-default_view)
 tie my %views, 'Tie::IxHash',
        'Basics'           => 'basics',
@@ -273,6 +299,8 @@ $views{'Payment History'} =  'payment_history'
                                unless $conf->config('payby-default' eq 'HIDE');
 $views{'Change History'}  =  'change_history'
   if $curuser->access_right('View customer history');
+$views{$conf->config('cust_main-custom_title') || 'Custom'} =  'custom'
+  if $conf->config('cust_main-custom_link');
 $views{'Jumbo'}           =  'jumbo';
 
 my %viewname = reverse %views;

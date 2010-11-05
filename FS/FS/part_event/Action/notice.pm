@@ -5,7 +5,7 @@ use base qw( FS::part_event::Action );
 use FS::Record qw( qsearchs );
 use FS::msg_template;
 
-sub description { 'Send a notice from a message template'; }
+sub description { 'Email a notice to the customer\'s billing address'; }
 
 #sub eventtable_hashref {
 #    { 'cust_main' => 1,

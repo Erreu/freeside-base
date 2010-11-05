@@ -7,6 +7,7 @@ use Text::CSV_XS;
 use FS::Record qw( dbh qsearch qsearchs );
 use FS::cust_pay;
 use FS::Conf;
+use Business::CreditCard qw(cardtype);
 
 @ISA = qw(FS::Record);
 
@@ -198,6 +199,8 @@ sub import_results {
   my $job = $param->{'job'};
   $job->update_statustext(0) if $job;
 
+  my $conf = new FS::Conf;
+
   my $filetype            = $info->{'filetype'};      # CSV or fixed
   my @fields              = @{ $info->{'fields'}};
   my $formatre            = $info->{'formatre'};      # for fixed
@@ -356,12 +359,21 @@ sub import_results {
       return "error updating status of paybatchnum $hash{'paybatchnum'}: $error\n";
     }
 
+    # purge CVV when the batch is processed
+    if ( $payby =~ /^(CARD|DCRD)$/ ) {
+      my $payinfo = $hash{'payinfo'} || $cust_pay_batch->payinfo;
+      if ( ! grep { $_ eq cardtype($payinfo) }
+          $conf->config('cvv-save') ) {
+        $new_cust_pay_batch->cust_main->remove_cvv;
+      }
+    }
+
     if ( $new_cust_pay_batch->status =~ /Approved/i ) {
 
       my $cust_pay = new FS::cust_pay ( {
         'custnum'  => $custnum,
 	'payby'    => $payby,
-        'paybatch' => $self->batchnum,
+        'paybatch' => $hash{'paybatch'} || $self->batchnum,
         'payinfo'  => ( $hash{'payinfo'} || $cust_pay_batch->payinfo ),
         map { $_ => $hash{$_} } (qw( paid _date )),
       } );
@@ -478,29 +490,34 @@ sub export_batch {
     $batch .= $h . "\n";
   }
   foreach my $cust_pay_batch (@cust_pay_batch) {
-    if($first_download) {
+
+    if ($first_download) {
       my $balance = $cust_pay_batch->cust_main->balance;
-      my $error = '';
-      if($balance <= 0) { # then don't charge this customer
-        $error = $cust_pay_batch->delete;
-        undef $cust_pay_batch;
-      }
-      elsif($balance < $cust_pay_batch->amount) { # then reduce the charge to the remaining balance
+      if ($balance <= 0) { # then don't charge this customer
+        my $error = $cust_pay_batch->delete;
+        if ( $error ) {
+          $dbh->rollback or die $dbh->errstr if $oldAutoCommit;
+          die $error;
+        }
+        next;
+      } elsif ($balance < $cust_pay_batch->amount) {
+        # reduce the charge to the remaining balance
         $cust_pay_batch->amount($balance);
-        $error = $cust_pay_batch->replace;
+        my $error = $cust_pay_batch->replace;
+        if ( $error ) {
+          $dbh->rollback or die $dbh->errstr if $oldAutoCommit;
+          die $error;
+        }
       }
       # else $balance >= $cust_pay_batch->amount
-      if($error) {
-        $dbh->rollback or die $dbh->errstr if $oldAutoCommit;
-        die $error;
-      }
     }
-    if($cust_pay_batch) { # that is, it wasn't deleted
-      $batchcount++;
-      $batchtotal += $cust_pay_batch->amount;
-      $batch .= &{$info->{'row'}}($cust_pay_batch, $self, $batchcount, $batchtotal) . "\n";
-    }
+
+    $batchcount++;
+    $batchtotal += $cust_pay_batch->amount;
+    $batch .= &{$info->{'row'}}($cust_pay_batch, $self, $batchcount, $batchtotal) . "\n";
+
   }
+
   my $f = $info->{'footer'};
   if(ref($f) eq 'CODE') {
     $batch .= &$f($self, $batchcount, $batchtotal) . "\n";

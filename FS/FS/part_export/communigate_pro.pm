@@ -85,10 +85,12 @@ sub _export_insert_svc_acct {
     'MailToAll'        =>($svc_acct->cgp_mailtoall      ?'YES':'NO'),
     'AddMailTrailer'   =>($svc_acct->cgp_addmailtrailer ?'YES':'NO'),
 
+    'ArchiveMessagesAfter' => $svc_acct->cgp_archiveafter,
+
     map { $quotas{$_} => $svc_acct->$_() }
         grep $svc_acct->$_(), keys %quotas
   );
-  #XXX phase 3: archive messages, mailing lists
+  #XXX phase 3: mailing lists
 
   my @options = ( 'CreateAccount',
     'accountName'    => $self->export_username($svc_acct),
@@ -144,6 +146,15 @@ sub _export_insert_svc_acct {
   warn "WARNING: error queueing SetAccountMailRules job: $rule_error"
     if $rule_error;
 
+  my $rpop_error = $self->communigate_pro_queue(
+    $svc_acct->svcnum,
+    'SetAccountRPOPs',
+    $self->export_username($svc_acct),
+    $svc_acct->cgp_rpop_hashref,
+  );
+  warn "WARNING: error queueing SetAccountMailRPOPs job: $rpop_error"
+    if $rpop_error;
+
   '';
 
 }
@@ -194,6 +205,7 @@ sub _export_insert_svc_domain {
     'RPOPAllowed'      =>($svc_domain->acct_def_cgp_rpopallowed    ?'YES':'NO'),
     'MailToAll'        =>($svc_domain->acct_def_cgp_mailtoall      ?'YES':'NO'),
     'AddMailTrailer'   =>($svc_domain->acct_def_cgp_addmailtrailer ?'YES':'NO'),
+    'ArchiveMessagesAfter' => $svc_domain->acct_def_cgp_archiveafter,
   );
   warn "WARNING: error queueing SetAccountDefaults job: $def_err"
     if $def_err;
@@ -318,8 +330,10 @@ sub _export_replace_svc_acct {
     if $old->cgp_mailtoall ne $new->cgp_mailtoall;
   $settings{'AddMailTrailer'} = ( $new->cgp_addmailtrailer ? 'YES':'NO' )
     if $old->cgp_addmailtrailer ne $new->cgp_addmailtrailer;
+  $settings{'ArchiveMessagesAfter'} = $new->cgp_archiveafter
+    if $old->cgp_archiveafter ne $new->cgp_archiveafter;
 
-  #XXX phase 3: archive messages, mailing lists
+  #XXX phase 3: mailing lists
 
   if ( keys %settings ) {
     my $error = $self->communigate_pro_queue(
@@ -375,6 +389,15 @@ sub _export_replace_svc_acct {
   );
   warn "WARNING: error queueing SetAccountMailRules job: $rule_error"
     if $rule_error;
+
+  my $rpop_error = $self->communigate_pro_queue(
+    $new->svcnum,
+    'SetAccountRPOPs',
+    $self->export_username($new),
+    $new->cgp_rpop_hashref,
+  );
+  warn "WARNING: error queueing SetAccountMailRPOPs job: $rpop_error"
+    if $rpop_error;
 
   '';
 
@@ -441,6 +464,7 @@ sub _export_replace_svc_domain {
     'RPOPAllowed'      => ( $new->acct_def_cgp_rpopallowed    ? 'YES' : 'NO' ),
     'MailToAll'        => ( $new->acct_def_cgp_mailtoall      ? 'YES' : 'NO' ),
     'AddMailTrailer'   => ( $new->acct_def_cgp_addmailtrailer ? 'YES' : 'NO' ),
+    'ArchiveMessagesAfter' => $new->acct_def_cgp_archiveafter,
   );
   warn "WARNING: error queueing SetAccountDefaults job: $def_err"
     if $def_err;
@@ -730,13 +754,7 @@ sub export_getsettings_svc_domain {
   foreach my $key ( grep ref($effective_settings->{$_}),
                     keys %$effective_settings )
   {
-    my $value = $effective_settings->{$key};
-    if ( ref($value) eq 'ARRAY' ) {
-      $effective_settings->{$key} = join(' ', @$value);
-    } else {
-      #XXX
-      warn "serializing ". ref($value). " for table display not yet handled";
-    }
+    $effective_settings->{$key} = _pretty( $effective_settings->{$key} );
   }
 
   %{$settingsref} = %$effective_settings;
@@ -801,6 +819,20 @@ sub export_getsettings_svc_acct {
                  map _rule2string($_), @$rules
                );
 
+#  #rpops too
+#  my $rpops = eval { $self->communigate_pro_runcommand(
+#    'GetAccountRPOPs',
+#    $svc_acct->email
+#  ) };
+#  return $@ if $@;
+#
+#  %$effective_settings = ( %$effective_settings,
+#                           map _rpop2string($_), %$rpops
+#                         );
+#  %$settings = ( %$settings,
+#                 map _rpop2string($_), %rpops
+#               );
+
   #aliases too
   my $aliases = eval { $self->communigate_pro_runcommand(
     'GetAccountAliases',
@@ -819,13 +851,7 @@ sub export_getsettings_svc_acct {
   foreach my $key ( grep ref($effective_settings->{$_}),
                     keys %$effective_settings )
   {
-    my $value = $effective_settings->{$key};
-    if ( ref($value) eq 'ARRAY' ) {
-      $effective_settings->{$key} = join(' ', @$value);
-    } else {
-      #XXX
-      warn "serializing ". ref($value). " for table display not yet handled";
-    }
+    $effective_settings->{$key} = _pretty( $effective_settings->{$key} );
   }
 
   %{$settingsref} = %$effective_settings;
@@ -833,6 +859,22 @@ sub export_getsettings_svc_acct {
 
   '';
 
+}
+
+sub _pretty {
+  my $value = shift;
+  if ( ref($value) eq 'ARRAY' ) {
+    '['. join(' ', map { ref($_) ? _pretty($_) : $_ } @$value ). ']';
+  } elsif ( ref($value) eq 'HASH' ) {
+    '{'. join(', ',
+        map { my $v = $value->{$_};
+              "$_:". ( ref($v) ? _pretty($v) : $v );
+            }
+            keys %$value
+    ). '}';
+  } else {
+    warn "serializing ". ref($value). " for table display not yet handled";
+  }
 }
 
 sub export_getsettings_svc_forward {
@@ -859,6 +901,14 @@ sub _rule2string {
   $actions    = join(', ', map { my $a = $_; join(' ', @$a); } @$actions);
   ("Mail rule $name" => "$priority IF $conditions THEN $actions ($comment)");
 }
+
+#sub _rpop2string {
+#  my $rpop = shift;
+#  my($priority, $name, $conditions, $actions, $comment) = @$rule;
+#  $conditions = join(', ', map { my $a = $_; join(' ', @$a); } @$conditions);
+#  $actions    = join(', ', map { my $a = $_; join(' ', @$a); } @$actions);
+#  ("Mail rule $name" => "$priority IF $conditions THEN $actions ($comment)");
+#}
 
 sub export_getsettings_svc_mailinglist {
   my($self, $svc_mailinglist, $settingsref, $defaultref ) = @_;
@@ -897,6 +947,7 @@ sub communigate_pro_queue_dep {
     'UpdateAccountDefaults'     => 'cp_Scalar_settingsHash',
     'SetAccountDefaultPrefs'    => 'cp_Scalar_settingsHash',
     'UpdateAccountDefaultPrefs' => 'cp_Scalar_settingsHash',
+    'SetAccountRPOPs'           => 'cp_Scalar_Hash',
   );
   my $sub = exists($kludge_methods{$method})
               ? $kludge_methods{$method}

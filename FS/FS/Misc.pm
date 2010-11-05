@@ -20,6 +20,7 @@ use Tie::IxHash;
                  pkg_freqs
                  generate_ps generate_pdf do_print
                  csv_from_fixed
+                 ocr_image
                );
 
 $DEBUG = 0;
@@ -113,7 +114,7 @@ sub send_email {
 #         join("\n", map { "  $_: ". $options{$_} } keys %options ). "\n"
   }
 
-  my $to = ref($options{to}) ? join(', ', @{ $options{to} } ) : $options{to};
+  my @to = ref($options{to}) ? @{ $options{to} } : ( $options{to} );
 
   my @mimeargs = ();
   my @mimeparts = ();
@@ -172,7 +173,7 @@ sub send_email {
 
   my $message = MIME::Entity->build(
     'From'       => $options{'from'},
-    'To'         => $to,
+    'To'         => join(', ', @to),
     'Sender'     => $options{'from'},
     'Reply-To'   => $options{'from'},
     'Date'       => time2str("%a, %d %b %Y %X %z", time),
@@ -232,8 +233,11 @@ sub send_email {
     $transport = Email::Sender::Transport::SMTP->new( %smtp_opt );
   }
   
+  push @to, $options{bcc} if defined($options{bcc});
   local $@; # just in case
-  eval { sendmail($message, { transport => $transport }) };
+  eval { sendmail($message, { transport => $transport,
+                              from      => $options{from},
+                              to        => \@to }) };
  
   if(ref($@) and $@->isa('Email::Sender::Failure')) {
     return ($@->code ? $@->code.' ' : '').$@->message
@@ -256,6 +260,10 @@ Sender address, required
 =item to
 
 Recipient address, required
+
+=item bcc
+
+Blind copy address, optional
 
 =item subject
 
@@ -290,6 +298,7 @@ sub generate_email {
   my %return = (
     'from'    => $args{'from'},
     'to'      => $args{'to'},
+    'bcc'     => $args{'bcc'},
     'subject' => $args{'subject'},
   );
 
@@ -842,6 +851,41 @@ sub csv_from_fixed {
   '';
 }
 
+=item ocr_image IMAGE_SCALAR
+
+Runs OCR on the provided image data and returns a list of text lines.
+
+=cut
+
+sub ocr_image {
+  my $logo_data = shift;
+
+  #XXX use conf dir location from Makefile
+  my $dir = $FS::UID::conf_dir. "/cache.". $FS::UID::datasrc;
+  my $fh = new File::Temp(
+    TEMPLATE => 'bizcard.XXXXXXXX',
+    SUFFIX   => '.png', #XXX assuming, but should handle jpg, gif, etc. too
+    DIR      => $dir,
+    UNLINK   => 0,
+  ) or die "can't open temp file: $!\n";
+
+  my $filename = $fh->filename;
+
+  print $fh $logo_data;
+  close $fh;
+
+  run( [qw(ocroscript recognize), $filename], '>'=>"$filename.hocr" )
+    or die "ocroscript recognize failed\n";
+
+  run( [qw(ocroscript hocr-to-text), "$filename.hocr"], '>pipe'=>\*OUT )
+    or die "ocroscript hocr-to-text failed\n";
+
+  my @lines = split(/\n/, <OUT> );
+
+  foreach (@lines) { s/\.c0m\s*$/.com/; }
+
+  @lines;
+}
 
 =back
 

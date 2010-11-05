@@ -17,11 +17,12 @@ use List::Util qw(first min);
 
 @ISA = qw(FS::part_pkg::recur_Common);
 
-$DEBUG = 1;
+$DEBUG = 0;
 
 tie my %cdr_svc_method, 'Tie::IxHash',
   'svc_phone.phonenum' => 'Phone numbers (svc_phone.phonenum)',
   'svc_pbx.title'      => 'PBX name (svc_pbx.title)',
+  'svc_pbx.svcnum'     => 'Freeside service # (svc_pbx.svcnum)',
 ;
 
 tie my %rating_method, 'Tie::IxHash',
@@ -70,7 +71,10 @@ tie my %granularity, 'Tie::IxHash', FS::rate_detail::granularities();
                                    'subscription',
                          'default' => '1',
                        },
-
+    'add_full_period'=> { 'name' => 'When prorating first month, also bill '.
+                                    'for one full period after that',
+                          'type' => 'checkbox',
+                        },
     'recur_method'  => { 'name' => 'Recurring fee method',
                          #'type' => 'radio',
                          #'options' => \%recur_method,
@@ -94,6 +98,10 @@ tie my %granularity, 'Tie::IxHash', FS::rate_detail::granularities();
                      'select_key'   => 'ratenum',
                      'select_label' => 'ratename',
                    },
+
+    'min_included' => { 'name' => 'Minutes included when using "single price per minute" rating method',
+                    },
+
 
     'min_charge' => { 'name' => 'Charge per minute when using "single price per minute" rating method',
                     },
@@ -149,10 +157,10 @@ tie my %granularity, 'Tie::IxHash', FS::rate_detail::granularities();
     'use_cdrtypenum' => { 'name' => 'Do not charge for CDRs where the CDR Type is not set to: ',
                          },
 
-    'skip_dst_prefix' => { 'name' => 'Do not charge for CDRs where the destination number starts with any of these values:',
+    'skip_dst_prefix' => { 'name' => 'Do not charge for CDRs where the destination number starts with any of these values: ',
     },
 
-    'skip_dcontext' => { 'name' => 'Do not charge for CDRs where the dcontext is set to any of these (comma-separated) values:',
+    'skip_dcontext' => { 'name' => 'Do not charge for CDRs where the dcontext is set to any of these (comma-separated) values: ',
                        },
 
     'skip_dstchannel_prefix' => { 'name' => 'Do not charge for CDRs where the dstchannel starts with:',
@@ -161,12 +169,12 @@ tie my %granularity, 'Tie::IxHash', FS::rate_detail::granularities();
     'skip_src_length_more' => { 'name' => 'Do not charge for CDRs where the source is more than this many digits:',
                               },
 
-    'noskip_src_length_accountcode_tollfree' => { 'name' => 'Do charge for CDRs where source is equal or greater than the specified digits and accountcode is toll free',
+    'noskip_src_length_accountcode_tollfree' => { 'name' => 'Do charge for CDRs where source is equal or greater than the specified digits, when accountcode is toll free',
                                                   'type' => 'checkbox',
                                                 },
 
     'accountcode_tollfree_ratenum' => {
-      'name' => 'Optional alternate rate plan when accountcode is toll free',
+      'name' => 'Optional alternate rate plan when accountcode is toll free: ',
       'type' => 'select',
       'select_table'  => 'rate',
       'select_key'    => 'ratenum',
@@ -178,8 +186,15 @@ tie my %granularity, 'Tie::IxHash', FS::rate_detail::granularities();
     'skip_dst_length_less' => { 'name' => 'Do not charge for CDRs where the destination is less than this many digits:',
                               },
 
-    'skip_lastapp' => { 'name' => 'Do not charge for CDRs where the lastapp matches this value',
+    'noskip_dst_length_accountcode_tollfree' => { 'name' => 'Do charge for CDRs where dst is less than the specified digits, when accountcode is toll free',
+                                                  'type' => 'checkbox',
+                                                },
+
+    'skip_lastapp' => { 'name' => 'Do not charge for CDRs where the lastapp matches this value: ',
                       },
+
+    'skip_max_callers' => { 'name' => 'Do not charge for CDRs where max_callers is less than or equal to this value: ',
+                          },
 
     'use_duration'   => { 'name' => 'Calculate usage based on the duration field instead of the billsec field',
                           'type' => 'checkbox',
@@ -195,7 +210,7 @@ tie my %granularity, 'Tie::IxHash', FS::rate_detail::granularities();
                          'default'        => 'default', #XXX test
                        },
 
-    'usage_section' => { 'name' => 'Section in which to place usage charges (whether separated or not)',
+    'usage_section' => { 'name' => 'Section in which to place usage charges (whether separated or not): ',
                        },
 
     'summarize_usage' => { 'name' => 'Include usage summary with recurring charges when usage is in separate section',
@@ -207,9 +222,13 @@ tie my %granularity, 'Tie::IxHash', FS::rate_detail::granularities();
                        },
     #eofalse
 
-    'bill_every_call' => { 'name' => 'Generate an invoice immediately for every call.  Useful for prepaid.',
+    'bill_every_call' => { 'name' => 'Generate an invoice immediately for every call (as well any setup fee, upon first payment).  Useful for prepaid.',
                            'type' => 'checkbox',
                          },
+
+    'bill_inactive_svcs' => { 'name' => 'Bill for all phone numbers that were active during the billing period',
+                              'type' => 'checkbox',
+                            },
 
     'count_available_phones' => { 'name' => 'Consider for tax purposes the number of lines to be svc_phones that may be provisioned rather than those that actually are.',
                            'type' => 'checkbox',
@@ -242,6 +261,7 @@ tie my %granularity, 'Tie::IxHash', FS::rate_detail::granularities();
   'fieldorder' => [qw(
                        setup_fee recur_fee recur_temporality unused_credit
                        recur_method cutoff_day
+                       add_full_period
                        cdr_svc_method
                        rating_method ratenum min_charge sec_granularity
                        ignore_unrateable
@@ -255,11 +275,14 @@ tie my %granularity, 'Tie::IxHash', FS::rate_detail::granularities();
                        skip_dstchannel_prefix skip_src_length_more 
                        noskip_src_length_accountcode_tollfree
                        accountcode_tollfree_ratenum
-                       skip_dst_length_less skip_lastapp
+                       skip_dst_length_less
+                       noskip_dst_length_accountcode_tollfree
+                       skip_lastapp
+                       skip_max_callers
                        use_duration
                        411_rewrite
                        output_format usage_mandate summarize_usage usage_section
-                       bill_every_call
+                       bill_every_call bill_inactive_svcs
                        count_available_phones
                      )
                   ],
@@ -314,7 +337,7 @@ sub calc_usage {
 
 #  my $downstream_cdr = '';
 
-  my $cdr_svc_method    = $self->option('cdr_svc_method')||'svc_phone.phonenum';
+  my $cdr_svc_method    = $self->option('cdr_svc_method',1)||'svc_phone.phonenum';
   my $rating_method     = $self->option('rating_method') || 'prefix';
   my $intl              = $self->option('international_prefix') || '011';
   my $domestic_prefix   = $self->option('domestic_prefix');
@@ -346,18 +369,35 @@ sub calc_usage {
 
   my($svc_table, $svc_field) = split('\.', $cdr_svc_method);
 
-  foreach my $cust_svc (
-    grep { $_->part_svc->svcdb eq $svc_table } $cust_pkg->cust_svc
-  ) {
+  my @cust_svc;
+  if( $self->option('bill_inactive_svcs',1) ) {
+    #XXX in this mode do we need to restrict the set of CDRs by date also?
+    @cust_svc = $cust_pkg->h_cust_svc($$sdate, $last_bill);
+  }
+  else {
+    @cust_svc = $cust_pkg->cust_svc;
+  }
+  @cust_svc = grep { $_->part_svc->svcdb eq $svc_table } @cust_svc;
 
-    my $svc_x = $cust_svc->svc_x;
-    foreach my $cdr (
-      $svc_x->get_cdrs(
+  foreach my $cust_svc (@cust_svc) {
+
+    my $svc_x;
+    if( $self->option('bill_inactive_svcs',1) ) {
+      $svc_x = $cust_svc->h_svc_x($$sdate, $last_bill);
+    }
+    else {
+      $svc_x = $cust_svc->svc_x;
+    }
+    my %options = (
         'disable_src'    => $self->option('disable_src'),
         'default_prefix' => $self->option('default_prefix'),
         'status'         => '',
         'for_update'     => 1,
-      )  # $last_bill, $$sdate )
+      );  # $last_bill, $$sdate )
+    $options{'by_svcnum'} = 1 if $svc_field eq 'svcnum';
+
+    foreach my $cdr (
+      $svc_x->get_cdrs( %options )
     ) {
       if ( $DEBUG > 1 ) {
         warn "rating CDR $cdr\n".
@@ -507,38 +547,6 @@ sub calc_usage {
 
         }
 
-#      } elsif ( $rating_method eq 'upstream' ) { #XXX this was convergent, not currently used.  very much becoming the odd one out. remove?
-#
-#        if ( $cdr->cdrtypenum == 1 ) { #rate based on upstream rateid
-#
-#          $rate_detail = $cdr->cdr_upstream_rate->rate_detail;
-#
-#          $regionnum = $rate_detail->dest_regionnum;
-#          $rate_region = $rate_detail->dest_region;
-#
-#          $pretty_destnum = $cdr->dst;
-#
-#          warn "  found rate for regionnum $regionnum and ".
-#               "rate detail $rate_detail\n"
-#            if $DEBUG;
-#
-#        } else { #pass upstream price through
-#
-#          $charge = sprintf('%.2f', $cdr->upstream_price);
-#          warn "Incrementing \$charges by $charge.  Now $charges\n" if $DEBUG;
-#          $charges += $charge;
-# 
-#          @call_details = (
-#            #time2str("%Y %b %d - %r", $cdr->calldate_unix ),
-#            time2str("%c", $cdr->calldate_unix),  #XXX this should probably be a config option dropdown so they can select US vs- rest of world dates or whatnot
-#            'N/A', #minutes...
-#            '$'.$charge,
-#            #$pretty_destnum,
-#            $cdr->description, #$rate_region->regionname,
-#          );
-#
-#        }
-
       } elsif ( $rating_method eq 'upstream_simple' ) {
 
         #XXX $charge = sprintf('%.2f', $cdr->upstream_price);
@@ -555,20 +563,19 @@ sub calc_usage {
       } elsif ( $rating_method eq 'single_price' ) {
 
         # a little false laziness w/below
+        # $rate_detail = new FS::rate_detail({sec_granularity => ... }) ?
 
         my $granularity = length($self->option('sec_granularity'))
                             ? $self->option('sec_granularity')
                             : 60;
 
-                    # length($cdr->billsec) ? $cdr->billsec : $cdr->duration;
         $seconds = $use_duration ? $cdr->duration : $cdr->billsec;
 
         $seconds += $granularity - ( $seconds % $granularity )
           if $seconds      # don't granular-ize 0 billsec calls (bills them)
-          && $granularity; # 0 is per call
-        my $minutes = $seconds / 60; # sprintf("%.1f", 
-        #$minutes =~ s/\.0$// if $granularity == 60;
-
+          && $granularity  # 0 is per call
+          && $seconds % $granularity;
+        my $minutes = $seconds / 60;
         # XXX config?
         #$charge = sprintf('%.2f', ( $self->option('min_charge') * $minutes )
                                   #+ 0.00000001 ); #so 1.005 rounds to 1.01
@@ -578,8 +585,12 @@ sub calc_usage {
         warn "Incrementing \$charges by $charge.  Now $charges\n" if $DEBUG;
         $charges += $charge;
 
-        @call_details = ($cdr->downstream_csv( 'format' => $output_format,
-                                               'charge' => $charge,
+        @call_details = ($cdr->downstream_csv( 'format'  => $output_format,
+                                               'charge'  => $charge,
+                                               'seconds' => ($use_duration ? 
+                                                             $cdr->duration : 
+                                                             $cdr->billsec),
+                                               'granularity' => $granularity,
                                              )
                         );
 
@@ -602,6 +613,9 @@ sub calc_usage {
              "; skipping\n"
 
       } else { # there *is* a rate_detail (or call_details), proceed...
+        # About this section:
+        # We don't round _anything_ (except granularizing) 
+        # until the final $charge = sprintf("%.2f"...).
 
         unless ( @call_details || ( $charge ne '' && $charge == 0 ) ) {
 
@@ -610,10 +624,8 @@ sub calc_usage {
           $seconds = min($seconds_left, $rate_detail->conn_sec);
           $seconds_left -= $seconds; 
           $weektime     += $seconds;
-          $charge = sprintf("%.02f", $rate_detail->conn_charge);
+          $charge = $rate_detail->conn_charge; 
 
-          my $total_minutes = 0;
-          my $whole_minutes = 1;
           my $etime;
           while($seconds_left) {
             my $ratetimenum = $rate_detail->ratetimenum; # may be empty
@@ -657,29 +669,28 @@ sub calc_usage {
               unless exists $included_min{$regionnum}{$ratetimenum};
 
             my $granularity = $rate_detail->sec_granularity;
-            $whole_minutes = 0 if $granularity;
 
-            # should this be done in every rate interval?
-            $charge_sec += $granularity - ( $charge_sec % $granularity )
-              if $charge_sec   # don't granular-ize 0 billsec calls (bills them)
-              && $granularity; # 0 is per call
-            my $minutes = sprintf("%.1f", $charge_sec / 60);
-            $minutes =~ s/\.0$// if $granularity == 60;
+            my $minutes;
+            if ( $granularity ) { # charge per minute
+              # Round up to the nearest $granularity
+              if ( $charge_sec and $charge_sec % $granularity ) {
+                $charge_sec += $granularity - ($charge_sec % $granularity);
+              }
+              $minutes = $charge_sec / 60; #don't round this
+            }
+            else { # per call
+              $minutes = 1;
+              $seconds_left = 0;
+            }
 
             $seconds += $charge_sec;
 
-            # per call rather than per minute
-            $minutes = 1 unless $granularity;
-            $seconds_left = 0 unless $granularity;
-
             $included_min{$regionnum}{$ratetimenum} -= $minutes;
-            
             if ( $included_min{$regionnum}{$ratetimenum} <= 0 ) {
               my $charge_min = 0 - $included_min{$regionnum}{$ratetimenum}; #XXX should preserve
                                                               #(display?) this
               $included_min{$regionnum}{$ratetimenum} = 0;
-              $charge += sprintf('%.2f', ($rate_detail->min_charge * $charge_min)
-                                         + 0.00000001 ); #so 1.005 rounds to 1.01
+              $charge += ($rate_detail->min_charge * $charge_min); #still not rounded
             }
 
             # choose next rate_detail
@@ -694,20 +705,17 @@ sub calc_usage {
           # this is why we need regionnum/rate_region....
           warn "  (rate region $rate_region)\n" if $DEBUG;
 
-          $total_minutes = sprintf("%.1f", $seconds / 60);
-          $total_minutes =~ s/\.0$// if $whole_minutes;
-
           $classnum = $rate_detail->classnum;
-          $charge = sprintf('%.2f', $charge);
+          $charge = sprintf('%.2f', $charge + 0.000001); # NOW round it.
+          warn "Incrementing \$charges by $charge.  Now $charges\n" if $DEBUG;
+          $charges += $charge;
 
           @call_details = (
             $cdr->downstream_csv( 'format'         => $output_format,
                                   'granularity'    => $rate_detail->sec_granularity, 
-                                  'minutes'        => $total_minutes,
-                                  # why do we go through this hocus-pocus?
-                                  # the cdr *will* show duration here
-                                  # if we forego the 'minutes' key
-                                  # duration vs billsec?
+                                  'seconds'        => ($use_duration ?
+                                                       $cdr->duration :
+                                                       $cdr->billsec),
                                   'charge'         => $charge,
                                   'pretty_dst'     => $pretty_destnum,
                                   'dst_regionname' => $regionname,
@@ -718,12 +726,9 @@ sub calc_usage {
 
         if ( $charge > 0 ) {
           #just use FS::cust_bill_pkg_detail objects?
-          warn "Incrementing \$charges by $charge.  Now $charges\n" if $DEBUG;
-          $charges += $charge;
           my $call_details;
-          my $phonenum = $cust_svc->svc_x->phonenum;
+          my $phonenum = $svc_x->phonenum;
 
-          #if ( $self->option('rating_method') eq 'upstream_simple' ) {
           if ( scalar(@call_details) == 1 ) {
             $call_details =
               [ 'C',
@@ -827,8 +832,9 @@ sub check_chargable {
     skip_dcontext
     skip_dstchannel_prefix
     skip_src_length_more noskip_src_length_accountcode_tollfree
-    skip_dst_length_less
+    skip_dst_length_less noskip_dst_length_accountcode_tollfree
     skip_lastapp
+    skip_max_callers
   );
   foreach my $opt (grep !exists($flags{option_cache}->{$_}), @opt ) {
     $flags{option_cache}->{$opt} = $self->option($opt, 1);
@@ -869,7 +875,10 @@ sub check_chargable {
 
   my $dst_length = $opt{'skip_dst_length_less'};
   return "destination less than $dst_length digits"
-    if $dst_length && length($cdr->dst) < $dst_length;
+    if $dst_length && length($cdr->dst) < $dst_length
+    && ! ( $opt{'noskip_dst_length_accountcode_tollfree'}
+            && $cdr->is_tollfree('accountcode')
+         );
 
   return "lastapp is $opt{'skip_lastapp'}"
     if length($opt{'skip_lastapp'}) && $cdr->lastapp eq $opt{'skip_lastapp'};
@@ -893,6 +902,11 @@ sub check_chargable {
     }
 
   }
+
+  return "max_callers <= $opt{skip_max_callers}"
+    if length($opt{'skip_max_callers'})
+      and length($cdr->max_callers)
+      and $cdr->max_callers <= $opt{'skip_max_callers'};
 
   #all right then, rate it
   '';

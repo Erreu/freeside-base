@@ -79,6 +79,15 @@ use FS::part_pkg::flat;
                                     'package recharge',
                           'type' => 'checkbox',
                         },
+    'add_full_period'=> { 'name' => 'When prorating first month, also bill '.
+                                    'for one full period after that',
+                          'type' => 'checkbox',
+                        },
+    'prorate_round_day'=> {
+                          'name' => 'When prorating first month, round to '.
+                                    'the nearest full day',
+                          'type' => 'checkbox',
+                        },
 
     #it would be better if this had to be turned on, its confusing
     'externalid' => { 'name'   => 'Optional External ID',
@@ -89,40 +98,16 @@ use FS::part_pkg::flat;
                     'seconds', 'upbytes', 'downbytes', 'totalbytes',
                     'recharge_amount', 'recharge_seconds', 'recharge_upbytes',
                     'recharge_downbytes', 'recharge_totalbytes',
-                    'usage_rollover', 'recharge_reset', 'externalid', ],
+                    'usage_rollover', 'recharge_reset', 'add_full_period',
+                    'prorate_round_day', 'externalid', ],
   'freq' => 'm',
   'weight' => 20,
 );
 
 sub calc_recur {
-  my($self, $cust_pkg, $sdate, $details, $param ) = @_;
-  my $cutoff_day = $self->option('cutoff_day', 1) || 1;
-  my $mnow = $$sdate;
-  my ($sec,$min,$hour,$mday,$mon,$year) = (localtime($mnow) )[0,1,2,3,4,5];
-  my $mend;
-  my $mstart;
-  
-  if ( $mday >= $cutoff_day ) {
-    $mend =
-      timelocal(0,0,0,$cutoff_day, $mon == 11 ? 0 : $mon+1, $year+($mon==11));
-    $mstart =
-      timelocal(0,0,0,$cutoff_day,$mon,$year);  
-
-  } else {
-    $mend = timelocal(0,0,0,$cutoff_day, $mon, $year);
-    if ($mon==0) {$mon=11;$year--;} else {$mon--;}
-    $mstart=  timelocal(0,0,0,$cutoff_day,$mon,$year);  
-  }
-
-  $$sdate = $mstart;
-  my $permonth = $self->option('recur_fee') / $self->freq;
-
-  my $months = ( ( $self->freq - 1 ) + ($mend-$mnow) / ($mend-$mstart) );
-
-  $param->{'months'} = $months;
-  my $discount = $self->calc_discount( $cust_pkg, $sdate, $details, $param);
-
-  sprintf('%.2f', $permonth * $months - $discount);
+  my $self = shift;
+  my $cutoff_day = $self->option('cutoff_day') || 1;
+  return $self->calc_prorate(@_, $cutoff_day) - $self->calc_discount(@_);
 }
 
 1;

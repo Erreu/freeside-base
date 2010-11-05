@@ -103,7 +103,7 @@ my $args_callback = sub {
     $options{"usage_taxproductnum_$_"} = $value;
   }
 
-  foreach ( $cgi->param('report_option') ) {
+  foreach ( grep $_, $cgi->param('report_option') ) {
     $error ||= "Illegal optional report class: $_" unless ( $_ =~ /^\d*$/  );
     $options{"report_option_$_"} = 1;
   }
@@ -159,6 +159,12 @@ my @process_m2m = (
     'link_table'   => 'part_pkg_taxoverride',
     'target_table' => 'tax_class',
     'params'       => \@tax_overrides,
+  },
+  { 'link_table'   => 'part_pkg_discount',
+    'target_table' => 'discount',
+    'params'       => [ map $cgi->param($_),
+                        grep /^discountnum/, $cgi->param
+                      ],
   },
   { 'link_table'   => 'part_pkg_link',
     'target_table' => 'part_pkg',

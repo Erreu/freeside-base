@@ -166,7 +166,18 @@ Customer object (required).
 =item object
 
 Additional context object (currently, can be a cust_main, cust_pkg, 
-cust_bill, svc_acct, or cust_pay object).
+cust_bill, svc_acct, cust_pay, or cust_pay_pending).  If the object 
+is a svc_acct, its cust_pkg will be fetched and used for substitution.
+
+As a special case, this may be an arrayref of two objects.  Both 
+objects will be available for substitution, with their field names 
+prefixed with 'new_' and 'old_' respectively.  This is used in the 
+rt_ticket export when exporting "replace" events.
+
+=item to
+
+Destination address.  The default is to use the customer's 
+invoicing_list addresses.
 
 =back
 
@@ -186,15 +197,37 @@ sub prepare {
   # create substitution table
   ###  
   my %hash;
-  foreach my $obj ($cust_main, $object || ()) {
+  my @objects = ($cust_main);
+  my @prefixes = ('');
+  my $svc;
+  if( ref $object ) {
+    if( ref($object) eq 'ARRAY' ) {
+      # [new, old], for provisioning tickets
+      push @objects, $object->[0], $object->[1];
+      push @prefixes, 'new_', 'old_';
+      $svc = $object->[0] if $object->[0]->isa('FS::svc_Common');
+    }
+    else {
+      push @objects, $object;
+      push @prefixes, '';
+      $svc = $object if $object->isa('FS::svc_Common');
+    }
+  }
+  if( $svc ) {
+    push @objects, $svc->cust_svc->cust_pkg;
+    push @prefixes, '';
+  }
+
+  foreach my $obj (@objects) {
+    my $prefix = shift @prefixes;
     foreach my $name (@{ $subs->{$obj->table} }) {
       if(!ref($name)) {
         # simple case
-        $hash{$name} = $obj->$name();
+        $hash{$prefix.$name} = $obj->$name();
       }
       elsif( ref($name) eq 'ARRAY' ) {
         # [ foo => sub { ... } ]
-        $hash{$name->[0]} = $name->[1]->($obj);
+        $hash{$prefix.($name->[0])} = $name->[1]->($obj);
       }
       else {
         warn "bad msg_template substitution: '$name'\n";
@@ -226,7 +259,7 @@ sub prepare {
     $_
   } @$guts;
   
-  $body = '';
+  $body = '{ use Date::Format qw(time2str); "" }';
   while(@$skin || @$guts) {
     $body .= shift(@$skin) || '';
     $body .= shift(@$guts) || '';
@@ -247,7 +280,7 @@ sub prepare {
   # and email
   ###
 
-  my @to = $cust_main->invoicing_list_emailonly;
+  my @to = ($opt{'to'}) || $cust_main->invoicing_list_emailonly;
   warn "prepared msg_template with no email destination (custnum ".
     $cust_main->custnum.")\n"
     if !@to;
@@ -255,9 +288,10 @@ sub prepare {
   my $conf = new FS::Conf;
 
   (
-    'from' => $self->from || 
+    'from' => $self->from_addr || 
               scalar( $conf->config('invoice_from', $cust_main->agentnum) ),
     'to'   => \@to,
+    'bcc'  => $self->bcc_addr || undef,
     'subject'   => $subject,
     'html_body' => $body,
     'text_body' => HTML::FormatText->new(leftmargin => 0, rightmargin => 70
@@ -310,11 +344,15 @@ sub substitutions {
       num_cancelled_pkgs num_ncancelled_pkgs num_pkgs
       classname categoryname
       balance
+      credit_limit
       invoicing_list_emailonly
       cust_status ucfirst_cust_status cust_statuscolor
 
       signupdate dundate
+      expdate
+      packages recurdates
       ),
+      # expdate is a special case
       [ signupdate_ymd    => sub { time2str('%Y-%m-%d', shift->signupdate) } ],
       [ dundate_ymd       => sub { time2str('%Y-%m-%d', shift->dundate) } ],
       [ paydate_my        => sub { sprintf('%02d/%04d', shift->paydate_monthyear) } ],
@@ -324,10 +362,13 @@ sub substitutions {
       [ company_name      => sub { 
           $conf->config('company_name', shift->agentnum) 
         } ],
+      [ company_address   => sub {
+          $conf->config('company_address', shift->agentnum)
+        } ],
     ],
     # next_bill_date
     'cust_pkg'  => [qw( 
-      pkgnum pkg_label pkg_label_long
+      pkgnum pkg pkg_label pkg_label_long
       location_label
       status statuscolor
     
@@ -351,11 +392,15 @@ sub substitutions {
     )],
     #XXX not really thinking about cust_bill substitutions quite yet
     
+    # for welcome and limit warning messages
     'svc_acct' => [qw(
+      svcnum
       username
+      domain
       ),
       [ password          => sub { shift->getfield('_password') } ],
-    ], # for welcome messages
+    ],
+    # for payment receipts
     'cust_pay' => [qw(
       paynum
       _date
@@ -370,6 +415,22 @@ sub substitutions {
             $cust_pay->paymask : $cust_pay->decrypt($cust_pay->payinfo)
         } ],
     ],
+    # for payment decline messages
+    # try to support all cust_pay fields
+    # 'error' is a special case, it contains the raw error from the gateway
+    'cust_pay_pending' => [qw(
+      _date
+      error
+      ),
+      [ paid              => sub { sprintf("%.2f", shift->paid) } ],
+      [ payby             => sub { FS::payby->shortname(shift->payby) } ],
+      [ date              => sub { time2str("%a %B %o, %Y", shift->_date) } ],
+      [ payinfo           => sub {
+          my $pending = shift;
+          ($pending->payby eq 'CARD' || $pending->payby eq 'CHEK') ?
+            $pending->paymask : $pending->decrypt($pending->payinfo)
+        } ],
+    ],
   };
 }
 
@@ -377,26 +438,27 @@ sub _upgrade_data {
   my ($self, %opts) = @_;
 
   my @fixes = (
-    [ 'alerter_msgnum',  'alerter_template',   '',               '' ],
-    [ 'cancel_msgnum',   'cancelmessage',      'cancelsubject',  '' ],
-    [ 'decline_msgnum',  'declinetemplate',    '',               '' ],
-    [ 'impending_recur_msgnum', 'impending_recur_template', '',  '' ],
-    [ 'payment_receipt_msgnum', 'payment_receipt_email', '',     '' ],
-    [ 'welcome_msgnum',  'welcome_email',      'welcome_email-subject', 'welcome_email-from' ],
-    [ 'warning_msgnum',  'warning_email',      'warning_email-subject', 'warning_email-from' ],
+    [ 'alerter_msgnum',  'alerter_template',   '',               '', '' ],
+    [ 'cancel_msgnum',   'cancelmessage',      'cancelsubject',  '', '' ],
+    [ 'decline_msgnum',  'declinetemplate',    '',               '', '' ],
+    [ 'impending_recur_msgnum', 'impending_recur_template', '',  '', 'impending_recur_bcc' ],
+    [ 'payment_receipt_msgnum', 'payment_receipt_email', '',     '', '' ],
+    [ 'welcome_msgnum',  'welcome_email',      'welcome_email-subject', 'welcome_email-from', '' ],
+    [ 'warning_msgnum',  'warning_email',      'warning_email-subject', 'warning_email-from', '' ],
   );
  
   my $conf = new FS::Conf;
   my @agentnums = ('', map {$_->agentnum} qsearch('agent', {}));
   foreach my $agentnum (@agentnums) {
     foreach (@fixes) {
-      my ($newname, $oldname, $subject, $from) = @$_;
+      my ($newname, $oldname, $subject, $from, $bcc) = @$_;
       if ($conf->exists($oldname, $agentnum)) {
         my $new = new FS::msg_template({
            'msgname'   => $oldname,
            'agentnum'  => $agentnum,
            'from_addr' => ($from && $conf->config($from, $agentnum)) || 
                           $conf->config('invoice_from', $agentnum),
+           'bcc_addr'  => ($bcc && $conf->config($from, $agentnum)) || '',
            'subject'   => ($subject && $conf->config($subject, $agentnum)) || '',
            'mime_type' => 'text/html',
            'body'      => join('<BR>',$conf->config($oldname, $agentnum)),

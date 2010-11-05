@@ -66,6 +66,10 @@ my $cust_pkg = new FS::cust_pkg {
   'discountnum_amount'   => scalar($cgi->param('discountnum_amount')),
   'discountnum_percent'  => scalar($cgi->param('discountnum_percent')),
   'discountnum_months'   => scalar($cgi->param('discountnum_months')),
+  'contract_end'         => ( scalar($cgi->param('contract_end'))
+                                ? parse_datetime($cgi->param('contract_end'))
+                                : ''
+                            ),
   #'discountnum_disabled' => scalar($cgi->param('discountnum_disabled')),
 };
 
@@ -74,7 +78,7 @@ my %opt = ( 'cust_pkg' => $cust_pkg );
 if ( $locationnum == -1 ) {
   my $cust_location = new FS::cust_location {
     map { $_ => scalar($cgi->param($_)) }
-        qw( custnum address1 address2 city county state zip country )
+        qw( custnum address1 address2 city county state zip country geocode )
   };
   $opt{'cust_location'} = $cust_location;
 }

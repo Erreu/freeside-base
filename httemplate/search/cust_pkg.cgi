@@ -19,6 +19,7 @@
                                      'Adjourn',
                                      'Susp.',
                                      'Expire',
+                                     'Contract end',
                                      'Cancel',
                                      'Reason',
                                      FS::UI::Web::cust_header(
@@ -59,7 +60,7 @@
                     #sub { time2str('%b %d %Y', shift->expire); },
                     #sub { time2str('%b %d %Y', shift->get('cancel')); },
                     ( map { time_or_blank($_) }
-                          qw( setup last_bill bill adjourn susp expire cancel ) ),
+          qw( setup last_bill bill adjourn susp expire contract_end cancel ) ),
 
                     sub { my $self = shift;
                           my $return = '';
@@ -175,8 +176,9 @@ my %search_hash = ();
 #some false laziness w/misc/bulk_change_pkg.cgi
   
 $search_hash{'query'} = $cgi->keywords;
-  
-for (qw( agentnum custnum magic status classnum custom cust_fields )) {
+
+#scalars
+for (qw( agentnum custnum magic status classnum custom cust_fields pkgbatch )) {
   $search_hash{$_} = $cgi->param($_) if $cgi->param($_);
 }
 
@@ -205,7 +207,7 @@ my %disable = (
   ''                => {},
 );
 
-foreach my $field (qw( setup last_bill bill adjourn susp expire cancel active )) {
+foreach my $field (qw( setup last_bill bill adjourn susp expire contract_end cancel active )) {
 
   my($beginning, $ending) = FS::UI::Web::parse_beginning_ending($cgi, $field);
 
@@ -289,6 +291,10 @@ my $html_init = sub {
                  'height'      => 210,
               ). '<BR>';
     }
+    $text .= include( '/elements/email-link.html',
+                'search_hash' => \%search_hash,
+                'table'       => 'cust_pkg',
+                );
   }
   return $text;
 };

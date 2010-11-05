@@ -162,6 +162,45 @@ sub cust_unlinked_msg {
 Adds this invoice to the database ("Posts" the invoice).  If there is an error,
 returns the error, otherwise returns false.
 
+=cut
+
+sub insert {
+  my $self = shift;
+  warn "$me insert called\n" if $DEBUG;
+
+  local $SIG{HUP} = 'IGNORE';
+  local $SIG{INT} = 'IGNORE';
+  local $SIG{QUIT} = 'IGNORE';
+  local $SIG{TERM} = 'IGNORE';
+  local $SIG{TSTP} = 'IGNORE';
+  local $SIG{PIPE} = 'IGNORE';
+
+  my $oldAutoCommit = $FS::UID::AutoCommit;
+  local $FS::UID::AutoCommit = 0;
+  my $dbh = dbh;
+
+  my $error = $self->SUPER::insert;
+  if ( $error ) {
+    $dbh->rollback if $oldAutoCommit;
+    return $error;
+  }
+
+  if ( $self->get('cust_bill_pkg') ) {
+    foreach my $cust_bill_pkg ( @{$self->get('cust_bill_pkg')} ) {
+      $cust_bill_pkg->invnum($self->invnum);
+      my $error = $cust_bill_pkg->insert;
+      if ( $error ) {
+        $dbh->rollback if $oldAutoCommit;
+        return "can't create invoice line item: $error";
+      }
+    }
+  }
+
+  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
+  '';
+
+}
+
 =item delete
 
 This method now works but you probably shouldn't use it.  Instead, apply a
@@ -224,13 +263,13 @@ sub delete {
 
 }
 
-=item replace OLD_RECORD
+=item replace [ OLD_RECORD ]
 
-Replaces the OLD_RECORD with this one in the database.  If there is an error,
-returns the error, otherwise returns false.
+You can, but probably shouldn't modify invoices...
 
-Only printed may be changed.  printed is normally updated by calling the
-collect method of a customer object (see L<FS::cust_main>).
+Replaces the OLD_RECORD with this one in the database, or, if OLD_RECORD is not
+supplied, replaces this record.  If there is an error, returns the error,
+otherwise returns false.
 
 =cut
 
@@ -241,11 +280,11 @@ collect method of a customer object (see L<FS::cust_main>).
 
 sub replace_check {
   my( $new, $old ) = ( shift, shift );
-  return "Can't change custnum!" unless $old->custnum == $new->custnum;
+  return "Can't modify closed invoice" if $old->closed =~ /^Y/i;
   #return "Can't change _date!" unless $old->_date eq $new->_date;
-  return "Can't change _date!" unless $old->_date == $new->_date;
-  return "Can't change charged!" unless $old->charged == $new->charged
-                                     || $old->charged == 0;
+  return "Can't change _date" unless $old->_date == $new->_date;
+  return "Can't change charged" unless $old->charged == $new->charged
+                                    || $old->charged == 0;
 
   '';
 }
@@ -2252,10 +2291,12 @@ sub print_generic {
   my $nbsp = $nbsps{$format};
 
   my %escape_functions = ( 'latex'    => \&_latex_escape,
-                           'html'     => \&encode_entities,
+                           'html'     => \&_html_escape_nbsp,#\&encode_entities,
                            'template' => sub { shift },
                          );
   my $escape_function = $escape_functions{$format};
+  my $escape_function_nonbsp = ($format eq 'html')
+                                 ? \&_html_escape : $escape_function;
 
   my %date_formats = ( 'latex'    => '%b %o, %Y',
                        'html'     => '%b&nbsp;%o,&nbsp;%Y',
@@ -2386,7 +2427,8 @@ sub print_generic {
       qsearchs('pkg_class', { classnum => $conf->config('finance_pkgclass') });
     $invoice_data{finance_section} = $pkg_class->categoryname;
   } 
- $invoice_data{finance_amount} = '0.00';
+  $invoice_data{finance_amount} = '0.00';
+  $invoice_data{finance_section} ||= 'Finance Charges'; #avoid config confusion
 
   my $countrydefault = $conf->config('countrydefault') || 'US';
   my $prefix = $cust_main->has_ship_address ? 'ship_' : '';
@@ -2558,7 +2600,7 @@ sub print_generic {
   my $extra_lines = ();
   if ( $multisection ) {
     ($extra_sections, $extra_lines) =
-      $self->_items_extra_usage_sections($escape_function, $format)
+      $self->_items_extra_usage_sections($escape_function_nonbsp, $format)
       if $conf->exists('usage_class_as_a_section', $cust_main->agentnum);
 
     push @$extra_sections, $adjust_section if $adjust_section->{sort_weight};
@@ -2567,13 +2609,13 @@ sub print_generic {
     push @sections,
       $self->_items_sections( $late_sections,      # this could stand a refactor
                               $summarypage,
-                              $escape_function,
+                              $escape_function_nonbsp,
                               $extra_sections,
                               $format,             #bah
                             );
     if ($conf->exists('svc_phone_sections')) {
       my ($phone_sections, $phone_lines) =
-        $self->_items_svc_phone_sections($escape_function, $format);
+        $self->_items_svc_phone_sections($escape_function_nonbsp, $format);
       push @{$late_sections}, @$phone_sections;
       push @detail_items, @$phone_lines;
     }
@@ -2657,6 +2699,7 @@ sub print_generic {
     $options{'skip_usage'} =
       scalar(@$extra_sections) && !grep{$section == $_} @$extra_sections;
     $options{'multilocation'} = $multilocation;
+    $options{'multisection'} = $multisection;
 
     foreach my $line_item ( $self->_items_pkg(%options) ) {
       my $detail = {
@@ -3039,6 +3082,7 @@ sub print_ps {
 
   my ($file, $lfile) = $self->print_latex(@_);
   my $ps = generate_ps($file);
+  unlink($file.'.tex');
   unlink($lfile);
 
   $ps;
@@ -3067,6 +3111,7 @@ sub print_pdf {
 
   my ($file, $lfile) = $self->print_latex(@_);
   my $pdf = generate_pdf($file);
+  unlink($file.'.tex');
   unlink($lfile);
 
   $pdf;
@@ -3119,6 +3164,18 @@ sub _latex_escape {
   my $value = shift;
   $value =~ s/([#\$%&~_\^{}])( )?/"\\$1". ( ( defined($2) && length($2) ) ? "\\$2" : '' )/ge;
   $value =~ s/([<>])/\$$1\$/g;
+  $value;
+}
+
+sub _html_escape {
+  my $value = shift;
+  encode_entities($value);
+  $value;
+}
+
+sub _html_escape_nbsp {
+  my $value = _html_escape(shift);
+  $value =~ s/ +/&nbsp;/g;
   $value;
 }
 
@@ -3356,6 +3413,7 @@ sub _items_sections {
   if ( $summarypage ) {
     @sections = grep { exists($subtotal{$_}) || ! _pkg_category($_)->disabled }
                 map { $_->categoryname } qsearch('pkg_category', {});
+    push @sections, '' if exists($subtotal{''});
   } else {
     @sections = keys %subtotal;
   }
@@ -3747,6 +3805,7 @@ sub _items_svc_phone_sections {
   my %lines = ();
 
   my %usage_class =  map { $_->classnum => $_ } qsearch( 'usage_class', {} );
+  $usage_class{''} ||= new FS::usage_class { 'classname' => '', 'weight' => 0 };
 
   foreach my $cust_bill_pkg ( $self->cust_bill_pkg ) {
     next unless $cust_bill_pkg->pkgnum > 0;
@@ -3989,6 +4048,7 @@ sub _items_cust_bill_pkg {
   my $section = $opt{section}->{description} if $opt{section};
   my $summary_page = $opt{summary_page} || '';
   my $multilocation = $opt{multilocation} || '';
+  my $multisection = $opt{multisection} || '';
 
   my @b = ();
   my ($s, $r, $u) = ( undef, undef, undef );
@@ -4010,7 +4070,8 @@ sub _items_cust_bill_pkg {
                                  ? $_->section eq $section
                                  : 1
                                }
-                          grep { !$_->summary || !$summary_page }
+                          #grep { !$_->summary || !$summary_page } # bunk!
+                          grep { !$_->summary || $multisection }
                           $cust_bill_pkg->cust_bill_pkg_display
                         )
     {
@@ -4039,15 +4100,20 @@ sub _items_cust_bill_pkg {
           unless ( $cust_pkg->part_pkg->hide_svc_detail
                 || $cust_bill_pkg->hidden )
           {
+
             push @d, map &{$escape_function}($_),
-                         $cust_pkg->h_labels_short($self->_date);
+                         $cust_pkg->h_labels_short($self->_date)
+              unless $cust_bill_pkg->pkgpart_override; #don't redisplay services
+
             if ( $multilocation ) {
               my $loc = $cust_pkg->location_label;
-              $loc = substr($desc, 0, 50). '...'
+              $loc = substr($loc, 0, 50). '...'
                 if $format eq 'latex' && length($loc) > 50;
               push @d, &{$escape_function}($loc);
             }
+
           }
+
           push @d, $cust_bill_pkg->details(%details_opt)
             if $cust_bill_pkg->recur == 0;
 
@@ -4069,7 +4135,7 @@ sub _items_cust_bill_pkg {
 
         }
 
-        if ( $cust_bill_pkg->recur != 0 &&
+        if ( ( $cust_bill_pkg->recur != 0  || $cust_bill_pkg->setup == 0 ) &&
              ( !$type || $type eq 'R' || $type eq 'U' )
            )
         {
@@ -4096,17 +4162,20 @@ sub _items_cust_bill_pkg {
                 || $cust_bill_pkg->hidden
                 || $is_summary && $type && $type eq 'U' )
           {
+
             push @d, map &{$escape_function}($_),
                          $cust_pkg->h_labels_short(@dates)
                                                    #$cust_bill_pkg->edate,
                                                    #$cust_bill_pkg->sdate)
-            ;
+              unless $cust_bill_pkg->pkgpart_override; #don't redisplay services
+
             if ( $multilocation ) {
               my $loc = $cust_pkg->location_label;
-              $loc = substr($desc, 0, 50). '...'
+              $loc = substr($loc, 0, 50). '...'
                 if $format eq 'latex' && length($loc) > 50;
               push @d, &{$escape_function}($loc);
             }
+
           }
 
           push @d, $cust_bill_pkg->details(%details_opt)
@@ -4139,7 +4208,7 @@ sub _items_cust_bill_pkg {
               };
             }
 
-          } elsif ( $amount ) {  # && $type eq 'U'
+          } else {  # $type eq 'U'
 
             if ( $cust_bill_pkg->hidden ) {
               $u->{amount}      += $amount;
@@ -4452,6 +4521,25 @@ sub credited_sql {
   $end   = '' unless defined($end);
   "( SELECT COALESCE(SUM(amount),0) FROM cust_credit_bill
        WHERE cust_bill.invnum = cust_credit_bill.invnum $start $end  )";
+}
+
+=item due_date_sql
+
+Returns an SQL fragment to retrieve the due date of an invoice.
+Currently only supported on PostgreSQL.
+
+=cut
+
+sub due_date_sql {
+'COALESCE(
+  SUBSTRING(
+    COALESCE(
+      cust_bill.invoice_terms,
+      cust_main.invoice_terms,
+      \''.($conf->config('invoice_default_terms') || '').'\'
+    ), E\'Net (\\\\d+)\'
+  )::INTEGER, 0
+) * 86400 + cust_bill._date'
 }
 
 =item search_sql_where HASHREF

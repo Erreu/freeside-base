@@ -3,6 +3,7 @@ package FS::Cron::backup;
 use strict;
 use vars qw( @ISA @EXPORT_OK );
 use Exporter;
+use Date::Format;
 use FS::UID qw(driver_name datasrc);
 
 @ISA = qw( Exporter );
@@ -12,6 +13,7 @@ sub backup_scp {
   my $conf = new FS::Conf;
   my $dest = $conf->config('dump-scpdest');
   if ( $dest ) {
+    $dest .= time2str('/%Y%m%d%H%M%S',time);
     datasrc =~ /dbname=([\w\.]+)$/ or die "unparsable datasrc ". datasrc;
     my $database = $1;
     eval "use Net::SCP qw(scp);";
@@ -30,11 +32,11 @@ sub backup_scp {
                      recipient => $conf->config('dump-pgpid'),
                    );
       chmod 0600, '/var/tmp/$database.gpg';
-      scp("/var/tmp/$database.gpg", $dest);
+      scp("/var/tmp/$database.gpg", "$dest.gpg");
       unlink "/var/tmp/$database.gpg" or die $!;
     } else {
       chmod 0600, '/var/tmp/$database.sql';
-      scp("/var/tmp/$database.sql", $dest);
+      scp("/var/tmp/$database.sql", "$dest.sql");
     }
     unlink "/var/tmp/$database.sql" or die $!;
   }

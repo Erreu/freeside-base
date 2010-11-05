@@ -10,13 +10,33 @@
 %  #my $row = 0;
 %  #while ( exists($param->{"custnum$row"}) ) {
 %  for ( my $row = 0; exists($param->{"custnum$row"}); $row++ ) {
+%    my $custnum = $param->{"custnum$row"};
+%    my $cust_main;
+%    if ( $custnum =~ /^(\d+)$/ and $1 <= 2147483647 ) {
+%      $cust_main = qsearchs({ 
+%        'table'     => 'cust_main',
+%        'hashref'   => { 'custnum' => $1 },
+%        'extra_sql' => ' AND '. $FS::CurrentUser::CurrentUser->agentnums_sql,
+%      });
+%    }
+%    if ( !$cust_main ) { # not found, try agent_custid
+%      $cust_main = qsearchs({ 
+%        'table'     => 'cust_main',
+%        'hashref'   => { 'agent_custid' => $custnum },
+%        'extra_sql' => ' AND '. $FS::CurrentUser::CurrentUser->agentnums_sql,
+%      });
+%    }
+%    $custnum = $cust_main->custnum if $cust_main;
+%    # if !$cust_main, then this will throw an error on batch_insert
+%
 %    push @cust_pay, new FS::cust_pay {
-%                                       'custnum'  => $param->{"custnum$row"},
-%                                       'paid'     => $param->{"paid$row"},
-%                                       'payby'    => 'BILL',
-%                                       'payinfo'  => $param->{"payinfo$row"},
-%                                       'paybatch' => $paybatch,
-%                                     }
+%                      'custnum'        => $custnum,
+%                      'paid'           => $param->{"paid$row"},
+%                      'payby'          => 'BILL',
+%                      'payinfo'        => $param->{"payinfo$row"},
+%                      'discount_term'  => $param->{"discount_term$row"},
+%                      'paybatch'       => $paybatch,
+%                    }
 %      if    $param->{"custnum$row"}
 %         || $param->{"paid$row"}
 %         || $param->{"payinfo$row"};
@@ -42,6 +62,6 @@
 % } else {
 %
 %    
-<% $cgi->redirect(popurl(3). "search/cust_pay.cgi?magic=paybatch;paybatch=$paybatch") %>
+<% $cgi->redirect(popurl(3). "search/cust_pay.html?magic=paybatch;paybatch=$paybatch") %>
 % } 
 

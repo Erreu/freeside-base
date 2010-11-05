@@ -1,7 +1,7 @@
 %# payment links
 
 % my $s = 0;
-% if ( $payby{'BILL'} && $curuser->access_right('Post payment') ) { 
+% if ( $payby{'BILL'} && $curuser->access_right(['Post payment', 'Post check payment' ]) ) { 
   <% $s++ ? ' | ' : '' %>
   <% include('/elements/popup_link-cust_main.html',
                'label'       => 'Enter check payment',
@@ -14,7 +14,7 @@
   %>
 % } 
 
-% if ( $payby{'CASH'} && $curuser->access_right('Post payment') ) { 
+% if ( $payby{'CASH'} && $curuser->access_right(['Post payment', 'Post cash payment']) ) { 
   <% $s++ ? ' | ' : '' %>
   <% include('/elements/popup_link-cust_main.html',
                'label'       => 'Enter cash payment',
@@ -33,7 +33,7 @@
 % } 
 
 % if ( ( $payby{'CARD'} || $payby{'DCRD'} )
-%        && $curuser->access_right('Process payment')
+%        && $curuser->access_right(['Process payment', 'Process credit card payment'])
 %        && ! $cust_main->is_encrypted($cust_main->payinfo)
 %      ) {
   <% $s++ ? ' | ' : '' %>
@@ -41,7 +41,7 @@
 % } 
 
 % if ( ( $payby{'CHEK'} || $payby{'DCHK'} )
-%        && $curuser->access_right('Process payment')
+%        && $curuser->access_right(['Process payment', 'Process Echeck payment'])
 %        && ! $cust_main->is_encrypted($cust_main->payinfo)
 %      ) {
   <% $s++ ? ' | ' : '' %>
@@ -73,7 +73,7 @@
 %# refund links
 
 % $s = 0;
-% if ( $payby{'BILL'} && $curuser->access_right('Post refund') ) { 
+% if ( $payby{'BILL'} && $curuser->access_right(['Post refund', 'Post check refund']) ) { 
   <% $s++ ? ' | ' : '' %>
   <% include('/elements/popup_link-cust_main.html',
                'label'       => 'Enter check refund',
@@ -86,7 +86,7 @@
   %>
 % } 
 
-% if ( $payby{'CASH'} && $curuser->access_right('Post refund') ) { 
+% if ( $payby{'CASH'} && $curuser->access_right(['Post refund', 'Post cash refund']) ) { 
   <% $s++ ? ' | ' : '' %>
   <% include('/elements/popup_link-cust_main.html',
                'label'       => 'Enter cash refund',
@@ -291,7 +291,7 @@
 
 
   <TR <% $display ? $display.' ID="old_history'.$old_history++.'"'  : ''%>>
-    <TD CLASS="grid" BGCOLOR="<% $bgcolor %>">
+    <TD VALIGN="top" CLASS="grid" BGCOLOR="<% $bgcolor %>">
 % unless ( !$target || $target{$target}++ ) { 
 
         <A NAME="<% $target %>">
@@ -308,19 +308,19 @@
     <TD CLASS="grid" BGCOLOR="<% $bgcolor %>">
       <% $item->{'desc'} %>
     </TD>
-    <TD ALIGN="right" CLASS="grid" BGCOLOR="<% $bgcolor %>">
+    <TD VALIGN="top" ALIGN="right" CLASS="grid" BGCOLOR="<% $bgcolor %>">
       <% $charge  %>
     </TD>
-    <TD ALIGN="right" CLASS="grid" BGCOLOR="<% $bgcolor %>">
+    <TD VALIGN="top" ALIGN="right" CLASS="grid" BGCOLOR="<% $bgcolor %>">
       <% $payment %>
     </TD>
-    <TD ALIGN="right" CLASS="grid" BGCOLOR="<% $bgcolor %>">
+    <TD VALIGN="top" ALIGN="right" CLASS="grid" BGCOLOR="<% $bgcolor %>">
       <% $credit  %>
     </TD>
-    <TD ALIGN="right" CLASS="grid" BGCOLOR="<% $bgcolor %>">
+    <TD VALIGN="top" ALIGN="right" CLASS="grid" BGCOLOR="<% $bgcolor %>">
       <% $refund  %>
     </TD>
-    <TD ALIGN="right" CLASS="grid" BGCOLOR="<% $bgcolor %>">
+    <TD VALIGN="top" ALIGN="right" CLASS="grid" BGCOLOR="<% $bgcolor %>">
       <% $showbalance %>
     </TD>
   </TR>
@@ -412,6 +412,16 @@ foreach my $cust_pay ($cust_main->cust_pay) {
   };
 }
 
+#pending payments 
+foreach my $cust_pay_pending ($cust_main->cust_pay_pending) {
+  push @history, {
+    'date'    => $cust_pay_pending->_date,
+    'desc'    => include('payment_history/pending_payment.html', $cust_pay_pending, %opt ),
+    'void_payment' => $cust_pay_pending->paid, 
+  };
+}
+
+
 #voided payments
 foreach my $cust_pay_void ($cust_main->cust_pay_void) {
   push @history, {
@@ -420,6 +430,16 @@ foreach my $cust_pay_void ($cust_main->cust_pay_void) {
     'void_payment' => $cust_pay_void->paid,
   };
 
+}
+
+#declined payments
+foreach my $cust_pay_pending ($cust_main->cust_pay_pending_attempt) {
+  push @history, {
+    'date'    => $cust_pay_pending->_date,
+    'desc'    => include('payment_history/attempted_payment.html', $cust_pay_pending, %opt ),
+    'void_payment' => $cust_pay_pending->paid, #??
+    #'target'  => $target, #XXX
+  };
 }
 
 #credits (some false laziness w/payments)
