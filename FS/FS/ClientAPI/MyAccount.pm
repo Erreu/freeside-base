@@ -266,6 +266,9 @@ sub access_info {
     @{ $info->{cust_paybys} }
   ];
 
+  $info->{'self_suspend_reason'} = 
+      $conf->config('selfservice-self_suspend_reason');
+
   return { %$info,
            'custnum'       => $custnum,
            'access_pkgnum' => $session->{'pkgnum'},
@@ -1453,8 +1456,18 @@ sub order_renew {
 
 }
 
-sub cancel_pkg {
+# these are basically the same
+sub cancel_pkg    { alter_pkg(shift, 'cancel', 'quiet' => 1) }
+sub suspend_pkg   { 
+  my $conf = new FS::Conf;
+  my $reasonnum = $conf->config('selfservice-self_suspend_reason')
+    or return { 'error' => "Permission denied" };
+  alter_pkg(shift, 'suspend', 'reason' => $reasonnum) 
+}
+
+sub alter_pkg {
   my $p = shift;
+  my $method = shift;
   my $session = _cache->get($p->{'session_id'})
     or return { 'error' => "Can't resume session" }; #better error message
 
@@ -1469,7 +1482,7 @@ sub cancel_pkg {
                                         'pkgnum'  => $pkgnum,   } )
     or return { 'error' => "unknown pkgnum $pkgnum" };
 
-  my $error = $cust_pkg->cancel( 'quiet'=>1 );
+  my $error = $cust_pkg->$method(@_);
   return { 'error' => $error };
 
 }
