@@ -584,6 +584,26 @@ my %msg_template_options = (
   'per_agent' => 1,
 );
 
+my $_gateway_name = sub {
+  my $g = shift;
+  return '' if !$g;
+  ($g->gateway_username . '@' . $g->gateway_module);
+};
+
+my %payment_gateway_options = (
+  'type'        => 'select-sub',
+  'options_sub' => sub {
+    my @gateways = qsearch({
+        'table' => 'payment_gateway',
+        'hashref' => { 'disabled' => '' },
+      });
+    map { $_->gatewaynum, $_gateway_name->($_) } @gateways;
+  },
+  'option_sub'  => sub {
+    my $gateway = FS::payment_gateway->by_key(shift);
+    $_gateway_name->($gateway);
+  },
+);
 
 #Billing (81 items)
 #Invoicing (50 items)
@@ -1726,6 +1746,13 @@ and customer address. Include units.',
   },
 
   {
+    'key'         => 'selfservice-payment_gateway',
+    'section'     => 'self-service',
+    'description' => 'Force the use of this payment gateway for self-service.',
+    %payment_gateway_options,
+  },
+
+  {
     'key'         => 'selfservice-save_unchecked',
     'section'     => 'self-service',
     'description' => 'In self-service, uncheck "Remember information" checkboxes by default (normally, they are checked by default).',
@@ -2711,6 +2738,13 @@ and customer address. Include units.',
   },
 
   {
+    'key'         => 'cust_pkg-group_by_location',
+    'section'     => 'UI',
+    'description' => "Group packages by location.",
+    'type'        => 'checkbox',
+  },
+
+  {
     'key'         => 'cust_pkg-show_fcc_voice_grade_equivalent',
     'section'     => 'UI',
     'description' => "Show a field on package definitions for assigning a DSO equivalency number suitable for use on FCC form 477.",
@@ -2964,7 +2998,7 @@ and customer address. Include units.',
 #  {
 #    'key'         => 'batch-manual_approval',
 #    'section'     => 'billing',
-#    'description' => 'Allow manual batch closure, which will approve all payments that do not yet have a status.  This is dangerous, but may be needed if your processor does not provide a list of approved payments.',
+#    'description' => 'Allow manual batch closure, which will approve all payments that do not yet have a status.  This is very dangerous.',
 #    'type'        => 'checkbox',
 #  },
 #
