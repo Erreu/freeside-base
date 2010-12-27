@@ -1,2 +1,0 @@
-export CVSROOT=":pserver:anonymous:anonymous@cvs.freeside.biz:/home/cvs/cvsroot"
-export CVS_RSH="ssh"

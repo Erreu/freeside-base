@@ -1,3 +1,0 @@
-#!/bin/sh
-su freeside -c '/usr/bin/freeside-upgrade fs_upgrade'
-#RT upgrade

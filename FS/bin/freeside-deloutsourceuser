@@ -1,6 +1,0 @@
-#!/bin/sh
-
-username=$1
-
-freeside-deluser -h %%%FREESIDE_CONF%%%/htpasswd $username 2>/dev/null
-
