@@ -75,6 +75,7 @@
 
 die "access denied"
   unless ( $FS::CurrentUser::CurrentUser->access_right('List inventory')
+	|| $FS::CurrentUser::CurrentUser->access_right('List services')
 	 );
 
 my @search = ();
