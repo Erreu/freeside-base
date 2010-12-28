@@ -1296,6 +1296,7 @@ sub tables_hashref {
         'locationnum',         'int', 'NULL', '', '', '',
         'otaker',          'varchar', 'NULL', 32, '', '', 
         'usernum',             'int', 'NULL', '', '', '',
+        'order_date',     @date_type,             '', '', 
         'start_date',     @date_type,             '', '', 
         'setup',          @date_type,             '', '', 
         'bill',           @date_type,             '', '', 
@@ -1319,7 +1320,7 @@ sub tables_hashref {
                    [ 'usernum' ],
                    [ 'start_date' ], ['setup'], ['last_bill'], ['bill'],
                    ['susp'], ['adjourn'], ['expire'], ['cancel'],
-                   ['change_date'],
+                   ['change_date'], ['order_date'],
                  ],
     },
 
