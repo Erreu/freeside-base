@@ -906,6 +906,7 @@ sub tables_hashref {
         'zip',         'varchar', 'NULL',      10, '', '', 
         'country',        'char',     '',       2, '', '', 
         'geocode',     'varchar', 'NULL',      20, '', '',
+        'disabled',       'char', 'NULL',       1, '', '', 
       ],
       'primary_key' => 'locationnum',
       'unique'      => [],
