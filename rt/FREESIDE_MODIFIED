@@ -66,6 +66,7 @@ share/html/Elements/ShowLink_Checklist
  share/html/Elements/SelectCustomerClass #SearchCustomerFields
  share/html/Elements/SelectCustomerTag #SearchCustomerFields
  share/html/Search/Build.html
+share/html/Search/Results.tsv #content-type bug fix
  share/html/Search/Elements/BuildFormatString
  share/html/Search/Elements/PickCFs #customfield date patch
 share/html/Ticket/Checklist.html
