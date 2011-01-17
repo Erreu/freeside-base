@@ -3338,6 +3338,7 @@ and customer address. Include units.',
     'type'        => 'select',
     'select_hash' => [
                        ''      => 'Numeric only',
+                       '\d{7}' => 'Numeric only, exactly 7 digits',
                        'ww?d+' => 'Numeric with one or two letter prefix',
                      ],
   },

@@ -142,9 +142,14 @@ sub smart_search {
       } );
     }
 
+    my $anum = $num;
+    if ( $conf->config('cust_main-agent_custid-format') =~ /^\\d\{(\d+)\}$/ ) {
+      $anum = sprintf("%0$1u", $num);
+    }
+
     push @cust_main, qsearch( {
       'table'     => 'cust_main',
-      'hashref'   => { 'agent_custid' => $num, %options },
+      'hashref'   => { 'agent_custid' => $anum, %options },
       'extra_sql' => " AND $agentnums_sql", #agent virtualization
     } );
 
