@@ -789,6 +789,17 @@ my %payment_gateway_options = (
   },
 
   {
+    'key'         => 'date_format_long',
+    'section'     => 'UI',
+    'description' => 'Verbose format for displaying dates',
+    'type'        => 'select',
+    'select_hash' => [
+                       '%b %o, %Y' => 'Mon DDth, YYYY',
+                       '%e %b %Y'  => 'DD Mon YYYY',
+                     ],
+  },
+
+  {
     'key'         => 'deletecustomers',
     'section'     => 'UI',
     'description' => 'Enable customer deletions.  Be very careful!  Deleting a customer will remove all traces that the customer ever existed!  It should probably only be used when auditing a legacy database.  Normally, you cancel all of a customers\' packages if they cancel service.',
