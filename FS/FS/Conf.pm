@@ -2795,28 +2795,28 @@ and customer address. Include units.',
 
   {
     'key'         => 'voip-cust_cdr_spools',
-    'section'     => '',
+    'section'     => 'telephony',
     'description' => 'Enable the per-customer option for individual CDR spools.',
     'type'        => 'checkbox',
   },
 
   {
     'key'         => 'voip-cust_cdr_squelch',
-    'section'     => '',
+    'section'     => 'telephony',
     'description' => 'Enable the per-customer option for not printing CDR on invoices.',
     'type'        => 'checkbox',
   },
 
   {
     'key'         => 'voip-cdr_email',
-    'section'     => '',
+    'section'     => 'telephony',
     'description' => 'Include the call details on emailed invoices (and HTML invoices viewed in the backend), even if the customer is configured for not printing them on the invoices.',
     'type'        => 'checkbox',
   },
 
   {
     'key'         => 'voip-cust_email_csv_cdr',
-    'section'     => '',
+    'section'     => 'telephony',
     'description' => 'Enable the per-customer option for including CDR information as a CSV attachment on emailed invoices.',
     'type'        => 'checkbox',
   },
@@ -3772,35 +3772,35 @@ and customer address. Include units.',
 
   {
     'key'         => 'svc_phone-radius-default_password',
-    'section'     => '',
+    'section'     => 'telephony',
     'description' => 'Default password when exporting svc_phone records to RADIUS',
     'type'        => 'text',
   },
 
   {
     'key'         => 'svc_phone-allow_alpha_phonenum',
-    'section'     => '',
+    'section'     => 'telephony',
     'description' => 'Allow letters in phone numbers.',
     'type'        => 'checkbox',
   },
 
   {
     'key'         => 'svc_phone-domain',
-    'section'     => '',
+    'section'     => 'telephony',
     'description' => 'Track an optional domain association with each phone service.',
     'type'        => 'checkbox',
   },
 
   {
     'key'         => 'svc_phone-phone_name-max_length',
-    'section'     => '',
+    'section'     => 'telephony',
     'description' => 'Maximum length of the phone service "Name" field (svc_phone.phone_name).  Sometimes useful to limit this (to 15?) when exporting as Caller ID data.',
     'type'        => 'text',
   },
   
   {
     'key'         => 'svc_phone-lnp',
-    'section'     => '',
+    'section'     => 'telephony',
     'description' => 'Enables Number Portability features for svc_phone',
     'type'        => 'checkbox',
   },
@@ -3814,7 +3814,7 @@ and customer address. Include units.',
 
   {
     'key'         => 'cdr-charged_party-field',
-    'section'     => '',
+    'section'     => 'telephony',
     'description' => 'Set the charged_party field of CDRs to this field.',
     'type'        => 'select-sub',
     'options_sub' => sub { my $fields = FS::cdr->table_info->{'fields'};
@@ -3830,14 +3830,14 @@ and customer address. Include units.',
   #probably deprecate in favor of cdr-charged_party-field above
   {
     'key'         => 'cdr-charged_party-accountcode',
-    'section'     => '',
+    'section'     => 'telephony',
     'description' => 'Set the charged_party field of CDRs to the accountcode.',
     'type'        => 'checkbox',
   },
 
   {
     'key'         => 'cdr-charged_party-accountcode-trim_leading_0s',
-    'section'     => '',
+    'section'     => 'telephony',
     'description' => 'When setting the charged_party field of CDRs to the accountcode, trim any leading zeros.',
     'type'        => 'checkbox',
   },
@@ -3858,7 +3858,7 @@ and customer address. Include units.',
 
   {
     'key'         => 'cdr-charged_party_rewrite',
-    'section'     => '',
+    'section'     => 'telephony',
     'description' => 'Do charged party rewriting in the freeside-cdrrewrited daemon; useful if CDRs are being dropped off directly in the database and require special charged_party processing such as cdr-charged_party-accountcode or cdr-charged_party-truncate*.',
     'type'        => 'checkbox',
   },
@@ -3879,7 +3879,7 @@ and customer address. Include units.',
 
   {
     'key'         => 'cdr-asterisk_forward_rewrite',
-    'section'     => '',
+    'section'     => 'telephony',
     'description' => 'Enable special processing for CDRs representing forwarded calls: For CDRs that have a dcontext that starts with "Local/" but does not match dst, set charged_party to dst, parse a new dst from dstchannel, and set amaflags to "2" ("BILL"/"BILLING").',
     'type'        => 'checkbox',
   },
@@ -4185,7 +4185,7 @@ and customer address. Include units.',
   
   {
     'key'         => 'opensips_gwlist',
-    'section'     => 'opensips',
+    'section'     => 'telephony',
     'description' => 'For svc_phone OpenSIPS dr_rules export, gwlist column value, per-agent',
     'type'        => 'text',
     'per_agent'   => 1,
@@ -4194,7 +4194,7 @@ and customer address. Include units.',
 
   {
     'key'         => 'opensips_description',
-    'section'     => 'opensips',
+    'section'     => 'telephony',
     'description' => 'For svc_phone OpenSIPS dr_rules export, description column value, per-agent',
     'type'        => 'text',
     'per_agent'   => 1,
@@ -4203,7 +4203,7 @@ and customer address. Include units.',
   
   {
     'key'         => 'opensips_route',
-    'section'     => 'opensips',
+    'section'     => 'telephony',
     'description' => 'For svc_phone OpenSIPS dr_rules export, routeid column value, per-agent',
     'type'        => 'text',
     'per_agent'   => 1,
