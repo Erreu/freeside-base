@@ -167,7 +167,7 @@ sub calc_remain {
   my $freq_sec = $1 * $sec{$2||'m'};
   return 0 unless $freq_sec;
 
-  sprintf("%.2f", $self->base_recur($cust_pkg) * ( $next_bill - $time ) / $freq_sec );
+  sprintf("%.2f", $self->base_recur($cust_pkg, \$time) * ( $next_bill - $time ) / $freq_sec );
 
 }
 
