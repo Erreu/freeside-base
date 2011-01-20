@@ -4,6 +4,7 @@ use strict;
 use vars qw( @ISA $me $DEBUG );
 use FS::Record qw( qsearch qsearchs dbh );
 use FS::cust_bill_batch;
+use CAM::PDF;
 
 @ISA = qw( FS::Record );
 $me = '[ FS::bill_batch ]';
@@ -53,12 +54,6 @@ Typeset the entire batch as a PDF file.  Returns the PDF as a string.
 =cut
 
 sub print_pdf {
-  eval 'use CAM::PDF';
-  if ( $@ ) {
-    die "CAM::PDF not installed\n" if $@ =~ /^Can't locate/;
-    die "Failed to load CAM::PDF: '$@'\n";
-  }
-
   my $self = shift;
   my $job = shift;
   $job->update_statustext(0) if $job;
