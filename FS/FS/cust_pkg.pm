@@ -748,7 +748,6 @@ sub cancel {
     }
   }
 
-  my %svc;
   unless ( $date ) {
 
     foreach my $cust_svc (
