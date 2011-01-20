@@ -54,7 +54,10 @@ Typeset the entire batch as a PDF file.  Returns the PDF as a string.
 
 sub print_pdf {
   eval 'use CAM::PDF';
-  warn "Failed to load CAM::PDF: '$@'\n" if $@;
+  if ( $@ ) {
+    die "CAM::PDF not installed\n" if $@ =~ /^Can't locate/;
+    die "Failed to load CAM::PDF: '$@'\n";
+  }
 
   my $self = shift;
   my $job = shift;
