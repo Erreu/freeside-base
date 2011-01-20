@@ -782,9 +782,6 @@ sub cancel {
     ) {
       my $remaining_value = $self->calc_remain('time' => $cancel_time);
       if ( $remaining_value > 0 ) {
-        # && !$options{'no_credit'} ) {
-        # Undocumented, unused option.
-        # part_pkg configuration should decide this anyway.
         my $error = $self->cust_main->credit(
           $remaining_value,
           'Credit for unused time on '. $self->part_pkg->pkg,
