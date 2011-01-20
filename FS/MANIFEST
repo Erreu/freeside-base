@@ -540,3 +540,4 @@ FS/part_pkg_discount.pm
 t/part_pkg_discount.t
 FS/svc_cert.pm
 t/svc_cert.t
+FS/cust_main/Status.pm
