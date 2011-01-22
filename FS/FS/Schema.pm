@@ -2810,7 +2810,7 @@ sub tables_hashref {
       'columns' => [
         'devicepart', 'serial',  '',      '', '', '',
         'devicename', 'varchar', '', $char_d, '', '',
-        #'classnum', #tie to an inventory class?
+        'inventory_classnum', 'int', 'NULL', '', '', '',
       ],
       'primary_key' => 'devicepart',
       'unique' => [ [ 'devicename' ] ], #?
