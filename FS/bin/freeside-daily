@@ -50,6 +50,10 @@ if ( $opt{u} ) {
 use FS::Cron::backup qw(backup_scp);
 backup_scp();
 
+my $deldir = "$FS::UID::cache_dir/cache.$FS::UID::datasrc/";
+unlink <${deldir}.invoice*>;
+unlink <${deldir}.letter*>;
+
 ###
 # subroutines
 ###
