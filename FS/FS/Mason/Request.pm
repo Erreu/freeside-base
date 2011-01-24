@@ -71,6 +71,8 @@ sub freeside_setup {
       } else {
         die "unknown mode $mode";
       }
+    
+      $CGITempFile::TMPDIRECTORY = "$FS::UID::cache_dir/cache.$FS::UID::datasrc";
 
   }
 
