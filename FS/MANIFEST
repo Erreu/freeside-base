@@ -541,3 +541,5 @@ t/part_pkg_discount.t
 FS/svc_cert.pm
 t/svc_cert.t
 FS/cust_main/Status.pm
+FS/cust_note_class.pm
+t/cust_note_class.t

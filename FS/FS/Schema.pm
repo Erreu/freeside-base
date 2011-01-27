@@ -930,6 +930,7 @@ sub tables_hashref {
       'columns' => [
         'notenum',  'serial',  '',     '', '', '', 
         'custnum',  'int',  '',     '', '', '', 
+        'classnum',      'int',     'NULL', '', '', '', 
         '_date',    @date_type, '', '', 
         'otaker',   'varchar', 'NULL',    32, '', '', 
         'usernum',   'int', 'NULL', '', '', '',
@@ -938,6 +939,17 @@ sub tables_hashref {
       'primary_key' => 'notenum',
       'unique' => [],
       'index' => [ [ 'custnum' ], [ '_date' ], [ 'usernum' ], ],
+    },
+
+    'cust_note_class' => {
+      'columns' => [
+        'classnum',    'serial',   '',      '', '', '', 
+        'classname',   'varchar',  '', $char_d, '', '', 
+        'disabled',    'char', 'NULL',       1, '', '', 
+      ],
+      'primary_key' => 'classnum',
+      'unique' => [],
+      'index' => [ ['disabled'] ],
     },
 
     'cust_category' => {

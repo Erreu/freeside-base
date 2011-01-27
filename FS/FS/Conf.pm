@@ -4236,6 +4236,18 @@ and customer address. Include units.',
     'select_enum' => [ 'Classic', 'Recurring' ],
   },
 
+  {
+    'key'         => 'note-classes',
+    'section'     => 'UI',
+    'description' => 'Use customer note classes',
+    'type'        => 'select',
+    'select_hash' => [
+                       0 => 'Disabled',
+		       1 => 'Enabled',
+		       2 => 'Enabled, with tabs',
+		     ],
+  },
+
   { key => "apacheroot", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
   { key => "apachemachine", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
   { key => "apachemachines", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },

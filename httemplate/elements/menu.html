@@ -434,6 +434,9 @@ tie my %config_cust, 'Tie::IxHash',
   'Customer categories' =>  [ $fsurl.'browse/cust_category.html', 'Customer categories define groups of customer classes.' ],
 ;
 
+$config_cust{'Customer note classes'} = [ $fsurl.'browse/cust_note_class.html', 'Customer note classes define groups of notes for reporting.' ]
+    if ($conf->exists('note-classes') && $conf->config('note-classes') > 0);
+
 tie my %config_agent, 'Tie::IxHash',
   'Agent types' => [ $fsurl.'browse/agent_type.cgi', 'Agent types define groups of package definitions that you can then assign to particular agents' ],
   'Agents'      => [ $fsurl.'browse/agent.cgi', 'Agents are resellers of your service. Agents may be limited to a subset of your full offerings (via their type)' ],

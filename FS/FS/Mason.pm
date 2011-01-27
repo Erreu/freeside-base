@@ -258,6 +258,7 @@ if ( -e $addl_handler_use_file ) {
   use FS::acct_snarf;
   use FS::part_pkg_discount;
   use FS::svc_cert;
+  use FS::cust_note_class;
   # Sammath Naur
 
   if ( $FS::Mason::addl_handler_use ) {
