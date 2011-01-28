@@ -273,6 +273,39 @@ sub SetToMidnight {
     return $self->Unix( $new );
 }
 
+=head2 SetToStart PERIOD[, Timezone => 'utc' ]
+
+Set to the beginning of the current PERIOD, which can be 
+"year", "month", "day", "hour", or "minute".
+
+=cut
+
+sub SetToStart {
+    my $self = shift;
+    my $p = uc(shift);
+    my %args = @_;
+    my $tz = $args{'Timezone'} || '';
+    my @localtime = $self->Localtime($tz);
+
+    # This is the cleanest way to implement it, I swear.
+    {
+        $localtime[0]=0;
+        last if ($p eq 'MINUTE');
+        $localtime[1]=0;
+        last if ($p eq 'HOUR');
+        $localtime[2]=0;
+        last if ($p eq 'DAY');
+        $localtime[3]=1;
+        last if ($p eq 'MONTH');
+        $localtime[4]=0;
+        last if ($p eq 'YEAR');
+        $RT::Logger->warning("Couldn't find start date of '$p'.");
+        return;
+    }
+    my $new = $self->Timelocal($tz, @localtime);
+    return $self->Unix($new);
+}
+
 =head2 Diff
 
 Takes either an C<RT::Date> object or the date in unixtime format as a string,
@@ -478,6 +511,25 @@ Adds 24 hours to the current time. Returns new unix time.
 =cut
 
 sub AddDay { return $_[0]->AddSeconds($DAY) }
+
+=head2 AddMonth
+
+Adds one month to the current time. Returns new 
+unix time.
+
+=cut
+
+sub AddMonth {
+    require Time::ParseDate;
+    my $self = shift;
+    my $date = ( 
+        Time::ParseDate::parsedate(
+            '1 month',
+            NOW => $self->Unix
+        )
+    );
+    return $self->Unix($date);
+}
 
 =head2 Unix [unixtime]
 
