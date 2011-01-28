@@ -2554,6 +2554,13 @@ and customer address. Include units.',
   },
 
   {
+    'key'         => 'ticket_system-escalation',
+    'section'     => '',
+    'description' => 'Enable priority escalation of tickets as part of daily batch processing.',
+    'type'        => 'checkbox',
+  },
+
+  {
     'key'         => 'ticket_system-rt_external_datasrc',
     'section'     => '',
     'description' => 'With external RT integration, the DBI data source for the external RT installation, for example, <code>DBI:Pg:user=rt_user;password=rt_word;host=rt.example.com;dbname=rt</code>',
@@ -3009,7 +3016,7 @@ and customer address. Include units.',
   {
     'key'         => 'batchconfig-td_eft1464',
     'section'     => 'billing',
-    'description' => 'Configuration for TD Bank EFT1464 batching, five lines: 1. Originator ID, 2. Datacenter Code, 3. Short name, 4. Long name, 5. Returned payment branch number, 6. Returned payment account, 7. Transaction code.',
+    'description' => 'Configuration for TD Bank EFT1464 batching, seven lines: 1. Originator ID, 2. Datacenter Code, 3. Short name, 4. Long name, 5. Returned payment branch number, 6. Returned payment account, 7. Transaction code.',
     'type'        => 'textarea',
   },
 
