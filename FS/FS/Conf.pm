@@ -655,6 +655,13 @@ my %payment_gateway_options = (
   },
 
   {
+    'key'         => 'discount-show-always',
+    'section'     => 'billing',
+    'description' => 'Generate a line item on an invoice even when a package is discounted 100%',
+    'type'        => 'checkbox',
+  },
+
+  {
     'key'         => 'encryption',
     'section'     => 'billing',
     'description' => 'Enable encryption of credit cards.',
