@@ -2186,6 +2186,9 @@ sub print_generic {
                      'template' => [ '{', '}' ],
                    );
 
+  warn "$me print_generic creating template\n"
+    if $DEBUG > 1;
+
   #create the template
   my $template = $params{template} ? $params{template} : $self->_agent_template;
   my $templatefile = "invoice_$format";
@@ -2203,11 +2206,17 @@ sub print_generic {
     @invoice_template = _translate_old_latex_format(@invoice_template);
   } 
 
+  warn "$me print_generic creating T:T object\n"
+    if $DEBUG > 1;
+
   my $text_template = new Text::Template(
     TYPE => 'ARRAY',
     SOURCE => \@invoice_template,
     DELIMITERS => $delimiters{$format},
   );
+
+  warn "$me print_generic compiling T:T object\n"
+    if $DEBUG > 1;
 
   $text_template->compile()
     or die "Can't compile $templatefile: $Text::Template::ERROR\n";
@@ -2322,6 +2331,8 @@ sub print_generic {
                            );
   my $embolden_function = $embolden_functions{$format};
 
+  warn "$me generating template variables\n"
+    if $DEBUG > 1;
 
   # generate template variables
   my $returnaddress;
@@ -2374,6 +2385,9 @@ sub print_generic {
     #$returnaddress = $warning;
 
   }
+
+  warn "$me generating invoice data\n"
+    if $DEBUG > 1;
 
   my $agentnum = $self->cust_main->agentnum;
 
@@ -2497,7 +2511,9 @@ sub print_generic {
   }
   $invoice_data{'summarypage'} = $summarypage;
 
-  #do variable substitution in notes, footer, smallfooter
+  warn "$me substituting variables in notes, footer, smallfooter\n"
+    if $DEBUG > 1;
+
   foreach my $include (qw( notes footer smallfooter coupon )) {
 
     my $inc_file = $conf->key_orbase("invoice_${format}$include", $template);
@@ -2567,6 +2583,9 @@ sub print_generic {
   $invoice_data{'total_items'} = \@total_items;
   $invoice_data{'buf'} = \@buf;
   $invoice_data{'sections'} = \@sections;
+
+  warn "$me generating sections\n"
+    if $DEBUG > 1;
 
   my $previous_section = { 'description' => 'Previous Charges',
                            'subtotal'    => $other_money_char.
@@ -2638,6 +2657,9 @@ sub print_generic {
          )
   {
 
+    warn "$me adding previous balances\n"
+      if $DEBUG > 1;
+
     foreach my $line_item ( $self->_items_previous ) {
 
       my $detail = {
@@ -2672,6 +2694,9 @@ sub print_generic {
   }
  
   if ( $conf->exists('svc_phone-did-summary') ) {
+      warn "$me adding DID summary\n"
+        if $DEBUG > 1;
+
       my ($didsummary,$minutes) = $self->_did_summary;
       my $didsummary_desc = 'DID Activity Summary (Past 30 days)';
       push @detail_items, 
@@ -2682,6 +2707,9 @@ sub print_generic {
   }
 
   foreach my $section (@sections, @$late_sections) {
+
+    warn "$me adding $section section\n"
+      if $DEBUG > 1;
 
     # begin some normalization
     $section->{'subtotal'} = $section->{'amount'}
@@ -2766,6 +2794,9 @@ sub print_generic {
   {
     unshift @sections, $previous_section if $pr_total;
   }
+
+  warn "$me adding taxes\n"
+    if $DEBUG > 1;
 
   foreach my $tax ( $self->_items_tax ) {
 
