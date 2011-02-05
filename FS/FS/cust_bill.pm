@@ -4206,7 +4206,7 @@ sub _items_cust_bill_pkg {
         $_->{amount}      =~ s/^\-0\.00$/0.00/;
         $_->{unit_amount} = sprintf( "%.2f", $_->{unit_amount} ),
         push @b, { %$_ }
-	  unless ( $_->{amount} == 0 && !$discount_show_always );
+          unless ( $_->{amount} == 0 && !$discount_show_always );
         $_ = undef;
       }
     }
@@ -4406,7 +4406,7 @@ sub _items_cust_bill_pkg {
       $_->{amount}      =~ s/^\-0\.00$/0.00/;
       $_->{unit_amount} = sprintf( "%.2f", $_->{unit_amount} ),
       push @b, { %$_ }
-	unless ( $_->{amount} == 0 && !$discount_show_always );
+        unless ( $_->{amount} == 0 && !$discount_show_always );
     }
   }
 
