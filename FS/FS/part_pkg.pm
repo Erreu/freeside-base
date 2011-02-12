@@ -539,7 +539,7 @@ sub pkg_comment {
 
 sub custom_comment {
   my $self = shift;
-  ( $self->custom ? '(CUSTOM) ' : '' ). $self->comment;
+  ( $self->custom ? '(CUSTOM) ' : '' ). $self->comment . ' ' . $self->price_info;
 }
 
 =item pkg_class
