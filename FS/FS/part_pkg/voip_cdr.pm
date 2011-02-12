@@ -473,7 +473,7 @@ sub calc_usage {
             }
 
           } else {
-            $countrycode = $domestic_prefix || '1';
+            $countrycode = length($domestic_prefix) ? $domestic_prefix : '1';
             $number =~ s/^$countrycode//;# if length($number) > 10;
           }
 
