@@ -1591,6 +1591,7 @@ sub process_batch_import {
     params                     => { map { $_ => $param->{$_} } @pass_params },
     #?
     default_csv                => $opt->{default_csv},
+    postinsert_callback        => $opt->{postinsert_callback},
   );
 
   if ( $opt->{'batch_namecol'} ) {
@@ -1664,6 +1665,8 @@ sub batch_import {
   my( $type, $header, $sep_char, $fixedlength_format, 
       $xml_format, $row_callback, @fields );
   my $postinsert_callback = '';
+  $postinsert_callback = $param->{'postinsert_callback'}
+	  if $param->{'postinsert_callback'};
   if ( $param->{'format'} ) {
 
     my $format  = $param->{'format'};
@@ -1708,9 +1711,6 @@ sub batch_import {
     $fixedlength_format = '';
     $row_callback = '';
     @fields = @{ $param->{'fields'} };
-
-    $postinsert_callback = $param->{'postinsert_callback'}
-      if $param->{'postinsert_callback'}
 
   } else {
     die "neither format nor fields specified";

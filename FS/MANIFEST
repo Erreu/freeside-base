@@ -543,3 +543,9 @@ t/svc_cert.t
 FS/cust_main/Status.pm
 FS/cust_note_class.pm
 t/cust_note_class.t
+FS/lata.pm
+t/lata.t
+FS/did_vendor.pm
+t/did_vendor.t
+FS/did_order.pm
+t/did_order.t
