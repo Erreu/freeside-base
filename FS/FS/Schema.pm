@@ -2232,8 +2232,8 @@ sub tables_hashref {
 
     'svc_external' => {
       'columns' => [
-        'svcnum', 'int', '', '', '', '', 
-        'id',     'int', 'NULL', '', '', '', 
+        'svcnum',     'int',     '',      '', '', '', 
+        'id',      'bigint', 'NULL',      '', '', '', 
         'title',  'varchar', 'NULL', $char_d, '', '', 
       ],
       'primary_key' => 'svcnum',
