@@ -1,3 +1,64 @@
+2011-03-22 13:55  ivan
+
+	* Makefile, httemplate/docs/about.html: 2.1.2
+
+2011-03-21 20:32  mark
+
+	* bin/: cdr-vitelity.import: Vitelity API CDR import, #11037
+
+2011-03-21 20:32  mark
+
+	* bin/cdr-vitelity.import: file cdr-vitelity.import was added on
+	  branch FREESIDE_2_1_BRANCH on 2011-03-22 03:32:59 +0000
+
+2011-03-20 16:51  ivan
+
+	* httemplate/elements/freeside.css: fix hover effect on disabled
+	  text boxes
+
+2011-03-18 19:00  ivan
+
+	* FS/FS/Schema.pm: svc_external.id s/int/bigint/ RT#12060
+
+2011-03-16 15:25  ivan
+
+	* conf/invoice_latex_statement: update statement template
+
+2011-03-16 09:31  ivan
+
+	* httemplate/graph/cust_bill_pkg_discount.html: file
+	  cust_bill_pkg_discount.html was added on branch
+	  FREESIDE_2_1_BRANCH on 2011-03-16 16:31:04 +0000
+
+2011-03-16 09:31  ivan
+
+	* httemplate/graph/report_cust_bill_pkg_discount.html: file
+	  report_cust_bill_pkg_discount.html was added on branch
+	  FREESIDE_2_1_BRANCH on 2011-03-16 16:31:04 +0000
+
+2011-03-16 09:31  ivan
+
+	* httemplate/graph/: cust_bill_pkg_discount.html,
+	  report_cust_bill_pkg_discount.html: never added
+
+2011-03-15 19:12  ivan
+
+	* bin/bind.export: been a while.  remove db.domain files for slaved
+	  domains
+
+2011-03-15 19:06  mark
+
+	* httemplate/edit/: svc_acct.cgi, process/svc_acct.cgi: google
+	  account export tweaks, #11760
+
+2011-03-14 18:36  ivan
+
+	* httemplate/docs/about.html: happy new year
+
+2011-03-14 18:36  ivan
+
+	* ChangeLog: 2.1.2
+
 2011-03-14 17:46  ivan
 
 	* httemplate/search/cust_bill_pkg.cgi: fix sales report detail
