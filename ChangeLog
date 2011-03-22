@@ -1,3 +1,12 @@
+2011-03-22 14:05  ivan
+
+	* ChangeLog: 2.1.2
+
+2011-03-22 14:03  mark
+
+	* FS/FS/part_export/acct_google.pm: load modules correctly for
+	  acct_google
+
 2011-03-22 13:55  ivan
 
 	* Makefile, httemplate/docs/about.html: 2.1.2
