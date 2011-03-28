@@ -549,3 +549,5 @@ FS/did_vendor.pm
 t/did_vendor.t
 FS/did_order.pm
 t/did_order.t
+FS/areacode.pm
+t/areacode.t
