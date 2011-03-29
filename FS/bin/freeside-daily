@@ -47,8 +47,8 @@ if ( $opt{u} ) {
 }
 
 #you can skip this just by not having the config
-use FS::Cron::backup qw(backup_scp);
-backup_scp();
+use FS::Cron::backup qw(backup);
+backup();
 
 my $deldir = "$FS::UID::cache_dir/cache.$FS::UID::datasrc/";
 unlink <${deldir}.invoice*>;
