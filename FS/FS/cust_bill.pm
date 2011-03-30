@@ -654,9 +654,8 @@ sub cust_bill_pay_pkg {
     'table'     => 'cust_bill_pay_pkg',
     'addl_from' => ' LEFT JOIN cust_bill_pay USING ( billpaynum ) '.
                    ' LEFT JOIN cust_bill_pkg USING ( billpkgnum ) ',
-    'hashref'   => { 'invnum' => $self->invnum,
-                     'pkgnum' => $pkgnum,
-                   },
+    'extra_sql' => ' WHERE invnum = '. $self->invnum.
+                   "   AND pkgnum = $pkgnum",
   });
 
 }
@@ -699,9 +698,8 @@ sub cust_credit_bill_pkg {
     'table'     => 'cust_credit_bill_pkg',
     'addl_from' => ' LEFT JOIN cust_credit_bill USING ( creditbillnum ) '.
                    ' LEFT JOIN cust_bill_pkg    USING ( billpkgnum    ) ',
-    'hashref'   => { 'invnum' => $self->invnum,
-                     'pkgnum' => $pkgnum,
-                   },
+    'extra_sql' => ' WHERE invnum = '. $self->invnum.
+                   "   AND pkgnum = $pkgnum",
   });
 
 }
