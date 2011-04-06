@@ -262,6 +262,7 @@ if ( -e $addl_handler_use_file ) {
   use FS::lata;
   use FS::did_vendor;
   use FS::did_order;
+  use FS::did_order_item;
   use FS::areacode;
   # Sammath Naur
 
