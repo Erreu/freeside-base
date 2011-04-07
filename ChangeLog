@@ -1,3 +1,800 @@
+2011-04-07 15:45  ivan
+
+	* httemplate/docs/about.html: 1.9.5
+
+2010-11-04 13:35  ivan
+
+	* FS/FS/: cust_pay.pm, part_pkg/voip_cdr.pm: bill setup fees upon
+	  receiving a payment, for bill_every_call customers
+
+2010-10-22 17:54  ivan
+
+	* FS/FS/cust_bill_pkg_detail.pm: fix upgrades from old 1.7
+
+2010-10-19 22:01  jeff
+
+	* FS/FS/cust_bill.pm: move handling of classless svc_phone line
+	  item details to the correct place in 1.9 RT10170
+
+2010-10-17 20:36  ivan
+
+	* FS/FS/cust_main.pm: fix "Inactive" status showing instead of
+	  "Suspended" or "Canceled" when there were one-time charges,
+	  RT#9971
+
+2010-10-14 14:16  ivan
+
+	* FS/FS/domain_record.pm: fix domain edits, RT#10223
+
+2010-10-13 16:14  ivan
+
+	* FS/bin/: freeside-daily, freeside-monthly, freeside-radgroup: fix
+	  bad POD in manpages, especially freeside-daily -p
+
+2010-10-13 13:20  ivan
+
+	* FS/FS/cust_main.pm: fix late fee held for next invoice triggering
+	  immediately if next bill dates have been manually added to
+	  one-time charges, RT#10192
+
+2010-10-12 13:58  mark
+
+	* FS/FS/part_pkg.pm: fix typo?
+
+2010-10-12 12:06  mark
+
+	* FS/FS/: cust_pkg.pm, part_pkg/flat.pm: per-package option to
+	  adjust bill date on unsuspend, RT#8434
+
+2010-10-11 03:36  ivan
+
+	* FS/FS/agent_type.pm: optimization to speed up new customer page
+	  when there's lots of agents, RT#10184
+
+2010-10-11 02:36  ivan
+
+	* httemplate/edit/cust_main/first_pkg.html: add lock_agentnum and
+	  lock_pkgpart parameters to new customer page, RT#9782
+
+2010-10-11 02:03  ivan
+
+	* httemplate/edit/cust_main.cgi: add lock_agentnum and lock_pkgpart
+	  parameters to new customer page, RT#9782
+
+2010-10-10 13:52  ivan
+
+	* FS/FS/part_pkg.pm, httemplate/edit/part_pkg.cgi,
+	  httemplate/edit/elements/edit.html: simple protection against
+	  selecting and using package add-ons that point to the same
+	  package.  (still need to detect and break more complex
+	  self-referential loops)
+
+2010-10-10 12:42  ivan
+
+	* httemplate/: edit/cust_pay_pending.html,
+	  search/cust_pay_pending.html: add "capture" links to pending
+	  payments in captured state, RT#10152
+
+2010-10-09 17:26  ivan
+
+	* httemplate/: edit/cust_main/top_misc.html,
+	  edit/cust_main/first_pkg/select-part_pkg.html,
+	  elements/freeside.css: add lock_agentnum and lock_pkgpart
+	  parameters to new customer page, RT#9782
+
+2010-09-29 18:11  ivan
+
+	* FS/FS/cust_main.pm: improve signup date recovery, especially in
+	  the edit case
+
+2010-09-29 13:47  ivan
+
+	* FS/: FS/Conf.pm, FS/Upgrade.pm, FS/cust_pay.pm,
+	  bin/freeside-upgrade: backport fix for too much payment
+	  receiptery, RT#9723 / RT#9856
+
+2010-09-29 11:39  mark
+
+	* FS/FS/cust_main.pm: restore missing signup dates during upgrade,
+	  RT#9972
+
+2010-09-28 17:38  mark
+
+	* httemplate/edit/process/cust_main.cgi: avoid wiping signupdate
+	  when editing cust_main, RT#9972
+
+2010-09-23 20:14  jeff
+
+	* FS/FS/cust_main.pm: fix bad bug in line item generation RT#10024
+
+2010-09-17 11:27  ivan
+
+	* FS/FS/domain_record.pm: botched backport; sync with 2.1, RT#9883
+
+2010-09-16 09:07  ivan
+
+	* FS/FS/svc_acct.pm: blast from the past: exclamation mark vs.
+	  cistron radius with textfiles.  RT#9958
+
+2010-09-15 21:17  jeff
+
+	* FS/FS/part_export/domreg_opensrs.pm: default registrations to 1
+	  year
+
+2010-09-11 10:13  ivan
+
+	* httemplate/docs/credits.html: add Erik to credits
+
+2010-09-11 10:02  ivan
+
+	* FS/FS/Schema.pm, FS/FS/domain_record.pm, FS/FS/svc_domain.pm,
+	  FS/FS/part_export/domain_sql.pm,
+	  httemplate/view/svc_domain/dns.html: dns updates from Erik L: add
+	  ttl support, add check for SRV and finish allowing additional
+	  rectypes, allow forward slashes for RFC2317 classless in-arpa
+	  delegation, RT#8933
+
+2010-09-10 12:31  ivan
+
+	* FS/FS/part_export/shellcommands.pm: fix shell quoting for
+	  agent_custid...
+
+2010-09-08 14:33  jeff
+
+	* bin/generate-table-module: restore black magic
+
+2010-09-07 16:31  mark
+
+	* httemplate/search/: report_receivables.html,
+	  elements/cust_main_dayranges.html: Option to include customers
+	  with credit balances in aging report, RT#9834
+
+2010-09-07 13:25  mark
+
+	* FS/FS/part_export/shellcommands.pm: agent_custid available on
+	  replace, RT#9826
+
+2010-09-02 15:53  mark
+
+	* FS/FS/part_export/shellcommands.pm: agent_custid in shellcommands
+	  export, RT#9826
+
+2010-09-01 13:25  jeff
+
+	* httemplate/search/477partVI_census.html: warn about multiple
+	  states
+
+2010-09-01 11:52  jeff
+
+	* httemplate/search/: 477partIA_detail.html,
+	  477partIA_summary.html: fix xml tag for upper left corner of part
+	  ia and actually calculate the above 200kpbs residential
+	  percentage
+
+2010-09-01 11:44  mark
+
+	* FS/FS/: msg_template.pm, Cron/notify.pm: packages and recurdates
+	  for impending_recur templates
+
+2010-09-01 10:50  mark
+
+	* FS/FS/: msg_template.pm, Cron/alert_expiration.pm: make expdate
+	  available in new alerter templates, RT#9786
+
+2010-08-31 10:40  jeff
+
+	* httemplate/search/: report_cust_pay.html,
+	  elements/cust_pay_or_refund.html: tax names on payment search
+	  report #9760
+
+2010-08-25 09:04  jeff
+
+	* httemplate/search/: 477partIA_detail.html, 477partVI_census.html,
+	  elements/search-xml.html: stricter than docs suggest: no 0 values
+	  for partIA RT#9721
+
+2010-08-25 01:43  ivan
+
+	* FS/FS/cust_main.pm: syntax error in backport or something
+
+2010-08-24 15:04  ivan
+
+	* FS/bin/freeside-wipe-cvv: blank payinfo instead of "deleted"
+
+2010-08-24 13:14  ivan
+
+	* FS/bin/freeside-prepaidd: insurance against prepaid
+	  double-billing, RT#9689
+
+2010-08-24 13:09  ivan
+
+	* FS/bin/freeside-prepaidd: insurance against prepaid
+	  double-billing, RT#9689
+
+2010-08-24 10:36  jeff
+
+	* httemplate/search/: 477.html, 477partIA_detail.html,
+	  477partVI.html, 477partVI_census.html, report_477.html: fixup 477
+	  XML output
+
+2010-08-24 10:30  jeff
+
+	* httemplate/search/477partVI_census.html: file
+	  477partVI_census.html was added on branch FREESIDE_1_9_BRANCH on
+	  2010-08-24 17:36:47 +0000
+
+2010-08-24 10:30  jeff
+
+	* httemplate/search/477partVI_census.html: fixup 477 XML output
+
+2010-08-23 20:06  mark
+
+	* FS/bin/freeside-wipe-cvv: file freeside-wipe-cvv was added on
+	  branch FREESIDE_1_9_BRANCH on 2010-08-24 03:07:03 +0000
+
+2010-08-23 20:06  mark
+
+	* FS/bin/: freeside-wipe-cvv: script to remove payment info from
+	  canceled customers, RT#9652
+
+2010-08-23 20:03  mark
+
+	* FS/FS/: cust_main.pm, pay_batch.pm: delete CVV when processing
+	  batch results, RT#9652
+
+2010-08-23 17:55  ivan
+
+	* FS/FS/cust_pay.pm: fix payment receipts when
+	  payment_receipt_msgnum is unconfigured
+
+2010-08-23 09:47  jeff
+
+	* FS/FS/: cust_bill.pm, cust_bill_pkg_display.pm: create a default
+	  finance section and have hidden sectionless line items remain
+	  sectionless
+
+2010-08-23 09:35  jeff
+
+	* FS/FS/Conf.pm,
+	  httemplate/misc/xmlhttp-cust_main-censustract.html: work around
+	  ffiec bug and add year 2010
+
+2010-08-20 17:21  mark
+
+	* FS/FS/part_event/Condition/: once_every.pm, once_perinv.pm,
+	  pkg_next_bill_within.pm: new event conditions, RT#8896
+
+2010-08-20 17:17  mark
+
+	* FS/FS/part_event/Condition/once_every.pm: file once_every.pm was
+	  added on branch FREESIDE_1_9_BRANCH on 2010-08-21 00:21:22 +0000
+
+2010-08-20 17:17  mark
+
+	* FS/FS/part_event/Condition/once_perinv.pm: file once_perinv.pm
+	  was added on branch FREESIDE_1_9_BRANCH on 2010-08-21 00:21:22
+	  +0000
+
+2010-08-20 17:17  mark
+
+	* FS/FS/part_event/Condition/pkg_next_bill_within.pm: file
+	  pkg_next_bill_within.pm was added on branch FREESIDE_1_9_BRANCH
+	  on 2010-08-21 00:21:23 +0000
+
+2010-08-20 17:17  mark
+
+	* FS/FS/part_event/Condition/: once_every.pm, once_perinv.pm,
+	  pkg_next_bill_within.pm: new event conditions, RT#8896
+
+2010-08-19 04:55  ivan
+
+	* FS/FS/pay_batch.pm: fix batching protection against transactions
+	  settled in the meantime, RT#7905
+
+2010-08-18 12:42  jeff
+
+	* FS/FS/cust_main.pm: no, patch... not like that
+
+2010-08-18 12:38  jeff
+
+	* FS/FS/: cust_main.pm, cust_bill.pm: allow sections to work
+	  without 'separate_usage,' correct packages hidden behind zero
+	  value packages, correct section handling, and fix propogation of
+	  other display attributes to child packages
+
+2010-08-18 10:04  mark
+
+	* httemplate/search/cust_pkg_susp.cgi: file cust_pkg_susp.cgi was
+	  added on branch FREESIDE_1_9_BRANCH on 2010-08-18 17:05:15 +0000
+
+2010-08-18 10:04  mark
+
+	* httemplate/search/cust_pkg_susp.html: file cust_pkg_susp.html was
+	  added on branch FREESIDE_1_9_BRANCH on 2010-08-18 17:05:15 +0000
+
+2010-08-18 10:04  mark
+
+	* httemplate/: search/cust_pkg_susp.cgi, search/cust_pkg_susp.html,
+	  elements/menu.html: Suspension/unsuspension report, RT#8464
+
+2010-08-17 21:42  jeff
+
+	* FS/FS/cust_bill.pm: handle the usage_class-less details in
+	  svc_phone sections
+
+2010-08-17 10:05  ivan
+
+	* FS/MANIFEST: communigate phase 3: certificates, RT#7515
+
+2010-08-17 00:07  ivan
+
+	* httemplate/edit/: msg_template.html: better sizes and labels for
+	  message tempalte subject and addresses
+
+2010-08-16 23:57  ivan
+
+	* httemplate/: browse/msg_template.html, edit/msg_template.html:
+	  allow Configuration right to see global message templates, avoid
+	  weird surprises on upgrade
+
+2010-08-16 23:45  ivan
+
+	* etc/sql-reserved-words.txt: mysql reserves all sorts of things
+
+2010-08-16 23:41  ivan
+
+	* FS/FS/Schema.pm, FS/FS/acct_snarf.pm,
+	  httemplate/edit/acct_snarf.html: LEAVE is reserved in msyql
+
+2010-08-16 18:05  mark
+
+	* fs_selfservice/FS-SelfService/: SelfService.pm, cgi/signup.html:
+	  fix SelfService county selector, RT#8079
+
+2010-08-16 13:24  ivan
+
+	* httemplate/view/svc_phone.cgi: fix search of pending/billed CDRs
+	  to find src field too, RT#9640
+
+2010-08-16 13:11  ivan
+
+	* FS/: FS/Upgrade.pm, FS/cust_bill_pkg_detail.pm,
+	  bin/freeside-upgrade: fix upgrade with ancient
+	  cust_bill_pkg_detail.classnum but new DBIx::DBSchema, RT#9640
+
+2010-08-16 12:45  ivan
+
+	* httemplate/: search/cdr.html, view/svc_phone.cgi: fix search of
+	  pending/billed CDRs to find src field too, RT#9640
+
+2010-08-16 10:49  mark
+
+	* FS/FS/Misc.pm, FS/FS/Schema.pm, FS/FS/cust_main.pm,
+	  FS/FS/msg_template.pm, FS/FS/Cron/notify.pm,
+	  httemplate/edit/msg_template.html: Bcc address for impending
+	  recur notices, RT#8953
+
+2010-08-13 10:41  ivan
+
+	* FS/FS/cust_main/Import.pm: ignore expired cards on customer
+	  import
+
+2010-08-12 19:40  mark
+
+	* httemplate/elements/menu.html: clean up bad commit
+
+2010-08-12 15:25  ivan
+
+	* httemplate/edit/process/svc_acct.cgi: counter values can be
+	  negative
+
+2010-08-11 14:53  ivan
+
+	* FS/FS/cust_main/Import.pm: at least show an error for bad
+	  pkgparts instead of a hang, RT#9578
+
+2010-08-10 17:42  ivan
+
+	* httemplate/edit/REAL_cust_pkg.cgi: fix date editing
+	  w/international dates, RT#9509
+
+2010-08-10 17:08  ivan
+
+	* FS/FS/cust_main.pm: fix return address in welcome letters,
+	  RT#9497
+
+2010-08-10 14:37  ivan
+
+	* httemplate/elements/xmlhttp.html: eliminate the '0 status
+	  connecting' errors, they're not telling us anything and causing
+	  lots of people to waste time asking
+
+2010-08-09 23:28  ivan
+
+	* FS/FS/cust_bill.pm, FS/FS/cust_main.pm, conf/welcome_letter: add
+	  logo_file support to welcome_letter and fix leaving temp files
+	  around for invoices and letters, RT#9497
+
+2010-08-09 10:22  ivan
+
+	* FS/FS/access_user.pm: return username as a name lable for
+	  "Lastname, Firstname" employees
+
+2010-08-09 09:20  ivan
+
+	* FS/FS/cust_main.pm: fix cancellation error "No schema for table
+	  table found", seems to be fallout from cust_tag work, RT#9502
+
+2010-08-07 03:11  ivan
+
+	* FS/FS/: acct_snarf.pm, svc_acct.pm,
+	  part_export/communigate_pro.pm: communigate phase 3:
+	  RPOP/acct_snarf, RT#7515
+
+2010-08-07 00:39  ivan
+
+	* httemplate/browse/acct_snarf.html,
+	  httemplate/edit/acct_snarf.html,
+	  httemplate/edit/process/acct_snarf.html, FS/FS/Mason.pm,
+	  FS/FS/Schema.pm, FS/FS/acct_snarf.pm,
+	  httemplate/view/svc_acct/communigate.html: communigate phase 3:
+	  RPOP/acct_snarf, RT#7515
+
+2010-08-07 00:39  ivan
+
+	* httemplate/: browse/acct_snarf.html, edit/acct_snarf.html,
+	  edit/process/acct_snarf.html: file acct_snarf.html was added on
+	  branch FREESIDE_1_9_BRANCH on 2010-08-07 07:39:07 +0000
+
+2010-08-06 14:31  ivan
+
+	* FS/FS/svc_acct.pm, httemplate/edit/part_svc.cgi: communigate
+	  phase 3: archive messages, RT#7515
+
+2010-08-06 14:28  ivan
+
+	* FS/FS/Schema.pm, FS/FS/svc_acct.pm, FS/FS/svc_domain.pm,
+	  FS/FS/part_export/communigate_pro.pm,
+	  httemplate/edit/part_svc.cgi, httemplate/edit/svc_acct.cgi,
+	  httemplate/edit/svc_domain.cgi,
+	  httemplate/edit/svc_acct/communigate.html,
+	  httemplate/edit/svc_domain/communigate-acct_defaults.html,
+	  httemplate/edit/svc_domain/communigate-basics.html,
+	  httemplate/view/svc_acct/communigate.html,
+	  httemplate/view/svc_domain/acct_defaults.html: communigate phase
+	  3: archive messages, RT#7515
+
+2010-08-05 17:45  ivan
+
+	* httemplate/: edit/cgp_rule-redirect_all.html,
+	  edit/cgp_rule-vacation.html,
+	  edit/process/cgp_rule-redirect_all.html,
+	  edit/process/cgp_rule-simplified.html,
+	  edit/process/cgp_rule-vacation.html,
+	  view/svc_acct/communigate.html: communigate account rules:
+	  vacation & redirect all, RT#7514
+
+2010-08-05 17:45  ivan
+
+	* httemplate/edit/process/cgp_rule-redirect_all.html: file
+	  cgp_rule-redirect_all.html was added on branch
+	  FREESIDE_1_9_BRANCH on 2010-08-06 00:45:29 +0000
+
+2010-08-05 17:45  ivan
+
+	* httemplate/edit/process/cgp_rule-simplified.html: file
+	  cgp_rule-simplified.html was added on branch FREESIDE_1_9_BRANCH
+	  on 2010-08-06 00:45:29 +0000
+
+2010-08-05 17:45  ivan
+
+	* httemplate/edit/process/cgp_rule-vacation.html: file
+	  cgp_rule-vacation.html was added on branch FREESIDE_1_9_BRANCH on
+	  2010-08-06 00:45:29 +0000
+
+2010-08-05 13:16  mark
+
+	* httemplate/: elements/menu.html, search/cust_pkg_summary.cgi,
+	  search/cust_pkg_summary.html: Package summary report, RT#8461
+
+2010-08-05 13:10  mark
+
+	* httemplate/search/: cust_pkg_summary.cgi, cust_pkg_summary.html:
+	  Package summary report, RT#8461
+
+2010-08-05 13:10  mark
+
+	* httemplate/search/cust_pkg_summary.cgi: file cust_pkg_summary.cgi
+	  was added on branch FREESIDE_1_9_BRANCH on 2010-08-05 20:16:30
+	  +0000
+
+2010-08-05 13:10  mark
+
+	* httemplate/search/cust_pkg_summary.html: file
+	  cust_pkg_summary.html was added on branch FREESIDE_1_9_BRANCH on
+	  2010-08-05 20:16:31 +0000
+
+2010-08-04 21:17  jeff
+
+	* FS/FS/: cust_svc.pm, part_export/sqlradius.pm: add options to
+	  only process account records from a particular realm and to
+	  ignore sessions that span billing periods RT8082
+
+2010-08-04 17:24  mark
+
+	* FS/FS/cust_main.pm, FS/FS/msg_template.pm,
+	  httemplate/edit/msg_template.html: error message in decline
+	  templates, RT#9507
+
+2010-08-04 11:50  ivan
+
+	* FS/FS/Record.pm: fix scalar_sql not to return empty string for
+	  zero
+
+2010-08-03 18:30  ivan
+
+	* FS/FS/part_export/communigate_pro.pm: better serialization on
+	  debugging data, RT#7514
+
+2010-08-03 18:26  ivan
+
+	* FS/FS/part_export/: communigate_pro.pm: better serialization on
+	  debugging data, RT#7514
+
+2010-08-03 18:22  ivan
+
+	* FS/FS/part_export/: communigate_pro.pm: better serialization on
+	  debugging data, RT#7514
+
+2010-08-03 18:15  ivan
+
+	* FS/FS/part_export/communigate_pro.pm: better serialization on
+	  debugging data, RT#7514
+
+2010-08-03 16:12  ivan
+
+	* httemplate/browse/cgp_rule.html: don't allow addition of a domain
+	  rule template to itself, RT#7514
+
+2010-08-03 11:00  ivan
+
+	* httemplate/search/cust_main.cgi: spelling
+
+2010-08-02 20:30  mark
+
+	* httemplate/misc/custom_link_proxy.cgi,
+	  httemplate/view/cust_main/custom.html, FS/FS/Conf.pm,
+	  httemplate/view/cust_main.cgi, FS/FS/Mason.pm: customer view tab
+	  for an external info page, RT#8903
+
+2010-08-02 20:30  mark
+
+	* httemplate/view/cust_main/custom.html: file custom.html was added
+	  on branch FREESIDE_1_9_BRANCH on 2010-08-03 03:30:33 +0000
+
+2010-08-02 20:30  mark
+
+	* httemplate/misc/custom_link_proxy.cgi: file custom_link_proxy.cgi
+	  was added on branch FREESIDE_1_9_BRANCH on 2010-08-03 03:30:33
+	  +0000
+
+2010-07-30 15:20  mark
+
+	* FS/FS/Conf.pm, FS/FS/msg_template.pm, FS/FS/cust_pay.pm,
+	  httemplate/edit/msg_template.html: payment receipts use
+	  msg_template, RT#9060
+
+2010-07-29 22:50  mark
+
+	* FS/FS/: Misc.pm, part_pkg.pm, part_event/Condition/pkg_freq.pm:
+	  add pkg_freq event condition, RT#8896
+
+2010-07-29 22:38  mark
+
+	* FS/FS/Conf.pm: fix stray commit
+
+2010-07-29 17:13  jeff
+
+	* FS/FS/tax_rate.pm: fix error message to be more useful
+
+2010-07-29 17:06  mark
+
+	* FS/FS/Schema.pm: fix mutilated schema
+
+2010-07-29 16:11  mark
+
+	* FS/FS/part_event/Condition/pkg_freq.pm: add pkg_freq event
+	  condition, RT#8896
+
+2010-07-29 16:11  mark
+
+	* FS/FS/part_event/Condition/pkg_freq.pm: file pkg_freq.pm was
+	  added on branch FREESIDE_1_9_BRANCH on 2010-07-30 05:50:24 +0000
+
+2010-07-29 09:41  mark
+
+	* httemplate/search/elements/cust_main_dayranges.html: aging report
+	  now uses DateTime, RT#9417
+
+2010-07-28 16:20  mark
+
+	* FS/FS/Conf.pm, FS/FS/Schema.pm, FS/FS/cust_main.pm,
+	  FS/FS/cust_pkg.pm, FS/FS/msg_template.pm, FS/FS/svc_acct.pm,
+	  FS/FS/Cron/alert_expiration.pm, FS/FS/Cron/notify.pm,
+	  httemplate/config/config-view.cgi,
+	  httemplate/edit/msg_template.html: msg_template improvements,
+	  RT#8324
+
+2010-07-27 19:51  ivan
+
+	* FS/FS/Upgrade.pm: fix unnecessary warnings on upgrade of remote
+	  Pg RADIUS db, RT#9178
+
+2010-07-27 19:46  ivan
+
+	* FS/FS/Upgrade.pm: fix unnecessary warnings on upgrade of remote
+	  Pg RADIUS db, RT#9178
+
+2010-07-26 15:59  ivan
+
+	* httemplate/edit/cgp_rule-redirect_all.html: file
+	  cgp_rule-redirect_all.html was added on branch
+	  FREESIDE_1_9_BRANCH on 2010-07-26 22:59:04 +0000
+
+2010-07-26 15:59  ivan
+
+	* httemplate/edit/cgp_rule-vacation.html: file
+	  cgp_rule-vacation.html was added on branch FREESIDE_1_9_BRANCH on
+	  2010-07-26 22:59:04 +0000
+
+2010-07-26 15:59  ivan
+
+	* httemplate/: edit/cgp_rule-redirect_all.html,
+	  edit/cgp_rule-vacation.html, view/svc_acct/communigate.html:
+	  communigate vacation & redirect all rules, RT#7514
+
+2010-07-25 13:47  jeff
+
+	* FS/FS/Upgrade.pm: missing upgrade
+
+2010-07-23 16:16  ivan
+
+	* FS/FS/pay_batch.pm: put batch card numbers/masks in cust_pay so
+	  they can be refunded, patch from peter loeppky, RT#8776
+
+2010-07-23 03:02  ivan
+
+	* FS/FS/svc_CGP_Mixin.pm, FS/FS/svc_acct.pm, FS/FS/svc_domain.pm,
+	  httemplate/edit/svc_acct.cgi, httemplate/edit/svc_domain.cgi: add
+	  EmptyTrash values and finish consolidating the CGP timezone
+	  arrays, RT#7083
+
+2010-07-23 02:32  ivan
+
+	* FS/FS/svc_CGP_Mixin.pm, FS/FS/svc_CGPRule_Mixin.pm,
+	  FS/FS/svc_acct.pm, FS/MANIFEST, FS/FS/svc_domain.pm,
+	  httemplate/edit/svc_acct.cgi, httemplate/edit/svc_domain.cgi:
+	  consolidate four CGP timezone arrays, RT#7083
+
+2010-07-23 02:32  ivan
+
+	* FS/FS/svc_CGP_Mixin.pm: file svc_CGP_Mixin.pm was added on branch
+	  FREESIDE_1_9_BRANCH on 2010-07-23 09:33:00 +0000
+
+2010-07-22 16:33  mark
+
+	* FS/FS/Conf.pm, httemplate/view/cust_main/tickets.html: option to
+	  force default queue for new tickets in cust_main, RT#8889
+
+2010-07-22 09:43  ivan
+
+	* httemplate/browse/msg_template.html,
+	  httemplate/edit/msg_template.html,
+	  httemplate/edit/process/msg_template.html,
+	  httemplate/elements/menu.html, FS/FS/msg_template.pm: allow
+	  Configuration ACL to edit templates, RT#8324
+
+2010-07-22 00:25  mark
+
+	* httemplate/search/: report_receivables.cgi,
+	  unapplied_cust_pay.html, elements/cust_main_dayranges.html: Fix
+	  weird behavior of aging report, RT#9234
+
+2010-07-21 00:54  ivan
+
+	* Makefile: post-1.9.4
+
+2010-07-20 14:33  mark
+
+	* httemplate/view/cust_main/tickets.html: adjust "Create Ticket"
+	  link, RT#7656
+
+2010-07-17 15:26  ivan
+
+	* httemplate/edit/part_tag.html: customer tags, RT#9192
+
+2010-07-17 15:14  ivan
+
+	* FS/FS/UI/Web/small_custview.pm, httemplate/view/cust_main.cgi,
+	  httemplate/view/cust_main/misc.html, FS/FS/Conf.pm: customer
+	  tags, RT#9192
+
+2010-07-17 14:41  ivan
+
+	* httemplate/: elements/pickcolor.html, elements/tr-pickcolor.html,
+	  browse/part_tag.html, edit/part_tag.html: customer tags, RT#9192
+
+2010-07-17 14:41  ivan
+
+	* httemplate/elements/pickcolor.html: file pickcolor.html was added
+	  on branch FREESIDE_1_9_BRANCH on 2010-07-17 21:41:49 +0000
+
+2010-07-17 14:41  ivan
+
+	* httemplate/elements/tr-pickcolor.html: file tr-pickcolor.html was
+	  added on branch FREESIDE_1_9_BRANCH on 2010-07-17 21:41:49 +0000
+
+2010-07-16 16:45  ivan
+
+	* httemplate/elements/select-cust_tag.html,
+	  httemplate/elements/tr-select-cust_tag.html,
+	  FS/FS/AccessRight.pm, FS/FS/Record.pm, FS/FS/cust_main.pm,
+	  FS/FS/cust_tag.pm, httemplate/edit/part_tag.html,
+	  httemplate/edit/cust_main/top_misc.html,
+	  httemplate/edit/process/cust_main.cgi,
+	  httemplate/view/cust_main/misc.html: customer tags, RT#9192
+
+2010-07-16 16:45  ivan
+
+	* httemplate/elements/select-cust_tag.html: file
+	  select-cust_tag.html was added on branch FREESIDE_1_9_BRANCH on
+	  2010-07-16 23:46:39 +0000
+
+2010-07-16 16:45  ivan
+
+	* httemplate/elements/tr-select-cust_tag.html: file
+	  tr-select-cust_tag.html was added on branch FREESIDE_1_9_BRANCH
+	  on 2010-07-16 23:46:39 +0000
+
+2010-07-15 14:46  ivan
+
+	* FS/FS/cust_tag.pm: file cust_tag.pm was added on branch
+	  FREESIDE_1_9_BRANCH on 2010-07-15 21:47:03 +0000
+
+2010-07-15 14:46  ivan
+
+	* FS/t/cust_tag.t: file cust_tag.t was added on branch
+	  FREESIDE_1_9_BRANCH on 2010-07-15 21:47:03 +0000
+
+2010-07-15 14:46  ivan
+
+	* httemplate/: browse/part_tag.html, edit/part_tag.html,
+	  edit/process/part_tag.html: file part_tag.html was added on
+	  branch FREESIDE_1_9_BRANCH on 2010-07-15 21:47:03 +0000
+
+2010-07-15 14:46  ivan
+
+	* FS/FS/part_tag.pm: file part_tag.pm was added on branch
+	  FREESIDE_1_9_BRANCH on 2010-07-15 21:47:02 +0000
+
+2010-07-15 14:46  ivan
+
+	* FS/t/part_tag.t: file part_tag.t was added on branch
+	  FREESIDE_1_9_BRANCH on 2010-07-15 21:47:03 +0000
+
+2010-07-15 14:46  ivan
+
+	* FS/FS/cust_tag.pm, FS/FS/part_tag.pm, FS/t/cust_tag.t,
+	  FS/t/part_tag.t, httemplate/browse/part_tag.html,
+	  httemplate/edit/part_tag.html,
+	  httemplate/edit/process/part_tag.html, FS/FS.pm, FS/MANIFEST,
+	  FS/FS/Schema.pm, FS/FS/Mason.pm, httemplate/elements/menu.html:
+	  customer tags, RT#9192
+
+2010-07-14 03:36  ivan
+
+	* ChangeLog, debian/changelog: Updated for 1.9.4
+
 2010-07-14 03:33  ivan
 
 	* FS/FS/part_event/Action/notice.pm: notices, RT#8324
@@ -28001,11 +28798,6 @@
 2003-06-02 05:22  ivan
 
 	* FS/FS/cust_pkg.pm: add last_bill field to manpage
-
-2003-05-30 02:40  ivan
-
-	* httemplate/docs/man/FS/part_export/.cvs_is_on_crack: force
-	  inclusion of httemplate/docs/man hierarchy
 
 2003-05-30 02:22  ivan
 
