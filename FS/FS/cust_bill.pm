@@ -3306,7 +3306,7 @@ sub print_ps {
   my ($file, $logofile, $barcodefile) = $self->print_latex(@_);
   my $ps = generate_ps($file);
   unlink($logofile);
-  unlink($barcodefile);
+  unlink($barcodefile) if $barcodefile;
 
   $ps;
 }
@@ -3335,7 +3335,7 @@ sub print_pdf {
   my ($file, $logofile, $barcodefile) = $self->print_latex(@_);
   my $pdf = generate_pdf($file);
   unlink($logofile);
-  unlink($barcodefile);
+  unlink($barcodefile) if $barcodefile;
 
   $pdf;
 }
