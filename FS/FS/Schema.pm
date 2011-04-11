@@ -2599,7 +2599,7 @@ sub tables_hashref {
       'index' => [ [ 'calldate' ],
                    [ 'src' ], [ 'dst' ], [ 'dcontext' ], [ 'charged_party' ],
                    [ 'accountcode' ], [ 'carrierid' ], [ 'cdrid' ],
-                   [ 'sessionnum' ],
+                   [ 'sessionnum' ], [ 'subscriber' ],
                    [ 'freesidestatus' ], [ 'freesiderewritestatus' ],
                    [ 'cdrbatch' ], [ 'cdrbatchnum' ],
                  ],
