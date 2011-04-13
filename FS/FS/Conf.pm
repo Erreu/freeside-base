@@ -653,6 +653,13 @@ my %payment_gateway_options = (
     'description' => 'IP address to assign to new virtual hosts',
     'type'        => 'text',
   },
+  
+  {
+    'key'         => 'credits-auto-apply-disable',
+    'section'     => 'billing',
+    'description' => 'Disable the "Auto-Apply to invoices" UI option for new credits',
+    'type'        => 'checkbox',
+  },
 
   {
     'key'         => 'discount-show-always',
