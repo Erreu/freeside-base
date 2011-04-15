@@ -264,6 +264,8 @@ if ( -e $addl_handler_use_file ) {
   use FS::did_order;
   use FS::did_order_item;
   use FS::areacode;
+  use FS::msa;
+  use FS::rate_center;
   # Sammath Naur
 
   if ( $FS::Mason::addl_handler_use ) {

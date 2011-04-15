@@ -553,3 +553,7 @@ FS/did_order_item.pm
 t/did_order_item.t
 FS/areacode.pm
 t/areacode.t
+FS/msa.pm
+t/msa.t
+FS/rate_center.pm
+t/rate_center.t
