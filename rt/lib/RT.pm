@@ -57,7 +57,7 @@ use Cwd ();
 
 use vars qw($Config $System $SystemUser $Nobody $Handle $Logger $_INSTALL_MODE);
 
-our $VERSION = '3.8.9';
+our $VERSION = '3.8.8';
 
 
 
