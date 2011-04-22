@@ -142,7 +142,7 @@ while ( my $Ticket = $Tickets->Next()) {
                 Arguments => [ $Ticket, $row ],
             );
         } #foreach $subcol
-        $value .= join('', @out);
+        $value = join('', '<span>', @out, '</span>');
         # strip out all HTML except line breaks
         my $tree = HTML::TreeBuilder->new->parse($value);
         my $text = $plaintext->format($tree);
