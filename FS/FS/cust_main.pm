@@ -1652,6 +1652,7 @@ sub check {
     || $self->ut_alphan('geocode')
     || $self->ut_floatn('cdr_termination_percentage')
     || $self->ut_floatn('credit_limit')
+    || $self->ut_numbern('billday')
   ;
 
   #barf.  need message catalogs.  i18n.  etc.
