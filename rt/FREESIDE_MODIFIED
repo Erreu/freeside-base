@@ -134,4 +134,5 @@ lib/RT/Extension/SearchResults/XLS.pm
 
 share/html/Search/Results.csv
 share/html/Search/Elements/ResultViews
+share/html/Elements/ColumnMap
 
