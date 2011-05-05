@@ -1085,6 +1085,7 @@ sub list_svcs {
   { 
     'svcnum'   => $session->{'svcnum'},
     'custnum'  => $custnum,
+    'view_usage_nodomain' => $conf->exists('selfservice-view_usage_nodomain'),
     'svcs'     => [
       map { 
             my $svc_x = $_->svc_x;
@@ -1175,8 +1176,8 @@ sub list_support_usage {
 
 sub _list_cdr_usage {
   my($svc_phone, $begin, $end) = @_;
-  map [ $_->downstream_csv('format' => 'default') ], #XXX config for format
-      $svc_phone->get_cdrs( 'begin'=>$begin, 'end'=>$end, );
+  map [ $_->downstream_csv('format' => 'default', 'keeparray' => 1) ], #XXX config for format
+                       $svc_phone->get_cdrs( 'begin'=>$begin, 'end'=>$end, );
 }
 
 sub list_cdr_usage {
