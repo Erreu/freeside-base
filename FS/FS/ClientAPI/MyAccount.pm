@@ -1054,6 +1054,8 @@ sub list_pkgs {
 sub list_svcs {
   my $p = shift;
 
+  my $conf = new FS::Conf;
+
   my($context, $session, $custnum) = _custoragent_session_custnum($p);
   return { 'error' => $session } if $context eq 'error';
 
