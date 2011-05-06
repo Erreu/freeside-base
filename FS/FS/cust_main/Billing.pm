@@ -828,6 +828,7 @@ sub _make_lines {
 
   my $setup = 0;
   my $unitsetup = 0;
+  my %setup_param = ();
   if (     ! $options{recurring_only}
        and ! $options{cancel}
        and ( $options{'resetup'}
@@ -850,7 +851,7 @@ sub _make_lines {
     unless ( $cust_pkg->waive_setup ) {
         $lineitems++;
 
-        $setup = eval { $cust_pkg->calc_setup( $time, \@details ) };
+        $setup = eval { $cust_pkg->calc_setup( $time, \@details, \%setup_param ) };
         return "$@ running calc_setup for $cust_pkg\n"
           if $@;
 
@@ -910,6 +911,7 @@ sub _make_lines {
                   'discounts'           => \@discounts,
                   'real_pkgpart'        => $real_pkgpart,
                   'freq_override'	=> $options{freq_override} || '',
+                  %setup_param,
                 );
 
     my $method = $options{cancel} ? 'calc_cancel' : 'calc_recur';
@@ -937,6 +939,12 @@ sub _make_lines {
 
       $cust_pkg->setfield('bill', $next_bill );
 
+    }
+
+    if ( defined $param{'discount_left_setup'} ) {
+        foreach my $discount_setup ( values %{$param{'discount_left_setup'}} ) {
+            $setup -= $discount_setup;
+        }
     }
 
   }
