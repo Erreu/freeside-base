@@ -2095,7 +2095,7 @@ sub tables_hashref {
     'msgcat' => {
       'columns' => [
         'msgnum', 'serial', '', '', '', '', 
-        'msgcode', 'varchar', '', 255, '', '', 
+        'msgcode', 'varchar', '', $char_d, '', '', 
         'locale', 'varchar', '', 16, '', '', 
         'msg', 'text', '', '', '', '', 
       ],
