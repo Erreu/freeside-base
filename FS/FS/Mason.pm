@@ -268,6 +268,7 @@ if ( -e $addl_handler_use_file ) {
   use FS::areacode;
   use FS::msa;
   use FS::rate_center;
+  use FS::cust_msg;
   # Sammath Naur
 
   if ( $FS::Mason::addl_handler_use ) {
