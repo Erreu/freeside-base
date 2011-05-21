@@ -1,0 +1,205 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use Text::CSV;
+use FS::UID qw(adminsuidsetup);
+use FS::cust_main_county;
+use FS::Record qw(qsearch qsearchs);
+use DateTime::Format::Natural;
+use FS::lata;
+use FS::msa;
+use FS::cust_main;
+use FS::cust_main::Search qw(smart_search);
+use FS::did_order;
+use FS::did_order_item;
+use FS::rate_center;
+use FS::phone_avail;
+
+my $user = shift;
+adminsuidsetup $user;
+
+#### SET THESE! #################################
+my $file = '/home/levinse/dids1.csv';
+my $did_vendor_id = 1;
+my %custname2num = (); # MyCust => 12345,
+################################################
+
+my $debug = 1;
+my $max_date = time;
+my $min_date = 1262304000; # January 1st 2010
+my %did_order = ();
+my %rate_center_cache = ();
+my $linenum = 1;
+
+my $csv = new Text::CSV;
+open (CSV, "<", $file) or die $!;
+
+sub parsedt {
+    my ($dt,$min,$max) = (shift,shift,shift);
+    my $parser = new DateTime::Format::Natural( 'time_zone' => 'local' );
+    my $epoch = $parser->parse_datetime($dt);
+    return $epoch->epoch 
+        if ($parser->success && $epoch->epoch >= $min && $epoch->epoch <= $max);
+    die "invalid date $dt (min=$min, max=$max)";
+}
+
+# XXX: transactions? so that we can fail the import when we "die"
+sub suffer {
+    my $linenum = shift;
+    my @columns = @_;
+
+    my $did = $columns[0];
+    my $npa = $columns[1];
+    my $state = $columns[2];
+    my $rate_center_abbrev = $columns[3];
+    my $rate_center = $columns[4];
+    my $customer = $columns[5];
+    my $submitted = parsedt($columns[7],$min_date,$max_date);
+    my $ordernum = $columns[8];
+    my $confirmed = parsedt($columns[9],$submitted,$max_date);
+
+    # sometimes, we're in a non-Y2K-compliant bullshit format, differing from
+    # all the other dates. Other times, we randomly change formats multiple times
+    # in the middle of the file for absolutely no reason...wtf
+    my $received = $columns[10]; 
+    if ( $received =~ /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/ ) {
+        $received = $2."/".$1."/20".$3;
+    } elsif ( $received !~ /^\d{2}\/\d{2}\/\d{4}$/ ) {
+        die "invalid received date $received";
+    }
+    $received = parsedt($received,$confirmed,$max_date);
+
+    my $latanum = $columns[12];
+    my $latadesc = $columns[13];
+    my $msadesc = $columns[14];
+
+    die "invalid DID and/or NPA or NPA doesn't match DID"
+        unless ($did =~ /^(\d{3})\d{7}$/ && $npa == $1);
+    die "invalid state, order #, LATA #, or LATA description"
+        unless ($state =~ /^[A-Z]{2}$/  && $ordernum =~ /^\d+$/ 
+                                        && $latanum =~ /^\d{3}$/ 
+                                        && $latadesc =~ /^[\w\s]+$/);
+
+    my $lata = qsearchs('lata', { 'latanum' => $latanum });
+    die "no lata found for latanum $latanum or multiple results" unless $lata;
+
+    # unsurprisingly, our idea of a LATA name doesn't always match their idea 
+    # of the same. Specifically, they randomly expand the state portion and
+    # abbreviate it arbitrarily
+    my $latadescription = $lata->description;
+    $latadescription =~ s/ ..$//; # strip off the fixed state abbreviation portion in ours
+    $latadesc =~ s/\s\w+$//; # strip off the variable state abbreviation (or full name) portion in theirs
+    $latadesc = 'CONNECTICUT (SNET)' if $latanum == 920; # hax!
+    die "CSV file LATA description ($latadesc) doesn't match our LATA description ($latadescription)"
+        unless uc($latadescription) eq uc($latadesc);
+
+    # here comes the bigger unsurprising mess
+    my $msanum = -1; # means no msa entered
+
+    # 1. Danbury isn't a MSA
+    $msadesc = '' if $msadesc eq 'Danbury';
+
+    # 2. not everything in their file has a MSA
+    if ( $msadesc =~ /^[\w\s]+$/ ) {
+        # 3. replace this bullshit
+        $msadesc = "Washington" if $msadesc eq 'Washington DC';
+
+        # 4. naturally enough, their idea of a MSA differs from our idea of it
+        my @msa = qsearch('msa', { 'description' => {
+                                            'op' => 'ILIKE',
+                                            'value' => $msadesc."%" 
+                                        }
+                                  });
+
+        # 5. so now we have two cases for a match and everything else is a non-match
+        foreach my $msa ( @msa ) {
+            # a. our MSA stripped of state portion matches their MSA exactly
+            my $msatest1 = $msa->description;
+            $msatest1 =~ s/,.*?$//;
+            if($msatest1 eq $msadesc) {
+                die "multiple MSA matches" unless $msanum == -1;
+                $msanum = $msa->msanum;
+            }
+            
+            # b. our MSA stripped of state portion and up to the first hyphen matches their MSA exactly
+            my $msatest2 = $msa->description;
+            if($msatest2 =~ /^([\w\s]+)-/ && $1 eq $msadesc) {
+                die "multiple MSA matches" unless $msanum == -1;
+                $msanum = $msa->msanum;
+            }
+        }
+        die "msa $msadesc not found" if $msanum == -1;
+        print "$msadesc matched msanum $msanum for line $linenum\n" if $debug;
+    }
+
+    print "Pass $linenum\n" if $debug;
+
+    my $order = order($ordernum,$submitted,$confirmed,$received,$customer);
+
+}
+
+sub order {
+    my($ordernum,$submitted,$confirmed,$received,$customer) = (shift,shift,shift,shift,shift);
+    
+    my %cust = ();
+    if ( $customer ne 'Stock' ) {
+        if ( exists($custname2num{$customer}) ) {
+            $cust{'custnum'} = $custname2num{$customer};
+        } else {
+            my @cust_main = smart_search('search' => $customer);
+            die scalar(@cust_main) . " customers found for $customer" 
+                unless scalar(@cust_main) == 1;
+            $cust{'custnum'} = $cust_main[0]->custnum;
+            
+            # cache it, or we'll be going even slower than we already are
+            $custname2num{$customer} = $cust_main[0]->custnum; 
+        }
+    }
+
+    my $o;
+    if( exists $did_order{$ordernum} ) {
+        $o = $did_order{$ordernum};
+        die "vendor order #$ordernum - order data differs from one item to another"
+            unless ($o->submitted == $submitted && $o->confirmed == $confirmed
+                    && $o->received == $received);
+        die "customer mismatch for vendor order #$ordernum" 
+            unless (($o->custnum && $cust{'custnum'} && $o->custnum == $cust{'custnum'})
+                || (!$o->custnum && !exists($cust{'custnum'})) );
+    } else {
+        $did_order{$ordernum} = new FS::did_order{ vendornum => $did_vendor_id,
+                                                   vendor_order_id => $ordernum,
+                                                   submitted => $submitted,
+                                                   confirmed => $confirmed,
+                                                   received => $received,
+                                                   %cust,
+                                                 };
+        $o = $did_order{$ordernum};
+    }
+
+    die "wtf" unless $o;
+    $o;
+}
+
+sub provision {
+
+    local $FS::svc_Common::noexport_hack = 1;
+
+}
+
+while (<CSV>) {
+    if ( $linenum == 1 ) { # skip header
+        $linenum++;
+        next;
+    }
+
+    if ($csv->parse($_)) {
+        my @columns = $csv->fields();
+        suffer($linenum,@columns);
+    } else {
+        my $err = $csv->error_input;
+        print "Failed to parse line $linenum: $err";
+    }
+    $linenum++;
+}
+close CSV;
