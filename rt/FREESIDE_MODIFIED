@@ -96,7 +96,6 @@ share/html/Ticket/Checklist.html
 share/html/Ticket/Display.html #timeworked custom fields #mandatory fields
 share/html/Ticket/Modify.html #mandatory fields
 share/html/Ticket/ModifyAll.html #mandatory fields
-share/html/Ticket/ModifyPeople.html #mandatory fields
 share/html/Ticket/Elements/AddCustomers
 share/html/Ticket/Elements/EditCustomers
 share/html/Ticket/Elements/EditCustomFields
