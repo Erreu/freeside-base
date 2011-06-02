@@ -101,8 +101,10 @@ if ($TicketObj && !$OnCreate) {
 $m->callback( %ARGS, CallbackName => 'MassageCustomFields', CustomFields => $CustomFields );
 
 # show hints for missing required fields
-foreach my $field ( $TicketObj->MissingRequiredFields ) {
-    $m->notes('InvalidField-' . $field->Id => 'Required to resolve');
+if ( $TicketObj ) {
+    foreach my $field ( $TicketObj->MissingRequiredFields ) {
+        $m->notes('InvalidField-' . $field->Id => 'Required to resolve');
+    }
 }
 
 </%INIT>
