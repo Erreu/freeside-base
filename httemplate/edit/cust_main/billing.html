@@ -96,6 +96,13 @@
       return true;
     }
 
+    function init_payauto_changed(){
+        var f = document.getElementById('CARD_payauto');
+        if(f != null) payauto_changed(f);
+        f = document.getElementById('CHEK_payauto');
+        if(f != null) payauto_changed(f);
+    }
+
     function payauto_changed(payauto_field){
         var f = (payauto_field.name == 'CARD_payauto') ? 'card_billday' : 'chek_billday';
         f = document.getElementById(f);
@@ -130,7 +137,7 @@
 %
 %  sub billday_options {
 %   my $curr_value = shift;
-%   my $ret = '<OPTION></OPTION>';
+%   my $ret = '';
 %   for my $billday ( 1 .. 28 ) {
 %       my $sel = '';
 %       $sel = "SELECTED='SELECTED'" if $curr_value == $billday;
@@ -148,7 +155,7 @@
 %      '<TABLE BGCOLOR="#cccccc" BORDER=0 CELLSPACING=0 HEIGHT=192>'.
 %
 %        qq!<TR><TD ALIGN="right" WIDTH="200">${r}Card number </TD>!.
-%          qq!<TD WIDTH="408"><INPUT TYPE="text" NAME="CARD_payinfo" VALUE="!. ( $payby =~ /^(CARD|DCRD)$/ ? $payinfo : '' ). qq!" MAXLENGTH=19 onChange="card_changed(this)" onKeyUp="card_changed(this)"></TD></TR>!.
+%          qq!<TD WIDTH="408"><INPUT TYPE="text" ID="CARD_payauto" NAME="CARD_payinfo" VALUE="!. ( $payby =~ /^(CARD|DCRD)$/ ? $payinfo : '' ). qq!" MAXLENGTH=19 onChange="card_changed(this)" onKeyUp="card_changed(this)"></TD></TR>!.
 %
 %        qq!<TR><TD ALIGN="right" WIDTH="200">${r}Expiration </TD>!.
 %          '<TD WIDTH="408">'.
@@ -196,8 +203,8 @@
 %
 %      ( $conf->exists('cust_main-select-billday') ?
 %        qq!<TR><TD COLSPAN=2 WIDTH="608" id="card_billday" style="display: $billday_card_display">
-%                    Charge on the <SELECT NAME="billday">!
-%                . billday_options($cust_main->billday) . qq!</SELECT> day of each month</TD></TR>!
+%                    Charge on this day of each month <SELECT NAME="billday">!
+%                . billday_options($cust_main->billday) . qq!</SELECT> </TD></TR>!
 %        : ''
 %      ).
 %
@@ -237,18 +244,14 @@
 %       ).
 %
 %
-%        qq!<TR><TD COLSPAN=4 WIDTH="608"><INPUT TYPE="checkbox" onchange="payauto_changed(this);" NAME="CHEK_payauto" $CHEK_payauto_checked> Charge future payments to this electronic check automatically</TD></TR>!.
+%        qq!<TR><TD COLSPAN=4 WIDTH="608"><INPUT TYPE="checkbox" onchange="payauto_changed(this);" ID="CHEK_payauto" NAME="CHEK_payauto" $CHEK_payauto_checked> Charge future payments to this electronic check automatically</TD></TR>!.
 %
 %      ( $conf->exists('cust_main-select-billday') ?
 %        qq!<TR><TD COLSPAN=2 WIDTH="608" id="chek_billday" style="display: $billday_chek_display">
-%                    Charge on the <SELECT NAME="billday">!
-%                . billday_options($cust_main->billday) . qq!</SELECT> day of each month</TD></TR>!
+%                    Charge on this day of each month <SELECT NAME="billday">!
+%                . billday_options($cust_main->billday) . qq!</SELECT> </TD></TR>!
 %        : ''
 %      ).
-%
-%        '<TR><TD>&nbsp;</TD></TR>'.
-%        '<TR><TD>&nbsp;</TD></TR>'.
-%        '<TR><TD>&nbsp;</TD></TR>'.
 %
 %      '</TABLE>',
 %
@@ -395,6 +398,7 @@
                   'labels'     => \%allopt,
                   'html_between' => '</TD></TR></TABLE>',
                   'layer_callback' => sub { my $layer = shift; $payby{$layer}; },
+                  'onchange'    => 'init_payauto_changed();',
               )
     %>
 
