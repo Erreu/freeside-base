@@ -2927,6 +2927,7 @@ sub tables_hashref {
         'ratecenternum',      'int',     'NULL',      '', '', '',
         'state',       'char',    'NULL',       2, '', '', 
         'quantity',      'int',     '',      '', '', '',
+        'custnum',   'int', 'NULL', '', '', '',
       ],
       'primary_key' => 'orderitemnum',
       'unique' => [],
