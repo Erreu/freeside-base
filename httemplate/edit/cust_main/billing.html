@@ -263,7 +263,7 @@
 %              qq!Charge future payments to this electronic check automatically</TD></TR>!.
 %
 %      ( $conf->exists('cust_main-select-billday') ?
-%           qq!<TR><TD id="chek_billday" $chek_billday_style>
+%           qq!<TR><TD ALIGN="RIGHT" id="chek_billday" $chek_billday_style>
 %                    Charge on this day of each month </TD><TD> &nbsp;
 %                   <SELECT NAME="billday">!
 %                . billday_options($cust_main->billday) . qq!</SELECT> </TD></TR>!
