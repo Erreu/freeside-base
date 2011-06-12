@@ -3138,6 +3138,15 @@ sub tables_hashref {
       'index'  => [], #recnum
     },
 
+    'svc_port' => {
+      'columns' => [
+        'svcnum',                'int',     '',      '', '', '', 
+      ],
+      'primary_key' => 'svcnum',
+      'unique' => [],
+      'index'  => [], #recnum
+    },
+
     'areacode'  => {
       'columns' => [
       'areanum',   'serial',        '',      '', '', '',
@@ -3149,42 +3158,6 @@ sub tables_hashref {
       'primary_key' => 'areanum',
       'unique' => [ [ 'code' ] ],
       'index'  => [],
-    },
-
-    'nms_device' => {
-      'columns' => [
-        'nms_devicenum', 'serial',     '',      '', '', '',
-        #'agentnum',         'int', 'NULL',      '', '', '',
-        'devicename',   'varchar',     '', $char_d, '', '',
-        'ip',           'varchar',     '',      15, '', '', 
-        'protocol',     'varchar',     '', $char_d, '', '',
-#        'last',     'int',     '',    '', '', '', 
-      ],
-      'primary_key' => 'nms_devicenum',
-      'unique' => [],
-      'index'  => [],
-    },
-   
-    'nms_deviceport' => {
-      'columns' => [
-        'portnum',       'serial',     '', '', '', '', 
-        'nms_devicenum',    'int',     '', '', '', '', 
-        'deviceport',       'int',     '', '', '', '', 
-        #'ip',       'varchar', 'NULL', 15, '', '', 
-        'svcnum',           'int', 'NULL', '', '', '',
-      ],
-      'primary_key' => 'portnum',
-      'unique'      => [ [ 'nms_devicenum', 'deviceport' ] ],
-      'index'       => [ [ 'svcnum' ] ],
-    },
-
-    'svc_port' => {
-      'columns' => [
-        'svcnum',                'int',     '',      '', '', '', 
-      ],
-      'primary_key' => 'svcnum',
-      'unique' => [],
-      'index'  => [], #recnum
     },
 
 
