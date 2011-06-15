@@ -217,7 +217,7 @@
 %      ( $conf->exists('cust_main-select-billday') ?
 %           qq!<TR><TD ALIGN="RIGHT" id="card_billday" $card_billday_style>
 %                       Charge on this day of each month</TD><TD> &nbsp; 
-%                       <SELECT NAME="billday">!
+%                       <SELECT id="select_card_billday" $card_billday_select_disabled NAME="billday">!
 %                . billday_options($cust_main->billday) . qq!</SELECT> </TD></TR>!
 %        : ''
 %      ).
@@ -265,7 +265,7 @@
 %      ( $conf->exists('cust_main-select-billday') ?
 %           qq!<TR><TD ALIGN="RIGHT" id="chek_billday" $chek_billday_style>
 %                    Charge on this day of each month </TD><TD> &nbsp;
-%                   <SELECT NAME="billday">!
+%                   <SELECT id="select_chek_billday" $chek_billday_select_disabled NAME="billday">!
 %                . billday_options($cust_main->billday) . qq!</SELECT> </TD></TR>!
 %        : ''
 %      ).
