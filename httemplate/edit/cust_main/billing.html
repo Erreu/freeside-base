@@ -166,7 +166,7 @@
 %      '<TABLE BGCOLOR="#cccccc" BORDER=0 CELLSPACING=0 HEIGHT=192>'.
 %
 %        qq!<TR><TD ALIGN="right" WIDTH="200">${r}Card number </TD>!.
-%          qq!<TD WIDTH="408"><INPUT TYPE="text" ID="CARD_payauto" NAME="CARD_payinfo" VALUE="!. ( $payby =~ /^(CARD|DCRD)$/ ? $payinfo : '' ). qq!" MAXLENGTH=19 onChange="card_changed(this)" onKeyUp="card_changed(this)"></TD></TR>!.
+%          qq!<TD WIDTH="408"><INPUT TYPE="text" NAME="CARD_payinfo" VALUE="!. ( $payby =~ /^(CARD|DCRD)$/ ? $payinfo : '' ). qq!" MAXLENGTH=19 onChange="card_changed(this)" onKeyUp="card_changed(this)"></TD></TR>!.
 %
 %        qq!<TR><TD ALIGN="right" WIDTH="200">${r}Expiration </TD>!.
 %          '<TD WIDTH="408">'.
@@ -211,7 +211,7 @@
 %          qq!<TD WIDTH="408"><INPUT TYPE="text" NAME="CARD_payname" VALUE="!. ( $payby =~ /^(CARD|DCRD)$/ ? $cust_main->payname : '' ). qq!"></TD></TR>!.
 %
 %        qq!<TR><TD COLSPAN=2 WIDTH="608">!.
-%           qq!<INPUT TYPE="checkbox" onchange="payauto_changed(this);" NAME="CARD_payauto" $CARD_payauto_checked> !.
+%           qq!<INPUT TYPE="checkbox" onchange="payauto_changed(this);" ID="CARD_payauto" NAME="CARD_payauto" $CARD_payauto_checked> !.
 %           qq!Charge future payments to this card automatically</TD></TR>!.
 %
 %      ( $conf->exists('cust_main-select-billday') ?
