@@ -55,7 +55,13 @@ sub calc_prorate {
     my $mnow = $$sdate;
     my ($sec, $min, $hour, $mday, $mon, $year) = (localtime($mnow))[0..5];
     if( $self->option('prorate_round_day',1) ) {
-      $mday++ if $hour >= 12;
+      # If the time is 12:00-23:59, move to the next day by adding 18 
+      # hours to $mnow.  Because of DST this can end up from 05:00 to 18:59
+      # but it's always within the next day.
+      $mnow += 64800 if $hour >= 12;
+      # Get the new day, month, and year.
+      ($mday,$mon,$year) = (localtime($mnow))[3..5];
+      # Then set $mnow to midnight on that date.
       $mnow = timelocal(0,0,0,$mday,$mon,$year);
     }
     my $mend;
