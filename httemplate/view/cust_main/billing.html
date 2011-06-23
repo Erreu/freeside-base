@@ -84,6 +84,8 @@ Billing information
 </TR>
 % } elsif ( $cust_main->payby eq 'CHEK' || $cust_main->payby eq 'DCHK') {
 %     my( $account, $aba ) = split('@', $cust_main->paymask );
+%  my $branch = '';
+%  ($branch,$aba) = split('\.',$aba) if $conf->exists('cust_main-require-bank-branch');
 
 
     Electronic&nbsp;check&nbsp;<% $cust_main->payby eq 'CHEK' ? '(automatic)' : '(on-demand)' %>
@@ -93,6 +95,14 @@ Billing information
   <TD ALIGN="right">ABA/Routing code</TD>
   <TD BGCOLOR="#ffffff"><% $aba %></TD>
 </TR>
+
+% if ( $conf->exists('cust_main-require-bank-branch') ) {
+<TR>
+  <TD ALIGN="right">Branch number</TD>
+  <TD BGCOLOR="#ffffff"><% $branch %></TD>
+ <TR>
+% }
+
 <TR>
   <TD ALIGN="right">Account number</TD>
   <TD BGCOLOR="#ffffff"><% $account %></TD>
