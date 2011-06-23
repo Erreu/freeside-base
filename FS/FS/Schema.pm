@@ -2508,6 +2508,7 @@ sub tables_hashref {
         'classname',   'varchar',  '', $char_d, '', '', 
         'categorynum', 'int',  'NULL',      '', '', '', 
         'disabled',    'char', 'NULL',       1, '', '', 
+        'fcc_ds0s',      'int',     'NULL', '', '', '', 
       ],
       'primary_key' => 'classnum',
       'unique' => [],
