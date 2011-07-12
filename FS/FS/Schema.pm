@@ -1455,6 +1455,8 @@ sub tables_hashref {
         'reason',       'varchar',   '',   $char_d, '', '', 
         'payby',        'char',   '',     4, '', '', # CARD/BILL/COMP, should
                                                      # be index into payby
+        'recur_show_zero',    'char', 'NULL',  1, '', '',
+        'setup_show_zero',    'char', 'NULL',  1, '', '',
                                                      # table eventually
         'payinfo',      'varchar',   'NULL', 512, '', '', #see cust_main above
 	'paymask', 'varchar', 'NULL', $char_d, '', '', 
@@ -1638,6 +1640,7 @@ sub tables_hashref {
         'pkgpart',    'int',    '',   '', '', '', 
         'svcpart',    'int',    '',   '', '', '', 
         'quantity',   'int',    '',   '', '', '', 
+        'setup_show_zero',  'char', 'NULL',  1, '', '',
         'primary_svc','char', 'NULL',  1, '', '', 
         'hidden',     'char', 'NULL',  1, '', '',
       ],
