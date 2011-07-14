@@ -700,7 +700,7 @@ sub provision_svc {
 
   my $result = part_svc_info(
     'session_id' => $session_id,
-    map { $_ => $cgi->param($_) } qw( pkgnum svcpart ),
+    map { $_ => $cgi->param($_) } qw( pkgnum svcpart svcnum ),
   );
   die $result->{'error'} if exists $result->{'error'} && $result->{'error'};
 
@@ -734,7 +734,7 @@ sub process_svc_phone {
 	    'session_id' => $session_id,
 	    'bulkdid' => [ @bulkdid ],
 	    'countrycode' => '1',
-	     map { $_ => $cgi->param($_) } qw( pkgnum svcpart phonenum )
+	     map { $_ => $cgi->param($_) } qw( pkgnum svcpart phonenum svcnum email forwarddst )
 	);
     }
 
@@ -743,7 +743,7 @@ sub process_svc_phone {
 	return {
 	  $cgi->Vars,
 	  %{ part_svc_info( 'session_id' => $session_id,
-                        map { $_ => $cgi->param($_) } qw( pkgnum svcpart )
+                        map { $_ => $cgi->param($_) } qw( pkgnum svcpart svcnum )
 	      )
 	  },
 	  'error' => $result->{'error'},

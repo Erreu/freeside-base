@@ -1039,6 +1039,10 @@ sub list_pkgs {
                                         if $context eq 'agent'
                                         && $conf->exists('agent-showpasswords')
                                         && $_->part_svc->svcdb eq 'svc_acct';
+                                      $ref->{svchash} = { $_->svc_x->hash } if 
+                                        $_->part_svc->svcdb eq 'svc_phone';
+                                      $ref->{svchash}->{svcpart} =  $_->part_svc->svcpart
+                                        if $_->part_svc->svcdb eq 'svc_phone'; # hack
                                       $ref;
                                     } $_->cust_svc
                               ],
@@ -1601,6 +1605,23 @@ sub provision_phone {
  my @bulkdid;
  @bulkdid = @{$p->{'bulkdid'}} if $p->{'bulkdid'};
 
+ if($p->{'svcnum'} && $p->{'svcnum'} =~ /^\d+$/){
+      my($context, $session, $custnum) = _custoragent_session_custnum($p);
+      return { 'error' => $session } if $context eq 'error';
+    
+      my $svc_phone = qsearchs('svc_phone', { svcnum => $p->{'svcnum'} });
+      return { 'error' => 'service not found' } unless $svc_phone;
+      return { 'error' => 'invalid svcnum' } 
+        if $svc_phone && $svc_phone->cust_svc->cust_pkg->custnum != $custnum;
+
+      $svc_phone->email($p->{'email'}) 
+        if $svc_phone->email ne $p->{'email'} && $p->{'email'} =~ /^([\w\.\d@]+|)$/;
+      $svc_phone->forwarddst($p->{'forwarddst'}) 
+        if $svc_phone->forwarddst ne $p->{'forwarddst'} 
+            && $p->{'forwarddst'} =~ /^(\d+|)$/;
+      return { 'error' => $svc_phone->replace };
+ }
+
 # single DID LNP
  unless($p->{'lnp'}) {
     $p->{'lnp_desired_due_date'} = parse_datetime($p->{'lnp_desired_due_date'});
@@ -1763,7 +1784,7 @@ sub part_svc_info {
 
   my $conf = new FS::Conf;
 
-  return {
+  my $ret = {
     'svc'     => $part_svc->svc,
     'svcdb'   => $part_svc->svcdb,
     'pkgnum'  => $pkgnum,
@@ -1782,6 +1803,17 @@ sub part_svc_info {
 
   };
 
+  if ($p->{'svcnum'} && $p->{'svcnum'} =~ /^\d+$/ 
+                     && $ret->{'svcdb'} eq 'svc_phone') {
+        $ret->{'svcnum'} = $p->{'svcnum'};
+        my $svc_phone = qsearchs('svc_phone', { svcnum => $p->{'svcnum'} });
+        if ( $svc_phone && $svc_phone->cust_svc->cust_pkg->custnum == $custnum ) {
+            $ret->{'email'} = $svc_phone->email;
+            $ret->{'forwarddst'} = $svc_phone->forwarddst;
+        }
+  }
+
+  $ret;
 }
 
 sub unprovision_svc {
