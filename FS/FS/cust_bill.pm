@@ -3951,6 +3951,8 @@ sub _items_extra_usage_sections {
   my %classnums = ();
   my %lines = ();
 
+  my $maxlength = $conf->config('cust_bill-latex_lineitem_maxlength') || 50;
+
   my %usage_class =  map { $_->classnum => $_ } qsearch( 'usage_class', {} );
   foreach my $cust_bill_pkg ( $self->cust_bill_pkg ) {
     next unless $cust_bill_pkg->pkgnum > 0;
@@ -3970,8 +3972,8 @@ sub _items_extra_usage_sections {
 
         my $desc = $detail->regionname; 
         my $description = $desc;
-        $description = substr($desc, 0, 50). '...'
-          if $format eq 'latex' && length($desc) > 50;
+        $description = substr($desc, 0, $maxlength). '...'
+          if $format eq 'latex' && length($desc) > $maxlength;
 
         $lines{$section}{$desc} ||= {
           description     => &{$escape}($description),
@@ -4115,6 +4117,8 @@ sub _items_svc_phone_sections {
   my %classnums = ();
   my %lines = ();
 
+  my $maxlength = $conf->config('cust_bill-latex_lineitem_maxlength') || 50;
+
   my %usage_class =  map { $_->classnum => $_ } qsearch( 'usage_class', {} );
   $usage_class{''} ||= new FS::usage_class { 'classname' => '', 'weight' => 0 };
 
@@ -4144,8 +4148,8 @@ sub _items_svc_phone_sections {
 
       my $desc = $detail->regionname; 
       my $description = $desc;
-      $description = substr($desc, 0, 50). '...'
-        if $format eq 'latex' && length($desc) > 50;
+      $description = substr($desc, 0, $maxlength). '...'
+        if $format eq 'latex' && length($desc) > $maxlength;
 
       $lines{$phonenum}{$desc} ||= {
         description     => &{$escape}($description),
@@ -4457,6 +4461,8 @@ sub _items_cust_bill_pkg {
   my $multisection = $opt{multisection} || '';
   my $discount_show_always = 0;
 
+  my $maxlength = $conf->config('cust_bill-latex_lineitem_maxlength') || 50;
+
   my @b = ();
   my ($s, $r, $u) = ( undef, undef, undef );
   foreach my $cust_bill_pkg ( @$cust_bill_pkgs )
@@ -4482,8 +4488,8 @@ sub _items_cust_bill_pkg {
       my $type = $display->type;
 
       my $desc = $cust_bill_pkg->desc;
-      $desc = substr($desc, 0, 50). '...'
-        if $format eq 'latex' && length($desc) > 50;
+      $desc = substr($desc, 0, $maxlength). '...'
+        if $format eq 'latex' && length($desc) > $maxlength;
 
       my %details_opt = ( 'format'          => $format,
                           'escape_function' => $escape_function,
@@ -4524,8 +4530,8 @@ sub _items_cust_bill_pkg {
 
             if ( $multilocation ) {
               my $loc = $cust_pkg->location_label;
-              $loc = substr($loc, 0, 50). '...'
-                if $format eq 'latex' && length($loc) > 50;
+              $loc = substr($loc, 0, $maxlength). '...'
+                if $format eq 'latex' && length($loc) > $maxlength;
               push @d, &{$escape_function}($loc);
             }
 
@@ -4605,8 +4611,8 @@ sub _items_cust_bill_pkg {
 
             if ( $multilocation ) {
               my $loc = $cust_pkg->location_label;
-              $loc = substr($loc, 0, 50). '...'
-                if $format eq 'latex' && length($loc) > 50;
+              $loc = substr($loc, 0, $maxlength). '...'
+                if $format eq 'latex' && length($loc) > $maxlength;
               push @d, &{$escape_function}($loc);
             }
 
