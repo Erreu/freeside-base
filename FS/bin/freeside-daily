@@ -12,6 +12,10 @@ getopts("p:a:d:vl:sy:nmrkg:u", \%opt);
 my $user = shift or die &usage;
 adminsuidsetup $user;
 
+#no way to skip this yet, but should be harmless/quick
+use FS::Cron::expire_banned_pay qw(expire_banned_pay);
+expire_banned_pay(%opt);
+
 #you can skip this by setting the disable_cron_billing config
 use FS::Cron::bill qw(bill);
 bill(%opt);
