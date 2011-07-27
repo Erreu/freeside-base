@@ -1,16 +1,19 @@
-<% include('/elements/header.html', 'Invoice Report' ) %>
+<% include('/elements/header.html', $title ) %>
 
 <FORM ACTION="cust_bill.html" METHOD="GET">
 <INPUT TYPE="hidden" NAME="magic" VALUE="_date">
+<INPUT TYPE="hidden" NAME="custnum" VALUE="<% $custnum %>">
 
 <TABLE BGCOLOR="#cccccc" CELLSPACING=0
 
+% unless ( $custnum ) {
   <% include( '/elements/tr-select-agent.html',
                  'curr_value'    => scalar( $cgi->param('agentnum') ),
                  'label'         => 'Invoices for agent: ',
                  'disable_empty' => 0,
              )
   %>
+% }
 
   <% include( '/elements/tr-input-beginning_ending.html' ) %>
 
@@ -25,6 +28,10 @@
                 field   => 'owed',
             )
   %>
+
+% if ( $cust_main ) {
+  <INPUT TYPE="hidden" NAME="payby" VALUE="<% $cust_main->payby %>">
+% } else {
   <% include( '/elements/tr-select-payby.html',
                 label   => 'Payment method:',
                 payby_type   => 'cust',
@@ -32,15 +39,19 @@
                 all_selected => 1,
             )
   %>
+% }
 
   <TR>
     <TD ALIGN="right"><INPUT TYPE="checkbox" NAME="open" VALUE="1" CHECKED></TD>
     <TD>Show only open invoices</TD>
   </TR>
+
+% unless ( $custnum ) {
   <TR>
     <TD ALIGN="right"><INPUT TYPE="checkbox" NAME="newest_percust" VALUE="1"></TD>
     <TD>Show only the single most recent invoice per-customer</TD>
   </TR>
+% }
 
 </TABLE>
 
@@ -54,5 +65,20 @@
 
 die "access denied"
   unless $FS::CurrentUser::CurrentUser->access_right('List invoices');
+
+my $title = 'Invoice Report';
+
+#false laziness w/report_cust_pkg.html
+my $custnum = '';
+my $cust_main = '';
+if ( $cgi->param('custnum') =~ /^(\d+)$/ ) {
+  $custnum = $1;
+  $cust_main = qsearchs({
+    'table'     => 'cust_main', 
+    'hashref'   => { 'custnum' => $custnum },
+    'extra_sql' => ' AND '. $FS::CurrentUser::CurrentUser->agentnums_sql,
+  }) or die "unknown custnum $custnum";
+  $title .= ': '. $cust_main->name;
+}
 
 </%init>
