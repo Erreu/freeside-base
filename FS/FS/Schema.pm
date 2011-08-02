@@ -3155,15 +3155,6 @@ sub tables_hashref {
       'index'  => [], #recnum
     },
 
-    'svc_port' => {
-      'columns' => [
-        'svcnum',                'int',     '',      '', '', '', 
-      ],
-      'primary_key' => 'svcnum',
-      'unique' => [],
-      'index'  => [], #recnum
-    },
-
     'areacode'  => {
       'columns' => [
       'areanum',   'serial',        '',      '', '', '',
