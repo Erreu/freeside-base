@@ -1218,7 +1218,7 @@ sub _handle_taxes {
     }
 
     if ($separate || $usage_mandate) {
-      $hash{section} = $section if ($separate || $usage_mandate);
+      $hash{section} = $section if $section;
       push @display, new FS::cust_bill_pkg_display { type => 'U', %hash };
     }
 
