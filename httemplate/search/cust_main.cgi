@@ -523,7 +523,7 @@
 %      my $pkg_rowspan = shift @pkg_rowspans;
 
        <% $n1 %><TD CLASS="grid" BGCOLOR="<% $bgcolor %>" ROWSPAN="<% $pkg_rowspan %>">
-      <A HREF="$pkgview"><FONT SIZE=-1><% $pkg_comment %></FONT></A></TD>
+      <A HREF="<% $pkgview %>"><FONT SIZE=-1><% $pkg_comment %></FONT></A></TD>
 
 %      my $n2 = '';
 %      my $td = '<TD CLASS="grid" BGCOLOR="'.$bgcolor.'">';
