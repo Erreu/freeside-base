@@ -3038,7 +3038,10 @@ sub search {
   ###
   # parse censustract2
   ###
-  if ( exists($params->{'censustract2'}) =~ /^(\d*)$/ ) {
+  if ( exists($params->{'censustract2'})
+       && $params->{'censustract2'} =~ /^(\d*)$/
+     )
+  {
     if ($1) {
       push @where, "cust_main.censustract LIKE '$1%'";
     } else {
