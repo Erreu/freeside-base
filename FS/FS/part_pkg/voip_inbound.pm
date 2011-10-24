@@ -284,22 +284,26 @@ sub calc_usage {
                                  + 0.00000001 ); #so 1.00005 rounds to 1.0001
 
       if ( $charge > 0 ) {
-          $charges += $charge;
-          my @call_details = ($cdr->downstream_csv( 'format' => $output_format,
-                                                 'charge'  => $charge,
-                                                 'minutes' => $minutes,
-                                                 'granularity' => $granularity,
-                                               )
-                            );
-          push @$details,
-            [ 'C',
-              $call_details[0],
-              $charge,
-              $cdr->calltypenum, #classnum
-              $self->phonenum,
-              $seconds,
-              '', #regionname, not set for inbound calls
-            ];
+        $charges += $charge;
+        my @call_details = (
+          $cdr->downstream_csv( 'format'      => $output_format,
+                                'charge'      => $charge,
+                                'seconds'     => ($use_duration
+                                                   ? $cdr->duration
+                                                   : $cdr->billsec
+                                                 ),
+                                'granularity' => $granularity,
+                              )
+        );
+        push @$details,
+          [ 'C',
+            $call_details[0],
+            $charge,
+            $cdr->calltypenum, #classnum
+            $self->phonenum,
+            $seconds,
+            '', #regionname, not set for inbound calls
+          ];
     }
 
     my $error = $cdr->set_status_and_rated_price( 'done',
