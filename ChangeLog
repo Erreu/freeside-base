@@ -1,3 +1,2233 @@
+2011-10-24 17:23  ivan
+
+	* Makefile, httemplate/docs/about.html: 2.1.3
+
+2011-10-24 17:19  ivan
+
+	* FS/FS/: svc_acct.pm, svc_broadband.pm: fix error on advanced
+	  broadband report when selecting a router, RT#14626
+
+2011-10-24 17:04  ivan
+
+	* FS/FS/cust_main/Billing.pm: make discount-show-always get along
+	  with setup discounts, RT#11512
+
+2011-10-24 15:55  ivan
+
+	* FS/FS/part_pkg/discount_Mixin.pm: fix discounting setup when
+	  recur < setup, RT#11512
+
+2011-10-24 15:45  ivan
+
+	* httemplate/browse/discount.html: fix browsing of unnamed
+	  discounds
+
+2011-10-24 14:20  ivan
+
+	* FS/FS/part_pkg/voip_inbound.pm: fix display of duration on
+	  inbound packages with use_duraiton, RT#14370
+
+2011-10-23 18:15  ivan
+
+	* FS/FS/cust_pkg_discount.pm, FS/FS/part_pkg/flat.pm,
+	  httemplate/elements/order_pkg.js,
+	  httemplate/elements/tr-select-discount.html,
+	  httemplate/view/cust_main/order_pkg_link.html: fix discounts not
+	  appearing for one-time charge packages, RT#13654
+
+2011-10-23 16:09  ivan
+
+	* httemplate/elements/menu.html: reports->packages->package
+	  definitions now "by # active", RT#5501
+
+2011-09-28 22:53  ivan
+
+	* FS/FS/Record.pm: fix DBI binding for negative integers, shoudl
+	  fix CCH update, RT#14243
+
+2011-09-28 22:22  ivan
+
+	* FS/FS/part_pkg_taxrate.pm: add additional debugging for failing
+	  CCH update, RT#14243
+
+2011-09-22 15:07  ivan
+
+	* FS/FS/Conf_compat17.pm: whitespace
+
+2011-09-14 13:48  ivan
+
+	* FS/FS/ClientAPI/MyAccount.pm: add svc_label to ClientAPI
+	  customer_info, RT#13656
+
+2011-09-12 13:06  ivan
+
+	* FS/FS/UID.pm: fix no REMOTE_USER error to refer to "installation
+	  instructions" instead of long-gone httemplate/docs/install.html
+
+2011-09-08 15:09  ivan
+
+	* FS/FS/part_pkg/: delayed_Mixin.pm, discount_Mixin.pm, flat.pm,
+	  global_Mixin.pm, prorate_Mixin.pm, sql_external.pm,
+	  usage_Mixin.pm: fix mixin inheritence preventing prorate_delayed
+	  packages from billing, RT#14372
+
+2011-09-08 15:04  ivan
+
+	* FS/FS/part_pkg.pm: fix very obsolote eval callbacks for
+	  part_pkg.setup and recur, RT#14372
+
+2011-08-31 01:26  mark
+
+	* FS/FS/cust_pay.pm: fix payment application with term discounts,
+	  #5318
+
+2011-08-18 16:59  ivan
+
+	* httemplate/search/: 477partVI_census.html, cust_pkg.cgi: fix
+	  "multiple states" links, RT#13922
+
+2011-08-18 16:56  ivan
+
+	* httemplate/search/cust_pkg.cgi: attempt fixing "multiple states"
+	  links, RT#13922
+
+2011-08-18 16:50  ivan
+
+	* httemplate/search/477partVI_census.html: attempt fixing "multiple
+	  states" links, RT#13922
+
+2011-08-18 16:43  ivan
+
+	* FS/FS/cust_pkg.pm, httemplate/search/477partVI_census.html:
+	  attempt fixing "multiple states" links, RT#13922
+
+2011-08-18 16:39  ivan
+
+	* FS/FS/cust_pkg.pm, httemplate/search/477partVI_census.html:
+	  attempt fixing "multiple states" links, RT#13922
+
+2011-08-18 16:29  ivan
+
+	* FS/FS/cust_pkg.pm, httemplate/search/477partVI_census.html: fix
+	  477 package links, RT#13922
+
+2011-08-18 16:22  ivan
+
+	* httemplate/search/477partVI_census.html: fix 477 package links
+	  report_option arg, RT#13922
+
+2011-08-18 16:14  ivan
+
+	* httemplate/search/: cust_pkg.cgi, 477partVI_census.html: fix 477
+	  package links report_option arg, RT#13922
+
+2011-08-18 15:55  ivan
+
+	* httemplate/search/elements/search-html.html: BR before "None
+	  found" search message
+
+2011-08-18 15:35  ivan
+
+	* FS/FS/Report/FCC_477.pm: fix errors saving 477 form info if run
+	  concurrently, RT#13922
+
+2011-08-18 15:33  ivan
+
+	* httemplate/search/477partVI_census.html: fix 477 package links
+	  report_option arg, RT#13922
+
+2011-08-18 15:11  ivan
+
+	* httemplate/search/cust_pkg.cgi: fix 477 reporting w/multiple
+	  classnums, RT#13922
+
+2011-08-18 14:27  ivan
+
+	* FS/FS/cust_pkg.pm, httemplate/search/477partVI_census.html,
+	  httemplate/search/cust_pkg.cgi: fix 477 reporting w/multiple
+	  classnums, RT#13922
+
+2011-08-17 18:23  ivan
+
+	* httemplate/search/477partVI_census.html: multiple state links in
+	  FCC report, RT#13922
+
+2011-08-17 18:15  ivan
+
+	* FS/FS/Report/FCC_477.pm, FS/FS/cust_pkg.pm,
+	  httemplate/search/477partVI_census.html,
+	  httemplate/search/cust_pkg.cgi: multiple state links in FCC
+	  report, RT#13922
+
+2011-08-17 17:33  ivan
+
+	* FS/FS/cust_pkg.pm, httemplate/search/cust_pkg.cgi: allow multiple
+	  classnums in package search, RT#13922
+
+2011-08-17 14:39  ivan
+
+	* httemplate/search/477partVI_census.html: fix 477 censustract
+	  links, add links for states, RT#13922
+
+2011-08-17 14:07  ivan
+
+	* httemplate/search/477partVI_census.html: fix 477 censustract
+	  links, RT#13922
+
+2011-08-15 21:49  ivan
+
+	* FS/FS/pay_batch.pm: fix paymentech batch download, RT#7905
+
+2011-08-15 19:09  mark
+
+	* httemplate/: elements/progress-init.html,
+	  misc/download-bill_batch.html, search/bill_batch.cgi: reliably
+	  start batch download, #947
+
+2011-08-15 18:10  ivan
+
+	* httemplate/search/cust_main.cgi: fix package links in customer
+	  search in 2.1, RT#14091
+
+2011-08-15 17:44  ivan
+
+	* conf/: invoice_html, invoice_latex: Invoice # & Customer #
+
+2011-08-15 17:37  ivan
+
+	* conf/: invoice_html, invoice_latex: don't show empty Terms: on
+	  invoices
+
+2011-08-15 13:51  ivan
+
+	* httemplate/view/: cust_bill-pdf.cgi, cust_bill-ps.cgi: adding
+	  Content-Disposition with a filename and proper extension fixes
+	  invoice opening on mac firefox, RT#14015
+
+2011-08-12 14:57  ivan
+
+	* httemplate/: edit/cust_main/bottomfixup.js,
+	  misc/xmlhttp-cust_main-censustract.html: fix census geocoding,
+	  RT#14060
+
+2011-08-10 17:38  ivan
+
+	* FS/FS/cust_pkg.pm, FS/FS/part_pkg.pm,
+	  FS/FS/part_pkg/delayed_Mixin.pm, FS/FS/part_pkg/flat.pm,
+	  httemplate/elements/order_pkg.js,
+	  httemplate/elements/select-part_pkg.html,
+	  httemplate/elements/tr-select-cust-part_pkg.html,
+	  httemplate/misc/cust-part_pkg.cgi,
+	  httemplate/misc/order_pkg.html: hide start date on package order
+	  for specific package definitions, RT#13783
+
+2011-08-10 16:43  ivan
+
+	* FS/FS/: part_pkg/delayed_Mixin.pm, cust_pkg.pm,
+	  part_pkg/flat_delayed.pm, part_pkg/prorate_delayed.pm: delay
+	  setup checkbox, RT#13783
+
+2011-08-10 16:43  ivan
+
+	* FS/FS/part_pkg/delayed_Mixin.pm: file delayed_Mixin.pm was added
+	  on branch FREESIDE_2_1_BRANCH on 2011-08-10 23:43:49 +0000
+
+2011-08-08 15:09  ivan
+
+	* FS/FS/: cust_main/Billing_Realtime.pm, Conf.pm: add
+	  business-onlinepayment-currency config setting, RT#13904
+
+2011-08-05 12:26  ivan
+
+	* FS/FS/: cust_pkg.pm, part_pkg.pm: fix double display of service
+	  links in bundled packages (and mis-alignment in customer
+	  search?), RT#13966
+
+2011-08-04 20:27  ivan
+
+	* FS/FS/part_event/Condition.pm: fix billday condition without a
+	  delay option causing the event to never run, RT#13915
+
+2011-08-03 15:32  mark
+
+	* rt/share/html/: Elements/TitleBox,
+	  RTx/Statistics/CallsMultiQueue/index.html,
+	  RTx/Statistics/CallsQueueDay/index.html,
+	  RTx/Statistics/DayOfWeek/index.html,
+	  RTx/Statistics/OpenStalled/index.html,
+	  RTx/Statistics/Resolution/index.html: fix statistics report
+	  TitleBox, #13546
+
+2011-08-03 15:13  ivan
+
+	* FS/FS/cust_main/Billing.pm: fix displaying usage separate from
+	  recurring when using separate_usage and invoice_sections but
+	  without a usage_section set, RT#13907
+
+2011-08-02 19:23  mark
+
+	* httemplate/view/attachment.html,
+	  rt/share/html/Ticket/Attachment/dhandler: avoid corrupt
+	  attachments, #13209 and #13877
+
+2011-08-02 13:57  mark
+
+	* FS/FS/part_pkg/voip_cdr.pm: skip_dst_prefix, #13895
+
+2011-08-01 23:11  ivan
+
+	* FS/FS/Schema.pm: reverted expensive cdr.upstream_price schema
+	  change on 2.1
+
+2011-08-01 22:45  ivan
+
+	* FS/FS/cust_bill.pm: fix bundled package display, RT#13866
+
+2011-08-01 18:29  ivan
+
+	* FS/FS/Schema.pm: remove svc_port inadvertantly committed in 2.1
+
+2011-07-31 01:11  mark
+
+	* httemplate/: edit/cust_main_attach.cgi,
+	  edit/process/cust_main_attach.cgi,
+	  view/cust_main/attachments.html: clean attachment filenames,
+	  #13843
+
+2011-07-30 16:20  mark
+
+	* FS/FS/bill_batch.pm, httemplate/elements/progress-popup.html,
+	  httemplate/misc/download-bill_batch.html,
+	  httemplate/search/bill_batch.cgi, httemplate/view/bill_batch.cgi:
+	  rearrange flow of batch download, #947
+
+2011-07-30 16:13  mark
+
+	* httemplate/misc/download-bill_batch.html: file
+	  download-bill_batch.html was added on branch FREESIDE_2_1_BRANCH
+	  on 2011-07-30 23:20:37 +0000
+
+2011-07-30 16:13  mark
+
+	* httemplate/misc/download-bill_batch.html: rearrange flow of batch
+	  download, #947
+
+2011-07-27 16:26  ivan
+
+	* FS/FS/cust_bill.pm,
+	  httemplate/view/cust_main/payment_history.html,
+	  httemplate/search/cust_bill.html,
+	  httemplate/search/report_cust_bill.html: add per-customer
+	  "Invoice reports" link, RT#13802
+
+2011-07-25 18:25  ivan
+
+	* FS/FS/cust_main/Packages.pm: fix late fee holding until next
+	  invoice w/suspended packages set to bill while suspended,
+	  RT#13638
+
+2011-07-22 17:40  ivan
+
+	* FS/FS/ClientAPI/MyAccount.pm: fix svc_pbx selfservice title?
+
+2011-07-22 10:55  levinse
+
+	* FS/FS/cust_pkg.pm, httemplate/search/477partIIA.html,
+	  httemplate/search/477partIIB.html: FCC form 477 part II and V
+	  issues, RT13057
+
+2011-07-22 10:27  ivan
+
+	* FS/FS/cust_pay_void.pm: finish upgrade even if a void_usernum
+	  cannot be determined for some records, RT#13600
+
+2011-07-21 16:33  ivan
+
+	* httemplate/search/: cust_bill_pkg.cgi, report_tax.cgi: fix tax
+	  reports for taxclass+non-taxclass cases, RT#13160
+
+2011-07-20 14:34  ivan
+
+	* FS/FS/banned_pay.pm: fix overzealous card reuse warning, RT#13743
+
+2011-07-20 14:16  ivan
+
+	* FS/FS/cust_main.pm, fs_selfservice/FS-SelfService/cgi/signup.cgi:
+	  better error message for signup duplicate cards, allow editing of
+	  those customer records, RT#13744
+
+2011-07-20 06:46  ivan
+
+	* FS/FS/Schema.pm: fix missing banned_pay index
+
+2011-07-19 14:27  ivan
+
+	* FS/FS/geocode_Mixin.pm: fix geocode guessing w/a 5 digit zip,
+	  RT#13595
+
+2011-07-19 10:45  ivan
+
+	* rt/lib/RT/Interface/Web.pm: lost package declaration before
+	  import of Web_Vendor.pm, with disasterous results
+
+2011-07-15 14:10  ivan
+
+	* FS/FS/Cron/expire_banned_pay.pm: file expire_banned_pay.pm was
+	  added on branch FREESIDE_2_1_BRANCH on 2011-07-15 21:10:20 +0000
+
+2011-07-15 14:10  ivan
+
+	* FS/FS/Cron/expire_banned_pay.pm, FS/bin/freeside-daily,
+	  FS/FS/Conf.pm, FS/FS/Schema.pm, FS/FS/banned_pay.pm,
+	  FS/FS/cust_main.pm, FS/FS/ClientAPI/Signup.pm,
+	  FS/FS/cust_main/Billing_Realtime.pm,
+	  fs_selfservice/FS-SelfService/cgi/signup.cgi,
+	  fs_selfservice/FS-SelfService/cgi/signup.html: add
+	  signup-duplicate_cc-warn_hours to warn about duplicate signups in
+	  a time span, RT#12011
+
+2011-07-15 13:28  ivan
+
+	* rt/: lib/RT/Interface/Web.pm, FREESIDE_MODIFIED: fix 403 errors
+	  pulling up RTx-Statistics charts, RT#13546
+
+2011-07-14 15:21  ivan
+
+	* FS/FS/: Conf.pm, cust_bill.pm: add
+	  cust_bill-latex_lineitem_maxlength conf, RT#13634
+
+2011-07-14 10:31  ivan
+
+	* FS/FS/cust_bill.pm: fix CDRs showing on typeset (but not printed)
+	  invoices w/squelch_cdr, RT#13561
+
+2011-07-14 10:13  ivan
+
+	* httemplate/view/: cust_bill-pdf.cgi, cust_bill-ps.cgi: fix CDRs
+	  showing on typeset (but not printed) invoices w/squelch_cdr,
+	  RT#13561
+
+2011-07-13 21:53  levinse
+
+	* httemplate/misc/batch-cust_pay.html: prevent Enter from
+	  submitting quick payment form, RT13651
+
+2011-07-13 20:46  levinse
+
+	* FS/FS/ClientAPI/MyAccount.pm,
+	  fs_selfservice/FS-SelfService/cgi/provision_list.html,
+	  fs_selfservice/FS-SelfService/cgi/provision_svc_phone.html,
+	  fs_selfservice/FS-SelfService/cgi/selfservice.cgi: view/set
+	  svc_phone forwardst and email from self-service, RT13622
+
+2011-07-13 09:34  ivan
+
+	* httemplate/misc/: recharge_svc.html, process/recharge_svc.html:
+	  fix backend recharge w/prepaid card, RT#13478
+
+2011-07-13 01:10  mark
+
+	* httemplate/: view/bill_batch.cgi, elements/progress-popup.html:
+	  fix invoice batch download, #13461
+
+2011-07-12 16:00  ivan
+
+	* FS/FS/Schema.pm, FS/FS/cust_bill.pm, FS/FS/cust_main/Billing.pm,
+	  httemplate/edit/part_pkg.cgi: fix UI for package editing
+	  w/recur_show_zero, add setup_show_zero, RT#9777
+
+2011-07-12 15:57  ivan
+
+	* FS/FS/part_pkg.pm, FS/FS/cust_bill_pkg.pm, FS/FS/cust_pkg.pm,
+	  httemplate/browse/part_pkg.cgi: fix UI for package editing
+	  w/recur_show_zero, add setup_show_zero, RT#9777
+
+2011-07-07 10:00  levinse
+
+	* FS/FS/cust_bill.pm, httemplate/edit/part_pkg.cgi,
+	  httemplate/edit/process/part_pkg.cgi: add a per-package
+	  disable_line_item_date_ranges option, RT13200
+
+2011-07-06 18:43  levinse
+
+	* FS/FS/phone_avail.pm, httemplate/edit/process/did_order.html:
+	  various DID inventory changes, RT12754
+
+2011-07-05 21:15  levinse
+
+	* FS/FS/cust_main/Billing.pm, httemplate/edit/process/cust_pay.cgi:
+	  modify backdated payment application behaviour, RT11870
+
+2011-07-01 15:26  levinse
+
+	* httemplate/elements/customer-table.html: quick payment entry
+	  improvements, RT8121
+
+2011-07-01 15:02  levinse
+
+	* httemplate/elements/change_history_common.html: file
+	  change_history_common.html was added on branch
+	  FREESIDE_2_1_BRANCH on 2011-07-01 22:03:18 +0000
+
+2011-07-01 15:02  levinse
+
+	* httemplate/search/employee_audit.html: file employee_audit.html
+	  was added on branch FREESIDE_2_1_BRANCH on 2011-07-01 22:03:18
+	  +0000
+
+2011-07-01 15:02  levinse
+
+	* httemplate/search/report_employee_audit.html: file
+	  report_employee_audit.html was added on branch
+	  FREESIDE_2_1_BRANCH on 2011-07-01 22:03:18 +0000
+
+2011-07-01 15:02  levinse
+
+	* httemplate/: elements/change_history_common.html,
+	  search/employee_audit.html, search/report_employee_audit.html,
+	  view/cust_main/change_history.html, elements/menu.html: add
+	  employee audit report, RT13350
+
+2011-06-29 12:06  mark
+
+	* rt/lib/RT/Attribute_Overlay.pm: fix queue renaming, #10488
+
+2011-06-28 22:16  ivan
+
+	* FS/FS/part_svc.pm: disable debugging in part_svc
+
+2011-06-28 15:36  ivan
+
+	* httemplate/edit/bulk-cust_svc.html, FS/FS/cust_svc.pm,
+	  FS/FS/part_svc.pm: add no export option to bulk service changes,
+	  RT#13439
+
+2011-06-28 06:35  levinse
+
+	* FS/FS/Cron/set_lata_have_usage.pm: improve performance of DID
+	  provisioning status report, RT10988
+
+2011-06-27 16:28  levinse
+
+	* FS/FS/pkg_class.pm: add optional fcc_ds0s to pkg_class, RT13057
+
+2011-06-27 14:27  ivan
+
+	* FS/FS/part_pkg/discount_Mixin.pm: fix over-discounting resulting
+	  in an error, RT#13450
+
+2011-06-23 20:36  levinse
+
+	* fs_selfservice/FS-SelfService/cgi/myaccount_menu.html:
+	  selfservice: don't display recharge account links if negative
+	  balance, RT12728
+
+2011-06-23 19:33  mark
+
+	* httemplate/search/cust_main.cgi: improve speed in customer
+	  search, #13364
+
+2011-06-23 16:07  ivan
+
+	* FS/FS/part_export/netsapiens.pm: update per netsapiens, RT#12447
+
+2011-06-23 14:30  mark
+
+	* httemplate/elements/search-cust_svc.html: file
+	  search-cust_svc.html was added on branch FREESIDE_2_1_BRANCH on
+	  2011-06-23 21:31:29 +0000
+
+2011-06-23 14:30  mark
+
+	* httemplate/: elements/search-cust_svc.html, search/cust_main.cgi,
+	  search/cust_pkg.cgi: large package display in customer/package
+	  search, #13364
+
+2011-06-22 21:12  levinse
+
+	* httemplate/: edit/cust_main/billing.html,
+	  view/cust_main/billing.html: echeck: add optional bank branch
+	  format, RT13360
+
+2011-06-22 21:08  levinse
+
+	* FS/FS/Conf.pm, FS/FS/cust_main.pm, httemplate/edit/cust_main.cgi,
+	  httemplate/edit/cust_main/bottomfixup.js,
+	  httemplate/edit/process/cust_main.cgi: echeck: add optional bank
+	  branch format, RT13360
+
+2011-06-22 18:55  levinse
+
+	* FS/FS/Schema.pm, FS/FS/pkg_class.pm,
+	  httemplate/browse/pkg_class.html, httemplate/edit/pkg_class.html,
+	  httemplate/edit/elements/class_Common.html: add optional fcc_ds0s
+	  to pkg_class, RT13057
+
+2011-06-22 17:12  levinse
+
+	* httemplate/search/report_cdr.html: CDR report: add cdrtypenum
+	  search criteria, RT13402
+
+2011-06-22 17:02  levinse
+
+	* httemplate/search/: cdr.html, report_cdr.html: CDR report: add
+	  cdrtypenum search criteria, RT13402
+
+2011-06-22 16:39  levinse
+
+	* httemplate/misc/delete-addr_block.html,
+	  httemplate/misc/delete-router.html, FS/FS/addr_block.pm,
+	  FS/FS/router.pm, httemplate/browse/addr_block.cgi,
+	  httemplate/browse/router.cgi: add router and addr_block delete
+	  features, RT13197
+
+2011-06-22 16:39  levinse
+
+	* httemplate/misc/delete-addr_block.html: file
+	  delete-addr_block.html was added on branch FREESIDE_2_1_BRANCH on
+	  2011-06-22 23:39:36 +0000
+
+2011-06-22 16:39  levinse
+
+	* httemplate/misc/delete-router.html: file delete-router.html was
+	  added on branch FREESIDE_2_1_BRANCH on 2011-06-22 23:39:36 +0000
+
+2011-06-22 15:25  levinse
+
+	* FS/FS/cdr/kannel.pm: cdr/kannel.pm: change row parse format,
+	  RT10991
+
+2011-06-22 15:01  ivan
+
+	* FS/FS/Cron/notify.pm: fix notification for flat_delayed packages
+	  when freeside-daily -a is used with comma-separated agents,
+	  RT#13349
+
+2011-06-22 14:30  levinse
+
+	* FS/FS/cdr/kannel.pm: cdr/kannel.pm: change row parse format,
+	  RT10991
+
+2011-06-22 14:12  ivan
+
+	* httemplate/search/phone_inventory_provisioned.html: fix headers,
+	  alignment and tabs, RT#10988
+
+2011-06-22 13:17  levinse
+
+	* FS/FS/cdr/kannel.pm: cdr/kannel.pm: better debug, RT10991
+
+2011-06-22 11:42  ivan
+
+	* FS/bin/freeside-cdr-sftp_and_import: fix -g gunzipping, RT#10991
+
+2011-06-22 11:32  levinse
+
+	* FS/FS/Cron/set_lata_have_usage.pm: file set_lata_have_usage.pm
+	  was added on branch FREESIDE_2_1_BRANCH on 2011-06-22 18:32:22
+	  +0000
+
+2011-06-22 11:32  levinse
+
+	* FS/FS/Cron/set_lata_have_usage.pm, FS/FS/svc_phone.pm,
+	  FS/bin/freeside-daily, bin/set-lata-have_usage: improve
+	  performance of DID provisioning status report, RT10988
+
+2011-06-22 11:22  levinse
+
+	* FS/bin/freeside-cdr-sftp_and_import:
+	  freeside-cdr-sftp_and_import: add an option to gunzip imported
+	  files, RT10991
+
+2011-06-22 10:22  levinse
+
+	* FS/bin/freeside-cdr-sftp_and_import:
+	  freeside-cdr-sftp_and_import: add an option to gunzip imported
+	  files
+
+2011-06-22 10:01  levinse
+
+	* bin/set-lata-have_usage: file set-lata-have_usage was added on
+	  branch FREESIDE_2_1_BRANCH on 2011-06-22 17:02:17 +0000
+
+2011-06-22 10:01  levinse
+
+	* bin/set-lata-have_usage, FS/FS/Schema.pm, FS/FS/lata.pm,
+	  httemplate/search/phone_inventory_provisioned.html: improve
+	  performance of DID provisioning status report, RT10988
+
+2011-06-21 17:56  ivan
+
+	* FS/bin/freeside-cdr-sftp_and_import: fix name in pod
+
+2011-06-21 16:27  levinse
+
+	* httemplate/search/phone_inventory_provisioned.html: improve
+	  performance of DID provisioning status report, RT10988
+
+2011-06-21 15:59  levinse
+
+	* httemplate/search/phone_inventory_provisioned.html: improve
+	  performance of DID provisioning status report, RT10988
+
+2011-06-21 15:41  levinse
+
+	* FS/FS/: cust_bill.pm, svc_phone.pm: invoice DID summary
+	  performance enhancement, RT10886
+
+2011-06-21 15:15  levinse
+
+	* FS/FS/cust_bill.pm: cust_bill.pm: if DID summary is turned on,
+	  don't try to get CDRs in the unlikely case that the h_svc_phone
+	  record isn't found with the correct insert time, RT13361
+
+2011-06-21 15:00  levinse
+
+	* httemplate/search/phone_inventory_provisioned.html: improve
+	  performance of DID provisioning status report, RT10988
+
+2011-06-21 11:20  levinse
+
+	* FS/FS/: Conf.pm, cust_bill.pm: DID activity summary improvements,
+	  RT10886
+
+2011-06-20 20:15  levinse
+
+	* FS/FS/phone_avail.pm, FS/FS/Schema.pm,
+	  httemplate/search/phone_inventory_provisioned.html: improve
+	  performance of DID provisioning status report, RT10988
+
+2011-06-20 19:55  ivan
+
+	* FS/FS/Schema.pm: remove unnecessary/bloating indices on
+	  h_cust_event, RT#13337
+
+2011-06-20 18:52  levinse
+
+	* httemplate/edit/part_pkg.cgi: FCC 477 form improvements, RT13057
+
+2011-06-20 16:50  ivan
+
+	* FS/FS/prepay_credit.pm: some debugging for prepaid card
+	  generation, and retry more, RT#13329
+
+2011-06-20 13:24  levinse
+
+	* FS/FS/cdr/freeside_description_default.pm:
+	  cdr/freeside_description_default.pm: parse destination correctly,
+	  RT13141
+
+2011-06-18 22:05  mark
+
+	* httemplate/view/cust_main/packages/services.html: fix large
+	  package display with multiple svcparts, #9821
+
+2011-06-18 12:47  levinse
+
+	* httemplate/search/477partIIB.html: FCC 477 reporting: fix column
+	  headings on part II B, RT13057
+
+2011-06-16 23:30  levinse
+
+	* httemplate/search/: cdr.html, report_cdr.html: CDR Report: add
+	  top sources, top destinations, and longest calls report options,
+	  RT12185
+
+2011-06-16 15:57  levinse
+
+	* FS/FS/part_pkg/: voip_cdr.pm, voip_inbound.pm: add CDR rating
+	  options to ignore CDRs having configurable disposition values and
+	  having particular cdrtypenum values, RT10091
+
+2011-06-16 15:07  mark
+
+	* FS/FS/part_pkg/prorate_Mixin.pm: better calculation of prorate
+	  rounding, #13299
+
+2011-06-16 13:21  ivan
+
+	* FS/FS/Conf.pm, httemplate/config/config-process.cgi,
+	  httemplate/config/config-view.cgi, httemplate/config/config.cgi,
+	  httemplate/edit/cust_main.cgi: add default_agentnum config,
+	  RT#13302
+
+2011-06-16 12:47  levinse
+
+	* FS/FS/part_pkg/voip_inbound.pm: part_pkg/voip_inbound.pm: add
+	  included minutes feature, RT12306
+
+2011-06-15 17:33  levinse
+
+	* bin/import-did-inventory: DID inventory/import / bulk DID orders
+	  - phase 2, RT12754
+
+2011-06-15 16:44  levinse
+
+	* bin/import-did-inventory: DID inventory/import / bulk DID orders
+	  - phase 2, RT12754
+
+2011-06-15 16:40  levinse
+
+	* bin/import-did-inventory: DID inventory/import / bulk DID orders
+	  - phase 2, RT12754
+
+2011-06-15 16:21  levinse
+
+	* bin/import-did-inventory: DID inventory/import / bulk DID orders
+	  - phase 2, RT12754
+
+2011-06-14 20:51  levinse
+
+	* bin/import-did-inventory: DID inventory/import / bulk DID orders
+	  - phase 2, RT12754
+
+2011-06-14 19:38  ivan
+
+	* Makefile: further refine check-conflicts to avoid false positives
+
+2011-06-14 19:36  levinse
+
+	* httemplate/edit/cust_main/billing.html: configurable payment date
+	  for auto CHEK/CARD, RT10813
+
+2011-06-14 19:18  levinse
+
+	* httemplate/edit/cust_main/billing.html: configurable payment date
+	  for auto CHEK/CARD, RT10813
+
+2011-06-14 18:41  ivan
+
+	* Makefile: added protection to Makfile against deploying cvs
+	  conflicts
+
+2011-06-14 18:37  ivan
+
+	* Makefile: added protection to Makfile against deploying cvs
+	  conflicts
+
+2011-06-14 18:24  ivan
+
+	* httemplate/search/cust_pay_batch.cgi: disable additional batch
+	  download links, causes confusion
+
+2011-06-14 13:29  levinse
+
+	* bin/: import-did-inventory: DID inventory/import / bulk DID
+	  orders - phase 2, RT12754
+
+2011-06-14 13:20  levinse
+
+	* bin/import-did-inventory: DID inventory/import / bulk DID orders
+	  - phase 2, RT12754
+
+2011-06-14 13:14  levinse
+
+	* bin/import-did-inventory: DID inventory/import / bulk DID orders
+	  - phase 2, RT12754
+
+2011-06-14 08:53  levinse
+
+	* bin/import-did-inventory: DID inventory/import / bulk DID orders
+	  - phase 2, RT12754
+
+2011-06-13 22:01  levinse
+
+	* httemplate/edit/cust_main/billing.html: configurable payment date
+	  for auto CHEK/CARD, RT10813
+
+2011-06-13 14:25  levinse
+
+	* FS/FS/part_pkg/discount_Mixin.pm: bug fix for discounts on setup
+	  fees, RT11512
+
+2011-06-13 11:26  levinse
+
+	* bin/import-did-inventory: DID inventory/import / bulk DID orders
+	  - phase 2, RT12754
+
+2011-06-12 10:49  ivan
+
+	* httemplate/elements/header-popup.html: fix popup bgcolor
+
+2011-06-11 22:58  ivan
+
+	* FS/FS/Schema.pm: remove random nms_ tables inadvertantly
+	  committed in 2.1
+
+2011-06-10 19:42  levinse
+
+	* FS/FS/Conf.pm: svc_broadband add/edit: configurable require
+	  co-ordinates in NW quadrant, RT12925
+
+2011-06-09 22:16  levinse
+
+	* FS/FS/Conf.pm, FS/FS/svc_broadband.pm,
+	  httemplate/edit/svc_broadband.cgi: svc_broadband add/edit:
+	  configurable require co-ordinates in NW quadrant, RT12925
+
+2011-06-09 20:33  ivan
+
+	* FS/FS/Schema.pm, FS/FS/cust_bill.pm, FS/FS/part_pkg.pm,
+	  httemplate/edit/part_pkg.cgi, httemplate/elements/checkbox.html,
+	  httemplate/elements/input-text.html,
+	  httemplate/elements/tr-select-agent.html, FS/FS/cust_bill_pkg.pm,
+	  FS/FS/cust_main/Billing.pm, httemplate/browse/part_pkg.cgi: add
+	  package def option to show $0 recurring on invoices, RT#9777
+
+2011-06-09 17:30  levinse
+
+	* bin/import-did-inventory: DID inventory/import / bulk DID orders
+	  - phase 2, RT12754
+
+2011-06-09 16:01  ivan
+
+	* conf/invoice_latexcoupon: fix double your in payment coupon,
+	  RT#13214
+
+2011-06-09 15:09  levinse
+
+	* FS/FS/cdr/kannel.pm: file kannel.pm was added on branch
+	  FREESIDE_2_1_BRANCH on 2011-06-09 22:09:08 +0000
+
+2011-06-09 15:09  levinse
+
+	* FS/: FS/cdr/kannel.pm, FS/Record.pm, FS/cdr.pm,
+	  bin/freeside-cdr-sftp_and_import: SMSC CDRs (Kannel) and
+	  cdrtypenum option on cdr sftp import script, RT10991
+
+2011-06-08 20:59  levinse
+
+	* httemplate/edit/cust_main/: billing.html: configurable payment
+	  date for auto CHEK/CARD, RT10813
+
+2011-06-08 13:57  levinse
+
+	* FS/FS/did_order_item.pm,
+	  httemplate/misc/did_order_confirmed.html: DID inventory/import /
+	  bulk DID orders - phase 2, RT12754
+
+2011-06-08 10:09  levinse
+
+	* FS/FS/did_order.pm: DID inventory/import / bulk DID orders -
+	  phase 2, RT12754
+
+2011-06-08 09:31  levinse
+
+	* FS/FS/cdr/freeside_description_default.pm:
+	  cdr/freeside_description_default.pm: parse destination correctly,
+	  RT13141
+
+2011-06-07 22:37  levinse
+
+	* FS/FS/Schema.pm, FS/FS/did_order.pm, FS/FS/did_order_item.pm,
+	  FS/FS/phone_avail.pm, httemplate/edit/did_order.html,
+	  httemplate/edit/process/did_order.html,
+	  httemplate/elements/did_order_item.html,
+	  httemplate/misc/did_order_confirmed.html,
+	  httemplate/misc/did_order_provision.html,
+	  httemplate/browse/did_order.html, bin/import-did-inventory: DID
+	  inventory/import / bulk DID orders - phase 2, RT12754
+
+2011-06-06 20:11  mark
+
+	* Makefile: set config ownership after install-rt
+
+2011-06-06 16:43  mark
+
+	* FS/FS/: Schema.pm, cdr/sonus.pm: Sonus CDR format, #13053
+
+2011-06-06 13:00  levinse
+
+	* FS/FS/part_event/Action/cust_bill_spool_csv.pm: undo last commit,
+	  RT12557
+
+2011-06-06 12:53  levinse
+
+	* FS/FS/part_event/Action/cust_bill_spool_csv.pm:
+	  cust_bill_spool_csv.pm: remove invoice destination stuff, RT12557
+
+2011-06-06 12:46  levinse
+
+	* httemplate/: elements/customer-table.html,
+	  misc/batch-cust_pay.html: quick payment entry improvements,
+	  RT8121
+
+2011-06-06 09:03  levinse
+
+	* FS/bin/freeside-pkg-date-midnight: oops
+
+2011-06-06 09:02  levinse
+
+	* FS/bin/freeside-pkg-date-midnight: freeside-pkg-date-midnight:
+	  docs, RT12570
+
+2011-06-05 21:55  mark
+
+	* Makefile: allow freeside user to read RT config, from #11274
+
+2011-06-05 10:22  levinse
+
+	* httemplate/elements/customer-table.html: quick payment entry
+	  improvements, RT8121
+
+2011-06-05 09:31  levinse
+
+	* FS/FS/part_pkg/sqlradacct_hour.pm: sqlradacct_hour.pm: don't
+	  truncate per byte/hour overage charges at 2 decimal places
+
+2011-06-04 23:05  levinse
+
+	* FS/FS/part_pkg/: prorate_delayed.pm, voip_cdr.pm: add
+	  suspend_bill package option to more pkgparts, RT10586
+
+2011-06-04 22:41  levinse
+
+	* FS/FS/Conf.pm, httemplate/search/477.html,
+	  httemplate/search/477partV.html,
+	  httemplate/search/report_477.html: FCC form 477 part II and V
+	  issues, RT13057
+
+2011-06-04 20:45  levinse
+
+	* conf/: invoice_htmlsummary, invoice_latexsummary: remove double
+	  summary listing of svc_phone usage when used with invoice
+	  summary, RT12637
+
+2011-06-03 11:18  levinse
+
+	* httemplate/edit/cust_main/billing.html: per-customer configurable
+	  payment date for auto CHEK/CARD, RT10813
+
+2011-06-03 11:10  levinse
+
+	* FS/FS/part_event/Condition/billday.pm: per-customer configurable
+	  payment date for auto CHEK/CARD, RT10813
+
+2011-06-03 10:07  ivan
+
+	* FS/FS/part_pkg/discount_Mixin.pm: fix annual discounts, RT#12977
+
+2011-06-03 09:33  ivan
+
+	* FS/FS/part_export/netsapiens.pm: escape ("percent-encode") : and
+	  @ in netsapeins URLs, RT#12447
+
+2011-06-02 21:41  levinse
+
+	* httemplate/edit/cust_main/contact.html: configurable alternate
+	  field order for cust edit, RT13102
+
+2011-06-02 21:35  levinse
+
+	* FS/FS/Conf.pm: configurable alternate field order for cust edit,
+	  RT13102
+
+2011-06-02 20:15  levinse
+
+	* httemplate/edit/cust_main/billing.html: configurable payment date
+	  for auto CHEK/CARD, RT10813
+
+2011-06-02 13:43  ivan
+
+	* FS/FS/cdr.pm: fix use of uninitialized value in lc() error in
+	  5.12
+
+2011-06-02 13:17  ivan
+
+	* Makefile: better rc.d start/end numbers to start after Pg and end
+	  before, for sid and eventually wheezy
+
+2011-06-02 12:24  mark
+
+	* rt/share/html/Ticket/Elements/EditCustomFields: fix ticket
+	  creation, from #9260
+
+2011-06-01 22:07  levinse
+
+	* httemplate/view/cust_main/contacts.html: fix regression in
+	  view/cust_main/contacts.html, RT13094
+
+2011-05-31 17:14  mark
+
+	* rt/: FREESIDE_MODIFIED, share/html/Ticket/Elements/Tabs: improve
+	  mandatory fields, #9260, tabs
+
+2011-05-31 16:22  mark
+
+	* rt/FREESIDE_MODIFIED: ModifyPeople not modified
+
+2011-05-31 16:12  mark
+
+	* rt/: FREESIDE_MODIFIED, lib/RT/CustomField.pm,
+	  lib/RT/CustomField_Vendor.pm, lib/RT/Ticket_Vendor.pm,
+	  lib/RT/Interface/Web_Vendor.pm, share/html/Search/Bulk.html,
+	  share/html/Ticket/Display.html, share/html/Ticket/Modify.html,
+	  share/html/Ticket/ModifyAll.html,
+	  share/html/Ticket/Elements/CheckMandatoryFields,
+	  share/html/Ticket/Elements/EditCustomFields: improve mandatory
+	  fields, #9260
+
+2011-05-30 16:24  levinse
+
+	* httemplate/edit/cust_main/billing.html,
+	  httemplate/edit/cust_main/contact.html,
+	  httemplate/view/cust_main/contacts.html,
+	  httemplate/view/cust_main/billing.html, FS/FS/Conf.pm: optional
+	  better visibility for invoicing email field, RT12944
+
+2011-05-27 14:46  mark
+
+	* FS/FS/part_export/apache.pm, bin/apache.export: apache.export
+	  suspension, #1822
+
+2011-05-26 18:11  mark
+
+	* FS/FS/cust_bill.pm, httemplate/elements/header-popup.html,
+	  httemplate/elements/progress-init.html,
+	  httemplate/elements/progress-popup.html,
+	  httemplate/search/bill_batch.cgi, httemplate/view/bill_batch.cgi:
+	  invoice batch download fix, #11871
+
+2011-05-26 14:36  levinse
+
+	* bin/import-did-inventory: DID inventory import, RT12754
+
+2011-05-26 13:59  levinse
+
+	* httemplate/: elements/tr-input-beginning_ending.html,
+	  graph/report_money_time_daily.html: daily sales, credits, and
+	  receipts report
+
+2011-05-25 16:25  mark
+
+	* FS/FS/cdr/enswitch.pm: fix to Enswitch CDR import, #11613
+
+2011-05-23 14:37  mark
+
+	* rt/share/html/Elements/Header: fix auto-refresh, #12766
+
+2011-05-22 17:01  ivan
+
+	* FS/FS/tax_rate.pm: fix cch tax rate import for taxes coming from
+	  dbf file in scientific notation, RT#11003
+
+2011-05-22 13:08  ivan
+
+	* httemplate/search/cust_main.cgi: scalar all CGI params used in
+	  lists
+
+2011-05-20 23:40  levinse
+
+	* bin/import-did-inventory: did inventory importing, RT12754
+
+2011-05-20 17:52  levinse
+
+	* bin/import-did-inventory, FS/FS/msa_Data.pm: DID inventory
+	  import, RT12754
+
+2011-05-20 17:52  levinse
+
+	* bin/import-did-inventory: file import-did-inventory was added on
+	  branch FREESIDE_2_1_BRANCH on 2011-05-21 00:52:50 +0000
+
+2011-05-20 13:19  mark
+
+	* FS/MANIFEST, FS/FS/Conf.pm, FS/FS/Mason.pm, FS/FS/Misc.pm,
+	  FS/FS/Schema.pm, FS/FS/cust_msg.pm, FS/FS/msg_template.pm,
+	  FS/t/cust_msg.t, httemplate/elements/menu.html,
+	  httemplate/misc/email-customers.html,
+	  httemplate/search/cust_msg.html, httemplate/view/cust_msg.html:
+	  logging of template-generated mail, #12809
+
+2011-05-19 22:13  levinse
+
+	* FS/FS/msa_Data.pm: how the hell did this copy-paste fail happen?
+
+2011-05-19 18:19  mark
+
+	* Makefile: install RT initialdata, #9569
+
+2011-05-18 17:19  ivan
+
+	* httemplate/search/cust_main-otaker.cgi: remove obsolete reports
+	  -> customers -> search customers -> by ordering employee,
+	  RT#12360
+
+2011-05-18 17:11  ivan
+
+	* httemplate/elements/menu.html: remove obsolete reports ->
+	  customers -> search customers -> by ordering employee, RT#12360
+
+2011-05-16 16:28  mark
+
+	* rt/lib/RT/Ticket_Vendor.pm: file Ticket_Vendor.pm was added on
+	  branch FREESIDE_2_1_BRANCH on 2011-05-31 23:12:37 +0000
+
+2011-05-16 16:28  mark
+
+	* rt/lib/RT/Ticket_Vendor.pm: increment priority via bulk ticket
+	  update, #12901
+
+2011-05-16 06:36  ivan
+
+	* FS/FS/Schema.pm: not on 2.1
+
+2011-05-15 19:04  levinse
+
+	* FS/FS/Schema.pm: schema change for
+	  internationalization/localization, RT12515
+
+2011-05-13 16:20  mark
+
+	* rt/lib/RT/Condition/CustomFieldTransaction.pm: file
+	  CustomFieldTransaction.pm was added on branch FREESIDE_2_1_BRANCH
+	  on 2011-05-13 23:21:08 +0000
+
+2011-05-13 16:20  mark
+
+	* rt/lib/RT/Condition/CustomFieldTransaction.pm,
+	  FS/FS/TicketSystem.pm, rt/FREESIDE_MODIFIED, rt/etc/initialdata,
+	  rt/share/html/Admin/Elements/EditScripOptions: notify on custom
+	  field change, #11274
+
+2011-05-13 13:03  levinse
+
+	* httemplate/graph/money_time_daily.cgi: file money_time_daily.cgi
+	  was added on branch FREESIDE_2_1_BRANCH on 2011-05-13 20:03:50
+	  +0000
+
+2011-05-13 13:03  levinse
+
+	* httemplate/graph/report_money_time_daily.html: file
+	  report_money_time_daily.html was added on branch
+	  FREESIDE_2_1_BRANCH on 2011-05-13 20:03:50 +0000
+
+2011-05-13 13:03  levinse
+
+	* FS/FS/Report/Table/Daily.pm,
+	  httemplate/graph/money_time_daily.cgi,
+	  httemplate/graph/report_money_time_daily.html, FS/FS/Mason.pm,
+	  FS/FS/Report/Table.pm, FS/FS/Report/Table/Monthly.pm,
+	  httemplate/elements/menu.html,
+	  httemplate/graph/elements/monthly.html: create a Sales, Credits,
+	  and Receipts report broken down by day, RT11470
+
+2011-05-13 13:03  levinse
+
+	* FS/FS/Report/Table/Daily.pm: file Daily.pm was added on branch
+	  FREESIDE_2_1_BRANCH on 2011-05-13 20:03:50 +0000
+
+2011-05-12 15:13  mark
+
+	* fs_selfservice/drupal/freeside.class.php: fix Drupal argument
+	  passing, #9380
+
+2011-05-12 12:57  mark
+
+	* FS/FS/cust_pay_pending.pm, FS/FS/ClientAPI/Signup.pm,
+	  FS/FS/cust_main/Billing_Realtime.pm,
+	  httemplate/view/cust_main/payment_history/pending_payment.html:
+	  new status for pending third-party payments, fix for #12808
+
+2011-05-11 08:23  levinse
+
+	* FS/FS/part_export/sqlradius.pm, httemplate/search/sqlradius.cgi,
+	  httemplate/search/sqlradius.html: add summarized RADIUS report
+	  feature, RT11776
+
+2011-05-10 17:49  ivan
+
+	* FS/FS/cust_main/Billing_Realtime.pm: removing code that deleted
+	  pending payments.  a real wtf.  RT#12662
+
+2011-05-10 16:21  mark
+
+	* Makefile, FS/FS/TicketSystem.pm, rt/Makefile, rt/Makefile.in:
+	  replace missing RT scrips on upgrade, #9569
+
+2011-05-10 12:42  ivan
+
+	* FS/FS/Cron/upload.pm: FTP error on "cd /" not fatal, RT#12326
+
+2011-05-09 15:32  ivan
+
+	* httemplate/edit/cust_main/billing.html: clarify squelch_cdr label
+
+2011-05-09 11:46  levinse
+
+	* FS/FS/cdr/freeside_description_default.pm: fix bug in
+	  freeside_description_default.pm, RT12078
+
+2011-05-08 13:09  levinse
+
+	* FS/FS/: Schema.pm,
+	  part_event/Condition/cust_bill_hasnt_noauto.pm: implement
+	  condition_sql for
+	  FS::part_event::Condition::cust_bill_hasnt_noauto, RT12714
+
+2011-05-07 22:44  levinse
+
+	* FS/FS/part_event/Condition/cust_bill_hasnt_noauto.pm: implement
+	  condition_sql for
+	  FS::part_event::Condition::cust_bill_hasnt_noauto, RT12714
+
+2011-05-07 19:48  levinse
+
+	* FS/FS/part_event/Condition/agent.pm: implemenent condition_sql
+	  for FS::part_event::Condition::agent, RT12715
+
+2011-05-07 10:30  ivan
+
+	* httemplate/view/cust_main.cgi: fix cust_main-external_links,
+	  RT#10889
+
+2011-05-05 17:29  levinse
+
+	* FS/FS/: cust_main/Billing.pm, part_pkg/discount_Mixin.pm,
+	  part_pkg/flat.pm: discounts on setup fees, part 2 of 2, RT11512
+
+2011-05-05 16:21  ivan
+
+	* FS/FS/cust_main/Billing_Realtime.pm: fix double insert of
+	  overpayments, RT#12655
+
+2011-05-05 12:34  levinse
+
+	* FS/FS/ClientAPI/MyAccount.pm: fix bug in previous commit for
+	  RT11761, RT12737
+
+2011-05-05 11:27  ivan
+
+	* FS/FS/cdr/: lesnet.pm: add lesnet CDR format
+
+2011-05-05 11:27  ivan
+
+	* FS/FS/cdr/lesnet.pm: file lesnet.pm was added on branch
+	  FREESIDE_2_1_BRANCH on 2011-05-05 18:27:33 +0000
+
+2011-05-05 10:23  ivan
+
+	* FS/FS/Conf.pm: fix FS::Locales inadvertant inclusion, RT#12737
+
+2011-05-05 09:44  ivan
+
+	* FS/FS/Conf.pm, httemplate/elements/select-terms.html: add Net 9,
+	  RT#12722
+
+2011-05-04 23:53  levinse
+
+	* FS/FS/Conf.pm, FS/FS/cdr.pm,
+	  fs_selfservice/FS-SelfService/cgi/view_cdr_details.html,
+	  fs_selfservice/FS-SelfService/cgi/view_usage.html,
+	  FS/FS/ClientAPI/MyAccount.pm: self-service view usage
+	  customization and CDR display fixes, RT11761
+
+2011-05-04 19:38  levinse
+
+	* fs_selfservice/FS-SelfService/cgi/make_payment.html: better SS
+	  payment process UI for negative balances, RT12728
+
+2011-05-04 18:02  levinse
+
+	* FS/FS/cdr/freeside_description_default.pm: fix small bug in last
+	  commit for RT12078
+
+2011-05-04 17:53  levinse
+
+	* FS/FS/cdr/: freeside_description_default.pm: add a CDR import
+	  format to allow importing of some Freeside-generated CDRs,
+	  RT12078
+
+2011-05-04 17:53  levinse
+
+	* FS/FS/cdr/freeside_description_default.pm: file
+	  freeside_description_default.pm was added on branch
+	  FREESIDE_2_1_BRANCH on 2011-05-05 00:53:42 +0000
+
+2011-05-03 22:44  levinse
+
+	* httemplate/: search/cust_main.cgi, elements/menu.html: add
+	  USPS-unvalidated customer addresses report, RT12402
+
+2011-05-03 18:07  levinse
+
+	* FS/FS/Conf.pm, httemplate/elements/menu.html: config to show
+	  payment history report, RT7694
+
+2011-05-03 14:50  ivan
+
+	* FS/FS/Schema.pm: varchars need a length or mysql is unhappy
+
+2011-05-03 14:45  ivan
+
+	* FS/FS/Schema.pm: varchars need a length or mysql is unhappy
+
+2011-05-03 14:24  ivan
+
+	* FS/FS/Maestro.pm: maestro "Not yet billed" is active, RT#11885
+
+2011-05-03 10:23  levinse
+
+	* FS/bin/: freeside-pkg-date-midnight: add a utility to move next
+	  bill dates to midnight for active anniversary packages, RT12570
+
+2011-05-03 10:23  levinse
+
+	* FS/bin/freeside-pkg-date-midnight: file
+	  freeside-pkg-date-midnight was added on branch
+	  FREESIDE_2_1_BRANCH on 2011-05-03 17:23:38 +0000
+
+2011-05-01 16:19  ivan
+
+	* bin/cdr.reimport: cdr reimporting, RT#12181
+
+2011-05-01 16:11  ivan
+
+	* bin/cdr.reimport: cdr reimporting, RT#12181
+
+2011-05-01 13:02  ivan
+
+	* bin/cdr.reimport: cdr reimporting, RT#12181
+
+2011-05-01 12:56  ivan
+
+	* bin/cdr.reimport: cdr reimporting, RT#12181
+
+2011-05-01 12:51  ivan
+
+	* FS/FS/Record.pm: cdr reimporting, RT#12181
+
+2011-05-01 12:27  ivan
+
+	* bin/cdr.reimport, FS/FS/Record.pm: cdr reimporting, RT#12181
+
+2011-05-01 12:27  ivan
+
+	* bin/cdr.reimport: file cdr.reimport was added on branch
+	  FREESIDE_2_1_BRANCH on 2011-05-01 19:27:54 +0000
+
+2011-05-01 12:07  ivan
+
+	* FS/bin/freeside-cdrrewrited: terminate cdrrewrited immediately on
+	  signals
+
+2011-04-30 14:20  mark
+
+	* FS/FS/part_export/acct_google.pm, httemplate/edit/svc_acct.cgi:
+	  better error handling in google export, #12064
+
+2011-04-30 13:28  mark
+
+	* rt/: FREESIDE_MODIFIED, share/html/Elements/ColumnMap,
+	  share/html/Elements/RT__Ticket/ColumnMap,
+	  share/html/Search/Results.csv, share/html/Search/Results.xls,
+	  share/html/Search/Elements/ResultsStructuredView: Excel date
+	  formatting, #12659
+
+2011-04-29 08:07  levinse
+
+	* FS/FS/: Conf.pm, cust_main.pm: make postal invoice fee a
+	  per-agent config, RT7240
+
+2011-04-29 05:16  levinse
+
+	* FS/FS/part_pkg/flat.pm: apply discount to setup fees, part 1 of
+	  2, RT11512
+
+2011-04-29 05:10  levinse
+
+	* FS/FS/Schema.pm, FS/FS/cust_pkg.pm, FS/FS/cust_pkg_discount.pm,
+	  FS/FS/discount.pm, FS/FS/part_pkg/discount_Mixin.pm,
+	  httemplate/edit/discount.html,
+	  httemplate/edit/process/cust_pkg_discount.html,
+	  httemplate/edit/process/quick-cust_pkg.cgi,
+	  httemplate/elements/tr-select-discount.html: apply discount to
+	  setup fees, part 1 of 2, RT11512
+
+2011-04-27 16:24  mark
+
+	* FS/FS/cdr.pm: new call details format, #12585
+
+2011-04-26 17:48  ivan
+
+	* httemplate/: elements/form-file_upload.html,
+	  misc/cdr-import.html, misc/cust_main-import.cgi,
+	  misc/cust_pkg-import.html, misc/inventory_item-import.html,
+	  misc/part_device-import.html, misc/phone_avail-import.html,
+	  misc/rate-import.html, misc/rate_edit_excel.html,
+	  misc/tax-import.cgi: fix submission bug w/chrome, RT#12638
+
+2011-04-25 17:19  levinse
+
+	* FS/FS/part_event/Condition/billday.pm: fix billday.pm bugs,
+	  RT10813
+
+2011-04-25 10:36  ivan
+
+	* FS/FS/part_event/Condition/: postal.pm: add postal.pm condition,
+	  RT#12557
+
+2011-04-25 10:36  ivan
+
+	* FS/FS/part_event/Condition/postal.pm: file postal.pm was added on
+	  branch FREESIDE_2_1_BRANCH on 2011-04-25 17:36:04 +0000
+
+2011-04-24 21:37  levinse
+
+	* FS/FS/Schema.pm, FS/FS/cust_pkg.pm, FS/FS/cust_main/Billing.pm,
+	  httemplate/edit/process/quick-cust_pkg.cgi,
+	  httemplate/misc/order_pkg.html, FS/FS/AccessRight.pm: add waive
+	  setup fee upon package order feature, RT12568
+
+2011-04-24 21:00  levinse
+
+	* httemplate/search/477partV.html,
+	  httemplate/search/477partVI_census.html,
+	  httemplate/search/report_477.html, FS/FS/Schema.pm,
+	  FS/FS/Report/FCC_477.pm, httemplate/search/477.html,
+	  httemplate/search/477partIA_detail.html,
+	  httemplate/search/477partIA_summary.html,
+	  httemplate/search/477partIIA.html,
+	  httemplate/search/477partIIB.html: FCC form 477 report
+	  improvements, RT12089
+
+2011-04-24 10:05  levinse
+
+	* FS/FS/part_event/Condition/billday.pm: file billday.pm was added
+	  on branch FREESIDE_2_1_BRANCH on 2011-04-24 17:05:02 +0000
+
+2011-04-24 10:04  levinse
+
+	* FS/FS/Conf.pm, FS/FS/cust_main.pm,
+	  httemplate/edit/cust_main/billing.html,
+	  httemplate/view/cust_main/billing.html, FS/FS/Schema.pm,
+	  FS/FS/part_event/Condition/billday.pm: add per-customer
+	  configurable billing date, RT10813
+
+2011-04-24 08:09  levinse
+
+	* FS/FS/cust_bill.pm: modify invoice DID summary date range
+	  calculation, RT10886
+
+2011-04-23 22:07  levinse
+
+	* FS/FS/cust_bill.pm: modify invoice DID summary date range
+	  calculation, RT10886
+
+2011-04-23 17:33  levinse
+
+	* FS/FS/Setup.pm: fix bug in Setup.pm for LATA/MSA population,
+	  RT11291
+
+2011-04-22 16:36  ivan
+
+	* FS/FS/Cron/upload.pm: wtxs upload changes, RT#12326
+
+2011-04-22 16:31  ivan
+
+	* bin/billco-upload: wtxs upload changes, RT#12326
+
+2011-04-22 16:27  ivan
+
+	* bin/billco-upload: file billco-upload was added on branch
+	  FREESIDE_2_1_BRANCH on 2011-04-22 23:27:48 +0000
+
+2011-04-22 16:27  ivan
+
+	* bin/billco-upload, FS/FS/Cron/upload.pm: wtxs upload changes,
+	  RT#12326
+
+2011-04-22 16:17  levinse
+
+	* httemplate/: edit/did_order.html, elements/did_order_item.html,
+	  misc/phone_avail-import.html: bulk DID orders/inventory
+	  improvements, RT11291
+
+2011-04-22 14:30  mark
+
+	* rt/share/html/: Ticket/Elements/ShowParents, Elements/EditLinks:
+	  hide ticket customer links, #1165
+
+2011-04-21 20:34  mark
+
+	* rt/share/html/Search/Elements/ResultViews: remove unneeded files
+	  after #10855
+
+2011-04-21 19:42  mark
+
+	* rt/share/html/Search/Elements/ResultsStructuredView: small fix,
+	  #10855
+
+2011-04-21 19:24  mark
+
+	* rt/share/html/Search/: Results.csv, Results.xls,
+	  Elements/ResultsStructuredView: improved XLS and CSV download,
+	  #10855
+
+2011-04-20 23:07  mark
+
+	* FS/FS/pay_batch/td_eft1464.pm: fix EFT1464 batch format, #10545
+
+2011-04-20 14:17  ivan
+
+	* httemplate/elements/tr-select-agent_type.html: fix agent type
+	  condition, RT#12539
+
+2011-04-20 10:46  ivan
+
+	* rt/: FREESIDE_MODIFIED, lib/RT/Interface/Web.pm: fix
+	  RT::InterFace::Web_Vendor inclusion, RT#12519
+
+2011-04-19 19:54  ivan
+
+	* rt/lib/RT/Base.pm: fix missing _ImportOverlays in RT::Base,
+	  RT#12519
+
+2011-04-19 18:22  mark
+
+	* rt/share/html/Ticket/: Create.html, Display.html: cloned tickets
+	  inherit customer links, #11169
+
+2011-04-19 16:49  levinse
+
+	* FS/FS/: lata_Data.pm, msa_Data.pm, lata.pm, Schema.pm, Setup.pm,
+	  Upgrade.pm, msa.pm, phone_avail.pm: bulk DID orders/inventory
+	  enhancements, RT11291
+
+2011-04-19 16:49  levinse
+
+	* FS/FS/lata_Data.pm: file lata_Data.pm was added on branch
+	  FREESIDE_2_1_BRANCH on 2011-04-19 23:49:40 +0000
+
+2011-04-19 16:49  levinse
+
+	* FS/FS/msa_Data.pm: file msa_Data.pm was added on branch
+	  FREESIDE_2_1_BRANCH on 2011-04-19 23:49:40 +0000
+
+2011-04-18 17:23  ivan
+
+	* rt/: Makefile, Makefile.in, config.log, config.status,
+	  configure.ac, bin/fastcgi_server, bin/mason_handler.fcgi,
+	  bin/mason_handler.scgi, bin/mason_handler.svc, bin/rt-mailgate,
+	  bin/rt-mailgate.in, lib/RT.pm, lib/RT.pm.in, lib/RT/Action.pm,
+	  lib/RT/Condition.pm, lib/RT/Config.pm, lib/RT/CustomField.pm,
+	  lib/RT/Date.pm, lib/RT/Principal_Overlay.pm, lib/RT/Record.pm,
+	  lib/RT/SearchBuilder.pm, lib/RT/System.pm, lib/RT/Test.pm,
+	  lib/RT/Ticket_Overlay.pm, lib/RT/Tickets_Overlay.pm,
+	  lib/RT/User_Overlay.pm, lib/RT/Users_Overlay.pm,
+	  lib/RT/Action/CreateTickets.pm,
+	  lib/RT/Action/EscalatePriority.pm, lib/RT/Interface/Web.pm,
+	  lib/RT/Search/Googleish.pm, sbin/rt-setup-database.in,
+	  share/html/Admin/Elements/EditCustomFields: landing 3.8.10 on 2.1
+	  branch
+
+2011-04-18 17:21  ivan
+
+	* rt/: Makefile, bin/rt-crontool, lib/RT.pm: an oops landing 3.8.9
+	  on 2.1 branch (few missed files)
+
+2011-04-18 17:14  ivan
+
+	* rt/: Makefile, bin/rt-crontool, lib/RT.pm: landing 3.8.9 on 2.1
+	  branch (few missed files)
+
+2011-04-18 13:05  ivan
+
+	* rt/lib/RT/CustomFieldValues/Queues.pm: adding missing file on 2.1
+	  from RT#8254
+
+2011-04-17 22:14  ivan
+
+	* FS/FS/Schema.pm: index all dates
+
+2011-04-16 20:27  levinse
+
+	* FS/FS/AccessRight.pm, FS/FS/did_order.pm,
+	  httemplate/browse/did_order.html,
+	  httemplate/misc/did_order_confirmed.html,
+	  httemplate/misc/did_order_provision.html,
+	  httemplate/search/phone_avail.html,
+	  httemplate/view/cust_main/packages/services.html: bulk DID
+	  orders/inventory enhancements, RT11291
+
+2011-04-15 17:01  mark
+
+	* rt/: FREESIDE_MODIFIED, share/html/Search/Results.csv,
+	  share/html/Search/Results.tsv, share/html/Search/Results.xls,
+	  share/html/Search/Elements/ResultViews: XLS and CSV download for
+	  2.1, #10855
+
+2011-04-15 16:54  mark
+
+	* rt/share/html/Search/Results.csv: CSV download, #10855
+
+2011-04-15 16:54  mark
+
+	* rt/share/html/Search/Results.csv: file Results.csv was added on
+	  branch FREESIDE_2_1_BRANCH on 2011-04-16 00:01:37 +0000
+
+2011-04-15 16:44  ivan
+
+	* FS/FS/tax_rate.pm, httemplate/search/report_newtax.cgi: fix new
+	  tax report w/FS::tax_rate_location->location_sql, RT#12332
+
+2011-04-15 16:33  ivan
+
+	* FS/FS/tax_rate.pm, httemplate/search/report_newtax.cgi: fix new
+	  tax report w/FS::tax_rate_location->location_sql, RT#12332
+
+2011-04-15 16:15  ivan
+
+	* FS/FS/tax_rate.pm, httemplate/search/report_newtax.cgi: fix new
+	  tax report w/FS::tax_rate_location->location_sql, RT#12332
+
+2011-04-15 16:02  ivan
+
+	* FS/FS/tax_rate.pm, httemplate/search/report_newtax.cgi: fix new
+	  tax report w/FS::tax_rate_location->location_sql, RT#12332
+
+2011-04-15 15:52  ivan
+
+	* FS/FS/tax_rate.pm, httemplate/search/report_newtax.cgi: fix new
+	  tax report w/FS::tax_rate_location->location_sql, RT#12332
+
+2011-04-15 15:36  ivan
+
+	* FS/FS/tax_rate_location.pm: adding
+	  FS::tax_rate_location->location_sql on 2.1
+
+2011-04-15 15:33  ivan
+
+	* FS/FS/tax_rate.pm, httemplate/search/report_newtax.cgi: link new
+	  tax report to cust_credit_bill_pkg for credits, RT#12332
+
+2011-04-15 15:19  ivan
+
+	* httemplate/search/cust_credit_bill_pkg.html: link new tax report
+	  to cust_credit_bill_pkg for credits, RT#12332
+
+2011-04-15 15:12  ivan
+
+	* httemplate/search/cust_credit_bill_pkg.html: link new tax report
+	  to cust_credit_bill_pkg for credits, RT#12332
+
+2011-04-15 15:02  ivan
+
+	* httemplate/search/: cust_credit_bill_pkg.html: link new tax
+	  report to cust_credit_bill_pkg for credits, RT#12332
+
+2011-04-15 14:58  ivan
+
+	* httemplate/search/cust_credit_bill_pkg.html: link new tax report
+	  to cust_credit_bill_pkg for credits, RT#12332
+
+2011-04-15 14:55  ivan
+
+	* httemplate/search/: report_newtax.cgi, cust_credit_bill_pkg.html:
+	  link new tax report to cust_credit_bill_pkg for credits, RT#12332
+
+2011-04-15 14:08  mark
+
+	* rt/share/html/Search/Results.xls: RT search results in Excel
+	  format, #10855
+
+2011-04-15 14:08  mark
+
+	* rt/share/html/Search/Results.xls: file Results.xls was added on
+	  branch FREESIDE_2_1_BRANCH on 2011-04-16 00:01:37 +0000
+
+2011-04-15 11:06  ivan
+
+	* FS/FS/part_event/Condition.pm: mysql fix for CAST ( vs CAST(
+
+2011-04-14 21:01  mark
+
+	* rt/lib/RT/: Date.pm, Tickets_Overlay.pm: Timezone issues with
+	  this-month search, #11057
+
+2011-04-14 20:13  levinse
+
+	* FS/: FS/msa.pm, FS.pm, MANIFEST, FS/Mason.pm: bulk DID
+	  orders/inventory enhancements, RT11291
+
+2011-04-14 20:13  levinse
+
+	* FS/FS/msa.pm: file msa.pm was added on branch FREESIDE_2_1_BRANCH
+	  on 2011-04-15 03:13:43 +0000
+
+2011-04-14 20:09  levinse
+
+	* FS/FS/Schema.pm, FS/FS/did_order.pm, FS/FS/did_order_item.pm,
+	  FS/FS/rate_center.pm, FS/bin/freeside-msa-import, FS/t/msa.t,
+	  FS/t/rate_center.t, httemplate/browse/did_order.html,
+	  httemplate/edit/did_order.html,
+	  httemplate/edit/process/did_order.html,
+	  httemplate/elements/did_order_item.html,
+	  httemplate/misc/did_order_confirm.html,
+	  httemplate/misc/did_order_confirmed.html,
+	  httemplate/misc/did_order_provision.html: bulk DID
+	  orders/inventory enhancements, RT11291
+
+2011-04-14 20:04  levinse
+
+	* httemplate/misc/did_order_provision.html: file
+	  did_order_provision.html was added on branch FREESIDE_2_1_BRANCH
+	  on 2011-04-15 03:09:52 +0000
+
+2011-04-14 20:04  levinse
+
+	* FS/bin/freeside-msa-import: file freeside-msa-import was added on
+	  branch FREESIDE_2_1_BRANCH on 2011-04-15 03:09:51 +0000
+
+2011-04-14 20:04  levinse
+
+	* FS/t/msa.t: file msa.t was added on branch FREESIDE_2_1_BRANCH on
+	  2011-04-15 03:09:51 +0000
+
+2011-04-14 20:04  levinse
+
+	* FS/t/rate_center.t: file rate_center.t was added on branch
+	  FREESIDE_2_1_BRANCH on 2011-04-15 03:09:51 +0000
+
+2011-04-14 20:04  levinse
+
+	* FS/FS/rate_center.pm, FS/bin/freeside-msa-import, FS/t/msa.t,
+	  FS/t/rate_center.t, httemplate/misc/did_order_provision.html:
+	  FS/FS/msa.pm
+
+2011-04-14 20:04  levinse
+
+	* FS/FS/rate_center.pm: file rate_center.pm was added on branch
+	  FREESIDE_2_1_BRANCH on 2011-04-15 03:09:50 +0000
+
+2011-04-14 14:29  ivan
+
+	* FS/FS/cust_main/Billing_Realtime.pm: fix error on second insert
+	  of CC payment, RT#12465
+
+2011-04-14 12:11  ivan
+
+	* rt/bin/: rt-mailgate, rt-mailgate.in: sync rt-mailgate in tree
+
+2011-04-13 17:23  ivan
+
+	* FS/FS/cust_bill.pm: fix missing information on invoices, RT#12461
+
+2011-04-13 17:11  ivan
+
+	* FS/FS/Misc.pm: check failure of pslatex by presence of resulting
+	  .dvi file rather than exit status, eliminates spurious pslatex
+	  errors, RT#12454
+
+2011-04-12 22:42  levinse
+
+	* httemplate/: elements/customer-table.html,
+	  misc/cust_main_note-import.cgi,
+	  misc/xmlhttp-cust_main-search.cgi: quick payment tool
+	  improvements, RT8121
+
+2011-04-12 21:24  levinse
+
+	* FS/FS/Conf.pm: add config option to disable auto-application of
+	  credits to invoices, RT12331
+
+2011-04-12 21:21  levinse
+
+	* httemplate/edit/cust_credit.cgi: add config option to disable
+	  auto-application of credits to invoices, RT12331
+
+2011-04-12 13:56  mark
+
+	* FS/FS/cust_bill.pm, FS/FS/msg_template.pm,
+	  httemplate/edit/msg_template.html: make company_phonenum
+	  available to templates, #12363
+
+2011-04-11 19:51  ivan
+
+	* FS/FS/Conf.pm, httemplate/edit/cust_main/billing.html: add
+	  disable_payauto_default conf, RT#12431
+
+2011-04-11 19:29  ivan
+
+	* bin/: cust_main-bulk_change: adding quick cust_main-bulk_change
+	  hask to change payby, RT#12430
+
+2011-04-11 19:29  ivan
+
+	* bin/cust_main-bulk_change: file cust_main-bulk_change was added
+	  on branch FREESIDE_2_1_BRANCH on 2011-04-12 02:29:43 +0000
+
+2011-04-11 18:25  mark
+
+	* FS/FS/pay_batch.pm: fix batch closure, #12351
+
+2011-04-11 16:31  levinse
+
+	* httemplate/misc/phone_avail-import.html: Bulk DID order
+	  improvements, RT11291
+
+2011-04-11 16:06  ivan
+
+	* httemplate/elements/order_pkg.js: file order_pkg.js was added on
+	  branch FREESIDE_2_1_BRANCH on 2011-04-11 23:06:23 +0000
+
+2011-04-11 16:06  ivan
+
+	* httemplate/: elements/order_pkg.js, misc/change_pkg.cgi,
+	  misc/order_pkg.html: fix usps-validation misfire and inability to
+	  submit on change package too, RT#12377, RT#12183
+
+2011-04-11 16:03  levinse
+
+	* httemplate/misc/did_order_confirm.html, FS/FS/Schema.pm,
+	  FS/FS/did_order.pm, httemplate/browse/did_order.html,
+	  httemplate/edit/did_order.html,
+	  httemplate/edit/process/did_order.html,
+	  httemplate/misc/did_order_confirmed.html,
+	  httemplate/elements/did_order_item.html: improvements to bulk DID
+	  orders, RT11291
+
+2011-04-11 16:00  levinse
+
+	* httemplate/misc/did_order_confirm.html: file
+	  did_order_confirm.html was added on branch FREESIDE_2_1_BRANCH on
+	  2011-04-11 23:03:31 +0000
+
+2011-04-11 16:00  levinse
+
+	* httemplate/misc/did_order_confirmed.html: file
+	  did_order_confirmed.html was added on branch FREESIDE_2_1_BRANCH
+	  on 2011-04-11 23:03:31 +0000
+
+2011-04-11 16:00  levinse
+
+	* httemplate/misc/: did_order_confirm.html,
+	  did_order_confirmed.html: improvements to bulk DID orders,
+	  RT11291
+
+2011-04-11 14:33  mark
+
+	* FS/FS/: Conf.pm, cust_pay.pm, msg_template.pm: per-agent payment
+	  receipt addresses, #10797
+
+2011-04-11 13:40  ivan
+
+	* httemplate/browse/cust_main_county.cgi: improve tax edit: don't
+	  offer to remove cities that have already been split into
+	  taxclasses, RT#11144
+
+2011-04-11 10:44  ivan
+
+	* FS/FS/part_event/Condition/times.pm: fix "times" condition to not
+	  run one extra, RT#11834
+
+2011-04-11 10:22  ivan
+
+	* FS/FS/part_event/: Condition.pm,
+	  Condition/cust_bill_has_service.pm, Condition/times.pm: fix times
+	  condition vs. mysql (causes billing errors even if not using),
+	  RT#10574
+
+2011-04-11 09:12  ivan
+
+	* httemplate/misc/order_pkg.html: fix javascript for great justice
+
+2011-04-11 09:05  ivan
+
+	* httemplate/misc/order_pkg.html: move javascript for great justice
+
+2011-04-11 00:53  ivan
+
+	* FS/bin/freeside-cdrrewrited: taqua accountcodes, RT#12181
+
+2011-04-11 00:19  levinse
+
+	* FS/FS/cust_bill.pm: possibly fix spurious error from cust_bill.pm
+	  related to barcode files when barcodes are turned off
+
+2011-04-11 00:04  ivan
+
+	* httemplate/search/cust_bill_pkg.cgi: fix error on detail for "tax
+	  collected" on vendor tax report, RT#12320
+
+2011-04-10 21:59  ivan
+
+	* FS/: FS/Conf.pm, FS/Schema.pm, FS/cdr/taqua.pm,
+	  bin/freeside-cdrrewrited: taqua accountcodes, RT#12181
+
+2011-04-10 18:24  ivan
+
+	* httemplate/: elements/tr-select-cust_location.html,
+	  misc/order_pkg.html: fix misfire of USPS address correction on
+	  non-new locations, RT#12183
+
+2011-04-10 15:22  ivan
+
+	* FS/FS/Conf.pm: added company_phonenum, for notifications,
+	  RT#12363
+
+2011-04-10 11:07  ivan
+
+	* httemplate/view/svc_phone.cgi: fix CDR links on svc_phone when
+	  using a default_prefix, RT#12338
+
+2011-04-10 11:04  ivan
+
+	* httemplate/search/cdr.html: fix CDR links on svc_phone when using
+	  a default_prefix, RT#12338
+
+2011-04-10 10:07  ivan
+
+	* FS/FS/cdr.pm: fix rounding of minute-granularity CDRs, RT#12101
+
+2011-04-09 16:48  ivan
+
+	* Makefile: start 2.1.3
+
+2011-04-09 15:50  ivan
+
+	* httemplate/elements/tr-select-cust-part_pkg.html: fix package
+	  selection with classes in IE8, RT#12377
+
+2011-04-08 18:28  ivan
+
+	* rt/etc/RT_Config.pm: per .in to prevent conflicts on upgrade
+
+2011-04-08 18:19  ivan
+
+	* FS/FS/Schema.pm: revert schema change to cdr.uniqueid on 2.1
+	  branch, RT#10992
+
+2011-04-08 17:43  ivan
+
+	* FS/FS/cust_main/Billing_Realtime.pm: should fix qis's
+	  intermittent backtraces when using an (ancient) counter-based
+	  cust_pay.paynum, RT#12317
+
+2011-04-08 16:14  ivan
+
+	* rt/etc/RT_Config.pm: propogate __CustomerTags__ fix to
+	  RT_Config.pm, RT#8784
+
+2011-04-08 16:13  ivan
+
+	* rt/: Makefile, Makefile.in, config.log, config.status,
+	  configure.ac, bin/mason_handler.fcgi, bin/mason_handler.scgi,
+	  bin/mason_handler.svc, bin/rt-crontool, bin/rt-mailgate,
+	  etc/RT_Config.pm, etc/RT_Config.pm.in, lib/RT.pm, lib/RT.pm.in,
+	  lib/RT/Action.pm, lib/RT/Condition.pm, lib/RT/Config.pm,
+	  lib/RT/CustomField.pm, lib/RT/CustomField_Overlay.pm,
+	  lib/RT/Date.pm, lib/RT/Groups_Overlay.pm,
+	  lib/RT/Principal_Overlay.pm, lib/RT/Queue_Overlay.pm,
+	  lib/RT/Record.pm, lib/RT/Scrip_Overlay.pm,
+	  lib/RT/SearchBuilder.pm, lib/RT/System.pm, lib/RT/Test.pm,
+	  lib/RT/Tickets_Overlay.pm, lib/RT/Transaction_Overlay.pm,
+	  lib/RT/User_Overlay.pm, lib/RT/Users_Overlay.pm,
+	  lib/RT/Action/CreateTickets.pm,
+	  lib/RT/Action/EscalatePriority.pm, lib/RT/Interface/Web.pm,
+	  sbin/rt-setup-database.in, share/html/autohandler,
+	  share/html/index.html, share/html/Admin/CustomFields/Modify.html,
+	  share/html/Admin/Elements/EditCustomFields,
+	  share/html/Admin/Elements/EditScrip,
+	  share/html/Admin/Elements/SelectScripAction,
+	  share/html/Admin/Elements/SelectScripCondition,
+	  share/html/Admin/Users/Modify.html,
+	  share/html/Elements/CollectionList,
+	  share/html/Elements/ColumnMap, share/html/Elements/Dashboards,
+	  share/html/Elements/Footer, share/html/Elements/Header,
+	  share/html/Elements/PageLayout,
+	  share/html/Elements/RefreshHomepage,
+	  share/html/Elements/SelectDate, share/html/Elements/SelectQueue,
+	  share/html/Elements/ShowUserVerbose,
+	  share/html/Elements/TicketList,
+	  share/html/Elements/RT__CustomField/ColumnMap,
+	  share/html/Elements/RT__Ticket/ColumnMap,
+	  share/html/Prefs/SearchOptions.html,
+	  share/html/Search/Build.html, share/html/Search/Results.tsv,
+	  share/html/Search/Elements/BuildFormatString,
+	  share/html/Search/Elements/DisplayOptions,
+	  share/html/Search/Elements/PickCFs,
+	  share/html/Ticket/Create.html, share/html/Ticket/Display.html,
+	  share/html/Ticket/Elements/BulkLinks,
+	  share/html/Ticket/Elements/ShowSummary,
+	  share/html/Ticket/Elements/ShowTransactionAttachments,
+	  share/html/Ticket/Elements/Tabs,
+	  share/html/Ticket/Graphs/index.html, share/html/User/Prefs.html,
+	  share/html/Widgets/TitleBoxEnd: landing 3.8.9 on 2.1 branch for
+	  2.1.3
+
+2011-04-08 11:10  ivan
+
+	* httemplate/edit/process/cust_main.cgi: fix edits of customers
+	  with tokenized cards, RT#12353
+
+2011-04-08 09:38  levinse
+
+	* httemplate/search/phone_inventory_provisioned.html: update phone
+	  provsioning/inventory report as per recent bulk DID order
+	  inventory changes, RT10988
+
+2011-04-07 21:58  levinse
+
+	* FS/FS/: Conf.pm, svc_acct.pm: add option to exclude configurable
+	  svc_acct svcparts from welcome emails, RT11021
+
+2011-04-07 21:12  levinse
+
+	* httemplate/search/cdr.html: add display of total billed minutes
+	  on CDR report, RT12344
+
+2011-04-07 17:59  mark
+
+	* rt/: etc/RT_Config.pm.in, lib/RT/Tickets_Overlay.pm,
+	  lib/RT/URI/freeside.pm, lib/RT/URI/freeside/Internal.pm,
+	  share/html/Elements/RT__Ticket/ColumnMap,
+	  share/html/Search/Elements/BuildFormatString: display customer
+	  agent, class, tag in ticket search, #8784
+
+2011-04-06 16:40  mark
+
+	* FS/FS/Schema.pm, bin/cdr-opensips.import: fix callid problem with
+	  openSIPS import, #10992
+
+2011-04-06 01:28  levinse
+
+	* FS/FS.pm, FS/MANIFEST, FS/FS/Mason.pm, FS/FS/Schema.pm,
+	  FS/FS/did_order.pm, FS/FS/did_order_item.pm,
+	  FS/FS/phone_avail.pm, FS/t/did_order_item.t,
+	  httemplate/browse/did_order.html, httemplate/edit/did_order.html,
+	  httemplate/edit/elements/edit.html,
+	  httemplate/edit/process/did_order.html,
+	  httemplate/elements/did_order_item.html,
+	  httemplate/elements/tr-did_order_item.html,
+	  httemplate/misc/phone_avail-import.html: bulk DID order/inventory
+	  improvements, RT11291
+
+2011-04-06 01:22  levinse
+
+	* httemplate/elements/: did_order_item.html,
+	  tr-did_order_item.html: bulk DID order/inventory improvements,
+	  RT11291
+
+2011-04-06 01:22  levinse
+
+	* httemplate/elements/did_order_item.html: file did_order_item.html
+	  was added on branch FREESIDE_2_1_BRANCH on 2011-04-06 08:28:38
+	  +0000
+
+2011-04-06 01:22  levinse
+
+	* httemplate/elements/tr-did_order_item.html: file
+	  tr-did_order_item.html was added on branch FREESIDE_2_1_BRANCH on
+	  2011-04-06 08:28:38 +0000
+
+2011-04-06 01:19  levinse
+
+	* FS/t/did_order_item.t: file did_order_item.t was added on branch
+	  FREESIDE_2_1_BRANCH on 2011-04-06 08:28:37 +0000
+
+2011-04-06 01:19  levinse
+
+	* FS/: FS/did_order_item.pm, t/did_order_item.t: bulk DID
+	  order/inventory improvements, RT11291
+
+2011-04-06 01:19  levinse
+
+	* FS/FS/did_order_item.pm: file did_order_item.pm was added on
+	  branch FREESIDE_2_1_BRANCH on 2011-04-06 08:28:37 +0000
+
+2011-04-05 09:38  mark
+
+	* FS/FS/cdr/telstra.pm: file telstra.pm was added on branch
+	  FREESIDE_2_1_BRANCH on 2011-04-05 16:38:21 +0000
+
+2011-04-05 09:38  mark
+
+	* FS/FS/: cdr/telstra.pm, Record.pm: Telstra CDR format, #10159
+
+2011-04-02 12:23  ivan
+
+	* httemplate/search/cust_bill_pkg.cgi: fix line item report when
+	  linked from CCH tax report credits, RT#12329
+
+2011-03-30 12:52  ivan
+
+	* FS/FS/cust_bill.pm: fix package balance conditions, RT#11834
+
+2011-03-30 12:49  ivan
+
+	* FS/FS/cust_bill.pm: fix package balance conditions, RT#11834
+
+2011-03-30 12:41  ivan
+
+	* FS/FS/: cust_bill.pm: fix package balance conditions, RT#11834
+
+2011-03-30 09:57  ivan
+
+	* bin/: pg-readonly: add rt tables to pg-readonly, RT#10536
+
+2011-03-28 17:32  ivan
+
+	* FS/FS/Conf.pm, FS/FS/Cron/backup.pm, FS/bin/freeside-daily,
+	  bin/freeside-backup: local backups, RT#12180
+
+2011-03-28 16:01  mark
+
+	* FS/FS/: Schema.pm, areacode.pm: primary key for areacode table
+
+2011-03-28 12:04  mark
+
+	* FS/MANIFEST, FS/FS/Mason.pm, FS/FS/Schema.pm, FS/FS/areacode.pm,
+	  FS/FS/part_export/voipnow_did.pm, FS/t/areacode.t,
+	  bin/populate-areacodes, httemplate/elements/select-did.html:
+	  VoipNow provisioning export, #11170
+
+2011-03-25 17:19  ivan
+
+	* httemplate/edit/svc_phone.cgi: visual glitch
+
+2011-03-24 18:19  mark
+
+	* FS/FS/cust_main/Billing_Realtime.pm: send invoice number in
+	  realtime_bop whenever possible, #12002
+
+2011-03-24 16:24  mark
+
+	* FS/FS/part_event/: Condition.pm, Condition/times.pm: fix data
+	  type issue, #11834
+
+2011-03-22 23:12  ivan
+
+	* FS/FS/part_event/Condition/times.pm: add new conditions: package
+	  balances and N times, RT#11834
+
+2011-03-22 22:59  ivan
+
+	* FS/FS/part_event/Condition/: pkg_balance.pm,
+	  pkg_balance_under.pm, times.pm: add new conditions: package
+	  balances and N times, RT#11834
+
+2011-03-22 22:59  ivan
+
+	* FS/FS/part_event/Condition/pkg_balance.pm: file pkg_balance.pm
+	  was added on branch FREESIDE_2_1_BRANCH on 2011-03-23 05:59:18
+	  +0000
+
+2011-03-22 22:59  ivan
+
+	* FS/FS/part_event/Condition/pkg_balance_under.pm: file
+	  pkg_balance_under.pm was added on branch FREESIDE_2_1_BRANCH on
+	  2011-03-23 05:59:18 +0000
+
+2011-03-22 22:59  ivan
+
+	* FS/FS/part_event/Condition/times.pm: file times.pm was added on
+	  branch FREESIDE_2_1_BRANCH on 2011-03-23 05:59:18 +0000
+
+2011-03-22 14:51  ivan
+
+	* ChangeLog, rpm/freeside.spec, debian/changelog: Updated for 2.1.2
+
 2011-03-22 14:05  ivan
 
 	* ChangeLog: 2.1.2
@@ -140,6 +2370,36 @@
 
 	* FS/FS/: Conf.pm, ClientAPI/Signup.pm: allow third-party payment
 	  customers to be recorded as CARD, #11734
+
+2011-02-28 20:38  mark
+
+	* FS/FS/part_export/voipnow_did.pm, bin/populate-areacodes: VoipNow
+	  export, minor fixes
+
+2011-02-28 20:38  mark
+
+	* bin/populate-areacodes: file populate-areacodes was added on
+	  branch FREESIDE_2_1_BRANCH on 2011-03-28 19:04:06 +0000
+
+2011-02-28 20:38  mark
+
+	* FS/FS/part_export/voipnow_did.pm: file voipnow_did.pm was added
+	  on branch FREESIDE_2_1_BRANCH on 2011-03-28 19:04:06 +0000
+
+2011-02-28 20:09  mark
+
+	* FS/FS/areacode.pm: file areacode.pm was added on branch
+	  FREESIDE_2_1_BRANCH on 2011-03-28 19:04:06 +0000
+
+2011-02-28 20:09  mark
+
+	* FS/t/areacode.t: file areacode.t was added on branch
+	  FREESIDE_2_1_BRANCH on 2011-03-28 19:04:06 +0000
+
+2011-02-28 20:09  mark
+
+	* FS/FS/areacode.pm, FS/FS/part_export/voipnow_did.pm,
+	  FS/t/areacode.t, bin/populate-areacodes: VoipNow export, #11170
 
 2011-02-26 03:02  mark
 
@@ -764,6 +3024,16 @@
 
 	* rt/lib/RT/Tickets_Overlay.pm: fix customfield date search,
 	  RT#8449
+
+2011-01-25 02:13  ivan
+
+	* rt/lib/RT/CustomFieldValues/Queues.pm: file Queues.pm was added
+	  on branch FREESIDE_2_1_BRANCH on 2011-04-18 20:05:40 +0000
+
+2011-01-25 02:13  mark
+
+	* rt/lib/RT/CustomFieldValues/Queues.pm: ticket escalation, part 2,
+	  RT#8254
 
 2011-01-25 00:32  mark
 
@@ -3530,9 +5800,6 @@
 
 	* rt/: etc/schema.Pg, lib/RT/CustomField.pm,
 	  share/html/Admin/CustomFields/Modify.html,
-	  share/html/Callbacks/CheckMandatoryFields/Ticket/Elements/Tabs/Default,
-	  share/html/Callbacks/CheckMandatoryFields/Ticket/Modify.html/BeforeActionList,
-	  share/html/Callbacks/CheckMandatoryFields/Ticket/Update.html/BeforeDisplay,
 	  share/html/Ticket/Elements/CheckMandatoryFields: RT mandatory
 	  custom fields, RT#9260
 
@@ -10920,7 +13187,7 @@
 
 2009-08-12 07:58  jeff
 
-	* Makefile, FS/FS/Conf.pm, FS/FS/Cron/upload.pm,
+	* bin/billco-upload, Makefile, FS/FS/Conf.pm, FS/FS/Cron/upload.pm,
 	  FS/bin/freeside-daily, FS/bin/freeside-monthly,
 	  httemplate/config/config-view.cgi: internalize billco-upload and
 	  automate the transfer to the provider RT#5902
@@ -11413,6 +13680,11 @@
 
 	* FS/: FS/cust_main.pm, FS/Cron/bill.pm, bin/freeside-daily: commit
 	  pkgpart exclusion for billing run, RT#5495
+
+2009-07-17 07:58  jeff
+
+	* bin/billco-upload: add mutex and commit changes found on
+	  installed system
 
 2009-07-16 19:29  jeff
 
@@ -25771,6 +28043,10 @@
 	* FS/FS/Schema.pm: remove redundant indices on cust_main ship_
 	  columns
 
+2006-01-03 00:45  ivan
+
+	* bin/billco-upload: agentnums 1-3
+
 2005-12-29 18:41  rsiddall
 
 	* FS/FS/Conf.pm, FS/FS/ConfItem.pm, FS/FS/cust_pkg.pm,
@@ -26216,11 +28492,19 @@
 
 	* FS/FS/cust_bill.pm: only send to specific destinations, oops!
 
+2005-10-31 21:21  ivan
+
+	* bin/billco-upload: do the zip
+
 2005-10-31 21:14  ivan
 
 	* httemplate/edit/part_bill_event.cgi: add option for spool_csv
 	  events to apply only to a specific destination type (i.e. postal
 	  only)
+
+2005-10-31 19:16  ivan
+
+	* bin/billco-upload: good nuff for 11/1
 
 2005-10-31 19:15  ivan
 
@@ -26228,6 +28512,10 @@
 	  billco format option to FTP invoice send, add invoice event to
 	  spool one giant (pair of) CSV files in addition to FTPing them
 	  individually
+
+2005-10-28 10:10  ivan
+
+	* bin/billco-upload: beginning of quick billco zip & upload tool
 
 2005-10-28 04:56  ivan
 
@@ -32704,11 +34992,6 @@
 2003-06-02 05:22  ivan
 
 	* FS/FS/cust_pkg.pm: add last_bill field to manpage
-
-2003-05-30 02:40  ivan
-
-	* httemplate/docs/man/FS/part_export/.cvs_is_on_crack: force
-	  inclusion of httemplate/docs/man hierarchy
 
 2003-05-30 02:22  ivan
 
