@@ -2908,7 +2908,7 @@ sub search {
 
   #agentnum
   if ( $params->{'agentnum'} =~ /^(\d+)$/ and $1 ) {
-    push @where, "agentnum = $1";
+    push @where, "cust_main.agentnum = $1";
   }
 
   #custnum
