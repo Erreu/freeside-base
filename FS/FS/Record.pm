@@ -996,7 +996,7 @@ sub insert {
        && $conf->exists('encryption')
   ) {
     foreach my $field (eval '@FS::'. $table . '::encrypted_fields') {
-      $self->{'saved'} = $self->getfield($field);
+      $saved->{$field} = $self->getfield($field);
       $self->setfield($field, $self->encrypt($self->getfield($field)));
     }
   }
