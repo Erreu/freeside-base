@@ -186,6 +186,7 @@ sub check {
     || $self->ut_coordn('latitude')
     || $self->ut_coordn('longitude')
     || $self->ut_enum('coord_auto', [ '', 'Y' ])
+    || $self->ut_enum('addr_clean', [ '', 'Y' ])
     || $self->ut_alphan('location_type')
     || $self->ut_textn('location_number')
     || $self->ut_enum('location_kind', [ '', 'R', 'B' ] )

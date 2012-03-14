@@ -64,7 +64,7 @@ if ( -e $addl_handler_use_file ) {
   use DateTime;
   use DateTime::Format::Strptime;
   use FS::Misc::DateTime qw( parse_datetime );
-  use FS::Misc::Geo qw( get_censustract get_district );
+  use FS::Misc::Geo qw( get_district );
   use Lingua::EN::Inflect qw(PL);
   Lingua::EN::Inflect::classical names=>0; #Categorys
   use Tie::IxHash;
@@ -304,6 +304,7 @@ if ( -e $addl_handler_use_file ) {
   use FS::tower;
   use FS::tower_sector;
   use FS::contact_class;
+  use FS::geocode_cache;
   # Sammath Naur
 
   if ( $FS::Mason::addl_handler_use ) {

@@ -318,6 +318,9 @@ if ( $cgi->param('error') ) {
   $stateid = '';
   $payinfo = '';
 
+  $cust_main->coord_auto('Y');
+  $cust_main->ship_coord_auto('Y');
+
   if ( $cgi->param('qualnum') =~ /^(\d+)$/ ) {
     my $qualnum = $1;
     my $qual = qsearchs('qual', { 'qualnum' => $qualnum } )

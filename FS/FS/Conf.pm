@@ -3735,6 +3735,17 @@ and customer address. Include units.',
   },
 
   {
+    'key'         => 'address_standardize_method',
+    'section'     => 'UI', #???
+    'description' => 'Method for standardizing customer addresses.',
+    'type'        => 'select',
+    'select_hash' => [ '' => '', 
+                       'usps' => 'U.S. Postal Service',
+                       'teleatlas' => 'TeleAtlas',
+                     ],
+  },
+
+  {
     'key'         => 'usps_webtools-userid',
     'section'     => 'UI',
     'description' => 'Production UserID for USPS web tools.   Enables USPS address standardization.  See the <a href="http://www.usps.com/webtools/">USPS website</a>, register and agree not to use the tools for batch purposes.',
@@ -3745,6 +3756,27 @@ and customer address. Include units.',
     'key'         => 'usps_webtools-password',
     'section'     => 'UI',
     'description' => 'Production password for USPS web tools.   Enables USPS address standardization.  See <a href="http://www.usps.com/webtools/">USPS website</a>, register and agree not to use the tools for batch purposes.',
+    'type'        => 'text',
+  },
+
+  {
+    'key'         => 'teleatlas-path',
+    'section'     => 'UI',
+    'description' => 'Path to TeleAtlas libraries on the Freeside server.',
+    'type'        => 'text',
+  },
+
+  {
+    'key'         => 'teleatlas-userid',
+    'section'     => 'UI',
+    'description' => 'User ID for TeleAtlas EZ-Locate service.  See <a href="http://www.geocode.com/">the Tele Atlas website</a> for access and pricing information.',
+    'type'        => 'text',
+  },
+
+  {
+    'key'         => 'teleatlas-password',
+    'section'     => 'UI',
+    'description' => 'Password for TeleAtlas EZ-Locate service.',
     'type'        => 'text',
   },
 

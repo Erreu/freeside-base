@@ -162,7 +162,7 @@ Example:
            NAME     = "<%$pre%>zip"
            ID       = "<%$pre%>zip"
            VALUE    = "<% $object->get($pre.'zip') |h %>"
-           SIZE     = 10
+           SIZE     = 11
            onChange = "<% $onchange %>"
            <% $disabled %>
            <% $style %>
@@ -220,6 +220,16 @@ Example:
 %   }
 % } 
 
+%# For address standardization:
+%# keep a clean copy of the address so we know if we need
+%# to re-standardize
+% foreach (qw(address1 city state country zip latitude
+%             longitude censustract addr_clean) ) {
+<INPUT TYPE="hidden" NAME="old_<%$pre.$_%>" VALUE="<% $object->get($_) |h%>">
+% }
+%# Placeholders
+<INPUT TYPE="hidden" NAME="<%$pre%>cachenum" VALUE="">
+<INPUT TYPE="hidden" NAME="<%$pre%>addr_clean" VALUE="">
 <%init>
 
 my %opt = @_;

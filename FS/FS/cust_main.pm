@@ -1498,30 +1498,30 @@ sub replace {
       && length($self->get($pre.'zip')) >= 10;
   }
 
-  for my $pre ( grep $old->get($_.'coord_auto'), ( '', 'ship_' ) ) {
-
-    $self->set($pre.'coord_auto', '') && next
-      if $self->get($pre.'latitude') && $self->get($pre.'longitude')
-      && (    $self->get($pre.'latitude')  != $old->get($pre.'latitude')
-           || $self->get($pre.'longitude') != $old->get($pre.'longitude')
-         );
-
-    $self->set_coord($pre)
-      if $old->get($pre.'address1') ne $self->get($pre.'address1')
-      || $old->get($pre.'city')     ne $self->get($pre.'city')
-      || $old->get($pre.'state')    ne $self->get($pre.'state')
-      || $old->get($pre.'country')  ne $self->get($pre.'country');
-
-  }
-
-  unless ( $import ) {
-    $self->set_coord
-      if ! $self->coord_auto && ! $self->latitude && ! $self->longitude;
-
-    $self->set_coord('ship_')
-      if $self->has_ship_address && ! $self->ship_coord_auto
-      && ! $self->ship_latitude && ! $self->ship_longitude;
-  }
+#  for my $pre ( grep $old->get($_.'coord_auto'), ( '', 'ship_' ) ) {
+#
+#    $self->set($pre.'coord_auto', '') && next
+#      if $self->get($pre.'latitude') && $self->get($pre.'longitude')
+#      && (    $self->get($pre.'latitude')  != $old->get($pre.'latitude')
+#           || $self->get($pre.'longitude') != $old->get($pre.'longitude')
+#         );
+#
+#    $self->set_coord($pre)
+#      if $old->get($pre.'address1') ne $self->get($pre.'address1')
+#      || $old->get($pre.'city')     ne $self->get($pre.'city')
+#      || $old->get($pre.'state')    ne $self->get($pre.'state')
+#      || $old->get($pre.'country')  ne $self->get($pre.'country');
+#
+#  }
+#
+#  unless ( $import ) {
+#    $self->set_coord
+#      if ! $self->coord_auto && ! $self->latitude && ! $self->longitude;
+#
+#    $self->set_coord('ship_')
+#      if $self->has_ship_address && ! $self->ship_coord_auto
+#      && ! $self->ship_latitude && ! $self->ship_longitude;
+#  }
 
   local($ignore_expired_card) = 1
     if $old->payby  =~ /^(CARD|DCRD)$/
@@ -1766,6 +1766,7 @@ sub check {
     || $self->ut_coordn('latitude')
     || $self->ut_coordn('longitude')
     || $self->ut_enum('coord_auto', [ '', 'Y' ])
+    || $self->ut_enum('addr_clean', [ '', 'Y' ])
     || $self->ut_numbern('censusyear')
     || $self->ut_anything('comments')
     || $self->ut_numbern('referral_custnum')
