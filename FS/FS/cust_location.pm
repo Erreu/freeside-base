@@ -195,9 +195,6 @@ sub check {
   ;
   return $error if $error;
 
-  $self->set_coord
-    unless $self->latitude && $self->longitude;
-
   return "No prospect or customer!" unless $self->prospectnum || $self->custnum;
   return "Prospect and customer!"       if $self->prospectnum && $self->custnum;
 

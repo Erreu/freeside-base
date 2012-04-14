@@ -1498,31 +1498,6 @@ sub replace {
       && length($self->get($pre.'zip')) >= 10;
   }
 
-#  for my $pre ( grep $old->get($_.'coord_auto'), ( '', 'ship_' ) ) {
-#
-#    $self->set($pre.'coord_auto', '') && next
-#      if $self->get($pre.'latitude') && $self->get($pre.'longitude')
-#      && (    $self->get($pre.'latitude')  != $old->get($pre.'latitude')
-#           || $self->get($pre.'longitude') != $old->get($pre.'longitude')
-#         );
-#
-#    $self->set_coord($pre)
-#      if $old->get($pre.'address1') ne $self->get($pre.'address1')
-#      || $old->get($pre.'city')     ne $self->get($pre.'city')
-#      || $old->get($pre.'state')    ne $self->get($pre.'state')
-#      || $old->get($pre.'country')  ne $self->get($pre.'country');
-#
-#  }
-#
-#  unless ( $import ) {
-#    $self->set_coord
-#      if ! $self->coord_auto && ! $self->latitude && ! $self->longitude;
-#
-#    $self->set_coord('ship_')
-#      if $self->has_ship_address && ! $self->ship_coord_auto
-#      && ! $self->ship_latitude && ! $self->ship_longitude;
-#  }
-
   local($ignore_expired_card) = 1
     if $old->payby  =~ /^(CARD|DCRD)$/
     && $self->payby =~ /^(CARD|DCRD)$/
@@ -1783,9 +1758,6 @@ sub check {
     || $self->ut_enum('locale', [ '', FS::Locales->locales ])
   ;
 
-  $self->set_coord
-    unless $import || ($self->latitude && $self->longitude);
-
   #barf.  need message catalogs.  i18n.  etc.
   $error .= "Please select an advertising source."
     if $error =~ /^Illegal or empty \(numeric\) refnum: /;
@@ -1888,9 +1860,6 @@ sub check {
       || $self->ut_enum('ship_coord_auto', [ '', 'Y' ] )
     ;
     return $error if $error;
-
-    $self->set_coord('ship_')
-      unless $import || ($self->ship_latitude && $self->ship_longitude);
 
     #false laziness with above
     unless ( qsearchs('cust_main_county', {
