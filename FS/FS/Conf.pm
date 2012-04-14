@@ -1594,6 +1594,13 @@ and customer address. Include units.',
   },
 
   {
+    'key'         => 'disable_maxselect',
+    'section'     => 'UI',
+    'description' => 'Prevent changing the number of records per page.',
+    'type'        => 'checkbox',
+  },
+
+  {
     'key'         => 'session-start',
     'section'     => 'session',
     'description' => 'If defined, the command which is executed on the Freeside machine when a session begins.  The contents of the file are treated as a double-quoted perl string, with the following variables available: <code>$ip</code>, <code>$nasip</code> and <code>$nasfqdn</code>, which are the IP address of the starting session, and the IP address and fully-qualified domain name of the NAS this session is on.',
@@ -2850,6 +2857,14 @@ and customer address. Include units.',
   },
 
   {
+    'key'         => 'company_url',
+    'section'     => 'UI',
+    'description' => 'Your company URL',
+    'type'        => 'text',
+    'per_agent'   => 1,
+  },
+
+  {
     'key'         => 'company_address',
     'section'     => 'required',
     'description' => 'Your company address',
@@ -3587,9 +3602,19 @@ and customer address. Include units.',
     'section'     => 'billing',
     'description' => 'Display format for line item date ranges on invoice line items.',
     'type'        => 'select',
-    'select_hash' => [ ''         => 'STARTDATE-ENDDATE',
-                       'month_of' => 'Month of MONTHNAME',
+    'select_hash' => [ ''           => 'STARTDATE-ENDDATE',
+                       'month_of'   => 'Month of MONTHNAME',
+                       'X_month'    => 'DATE_DESC MONTHNAME',
                      ],
+    'per_agent'   => 1,
+  },
+
+  {
+    'key'         => 'cust_bill-line_item-date_description',
+    'section'     => 'billing',
+    'description' => 'Text to display for "DATE_DESC" when using cust_bill-line_item-date_style DATE_DESC MONTHNAME.',
+    'type'        => 'text',
+    'per_agent'   => 1,
   },
 
   {
@@ -3896,7 +3921,17 @@ and customer address. Include units.',
     'section'     => 'UI',
     'description' => 'Prefix the customer number with this string for display purposes.',
     'type'        => 'text',
-    #and then probably agent-virt this to merge these instances
+    'per_agent'   => 1,
+  },
+
+  {
+    'key'         => 'cust_main-custnum-display_special',
+    'section'     => 'UI',
+    'description' => 'Use this customer number prefix format',
+    'type'        => 'select',
+    'select_hash' => [ '' => '',
+                       'CoStAg' => 'CoStAg (country, state, agent name or display_prefix)',
+                       'CoStCl' => 'CoStCl (country, state, class name)' ],
   },
 
   {
@@ -4161,6 +4196,20 @@ and customer address. Include units.',
     'section'     => 'self-service',
     'description' => 'Show usernames without their domains in "View my usage" in the self-service interface.',
     'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'selfservice-login_banner_image',
+    'section'     => 'self-service',
+    'description' => 'Banner image shown on the login page, in PNG format.',
+    'type'        => 'image',
+  },
+
+  {
+    'key'         => 'selfservice-login_banner_url',
+    'section'     => 'self-service',
+    'description' => 'Link for the login banner.',
+    'type'        => 'text',
   },
 
   {
@@ -4885,7 +4934,14 @@ and customer address. Include units.',
 			 },
   },
   
-  
+  {
+    'key'         => 'brand-agent',
+    'section'     => 'UI',
+    'description' => 'Brand the backoffice interface (currently Help->About) using the company_name, company_url and logo.png configuration settings of the selected agent.  Typically used when selling or bundling hosted access to the backoffice interface.  NOTE: The AGPL software license has specific requirements for source code availability in this situation.',
+    'type'        => 'select-agent',
+  },
+
+
   { key => "apacheroot", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
   { key => "apachemachine", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
   { key => "apachemachines", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },

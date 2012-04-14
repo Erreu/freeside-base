@@ -180,6 +180,51 @@ sub _upgrade_data { # class method
 
   }
 
+  my @all_groups = qsearch('access_group', {});
+
+  my %onetime = (
+    'List customers' => 'List all customers',
+    'List packages'  => 'Summarize packages',
+  );
+
+  foreach my $old_acl ( keys %onetime ) {
+    my $new_acl = $onetime{$old_acl}; #support arrayref too?
+    ( my $journal = 'ACL_'.lc($new_acl) ) =~ s/ /_/g;
+    next if FS::upgrade_journal->is_done($journal);
+
+    # grant $new_acl to all groups who have $old_acl
+    for my $group (@all_groups) {
+      if ( $group->access_right($old_acl) ) {
+        my $access_right = FS::access_right->new( {
+            'righttype'   => 'FS::access_group',
+            'rightobjnum' => $group->groupnum,
+            'rightname'   => $new_acl,
+        } );
+        my $error = $access_right->insert;
+        die $error if $error;
+      }
+    }
+    
+    FS::upgrade_journal->set_done($journal);
+  }
+
+  ### ACL_download_report_data
+  if ( !FS::upgrade_journal->is_done('ACL_download_report_data') ) {
+
+    # grant to everyone
+    for my $group (@all_groups) {
+      my $access_right = FS::access_right->new( {
+          'righttype'   => 'FS::access_group',
+          'rightobjnum' => $group->groupnum,
+          'rightname'   => 'Download report data',
+      } );
+      my $error = $access_right->insert;
+      die $error if $error;
+    }
+
+    FS::upgrade_journal->set_done('ACL_download_report_data');
+  }
+
   '';
 
 }

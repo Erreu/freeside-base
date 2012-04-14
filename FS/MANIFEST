@@ -634,3 +634,5 @@ FS/contact_class.pm
 t/contact_class.t
 FS/GeocodeCache.pm
 t/GeocodeCache.t
+FS/upgrade_journal.pm
+t/upgrade_journal.t
