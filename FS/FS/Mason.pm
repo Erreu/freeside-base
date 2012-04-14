@@ -304,7 +304,7 @@ if ( -e $addl_handler_use_file ) {
   use FS::tower;
   use FS::tower_sector;
   use FS::contact_class;
-  use FS::geocode_cache;
+  use FS::GeocodeCache;
   # Sammath Naur
 
   if ( $FS::Mason::addl_handler_use ) {

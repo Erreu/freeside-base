@@ -354,8 +354,9 @@ sub standardize_teleatlas {
     return $location;
   }
 
-  my $path = $conf->config('teleatlas-path')
-    or die "no teleatlas-path configured";
+  if ( my $path = $conf->config('teleatlas-path') ) {
+    local @INC = (@INC, $path);
+  }
   my $userid = $conf->config('teleatlas-userid')
     or die "no teleatlas-userid configured";
   my $password = $conf->config('teleatlas-password')

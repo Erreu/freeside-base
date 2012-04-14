@@ -45,9 +45,10 @@ function standardize_locations() {
   }
 
 %   }
-// unless they're both empty
-  if ( cf.elements['<% $pre %>latitude'] == '' &&
-       cf.elements['<% $pre %>longitude'] == '' ) {
+  // but if the coordinates have been set to null, turn coord_auto on 
+  // and standardize
+  if ( cf.elements['<% $pre %>latitude'].value == '' &&
+       cf.elements['<% $pre %>longitude'].value == '' ) {
     cf.elements['<% $pre %>coord_auto'].value = 'Y';
     changed = true;
   }

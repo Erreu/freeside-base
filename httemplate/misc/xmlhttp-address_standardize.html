@@ -24,7 +24,7 @@ foreach my $pre ( '', 'ship_' ) {
       qw( company address1 address2 city state zip country )
   };
 
-  my $cache = eval { FS::geocode_cache->standardize($location) };
+  my $cache = eval { FS::GeocodeCache->standardize($location) };
   $cache->set_censustract if $pre;
   $cache->set_coord;
 

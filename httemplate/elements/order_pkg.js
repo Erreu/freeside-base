@@ -19,13 +19,10 @@ function pkg_changed () {
       form.start_date_text.disabled = false;
       form.start_date.style.backgroundColor = '#ffffff';
       form.start_date_button.style.display = '';
-      //form.start_date_button_disabled.style.display = 'none';
-      //form.invoice_terms.disabled = true;
     } else {
       form.start_date_text.disabled = true;
       form.start_date.style.backgroundColor = '#dddddd';
       form.start_date_button.style.display = 'none';
-      //form.start_date_button_disabled.style.display = '';
     }
 
   } else {
