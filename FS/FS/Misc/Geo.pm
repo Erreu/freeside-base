@@ -132,7 +132,7 @@ sub get_censustract_ffiec {
 
   } #unless ($res->code  eq '200')
 
-  die "FFIEC Geocoding error: $error" if $error;
+  die "FFIEC Geocoding error: $error\n" if $error;
 
   $return->{'statecode'} .  $return->{'countycode'} .  $return->{'tractcode'};
 }
@@ -291,7 +291,7 @@ sub standardize_usps {
       UserID => $userid,
       Password => $password,
       Testing => 0,
-  } ) or die "error starting USPS WebTools";
+  } ) or die "error starting USPS WebTools\n";
 
   my($zip5, $zip4) = split('-',$location->{'zip'});
 
@@ -312,7 +312,7 @@ sub standardize_usps {
   warn $verifier->response
     if $DEBUG > 1;
 
-  die "USPS WebTools error: ".$verifier->{error}{description} 
+  die "USPS WebTools error: ".$verifier->{error}{description} ."\n"
     if $verifier->is_error;
 
   my $zip = $hash->{Zip5};
@@ -354,20 +354,19 @@ sub standardize_teleatlas {
     return $location;
   }
 
-  if ( my $path = $conf->config('teleatlas-path') ) {
-    local @INC = (@INC, $path);
-  }
-  my $userid = $conf->config('teleatlas-userid')
-    or die "no teleatlas-userid configured";
-  my $password = $conf->config('teleatlas-password')
-    or die "no teleatlas-password configured";
-
+  my $path = $conf->config('teleatlas-path') || '';
   local @INC = (@INC, $path);
   eval "use $class;";
   if ( $@ ) {
     die "Loading $class failed:\n$@".
         "\nMake sure the TeleAtlas Perl SDK is installed correctly.\n";
   }
+
+  my $userid = $conf->config('teleatlas-userid')
+    or die "no teleatlas-userid configured\n";
+  my $password = $conf->config('teleatlas-password')
+    or die "no teleatlas-password configured\n";
+
   
   my $tool = $class->new($userid, $password);
   my $match = $tool->findAddress(
@@ -390,7 +389,8 @@ sub standardize_teleatlas {
     zip         => $match->{STD_ZIP}.'-'.$match->{STD_P4},
     latitude    => $match->{MAT_LAT},
     longitude   => $match->{MAT_LON},
-    censustract => $match->{FIPS_ST}.$match->{FIPS_CTY}.$match->{CEN_TRCT},
+    censustract => $match->{FIPS_ST}.$match->{FIPS_CTY}.
+                   sprintf('%04.2f',$match->{CEN_TRCT}),
     addr_clean  => 'Y',
   };
 }

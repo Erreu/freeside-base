@@ -7,8 +7,7 @@ my $company_longitude = $conf->config('company_longitude');
 
 my @fixups = ('copy_payby_fields', 'standardize_locations');
 
-#push @fixups, 'fetch_censustract'
-#    if $conf->exists('cust_main-require_censustract');
+push @fixups, 'confirm_censustract';
 
 push @fixups, 'check_unique'
     if $conf->exists('cust_main-check_unique') and !$opt{'custnum'};
@@ -93,6 +92,35 @@ function copyelement(from, to) {
     }
   }
   //alert(from + " (" + from.type + "): " + to.name + " => " + to.value);
+}
+
+% # the value in 'censustract' is the confirmed censustract; if it's set,
+% # do nothing here
+function confirm_censustract() {
+  var cf = document.CustomerForm;
+  if ( cf.elements['censustract'].value == '' ) {
+    var address_info = form_address_info();
+    address_info['ship_latitude']  = cf.elements['ship_latitude'].value;
+    address_info['ship_longitude'] = cf.elements['ship_longitude'].value;
+    OLpostAJAX(
+        '<%$p%>/misc/confirm-censustract.html',
+        'q=' + encodeURIComponent(JSON.stringify(address_info)),
+        function() {
+          overlib( OLresponseAJAX, CAPTION, 'Confirm censustract', STICKY,
+            AUTOSTATUSCAP, CLOSETEXT, '', MIDX, 0, MIDY, 0, DRAGGABLE, WIDTH,
+            576, HEIGHT, 268, BGCOLOR, '#333399', CGCOLOR, '#333399',
+            TEXTSIZE, 3 );
+        },
+        0);
+  } else submit_continue();
+}
+
+%# called from confirm-censustract.html
+function set_censustract(tract, year) {
+  var cf = document.CustomerForm;
+  cf.elements['censustract'].value = tract;
+  cf.elements['censusyear'].value = year;
+  submit_continue();
 }
 
 function check_unique() {

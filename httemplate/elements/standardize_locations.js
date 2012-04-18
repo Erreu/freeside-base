@@ -1,14 +1,8 @@
-function standardize_locations() {
-
-  var startup_msg = '<P STYLE="position:absolute; top:50%; margin-top:-1em; width:100%; text-align:center"><B><FONT SIZE="+1">Verifying address...</FONT></B></P>';
-  overlib(startup_msg, WIDTH, 444, HEIGHT, 168, CAPTION, 'Please wait...', STICKY, AUTOSTATUSCAP, CLOSECLICK, MIDX, 0, MIDY, 0);
+function form_address_info() {
   var cf = document.<% $formname %>;
-
   var state_el      = cf.elements['<% $main_prefix %>state'];
   var ship_state_el = cf.elements['<% $ship_prefix %>state'];
-
-  var changed = false; // have any of the address fields been changed?
-  var address_info = {
+  return {
 % if ( $onlyship ) {
     'onlyship': 1,
 % } else {
@@ -26,7 +20,7 @@ function standardize_locations() {
     'ship_company':  cf.elements['<% $ship_prefix %>company'].value,
 % }
 % if ( $withcensus ) {
-    'ship_censustract': cf.elements['censustract'].value,
+    'ship_censustract': cf.elements['enter_censustract'].value,
 % }
     'ship_address1': cf.elements['<% $ship_prefix %>address1'].value,
     'ship_address2': cf.elements['<% $ship_prefix %>address2'].value,
@@ -35,6 +29,16 @@ function standardize_locations() {
     'ship_zip':      cf.elements['<% $ship_prefix %>zip'].value,
     'ship_country':  cf.elements['<% $ship_prefix %>country'].value,
   };
+}
+
+function standardize_locations() {
+
+  var startup_msg = '<P STYLE="position:absolute; top:50%; margin-top:-1em; width:100%; text-align:center"><B><FONT SIZE="+1">Verifying address...</FONT></B></P>';
+  overlib(startup_msg, WIDTH, 444, HEIGHT, 168, CAPTION, 'Please wait...', STICKY, AUTOSTATUSCAP, CLOSECLICK, MIDX, 0, MIDY, 0);
+  var cf = document.<% $formname %>;
+  var address_info = form_address_info();
+
+  var changed = false; // have any of the address fields been changed?
 
 // clear coord_auto fields if the user has changed the coordinates
 % for my $pre ($ship_prefix, $onlyship ? () : $main_prefix) {
@@ -72,16 +76,31 @@ function standardize_locations() {
     }
   }
 
+% # If address hasn't been changed, auto-confirm the existing value of 
+% # censustract so that we don't ask the user to confirm it again.
+
+  if ( !changed ) {
+    cf.elements['<% $main_prefix %>censustract'].value =
+      address_info['ship_censustract'];
+  }
+
+% if ( $conf->config('address_standardize_method') ) {
   if ( changed ) {
     address_standardize(JSON.stringify(address_info), confirm_standardize);
   }
   else {
     cf.elements['ship_addr_clean'].value = 'Y';
-% if ( !$onlyship ) {
+%   if ( !$onlyship ) {
     cf.elements['addr_clean'].value = 'Y';
-% }
+%   }
     post_standardization();
   }
+
+% } else {
+
+  post_standardization();
+
+% } # if address_standardize_method
 }
 
 var returned;
@@ -157,22 +176,33 @@ function replace_address() {
       setselect(cf.elements['<% $ship_prefix %>state'], newaddr['ship_state']);
       cf.elements['<% $ship_prefix %>zip'].value      = newaddr['ship_zip'];
       cf.elements['<% $ship_prefix %>addr_clean'].value = 'Y';
-% if ( $withcensus ) {
-      cf.elements['<% $main_prefix %>censustract'].value = newaddr['ship_censustract']
-%    }
       if ( cf.elements['<% $ship_prefix %>coord_auto'].value ) {
         cf.elements['<% $ship_prefix %>latitude'].value = newaddr['latitude'];
         cf.elements['<% $ship_prefix %>longitude'].value = newaddr['longitude'];
       }
   }
+% if ( $withcensus ) {
+% # then set the censustract if address_standardize provided one.
+  if ( ship_clean && newaddr['ship_censustract'] ) {
+      cf.elements['<% $main_prefix %>censustract'].value = newaddr['ship_censustract'];
+  }
+% }
 
   post_standardization();
 
 }
 
-function post_standardization() {
-
+function confirm_manual_address() {
+%# not much to do in this case, just confirm the censustract
+% if ( $withcensus ) {
   var cf = document.<% $formname %>;
+  cf.elements['<% $main_prefix %>censustract'].value =
+  cf.elements['<% $main_prefix %>enter_censustract'].value;
+% }
+  post_standardization();
+}
+
+function post_standardization() {
 
 % if ( $conf->exists('enable_taxproducts') ) {
 

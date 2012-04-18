@@ -51,7 +51,7 @@ Confirm address standardization
 %     }
   <TR>
     <TD><% $old{$pre.'address1'} %></TD>
-    <TD><FONT COLOR="#ff0000"><B><% $new{$pre.'error'} %></B></FONT></TD>
+    <TD ROWSPAN=3><FONT COLOR="#ff0000"><B><% $new{$pre.'error'} %></B></FONT></TD>
   </TR>
   <TR>
     <TD><% $old{$pre.'address2'} %></TD>
@@ -62,7 +62,8 @@ Confirm address standardization
 %   } #if error
 % } # for $pre
 
-% if ( $old{'ship_censustract'} or $new{'ship_censustract'} ) {
+%# only do this part if address standardization provided a censustract
+% if ( $new{'ship_censustract'} ) {
   <TR>
     <TH>Entered census tract</TH>
     <TH>Calculated census tract</TH>
@@ -82,7 +83,7 @@ Confirm address standardization
 % if ( $new{error} or $new{ship_error} ) {
   <TR>
     <TD ALIGN="center">
-    <BUTTON TYPE="button" STYLE="width:205px" onclick="post_standardization();">
+    <BUTTON TYPE="button" STYLE="width:205px" onclick="confirm_manual_address();">
       <IMG SRC="<%$p%>images/error.png" ALT=""> Use entered <%$addresses%>
     </BUTTON></TD>
     <TD ALIGN="center">
@@ -94,7 +95,7 @@ Confirm address standardization
 % else {
   <TR>
     <TD ALIGN="center">
-    <BUTTON TYPE="button" STYLE="width:205px" onclick="post_standardization();">
+    <BUTTON TYPE="button" STYLE="width:205px" onclick="confirm_manual_address()();">
       <IMG SRC="<%$p%>images/error.png" ALT=""> Use entered <%$addresses%>
     </BUTTON></TD>
     <TD ALIGN="center">

@@ -25,8 +25,8 @@ foreach my $pre ( '', 'ship_' ) {
   };
 
   my $cache = eval { FS::GeocodeCache->standardize($location) };
-  $cache->set_censustract if $pre;
   $cache->set_coord;
+  # don't do set_censustract here, though censustract may be set by now
 
   foreach ( keys(%$cache) ) {
     $new{$pre.$_} = $cache->get($_);
