@@ -10,9 +10,9 @@ use List::Util qw(max);
 use Tie::IxHash;
 use Time::Local qw( timelocal timelocal_nocheck );
 use MIME::Entity;
-use FS::UID qw( getotaker dbh );
+use FS::UID qw( getotaker dbh driver_name );
 use FS::Misc qw( send_email );
-use FS::Record qw( qsearch qsearchs );
+use FS::Record qw( qsearch qsearchs fields );
 use FS::CurrentUser;
 use FS::cust_svc;
 use FS::part_pkg;
@@ -337,6 +337,9 @@ sub insert {
   my $conf = new FS::Conf;
 
   if ( $conf->config('ticket_system') && $options{ticket_subject} ) {
+
+    #this init stuff is still inefficient, but at least its limited to 
+    # the small number (any?) folks using ticket emailing on pkg order
 
     #eval '
     #  use lib ( "/opt/rt3/local/lib", "/opt/rt3/lib" );
@@ -879,6 +882,158 @@ sub cancel_if_expired {
   '';
 }
 
+=item uncancel
+
+"Un-cancels" this package: Orders a new package with the same custnum, pkgpart,
+locationnum, (other fields?).  Attempts to re-provision cancelled services
+using history information (errors at this stage are not fatal).
+
+cust_pkg: pass a scalar reference, will be filled in with the new cust_pkg object
+
+svc_fatal: service provisioning errors are fatal
+
+svc_errors: pass an array reference, will be filled in with any provisioning errors
+
+=cut
+
+sub uncancel {
+  my( $self, %options ) = @_;
+
+  #in case you try do do $uncancel-date = $cust_pkg->uncacel 
+  return '' unless $self->get('cancel');
+
+  ##
+  # Transaction-alize
+  ##
+
+  local $SIG{HUP} = 'IGNORE';
+  local $SIG{INT} = 'IGNORE'; 
+  local $SIG{QUIT} = 'IGNORE';
+  local $SIG{TERM} = 'IGNORE';
+  local $SIG{TSTP} = 'IGNORE'; 
+  local $SIG{PIPE} = 'IGNORE'; 
+
+  my $oldAutoCommit = $FS::UID::AutoCommit;
+  local $FS::UID::AutoCommit = 0;
+  my $dbh = dbh;
+
+  ##
+  # insert the new package
+  ##
+
+  my $cust_pkg = new FS::cust_pkg {
+    last_bill       => ( $options{'last_bill'} || $self->get('last_bill') ),
+    bill            => ( $options{'bill'}      || $self->get('bill')      ),
+    uncancel        => time,
+    uncancel_pkgnum => $self->pkgnum,
+    map { $_ => $self->get($_) } qw(
+      custnum pkgpart locationnum
+      setup
+      susp adjourn resume expire start_date contract_end dundate
+      change_date change_pkgpart change_locationnum
+      manual_flag no_auto quantity agent_pkgid recur_show_zero setup_show_zero
+    ),
+  };
+
+  my $error = $cust_pkg->insert(
+    'change' => 1, #supresses any referral credit to a referring customer
+  );
+  if ($error) {
+    $dbh->rollback if $oldAutoCommit;
+    return $error;
+  }
+
+  ##
+  # insert services
+  ##
+
+  #find historical services within this timeframe before the package cancel
+  # (incompatible with "time" option to cust_pkg->cancel?)
+  my $fuzz = 2 * 60; #2 minutes?  too much?   (might catch separate unprovision)
+                     #            too little? (unprovisioing export delay?)
+  my($end, $start) = ( $self->get('cancel'), $self->get('cancel') - $fuzz );
+  my @h_cust_svc = $self->h_cust_svc( $end, $start );
+
+  my @svc_errors;
+  foreach my $h_cust_svc (@h_cust_svc) {
+    my $h_svc_x = $h_cust_svc->h_svc_x( $end, $start );
+    #next unless $h_svc_x; #should this happen?
+    (my $table = $h_svc_x->table) =~ s/^h_//;
+    require "FS/$table.pm";
+    my $class = "FS::$table";
+    my $svc_x = $class->new( {
+      'pkgnum'  => $cust_pkg->pkgnum,
+      'svcpart' => $h_cust_svc->svcpart,
+      map { $_ => $h_svc_x->get($_) } fields($table)
+    } );
+
+    # radius_usergroup
+    if ( $h_svc_x->isa('FS::h_svc_Radius_Mixin') ) {
+      $svc_x->usergroup( [ $h_svc_x->h_usergroup($end, $start) ] );
+    }
+
+    my $svc_error = $svc_x->insert;
+    if ( $svc_error ) {
+      if ( $options{svc_fatal} ) {
+        $dbh->rollback if $oldAutoCommit;
+        return $svc_error;
+      } else {
+        push @svc_errors, $svc_error;
+        # is this necessary? svc_Common::insert already deletes the 
+        # cust_svc if inserting svc_x fails.
+        my $cust_svc = qsearchs('cust_svc', { 'svcnum' => $svc_x->svcnum });
+        if ( $cust_svc ) {
+          my $cs_error = $cust_svc->delete;
+          if ( $cs_error ) {
+            $dbh->rollback if $oldAutoCommit;
+            return $cs_error;
+          }
+        }
+      } # svc_fatal
+    } # svc_error
+  } #foreach $h_cust_svc
+
+  #these are pretty rare, but should handle them
+  # - dsl_device (mac addresses)
+  # - phone_device (mac addresses)
+  # - dsl_note (ikano notes)
+  # - domain_record (i.e. restore DNS information w/domains)
+  # - inventory_item(?) (inventory w/un-cancelling service?)
+  # - nas (svc_broaband nas stuff)
+  #this stuff is unused in the wild afaik
+  # - mailinglistmember
+  # - router.svcnum?
+  # - svc_domain.parent_svcnum?
+  # - acct_snarf (ancient mail fetching config)
+  # - cgp_rule (communigate)
+  # - cust_svc_option (used by our Tron stuff)
+  # - acct_rt_transaction (used by our time worked stuff)
+
+  ##
+  # also move over any services that didn't unprovision at cancellation
+  ## 
+
+  foreach my $cust_svc ( qsearch('cust_svc', { pkgnum => $self->pkgnum } ) ) {
+    $cust_svc->pkgnum( $cust_pkg->pkgnum );
+    my $error = $cust_svc->replace;
+    if ( $error ) {
+      $dbh->rollback if $oldAutoCommit;
+      return $error;
+    }
+  }
+
+  ##
+  # Finish
+  ##
+
+  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
+
+  ${ $options{cust_pkg} }   = $cust_pkg   if ref($options{cust_pkg});
+  @{ $options{svc_errors} } = @svc_errors if ref($options{svc_errors});
+
+  '';
+}
+
 =item unexpire
 
 Cancels any pending expiration (sets the expire field to null).
@@ -1041,8 +1196,13 @@ sub suspend {
     $hash{'resume'} = $resume_date;
   }
 
+  $options{options} ||= {};
+
   my $new = new FS::cust_pkg ( \%hash );
-  $error = $new->replace( $self, options => { $self->options } );
+  $error = $new->replace( $self, options => { $self->options,
+                                              %{ $options{options} },
+                                            }
+                        );
   if ( $error ) {
     $dbh->rollback if $oldAutoCommit;
     return $error;
@@ -1162,7 +1322,8 @@ sub credit_remaining {
 
 Unsuspends all services (see L<FS::cust_svc> and L<FS::part_svc>) in this
 package, then unsuspends the package itself (clears the susp field and the
-adjourn field if it is in the past).
+adjourn field if it is in the past).  If the suspend reason includes an 
+unsuspension package, that package will be ordered.
 
 Available options are:
 
@@ -1239,6 +1400,8 @@ sub unsuspend {
   
   } #if $date 
 
+  my @labels = ();
+
   foreach my $cust_svc (
     qsearch('cust_svc',{'pkgnum'=> $self->pkgnum } )
   ) {
@@ -1258,9 +1421,14 @@ sub unsuspend {
         $dbh->rollback if $oldAutoCommit;
         return $error;
       }
+      my( $label, $value ) = $cust_svc->label;
+      push @labels, "$label: $value";
     }
 
   }
+
+  my $cust_pkg_reason = $self->last_cust_pkg_reason('susp');
+  my $reason = $cust_pkg_reason ? $cust_pkg_reason->reason : '';
 
   my %hash = $self->hash;
   my $inactive = time - $hash{'susp'};
@@ -1286,6 +1454,61 @@ sub unsuspend {
   if ( $error ) {
     $dbh->rollback if $oldAutoCommit;
     return $error;
+  }
+
+  my $unsusp_pkg;
+
+  if ( $reason && $reason->unsuspend_pkgpart ) {
+    my $part_pkg = FS::part_pkg->by_key($reason->unsuspend_pkgpart)
+      or $error = "Unsuspend package definition ".$reason->unsuspend_pkgpart.
+                  " not found.";
+    my $start_date = $self->cust_main->next_bill_date 
+      if $reason->unsuspend_hold;
+
+    if ( $part_pkg ) {
+      $unsusp_pkg = FS::cust_pkg->new({
+          'custnum'     => $self->custnum,
+          'pkgpart'     => $reason->unsuspend_pkgpart,
+          'start_date'  => $start_date,
+          'locationnum' => $self->locationnum,
+          # discount? probably not...
+      });
+      
+      $error ||= $self->cust_main->order_pkg( 'cust_pkg' => $unsusp_pkg );
+    }
+
+    if ( $error ) {
+      $dbh->rollback if $oldAutoCommit;
+      return $error;
+    }
+  }
+
+  if ( $conf->config('unsuspend_email_admin') ) {
+ 
+    my $error = send_email(
+      'from'    => $conf->config('invoice_from', $self->cust_main->agentnum),
+                                 #invoice_from ??? well as good as any
+      'to'      => $conf->config('unsuspend_email_admin'),
+      'subject' => 'FREESIDE NOTIFICATION: Customer package unsuspended',       'body'    => [
+        "This is an automatic message from your Freeside installation\n",
+        "informing you that the following customer package has been unsuspended:\n",
+        "\n",
+        'Customer: #'. $self->custnum. ' '. $self->cust_main->name. "\n",
+        'Package : #'. $self->pkgnum. " (". $self->part_pkg->pkg_comment. ")\n",
+        ( map { "Service : $_\n" } @labels ),
+        ($unsusp_pkg ?
+          "An unsuspension fee was charged: ".
+            $unsusp_pkg->part_pkg->pkg_comment."\n"
+          : ''
+        ),
+      ],
+    );
+
+    if ( $error ) {
+      warn "WARNING: can't send unsuspension admin email (unsuspending anyway): ".
+           "$error\n";
+    }
+
   }
 
   $dbh->commit or die $dbh->errstr if $oldAutoCommit;
@@ -1895,7 +2118,7 @@ sub cust_svc {
   }
   if ( $opt{'svcdb'} ) {
     $search{addl_from} = ' LEFT JOIN part_svc USING ( svcpart ) ';
-    $search{hashref}->{svcdb} = $opt{'svcdb'};
+    $search{extra_sql} = ' AND svcdb = '. dbh->quote( $opt{'svcdb'} );
   }
 
   cluck "cust_pkg->cust_svc called" if $DEBUG > 2;
@@ -2029,11 +2252,14 @@ field, I<num_avail>, which specifies the number of available services.
 
 sub available_part_svc {
   my $self = shift;
+
+  my $pkg_quantity = $self->quantity || 1;
+
   grep { $_->num_avail > 0 }
     map {
           my $part_svc = $_->part_svc;
           $part_svc->{'Hash'}{'num_avail'} = #evil encapsulation-breaking
-            $_->quantity - $self->num_cust_svc($_->svcpart);
+            $pkg_quantity * $_->quantity - $self->num_cust_svc($_->svcpart);
 
 	  # more evil encapsulation breakage
 	  if($part_svc->{'Hash'}{'num_avail'} > 0) {
@@ -2075,6 +2301,8 @@ sub part_svc {
   my $self = shift;
   my %opt = @_;
 
+  my $pkg_quantity = $self->quantity || 1;
+
   #XXX some sort of sort order besides numeric by svcpart...
   my @part_svc = sort { $a->svcpart <=> $b->svcpart } map {
     my $pkg_svc = $_;
@@ -2082,7 +2310,7 @@ sub part_svc {
     my $num_cust_svc = $self->num_cust_svc($part_svc->svcpart);
     $part_svc->{'Hash'}{'num_cust_svc'} = $num_cust_svc; #more evil
     $part_svc->{'Hash'}{'num_avail'}    =
-      max( 0, $pkg_svc->quantity - $num_cust_svc );
+      max( 0, $pkg_quantity * $pkg_svc->quantity - $num_cust_svc );
     $part_svc->{'Hash'}{'cust_pkg_svc'} =
         $num_cust_svc ? [ $self->cust_svc($part_svc->svcpart) ] : []
       unless exists($opt{summarize_size}) && $opt{summarize_size} > 0
@@ -2441,6 +2669,39 @@ Returns the label of the location object (see L<FS::cust_location>).
 
 #end of subs in location_Mixin.pm now... unfortunately the POD doesn't mixin
 
+=item tax_locationnum
+
+Returns the foreign key to a L<FS::cust_location> object for calculating  
+tax on this package, as determined by the C<tax-pkg_address> and 
+C<tax-ship_address> configuration flags.
+
+=cut
+
+sub tax_locationnum {
+  my $self = shift;
+  my $conf = FS::Conf->new;
+  if ( $conf->exists('tax-pkg_address') ) {
+    return $self->locationnum;
+  }
+  elsif ( $conf->exists('tax-ship_address') ) {
+    return $self->cust_main->ship_locationnum;
+  }
+  else {
+    return $self->cust_main->bill_locationnum;
+  }
+}
+
+=item tax_location
+
+Returns the L<FS::cust_location> object for tax_locationnum.
+
+=cut
+
+sub tax_location {
+  my $self = shift;
+  FS::cust_location->by_key( $self->tax_locationnum )
+}
+
 =item seconds_since TIMESTAMP
 
 Returns the number of seconds all accounts (see L<FS::svc_acct>) in this
@@ -2487,7 +2748,7 @@ sub seconds_since_sqlradacct {
     grep {
       my $part_svc = $_->part_svc;
       $part_svc->svcdb eq 'svc_acct'
-        && scalar($part_svc->part_export('sqlradius'));
+        && scalar($part_svc->part_export_usage);
     } $self->cust_svc
   ) {
     $seconds += $cust_svc->seconds_since_sqlradacct($start, $end);
@@ -2519,7 +2780,7 @@ sub attribute_since_sqlradacct {
     grep {
       my $part_svc = $_->part_svc;
       $part_svc->svcdb eq 'svc_acct'
-        && scalar($part_svc->part_export('sqlradius'));
+        && scalar($part_svc->part_export_usage);
     } $self->cust_svc
   ) {
     $sum += $cust_svc->attribute_since_sqlradacct($start, $end, $attrib);
@@ -3057,7 +3318,12 @@ specifies the user for agent virtualization
 
 =item fcc_line
 
- boolean selects packages containing fcc form 477 telco lines
+boolean; if true, returns only packages with more than 0 FCC phone lines.
+
+=item state, country
+
+Limit to packages with a service location in the specified state and country.
+For FCC 477 reporting, mostly.
 
 =back
 
@@ -3231,8 +3497,8 @@ sub search {
 
   if ( exists($params->{'censustract'}) ) {
     $params->{'censustract'} =~ /^([.\d]*)$/;
-    my $censustract = "cust_main.censustract = '$1'";
-    $censustract .= ' OR cust_main.censustract is NULL' unless $1;
+    my $censustract = "cust_location.censustract = '$1'";
+    $censustract .= ' OR cust_location.censustract is NULL' unless $1;
     push @where,  "( $censustract )";
   }
 
@@ -3244,10 +3510,22 @@ sub search {
      )
   {
     if ($1) {
-      push @where, "cust_main.censustract LIKE '$1%'";
+      push @where, "cust_location.censustract LIKE '$1%'";
     } else {
       push @where,
-        "( cust_main.censustract = '' OR cust_main.censustract IS NULL )";
+        "( cust_location.censustract = '' OR cust_location.censustract IS NULL )";
+    }
+  }
+
+  ###
+  # parse country/state
+  ###
+  for (qw(state country)) { # parsing rules are the same for these
+  if ( exists($params->{$_}) 
+    && uc($params->{$_}) =~ /^([A-Z]{2})$/ )
+    {
+      # XXX post-2.3 only--before that, state/country may be in cust_main
+      push @where, "cust_location.$_ = '$1'";
     }
   }
 
@@ -3375,22 +3653,36 @@ sub search {
 
   my $addl_from = 'LEFT JOIN cust_main USING ( custnum  ) '.
                   'LEFT JOIN part_pkg  USING ( pkgpart  ) '.
-                  'LEFT JOIN pkg_class ON ( part_pkg.classnum = pkg_class.classnum ) ';
+                  'LEFT JOIN pkg_class ON ( part_pkg.classnum = pkg_class.classnum ) '.
+                  'LEFT JOIN cust_location USING ( locationnum ) ';
 
-  my $count_query = "SELECT COUNT(*) FROM cust_pkg $addl_from $extra_sql";
+  my $select;
+  my $count_query;
+  if ( $params->{'select_zip5'} ) {
+    my $zip = 'cust_location.zip';
+
+    $select = "DISTINCT substr($zip,1,5) as zip";
+    $orderby = "ORDER BY substr($zip,1,5)";
+    $count_query = "SELECT COUNT( DISTINCT substr($zip,1,5) )";
+  } else {
+    $select = join(', ',
+                         'cust_pkg.*',
+                         ( map "part_pkg.$_", qw( pkg freq ) ),
+                         'pkg_class.classname',
+                         'cust_main.custnum AS cust_main_custnum',
+                         FS::UI::Web::cust_sql_fields(
+                           $params->{'cust_fields'}
+                         ),
+                  );
+    $count_query = 'SELECT COUNT(*)';
+  }
+
+  $count_query .= " FROM cust_pkg $addl_from $extra_sql";
 
   my $sql_query = {
     'table'       => 'cust_pkg',
     'hashref'     => {},
-    'select'      => join(', ',
-                                'cust_pkg.*',
-                                ( map "part_pkg.$_", qw( pkg freq ) ),
-                                'pkg_class.classname',
-                                'cust_main.custnum AS cust_main_custnum',
-                                FS::UI::Web::cust_sql_fields(
-                                  $params->{'cust_fields'}
-                                ),
-                     ),
+    'select'      => $select,
     'extra_sql'   => $extra_sql,
     'order_by'    => $orderby,
     'addl_from'   => $addl_from,
@@ -3427,6 +3719,25 @@ sub fcc_477_count {
 
 }
 
+=item tax_locationnum_sql
+
+Returns an SQL expression for the tax location for a package, based
+on the settings of 'tax-pkg_address' and 'tax-ship_address'.
+
+=cut
+
+sub tax_locationnum_sql {
+  my $conf = FS::Conf->new;
+  if ( $conf->exists('tax-pkg_address') ) {
+    'cust_pkg.locationnum';
+  }
+  elsif ( $conf->exists('tax-ship_address') ) {
+    'cust_main.ship_locationnum';
+  }
+  else {
+    'cust_main.bill_locationnum';
+  }
+}
 
 =item location_sql
 
@@ -3445,7 +3756,13 @@ sub location_sql {
 
   # '?' placeholders in _location_sql_where
   my $x = $ornull ? 3 : 2;
-  my @bill_param = ( ('city')x3, ('county')x$x, ('state')x$x, 'country' );
+  my @bill_param = ( 
+    ('district')x3,
+    ('city')x3, 
+    ('county')x$x,
+    ('state')x$x,
+    'country'
+  );
 
   my $main_where;
   my @main_param;
@@ -3504,16 +3821,19 @@ sub _location_sql_where {
 
   $ornull = $ornull ? ' OR ? IS NULL ' : '';
 
-  my $or_empty_city   = " OR ( ? = '' AND $table.${prefix}city   IS NULL ) ";
-  my $or_empty_county = " OR ( ? = '' AND $table.${prefix}county IS NULL ) ";
-  my $or_empty_state =  " OR ( ? = '' AND $table.${prefix}state  IS NULL ) ";
+  my $or_empty_city     = " OR ( ? = '' AND $table.${prefix}city     IS NULL )";
+  my $or_empty_county   = " OR ( ? = '' AND $table.${prefix}county   IS NULL )";
+  my $or_empty_state    = " OR ( ? = '' AND $table.${prefix}state    IS NULL )";
+
+  my $text = (driver_name =~ /^mysql/i) ? 'char' : 'text';
 
 #        ( $table.${prefix}city    = ? $or_empty_city   $ornull )
   "
-        ( $table.${prefix}city    = ? OR ? = '' OR CAST(? AS text) IS NULL )
-    AND ( $table.${prefix}county  = ? $or_empty_county $ornull )
-    AND ( $table.${prefix}state   = ? $or_empty_state  $ornull )
-    AND   $table.${prefix}country = ?
+        ( $table.district = ? OR ? = '' OR CAST(? AS $text) IS NULL )
+    AND ( $table.${prefix}city     = ? OR ? = '' OR CAST(? AS $text) IS NULL )
+    AND ( $table.${prefix}county   = ? $or_empty_county $ornull )
+    AND ( $table.${prefix}state    = ? $or_empty_state  $ornull )
+    AND   $table.${prefix}country  = ?
   ";
 }
 

@@ -68,7 +68,9 @@ function copy_payby_fields() {
 }
 
 <% include( '/elements/standardize_locations.js',
-            'callback' => 'submit_continue();'
+            'callback' => 'submit_continue();',
+            'main_prefix' => 'bill_',
+            'no_company' => 1,
           )
 %>
 
@@ -94,14 +96,17 @@ function copyelement(from, to) {
   //alert(from + " (" + from.type + "): " + to.name + " => " + to.value);
 }
 
+var prefix;
+
 % # the value in 'censustract' is the confirmed censustract; if it's set,
 % # do nothing here
 function confirm_censustract() {
+  prefix = document.getElementById('same').checked ? 'bill_' : 'ship_';
   var cf = document.CustomerForm;
-  if ( cf.elements['censustract'].value == '' ) {
+  if ( cf.elements[prefix+'censustract'].value == '' ) {
     var address_info = form_address_info();
-    address_info['ship_latitude']  = cf.elements['ship_latitude'].value;
-    address_info['ship_longitude'] = cf.elements['ship_longitude'].value;
+    address_info[prefix+'latitude']  = cf.elements[prefix+'latitude'].value;
+    address_info[prefix+'longitude'] = cf.elements[prefix+'longitude'].value;
     OLpostAJAX(
         '<%$p%>/misc/confirm-censustract.html',
         'q=' + encodeURIComponent(JSON.stringify(address_info)),
@@ -118,8 +123,8 @@ function confirm_censustract() {
 %# called from confirm-censustract.html
 function set_censustract(tract, year) {
   var cf = document.CustomerForm;
-  cf.elements['censustract'].value = tract;
-  cf.elements['censusyear'].value = year;
+  cf.elements[prefix+'censustract'].value = tract;
+  cf.elements[prefix+'censusyear'].value = year;
   submit_continue();
 }
 

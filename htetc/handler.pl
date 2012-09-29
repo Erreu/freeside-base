@@ -5,6 +5,24 @@ package HTML::Mason;
 use strict;
 use warnings;
 use FS::Mason qw( mason_interps );
+use FS::Trace;
+
+if ( %%%RT_ENABLED%%% ) {
+
+  require RT;
+
+  $> = scalar(getpwnam('freeside'));
+
+  RT::LoadConfig();
+  RT::Init();
+
+  # disconnect DB before fork:
+  #   (avoid 'prepared statement "dbdpg_p\d+_\d+" already exists' errors?)
+  $RT::Handle->dbh(undef);
+  undef $RT::Handle;
+
+  $> = $<;
+}
 
 #use vars qw($r);
 
@@ -31,10 +49,31 @@ my $ah = new HTML::Mason::ApacheHandler (
 #
 #chown (Apache->server->uid, Apache->server->gid, $interp->files_written);
 
+my $protect_fds;
+
 sub handler
 {
     #($r) = @_;
     my $r = shift;
+
+    FS::Trace->log('protecting fds');
+
+    #from rt/bin/webmux.pl(.in)
+    if ( !$protect_fds && $ENV{'MOD_PERL'} && exists $ENV{'MOD_PERL_API_VERSION'}
+        && $ENV{'MOD_PERL_API_VERSION'} >= 2
+    ) {
+        # under mod_perl2, STDIN and STDOUT get closed and re-opened,
+        # however they are not on FD 0 and 1.  In this case, the next
+        # socket that gets opened will occupy one of these FDs, and make
+        # all system() and open "|-" calls dangerous; for example, the
+        # DBI handle can get this FD, which later system() calls will
+        # close by putting garbage into the socket.
+        $protect_fds = [];
+        push @{$protect_fds}, IO::Handle->new_from_fd(0, "r")
+            if fileno(STDIN) != 0;
+        push @{$protect_fds}, IO::Handle->new_from_fd(1, "w")
+            if fileno(STDOUT) != 1;
+    }
 
     # If you plan to intermix images in the same directory as
     # components, activate the following to prevent Mason from
@@ -43,6 +82,8 @@ sub handler
     #return -1 if $r->content_type && $r->content_type !~ m|^text/|i;
 
     ###Module::Refresh->refresh;###
+
+    FS::Trace->log('setting content_type / headers');
 
     $r->content_type('text/html; charset=utf-8');
     #$r->content_type('text/html; charset=iso-8859-1');
@@ -57,6 +98,8 @@ sub handler
 
     if ( $r->filename =~ /\/rt\// ) { #RT
 
+      FS::Trace->log('handling RT file');
+
       # We don't need to handle non-text, non-xml items
       return -1 if defined( $r->content_type )
                 && $r->content_type !~ m!(^text/|\bxml\b)!io;
@@ -65,16 +108,21 @@ sub handler
       local $SIG{__WARN__};
       local $SIG{__DIE__};
 
-      RT::Init();
+      FS::Trace->log('initializing RT');
+      my_rt_init();
 
+      FS::Trace->log('setting RT interpreter');
       $ah->interp($rt_interp);
 
     } else {
 
+      FS::Trace->log('handling Freeside file');
+
       local $SIG{__WARN__};
       local $SIG{__DIE__};
 
-      RT::Init() if $RT::VERSION; #for lack of something else
+      FS::Trace->log('initializing RT');
+      my_rt_init();
 
       #we don't want the RT error handlers under FS
       {
@@ -83,10 +131,12 @@ sub handler
         undef($SIG{__DIE__})  if defined($SIG{__DIE__} );
       }
 
+      FS::Trace->log('setting Freeside interpreter');
       $ah->interp($fs_interp);
 
     }
 
+    FS::Trace->log('handling request');
     my %session;
     my $status;
     eval { $status = $ah->handle_request($r); };
@@ -106,7 +156,22 @@ sub handler
 #       );
 #    }
 
+    FS::Trace->log('done');
+
+    FS::Trace->dumpfile( "%%%FREESIDE_EXPORT%%%/profile/$$.".time,
+                         FS::Trace->total. ' '. $r->filename
+                       )
+      if FS::Trace->total > 5; #10?
+
+    FS::Trace->reset;
+
     $status;
+}
+
+sub my_rt_init {
+  return unless $RT::VERSION;
+  RT::ConnectToDatabase();
+  RT::InitSignalHandlers();
 }
 
 1;

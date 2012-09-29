@@ -102,6 +102,26 @@
     <TD BGCOLOR="#ffffff"><% $cust_main->signupdate ? time2str($date_format, $cust_main->signupdate) : '' %></TD>
   </TR>
 
+% my $id_country = $conf->config('national_id-country');
+%  if ( $id_country ) {
+%   if ( $id_country eq 'MY' ) {
+      <TR>
+%     my($old, $nric) = ( '', '');
+%     if ( $cust_main->national_id =~ /^\d{6}\-\d{2}\-\d{4}$/ ) {
+          <TD ALIGN="right"><% mt('NRIC') |h %></TD>
+%     } else { # elsif ( $cust_main->national_id =~ /^\w\d{9}$/ ) {
+          <TD ALIGN="right"><% mt('Old IC/Passport') |h %></TD>
+%     #} else {
+%     #  warn "unknown national_id format";
+%#         <TD ALIGN="right"></TD>
+%     }
+        <TD BGCOLOR="#ffffff"><% $cust_main->national_id |h %></TD>
+      </TR>
+%   } else {
+%     warn "unknown national_id-country $id_country";
+%   }
+% }
+
 % if ( $conf->exists('cust_main-enable_birthdate') ) {
 %   my $dt = $cust_main->birthdate ne ''
 %              ? DateTime->from_epoch( 'epoch'     => $cust_main->birthdate,
@@ -116,13 +136,41 @@
 
 % }
 
+% if ( $conf->exists('cust_main-enable_spouse_birthdate') ) {
+%   my $dt = $cust_main->spouse_birthdate ne ''
+%              ? DateTime->from_epoch( 'epoch'  => $cust_main->spouse_birthdate,
+%                                      'time_zone' =>'floating',
+%                                    )
+%              : '';
+
+  <TR>
+    <TD ALIGN="right"><% mt('Spouse Date of Birth') |h %></TD>
+    <TD BGCOLOR="#ffffff"><% $dt ? $dt->strftime($date_format) : '' %></TD>
+  </TR>
+
+% }
+
+% if ( $conf->exists('cust_main-enable_anniversary_date') ) {
+%   my $dt = $cust_main->anniversary_date ne ''
+%              ? DateTime->from_epoch( 'epoch'  => $cust_main->anniversary_date,
+%                                      'time_zone' =>'floating',
+%                                    )
+%              : '';
+
+  <TR>
+    <TD ALIGN="right"><% mt('Anniversary Date') |h %></TD>
+    <TD BGCOLOR="#ffffff"><% $dt ? $dt->strftime($date_format) : '' %></TD>
+  </TR>
+
+% }
+
 % if ( $conf->exists('cust_main-require_censustract') ) {
 
   <TR>
     <TD ALIGN="right">
-      <% mt('Census tract ([_1])', $cust_main->censusyear) |h %>
+      <% mt('Census tract ([_1])', $cust_main->ship_location->censusyear) |h %>
     </TD>
-    <TD BGCOLOR="#ffffff"><% $cust_main->censustract  %></TD>
+    <TD BGCOLOR="#ffffff"><% $cust_main->ship_location->censustract  %></TD>
   </TR>
 
 % }
@@ -131,7 +179,7 @@
 
   <TR>
     <TD ALIGN="right"><% mt('Tax district') |h %></TD>
-    <TD BGCOLOR="#ffffff"><% $cust_main->district %></TD>
+    <TD BGCOLOR="#ffffff"><% $cust_main->ship_location->district %></TD>
   </TR>
 
 % }

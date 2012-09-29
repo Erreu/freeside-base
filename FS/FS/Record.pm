@@ -39,6 +39,7 @@ use Tie::IxHash;
 @EXPORT_OK = qw(
   dbh fields hfields qsearch qsearchs dbdef jsearch
   str2time_sql str2time_sql_closing regexp_sql not_regexp_sql concat_sql
+  midnight_sql
 );
 
 $DEBUG = 0;
@@ -2420,10 +2421,9 @@ sub ut_coordn {
 
 }
 
-
 =item ut_domain COLUMN
 
-Check/untaint host and domain names.
+Check/untaint host and domain names.  May not be null.
 
 =cut
 
@@ -2431,9 +2431,25 @@ sub ut_domain {
   my( $self, $field ) = @_;
   #$self->getfield($field) =~/^(\w+\.)*\w+$/
   $self->getfield($field) =~/^(([\w\-]+\.)*\w+)$/
-    or return "Illegal (domain) $field: ". $self->getfield($field);
+    or return "Illegal (hostname) $field: ". $self->getfield($field);
   $self->setfield($field,$1);
   '';
+}
+
+=item ut_domainn COLUMN
+
+Check/untaint host and domain names.  May be null.
+
+=cut
+
+sub ut_domainn {
+  my( $self, $field ) = @_;
+  if ( $self->getfield($field) =~ /^()$/ ) {
+    $self->setfield($field,'');
+    '';
+  } else {
+    $self->ut_domain($field);
+  }
 }
 
 =item ut_name COLUMN
@@ -2562,6 +2578,22 @@ sub ut_enumn {
     : '';
 }
 
+=item ut_flag COLUMN
+
+Check/untaint a column if it contains either an empty string or 'Y'.  This
+is the standard form for boolean flags in Freeside.
+
+=cut
+
+sub ut_flag {
+  my( $self, $field ) = @_;
+  my $value = uc($self->getfield($field));
+  if ( $value eq '' or $value eq 'Y' ) {
+    $self->setfield($field, $value);
+    return '';
+  }
+  return "Illegal (flag) field $field: $value";
+}
 
 =item ut_foreign_key COLUMN FOREIGN_TABLE FOREIGN_COLUMN
 
@@ -3030,7 +3062,7 @@ sub not_regexp_sql {
 
 =item concat_sql [ DRIVER_NAME ] ITEMS_ARRAYREF
 
-Returns the items concatendated based on database type, using "CONCAT()" for
+Returns the items concatenated based on database type, using "CONCAT()" for
 mysql and " || " for Pg and other databases.
 
 You can pass an optional driver name such as "Pg", "mysql" or
@@ -3049,6 +3081,24 @@ sub concat_sql {
     join('||', @$items);
   }
 
+}
+
+=item midnight_sql DATE
+
+Returns an SQL expression to convert DATE (a unix timestamp) to midnight 
+on that day in the system timezone, using the default driver name.
+
+=cut
+
+sub midnight_sql {
+  my $driver = driver_name;
+  my $expr = shift;
+  if ( $driver =~ /^mysql/i ) {
+    "UNIX_TIMESTAMP(DATE(FROM_UNIXTIME($expr)))";
+  }
+  else {
+    "EXTRACT( EPOCH FROM DATE(TO_TIMESTAMP($expr)) )";
+  }
 }
 
 =back

@@ -8,6 +8,7 @@
                 'graph_labels' => \@labels,
                 'colors'       => \@colors,
                 'links'        => \@links,
+                'no_graph'     => \@no_graph,
                 'remove_empty' => 1,
                 'bottom_total' => 1,
                 'bottom_link'  => $bottom_link,
@@ -49,6 +50,21 @@ elsif ( $cgi->param('agentnum') =~ /^(\d+)$/ ) {
   die "agentnum $agentnum not found!" unless $sel_agent;
 }
 my $title = $sel_agent ? $sel_agent->agent.' ' : '';
+
+my( $refnum, $sel_part_referral, $all_part_referral ) = ('', '', '');
+if ( $cgi->param('refnum') eq 'all' ) {
+  $refnum = 0;
+  $all_part_referral = 'ALL';
+}
+elsif ( $cgi->param('refnum') =~ /^(\d+)$/ ) {
+  $refnum = $1;
+  $bottom_link .= "refnum=$refnum;";
+  $sel_part_referral = qsearchs('part_referral', { 'refnum' => $refnum } );
+  die "part_referral $refnum not found!" unless $sel_part_referral;
+}
+$title .= $sel_part_referral->referral.' '
+  if $sel_part_referral;
+
 $title .= 'Sales Report (Gross)';
 $title .= ', average per customer package'  if $average_per_cust_pkg;
 
@@ -103,6 +119,7 @@ my @params = ();
 my @labels = ();
 my @colors = ();
 my @links  = ();
+my @no_graph;
 
 my @components = ( 'SRU' );
 # split/omit components as appropriate
@@ -119,6 +136,11 @@ elsif ( $use_usage == 2 ) {
   $components[-1] =~ s/U//;
 }
 
+# Categorization of line items goes
+# Agent -> Referral -> Package class -> Component (setup/recur/usage)
+# If per-agent totals are enabled, they go under the Agent level.
+# There aren't any other kinds of subtotals.
+
 foreach my $agent ( $all_agent || $sel_agent || qsearch('agent', { 'disabled' => '' } ) ) {
 
   my $col_scheme = Color::Scheme->new
@@ -130,43 +152,91 @@ foreach my $agent ( $all_agent || $sel_agent || qsearch('agent', { 'disabled' =>
 
   ### fixup the color handling for package classes...
   ### and usage
-  my $n = 0;
 
-  foreach my $pkg_class ( @pkg_class ) {
-    foreach my $component ( @components ) {
+  foreach my $part_referral (
+    $all_part_referral ||
+    $sel_part_referral ||
+    qsearch('part_referral', { 'disabled' => '' } ) 
+  ) {
 
-      push @items, 'cust_bill_pkg';
+    foreach my $pkg_class ( @pkg_class ) {
+      foreach my $component ( @components ) {
 
-      push @labels,
-        ( $all_agent || $sel_agent ? '' : $agent->agent.' ' ).
-        ( $classnum eq '0'
-            ? ( ref($pkg_class) ? $pkg_class->classname : $pkg_class ) 
-            : ''
-        ).
-        ' '.$charge_labels{$component};
+        push @items, 'cust_bill_pkg';
 
-      my $row_classnum = ref($pkg_class) ? $pkg_class->classnum : 0;
-      my $row_agentnum = $all_agent || $agent->agentnum;
-      push @params, [ ($all_class ? () : ('classnum' => $row_classnum) ),
-                      ($all_agent ? () : ('agentnum' => $row_agentnum) ),
-                      'use_override'         => $use_override,
-                      'charges'              => $component,
-                      'average_per_cust_pkg' => $average_per_cust_pkg,
-                      'distribute'           => $distribute,
-                    ];
+        push @labels,
+          ( $all_agent || $sel_agent ? '' : $agent->agent.' ' ).
+          ( $all_part_referral || $sel_part_referral ? '' : $part_referral->referral.' ' ).
+          ( $classnum eq '0'
+              ? ( ref($pkg_class) ? $pkg_class->classname : $pkg_class ) 
+              : ''
+          ).
+          ' '.$charge_labels{$component};
 
-      push @links, "$link;".($all_agent ? '' : "agentnum=$row_agentnum;").
-                   ($all_class ? '' : "classnum=$row_classnum;").
+        my $row_classnum = ref($pkg_class) ? $pkg_class->classnum : 0;
+        my $row_agentnum = $all_agent || $agent->agentnum;
+        my $row_refnum = $all_part_referral || $part_referral->refnum;
+        push @params, [ ($all_class ? () : ('classnum' => $row_classnum) ),
+                        ($all_agent ? () : ('agentnum' => $row_agentnum) ),
+                        ($all_part_referral ? () : ('refnum' => $row_refnum) ),
+                        'use_override'         => $use_override,
+                        'charges'              => $component,
+                        'average_per_cust_pkg' => $average_per_cust_pkg,
+                        'distribute'           => $distribute,
+                      ];
+
+        push @links, "$link;".
+                     ($all_agent ? '' : "agentnum=$row_agentnum;").
+                     ($all_part_referral ? '' : "refnum=$row_refnum;").
+                     ($all_class ? '' : "classnum=$row_classnum;").
+                     "distribute=$distribute;".
+                     "use_override=$use_override;charges=$component;";
+
+        @recur_colors = ($col_scheme->colors)[0,4,8,1,5,9]
+          unless @recur_colors;
+        @onetime_colors = ($col_scheme->colors)[2,6,10,3,7,11]
+          unless @onetime_colors;
+        push @colors, shift @recur_colors;
+        push @no_graph, 0;
+
+      } #foreach $component
+    } #foreach $pkg_class
+  } #foreach $part_referral
+
+  if ( $cgi->param('agent_totals') and !$all_agent ) {
+    my $row_agentnum = $agent->agentnum;
+    # Include all components that are anywhere on this report
+    my $component = join('', @components);
+
+    my @row_params = (  'agentnum'              => $row_agentnum,
+                        'use_override'          => $use_override,
+                        'average_per_cust_pkg'  => $average_per_cust_pkg,
+                        'distribute'            => $distribute,
+                        'charges'               => $component,
+                     );
+    my $row_link = "$link;".
+                   "agentnum=$row_agentnum;".
                    "distribute=$distribute;".
-                   "use_override=$use_override;charges=$component;";
-
-      @recur_colors = ($col_scheme->colors)[0,4,8,1,5,9]
-        unless @recur_colors;
-      @onetime_colors = ($col_scheme->colors)[2,6,10,3,7,11]
-        unless @onetime_colors;
-      push @colors, shift @recur_colors;
-
+                   "charges=$component";
+    
+    # Also apply any refnum/classnum filters
+    if ( !$all_class and scalar(@pkg_class) == 1 ) {
+      # then a specific class has been chosen, but it may be the empty class
+      my $row_classnum = ref($pkg_class[0]) ? $pkg_class[0]->classnum : 0;
+      push @row_params, 'classnum' => $row_classnum;
+      $row_link .= ";classnum=$row_classnum";
     }
+    if ( $sel_part_referral ) {
+      push @row_params, 'refnum' => $sel_part_referral->refnum;
+      $row_link .= ";refnum=".$sel_part_referral->refnum;
+    }
+
+    push @items, 'cust_bill_pkg';
+    push @labels, mt('[_1] - Subtotal', $agent->agent);
+    push @params, \@row_params;
+    push @links, $row_link;
+    push @colors, '000000'; # better idea?
+    push @no_graph, 1;
   }
 
   $hue += $hue_increment;

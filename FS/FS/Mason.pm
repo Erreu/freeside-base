@@ -69,7 +69,7 @@ if ( -e $addl_handler_use_file ) {
   Lingua::EN::Inflect::classical names=>0; #Categorys
   use Tie::IxHash;
   use URI;
-  use URI::Escape;
+  use URI::Escape 3.31;
   use HTML::Entities;
   use HTML::TreeBuilder;
   use HTML::TableExtract qw(tree);
@@ -91,6 +91,10 @@ if ( -e $addl_handler_use_file ) {
   use Text::CSV_XS;
   use Spreadsheet::WriteExcel;
   use Spreadsheet::WriteExcel::Utility;
+  use OLE::Storage_Lite;
+  use Excel::Writer::XLSX;
+  #use Excel::Writer::XLSX::Utility; #redundant with above
+
   use Business::CreditCard 0.30; #for mask-aware cardtype()
   use NetAddr::IP;
   use Net::Ping;
@@ -122,6 +126,7 @@ if ( -e $addl_handler_use_file ) {
   use FS::UID qw( getotaker dbh datasrc driver_name );
   use FS::Record qw( qsearch qsearchs fields dbdef
                     str2time_sql str2time_sql_closing
+                    midnight_sql
                    );
   use FS::Conf;
   use FS::CGI qw(header menubar table itable ntable idiot
@@ -303,7 +308,24 @@ if ( -e $addl_handler_use_file ) {
   use FS::discount_plan;
   use FS::tower;
   use FS::tower_sector;
+  use FS::sales;
+  use FS::access_groupsales;
   use FS::contact_class;
+  use FS::part_svc_class;
+  use FS::ftp_target;
+  use FS::quotation;
+  use FS::quotation_pkg;
+  use FS::quotation_pkg_discount;
+  use FS::cust_bill_void;
+  use FS::cust_bill_pkg_void;
+  use FS::cust_bill_pkg_detail_void;
+  use FS::cust_bill_pkg_display_void;
+  use FS::cust_bill_pkg_tax_location_void;
+  use FS::cust_bill_pkg_tax_rate_location_void;
+  use FS::cust_tax_exempt_pkg_void;
+  use FS::cust_bill_pkg_discount_void;
+  use FS::agent_pkg_class;
+  use FS::svc_export_machine;
   use FS::GeocodeCache;
   # Sammath Naur
 
@@ -348,7 +370,7 @@ if ( -e $addl_handler_use_file ) {
 
       use RT::Interface::Web::Request;
 
-      #nother undeclared web UI dep (for ticket links graph)
+      #another undeclared web UI dep (for ticket links graph)
       use IPC::Run::SafeHandles;
 
       #slow, unreliable, segfaults and is optional
@@ -507,28 +529,7 @@ sub mason_interps {
     RT::LoadConfig();
   }
 
-  # A hook supporting strange legacy ways people (well, SG) have added stuff on
-
-  my @addl_comp_root = ();
-  my $addl_comp_root_file = '%%%FREESIDE_CONF%%%/addl_comp_root.pl';
-  if ( -e $addl_comp_root_file ) {
-    warn "reading $addl_comp_root_file\n";
-    my $text = slurp( $addl_comp_root_file );
-    my @addl = eval $text;
-    if ( @addl && ! $@ ) {
-      @addl_comp_root = @addl;
-    } elsif ($@) {
-      warn "error parsing $addl_comp_root_file: $@\n";
-    }
-  }
-
-  my $fs_comp_root =
-    scalar(@addl_comp_root)
-      ? [
-          [ 'freeside'=>'%%%FREESIDE_DOCUMENT_ROOT%%%' ],
-          @addl_comp_root,
-        ]
-      : '%%%FREESIDE_DOCUMENT_ROOT%%%';
+  my $fs_comp_root = '%%%FREESIDE_DOCUMENT_ROOT%%%';
 
   my %interp = (
     request_class        => $request_class,
@@ -575,11 +576,13 @@ sub mason_interps {
                       [ 'freeside' => '%%%FREESIDE_DOCUMENT_ROOT%%%'    ],
                     ],
     escape_flags => { 'h'         => \&RT::Interface::Web::EscapeUTF8,
+                      'u'         => \&RT::Interface::Web::EscapeURI,
+                      'j'         => \&RT::Interface::Web::EscapeJS,
                       'js_string' => $js_string_sub,
                     },
     compiler     => HTML::Mason::Compiler::ToObject->new(
                       default_escape_flags => 'h',
-                      allow_globals        => [qw(%session)],
+                      allow_globals        => [qw(%session $DECODED_ARGS)],
                     ),
   );
 

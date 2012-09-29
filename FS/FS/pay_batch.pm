@@ -10,6 +10,10 @@ use FS::cust_pay;
 use FS::agent;
 use Date::Parse qw(str2time);
 use Business::CreditCard qw(cardtype);
+use Scalar::Util 'blessed';
+use IO::Scalar;
+use FS::Misc qw(send_email); # for error notification
+use List::Util qw(sum);
 
 @ISA = qw(FS::Record);
 
@@ -47,10 +51,14 @@ from FS::Record.  The following fields are currently supported:
 
 =item status - O (Open), I (In-transit), or R (Resolved)
 
-=item download - 
+=item download - time when the batch was first downloaded
 
-=item upload - 
+=item upload - time when the batch was first uploaded
 
+=item title - unique batch identifier
+
+For incoming batches, the combination of 'title', 'payby', and 'agentnum'
+must be unique.
 
 =back
 
@@ -116,20 +124,43 @@ sub check {
     || $self->ut_enum('payby', [ 'CARD', 'CHEK' ])
     || $self->ut_enum('status', [ 'O', 'I', 'R' ])
     || $self->ut_foreign_keyn('agentnum', 'agent', 'agentnum')
+    || $self->ut_alphan('title')
   ;
   return $error if $error;
+
+  if ( $self->title ) {
+    my @existing = 
+      grep { !$self->batchnum or $_->batchnum != $self->batchnum } 
+      qsearch('pay_batch', {
+          payby     => $self->payby,
+          agentnum  => $self->agentnum,
+          title     => $self->title,
+      });
+    return "Batch already exists as batchnum ".$existing[0]->batchnum
+      if @existing;
+  }
 
   $self->SUPER::check;
 }
 
 =item agent
 
-Returns the L<FS::agent> object for this template.
+Returns the L<FS::agent> object for this batch.
 
 =cut
 
 sub agent {
   qsearchs('agent', { 'agentnum' => $_[0]->agentnum });
+}
+
+=item cust_pay_batch
+
+Returns all L<FS::cust_pay_batch> objects for this batch.
+
+=cut
+
+sub cust_pay_batch {
+  qsearch('cust_pay_batch', { 'batchnum' => $_[0]->batchnum });
 }
 
 =item rebalance
@@ -198,7 +229,10 @@ Options are:
 
 I<filehandle> - open filehandle of results file.
 
-I<format> - "csv-td_canada_trust-merchant_pc_batch", "csv-chase_canada-E-xactBatch", "ach-spiritone", or "PAP"
+I<format> - an L<FS::pay_batch> module
+
+I<gateway> - an L<FS::payment_gateway> object for a batch gateway.  This 
+takes precedence over I<format>.
 
 =cut
 
@@ -207,12 +241,12 @@ sub import_results {
 
   my $param = ref($_[0]) ? shift : { @_ };
   my $fh = $param->{'filehandle'};
+  my $job = $param->{'job'};
+  $job->update_statustext(0) if $job;
+
   my $format = $param->{'format'};
   my $info = $import_info{$format}
     or die "unknown format $format";
-
-  my $job = $param->{'job'};
-  $job->update_statustext(0) if $job;
 
   my $conf = new FS::Conf;
 
@@ -253,10 +287,6 @@ sub import_results {
 
   my $total = 0;
   my $line;
-
-  # Order of operations has been changed here.
-  # We now slurp everything into @all_values, then 
-  # process one line at a time.
 
   if ($filetype eq 'XML') {
     eval "use XML::Simple";
@@ -428,8 +458,12 @@ sub process_import_results {
   my $param = thaw(decode_base64(shift));
   $param->{'job'} = $job;
   warn Dumper($param) if $DEBUG;
-  my $batchnum = delete $param->{'batchnum'} or die "no batchnum specified\n";
-  my $batch = FS::pay_batch->by_key($batchnum) or die "batchnum '$batchnum' not found\n";
+  my $gatewaynum = delete $param->{'gatewaynum'};
+  if ( $gatewaynum ) {
+    $param->{'gateway'} = FS::payment_gateway->by_key($gatewaynum)
+      or die "gatewaynum '$gatewaynum' not found\n";
+    delete $param->{'format'}; # to avoid confusion
+  }
 
   my $file = $param->{'uploaded_files'} or die "no files provided\n";
   $file =~ s/^(\w+):([\.\w]+)$/$2/;
@@ -438,44 +472,404 @@ sub process_import_results {
         '<',
         "$dir/$file" )
       or die "unable to open '$file'.\n";
-  my $error = $batch->import_results($param);
+  
+  my $error;
+  if ( $param->{gateway} ) {
+    $error = FS::pay_batch->import_from_gateway(%$param);
+  } else {
+    my $batchnum = delete $param->{'batchnum'} or die "no batchnum specified\n";
+    my $batch = FS::pay_batch->by_key($batchnum) or die "batchnum '$batchnum' not found\n";
+    $error = $batch->import_results($param);
+  }
   unlink $file;
   die $error if $error;
 }
 
-# Formerly httemplate/misc/download-batch.cgi
-sub export_batch {
-  my $self = shift;
-  my $conf = new FS::Conf;
-  my $format = shift || $conf->config('batch-default_format')
-               or die "No batch format configured\n";
-  my $info = $export_info{$format} or die "Format not found: '$format'\n";
-  &{$info->{'init'}}($conf) if exists($info->{'init'});
+=item import_from_gateway [ OPTIONS ]
 
-  my $curuser = $FS::CurrentUser::CurrentUser;
+Import results from a L<FS::payment_gateway>, using Business::BatchPayment,
+and apply them.  GATEWAY must use the Business::BatchPayment namespace.
+
+This is a class method, since results can be applied to any batch.  
+The 'batch-reconsider' option determines whether an already-approved 
+or declined payment can have its status changed by a later import.
+
+OPTIONS may include:
+
+- gateway: the L<FS::payment_gateway>, required
+- filehandle: a file name or handle to use as a data source.
+- job: an L<FS::queue> object to update with progress messages.
+
+=cut
+
+sub import_from_gateway {
+  my $class = shift;
+  my %opt = @_;
+  my $gateway = $opt{'gateway'};
+  my $conf = FS::Conf->new;
+
+  # unavoidable duplication with import_batch, for now
+  local $SIG{HUP} = 'IGNORE';
+  local $SIG{INT} = 'IGNORE';
+  local $SIG{QUIT} = 'IGNORE';
+  local $SIG{TERM} = 'IGNORE';
+  local $SIG{TSTP} = 'IGNORE';
+  local $SIG{PIPE} = 'IGNORE';
 
   my $oldAutoCommit = $FS::UID::AutoCommit;
   local $FS::UID::AutoCommit = 0;
-  my $dbh = dbh;  
+  my $dbh = dbh;
+
+  my $job = delete($opt{'job'});
+  $job->update_statustext(0) if $job;
+
+  my $total = 0;
+  return "import_from_gateway requires a payment_gateway"
+    unless eval { $gateway->isa('FS::payment_gateway') };
+
+  my %proc_opt = (
+    'input' => $opt{'filehandle'}, # will do nothing if it's empty
+    # any other constructor options go here
+  );
+
+  my @item_errors;
+  my $mail_on_error = $conf->config('batch-errors_to');
+  if ( $mail_on_error ) {
+    # construct error trap
+    $proc_opt{'on_parse_error'} = sub {
+      my ($self, $line, $error) = @_;
+      push @item_errors, "  '$line'\n$error";
+    };
+  }
+
+  my $processor = $gateway->batch_processor(%proc_opt);
+
+  my @batches = $processor->receive;
+
+  my $num = 0;
+
+  my $total_items = sum( map{$_->count} @batches);
+
+  # whether to allow items to change status
+  my $reconsider = $conf->exists('batch-reconsider');
+
+  # mutex all affected batches
+  my %pay_batch_for_update;
+
+  my %bop2payby = (CC => 'CARD', ECHECK => 'CHEK');
+
+  BATCH: foreach my $batch (@batches) {
+
+    my %incoming_batch = (
+      'CARD' => {},
+      'CHEK' => {},
+    );
+
+    ITEM: foreach my $item ($batch->elements) {
+
+      my $cust_pay_batch; # the new batch entry (with status)
+      my $pay_batch; # the freeside batch it belongs to
+      my $payby; # CARD or CHEK
+      my $error;
+
+      # follow realtime gateway practice here
+      # though eventually this stuff should go into separate fields...
+      my $paybatch = $gateway->gatewaynum .  '-' .  $gateway->gateway_module .
+        ':' . $item->authorization .  ':' . $item->order_number;
+
+      if ( $batch->incoming ) {
+        # This is a one-way batch.
+        # Locate the customer, find an open batch correct for them,
+        # create a payment.  Don't bother creating a cust_pay_batch
+        # entry.
+        my $cust_main;
+        if ( defined($item->customer_id) 
+             and $item->customer_id =~ /^\d+$/ 
+             and $item->customer_id > 0 ) {
+
+          $cust_main = FS::cust_main->by_key($item->customer_id)
+                       || qsearchs('cust_main', 
+                         { 'agent_custid' => $item->customer_id }
+                       );
+          if ( !$cust_main ) {
+            push @item_errors, "Unknown customer_id ".$item->customer_id;
+            next ITEM;
+          }
+        }
+        else {
+          push @item_errors, "Illegal customer_id '".$item->customer_id."'";
+          next ITEM;
+        }
+        # it may also make sense to allow selecting the customer by 
+        # invoice_number, but no modules currently work that way
+
+        $payby = $bop2payby{ $item->payment_type };
+        my $agentnum = '';
+        $agentnum = $cust_main->agentnum if $conf->exists('batch-spoolagent');
+
+        # create a batch if necessary
+        $pay_batch = $incoming_batch{$payby}->{$agentnum} ||= 
+          FS::pay_batch->new({
+              status    => 'R', # pre-resolve it
+              payby     => $payby,
+              agentnum  => $agentnum,
+              upload    => time,
+              title     => $batch->batch_id,
+          });
+        if ( !$pay_batch->batchnum ) {
+          $error = $pay_batch->insert;
+          die $error if $error; # can't do anything if this fails
+        }
+
+        if ( !$item->approved ) {
+          $error ||= "payment rejected - ".$item->error_message;
+        }
+        if ( !defined($item->amount) or $item->amount <= 0 ) {
+          $error ||= "no amount in item $num";
+        }
+
+        my $payinfo;
+        if ( $item->check_number ) {
+          $payby = 'BILL'; # right?
+          $payinfo = $item->check_number;
+        } elsif ( $item->assigned_token ) {
+          $payinfo = $item->assigned_token;
+        }
+        # create the payment
+        my $cust_pay = FS::cust_pay->new(
+          {
+            custnum     => $cust_main->custnum,
+            _date       => $item->payment_date->epoch,
+            paid        => sprintf('%.2f',$item->amount),
+            payby       => $payby,
+            invnum      => $item->invoice_number,
+            batchnum    => $pay_batch->batchnum,
+            paybatch    => $paybatch,
+            payinfo     => $payinfo,
+          }
+        );
+        $error ||= $cust_pay->insert;
+        eval { $cust_main->apply_payments };
+        $error ||= $@;
+
+        if ( $error ) {
+          push @item_errors, 'Payment for customer '.$item->customer_id."\n$error";
+        }
+
+      } else {
+        # This is a request/reply batch.
+        # Locate the request (the 'tid' attribute is the paybatchnum).
+        my $paybatchnum = $item->tid;
+        $cust_pay_batch = FS::cust_pay_batch->by_key($paybatchnum);
+        if (!$cust_pay_batch) {
+          push @item_errors, "paybatchnum $paybatchnum not found";
+          next ITEM;
+        }
+        $payby = $cust_pay_batch->payby;
+
+        my $batchnum = $cust_pay_batch->batchnum;
+        if ( $batch->batch_id and $batch->batch_id != $batchnum ) {
+          warn "batch ID ".$batch->batch_id.
+                " does not match batchnum ".$cust_pay_batch->batchnum."\n";
+        }
+
+        # lock the batch and check its status
+        $pay_batch = FS::pay_batch->by_key($batchnum);
+        $pay_batch_for_update{$batchnum} ||= $pay_batch->select_for_update;
+        if ( $pay_batch->status ne 'I' and !$reconsider ) {
+          $error = "batch $batchnum no longer in transit";
+        }
+
+        if ( $cust_pay_batch->status ) {
+          my $new_status = $item->approved ? 'approved' : 'declined';
+          if ( lc( $cust_pay_batch->status ) eq $new_status ) {
+            # already imported with this status, so don't touch
+            next ITEM;
+          }
+          elsif ( !$reconsider ) {
+            # then we're not allowed to change its status, so bail out
+            $error = "paybatchnum ".$item->tid.
+            " already resolved with status '". $cust_pay_batch->status . "'";
+          }
+        }
+
+        if ( $error ) {        
+          push @item_errors, "Payment for customer ".$cust_pay_batch->custnum."\n$error";
+          next ITEM;
+        }
+
+        my $new_payinfo;
+        # update payinfo, if needed
+        if ( $item->assigned_token ) {
+          $new_payinfo = $item->assigned_token;
+        } elsif ( $payby eq 'CARD' ) {
+          $new_payinfo = $item->card_number if $item->card_number;
+        } else { #$payby eq 'CHEK'
+          $new_payinfo = $item->account_number . '@' . $item->routing_code
+            if $item->account_number;
+        }
+        $cust_pay_batch->set('payinfo', $new_payinfo) if $new_payinfo;
+
+        # set "paid" pseudo-field (transfers to cust_pay) to the actual amount
+        # paid, if the batch says it's different from the amount requested
+        if ( defined $item->amount ) {
+          $cust_pay_batch->set('paid', $item->amount);
+        } else {
+          $cust_pay_batch->set('paid', $cust_pay_batch->amount);
+        }
+
+        # set payment date to when it was processed
+        $cust_pay_batch->_date($item->payment_date->epoch)
+          if $item->payment_date;
+
+        # approval status
+        if ( $item->approved ) {
+          # follow Billing_Realtime format for paybatch
+          $error = $cust_pay_batch->approve($paybatch);
+          $total += $cust_pay_batch->paid;
+        }
+        else {
+          $error = $cust_pay_batch->decline($item->error_message);
+        }
+
+        if ( $error ) {        
+          push @item_errors, "Payment for customer ".$cust_pay_batch->custnum."\n$error";
+          next ITEM;
+        }
+      } # $batch->incoming
+
+      $num++;
+      $job->update_statustext(int(100 * $num/( $total_items ) ),
+        'Importing batch items')
+      if $job;
+
+    } #foreach $item
+
+  } #foreach $batch (input batch, not pay_batch)
+
+  # Format an error message
+  if ( @item_errors ) {
+    my $error_text = join("\n\n", 
+      "Errors during batch import: ".scalar(@item_errors),
+      @item_errors
+    );
+    if ( $mail_on_error ) {
+      my $subject = "Batch import errors"; #?
+      my $body = "Import from gateway ".$gateway->label."\n".$error_text;
+      send_email(
+        to      => $mail_on_error,
+        from    => $conf->config('invoice_from'),
+        subject => $subject,
+        body    => $body,
+      );
+    } else {
+      # Bail out.
+      $dbh->rollback if $oldAutoCommit;
+      die $error_text;
+    }
+  }
+
+  # Auto-resolve (with brute-force error handling)
+  foreach my $pay_batch (values %pay_batch_for_update) {
+    my $error = $pay_batch->try_to_resolve;
+
+    if ( $error ) {
+      $dbh->rollback if $oldAutoCommit;
+      return $error;
+    }
+  }
+
+  $dbh->commit if $oldAutoCommit;
+  return;
+}
+
+=item try_to_resolve
+
+Resolve this batch if possible.  A batch can be resolved if all of its
+entries have status.  If the system options 'batch-auto_resolve_days'
+and 'batch-auto_resolve_status' are set, and the batch's download date is
+at least (batch-auto_resolve_days) before the current time, then it can
+be auto-resolved; entries with no status will be approved or declined 
+according to the batch-auto_resolve_status setting.
+
+=cut
+
+sub try_to_resolve {
+  my $self = shift;
+  my $conf = FS::Conf->new;;
+
+  return if $self->status ne 'I';
+
+  my @unresolved = qsearch('cust_pay_batch',
+    {
+      batchnum => $self->batchnum,
+      status   => ''
+    }
+  );
+
+  if ( @unresolved and $conf->exists('batch-auto_resolve_days') ) {
+    my $days = $conf->config('batch-auto_resolve_days'); # can be zero
+    # either 'approve' or 'decline'
+    my $action = $conf->config('batch-auto_resolve_status') || '';
+    return unless 
+      length($days) and 
+      length($action) and
+      time > ($self->download + 86400 * $days)
+      ;
+
+    my $error;
+    foreach my $cpb (@unresolved) {
+      if ( $action eq 'approve' ) {
+        # approve it for the full amount
+        $cpb->set('paid', $cpb->amount) unless ($cpb->paid || 0) > 0;
+        $error = $cpb->approve($self->batchnum);
+      }
+      elsif ( $action eq 'decline' ) {
+        $error = $cpb->decline('No response from processor');
+      }
+      return $error if $error;
+    }
+  }
+
+  $self->set_status('R');
+}
+
+=item prepare_for_export
+
+Prepare the batch to be exported.  This will:
+- Set the status to "in transit".
+- If batch-increment_expiration is set and this is a credit card batch,
+  increment expiration dates that are in the past.
+- If this is the first download for this batch, adjust payment amounts to 
+  not be greater than the customer's current balance.  If the customer's 
+  balance is zero, the entry will be removed.
+
+Use this within a transaction.
+
+=cut
+
+sub prepare_for_export {
+  my $self = shift;
+  my $conf = FS::Conf->new;
+  my $curuser = $FS::CurrentUser::CurrentUser;
 
   my $first_download;
   my $status = $self->status;
   if ($status eq 'O') {
     $first_download = 1;
     my $error = $self->set_status('I');
-    die "error updating pay_batch status: $error\n" if $error;
+    return "error updating pay_batch status: $error\n" if $error;
   } elsif ($status eq 'I' && $curuser->access_right('Reprocess batches')) {
+    $first_download = 0;
+  } elsif ($status eq 'R' && 
+           $curuser->access_right('Redownload resolved batches')) {
     $first_download = 0;
   } else {
     die "No pending batch.\n";
   }
 
-  my $batch = '';
-  my $batchtotal = 0;
-  my $batchcount = 0;
-
-  my @cust_pay_batch = sort { $a->paybatchnum <=> $b->paybatchnum }
-                      qsearch('cust_pay_batch', { batchnum => $self->batchnum } );
+  my @cust_pay_batch = sort { $a->paybatchnum <=> $b->paybatchnum } 
+                       $self->cust_pay_batch;
   
   # handle batch-increment_expiration option
   if ( $self->payby eq 'CARD' ) {
@@ -487,39 +881,75 @@ sub export_batch {
         $year++ while( $year < $cyear or ($year == $cyear and $mon <= $cmon) );
         $_->exp( sprintf('%4u-%02u-%02u', $year + 1900, $mon+1, $day) );
       }
-      $_->setfield('expmmyy', sprintf('%02u%02u', $mon+1, $year % 100));
+      my $error = $_->replace;
+      return $error if $error;
     }
   }
 
   if ($first_download) { #remove or reduce entries if customer's balance changed
 
-    my @new = ();
     foreach my $cust_pay_batch (@cust_pay_batch) {
 
       my $balance = $cust_pay_batch->cust_main->balance;
       if ($balance <= 0) { # then don't charge this customer
         my $error = $cust_pay_batch->delete;
-        if ( $error ) {
-          $dbh->rollback or die $dbh->errstr if $oldAutoCommit;
-          die $error;
-        }
-        next;
+        return $error if $error;
       } elsif ($balance < $cust_pay_batch->amount) {
         # reduce the charge to the remaining balance
         $cust_pay_batch->amount($balance);
         my $error = $cust_pay_batch->replace;
-        if ( $error ) {
-          $dbh->rollback or die $dbh->errstr if $oldAutoCommit;
-          die $error;
-        }
+        return $error if $error;
       }
       # else $balance >= $cust_pay_batch->amount
-
-      push @new, $cust_pay_batch;
     }
-    @cust_pay_batch = @new;
+  } #if $first_download
 
+  '';
+}
+
+=item export_batch [ format => FORMAT | gateway => GATEWAY ]
+
+Export batch for processing.  FORMAT is the name of an L<FS::pay_batch> 
+module, in which case the configuration options are in 'batchconfig-FORMAT'.
+
+Alternatively, GATEWAY can be an L<FS::payment_gateway> object set to a
+L<Business::BatchPayment> module.
+
+=cut
+
+sub export_batch {
+  my $self = shift;
+  my %opt = @_;
+
+  my $conf = new FS::Conf;
+  my $batch;
+
+  my $gateway = $opt{'gateway'};
+  if ( $gateway ) {
+    # welcome to the future
+    my $fh = IO::Scalar->new(\$batch);
+    $self->export_to_gateway($gateway, 'file' => $fh);
+    return $batch;
   }
+
+  my $format = $opt{'format'} || $conf->config('batch-default_format')
+    or die "No batch format configured\n";
+
+  my $info = $export_info{$format} or die "Format not found: '$format'\n";
+
+  &{$info->{'init'}}($conf) if exists($info->{'init'});
+
+  my $oldAutoCommit = $FS::UID::AutoCommit;
+  local $FS::UID::AutoCommit = 0;
+  my $dbh = dbh;  
+
+  my $error = $self->prepare_for_export;
+
+  die $error if $error;
+  my $batchtotal = 0;
+  my $batchcount = 0;
+
+  my @cust_pay_batch = $self->cust_pay_batch;
 
   my $delim = exists($info->{'delimiter'}) ? $info->{'delimiter'} : "\n";
 
@@ -534,8 +964,8 @@ sub export_batch {
     $batchcount++;
     $batchtotal += $cust_pay_batch->amount;
     $batch .=
-      &{$info->{'row'}}($cust_pay_batch, $self, $batchcount, $batchtotal).
-      $delim;
+    &{$info->{'row'}}($cust_pay_batch, $self, $batchcount, $batchtotal).
+    $delim;
   }
 
   my $f = $info->{'footer'};
@@ -555,6 +985,43 @@ sub export_batch {
 
   $dbh->commit or die $dbh->errstr if $oldAutoCommit;
   return $batch;
+}
+
+=item export_to_gateway GATEWAY OPTIONS
+
+Given L<FS::payment_gateway> GATEWAY, export the items in this batch to 
+that gateway via Business::BatchPayment. OPTIONS may include:
+
+- file: override the default transport and write to this file (name or handle)
+
+=cut
+
+sub export_to_gateway {
+
+  my ($self, $gateway, %opt) = @_;
+  
+  my $oldAutoCommit = $FS::UID::AutoCommit;
+  local $FS::UID::AutoCommit = 0;
+  my $dbh = dbh;  
+
+  my $error = $self->prepare_for_export;
+  die $error if $error;
+
+  my %proc_opt = (
+    'output' => $opt{'file'}, # will do nothing if it's empty
+    # any other constructor options go here
+  );
+  my $processor = $gateway->batch_processor(%proc_opt);
+
+  my @items = map { $_->request_item } $self->cust_pay_batch;
+  my $batch = Business::BatchPayment->create(Batch =>
+    batch_id  => $self->batchnum,
+    items     => \@items
+  );
+  $processor->submit($batch);
+
+  $dbh->commit or die $dbh->errstr if $oldAutoCommit;
+  '';
 }
 
 sub manual_approve {
@@ -601,6 +1068,61 @@ sub manual_approve {
   $self->set_status('R');
   $dbh->commit;
   return;
+}
+
+sub _upgrade_data {
+  # Set up configuration for gateways that have a Business::BatchPayment
+  # module.
+  
+  eval "use Class::MOP;";
+  if ( $@ ) {
+    warn "Moose/Class::MOP not available.\n$@\nSkipping pay_batch upgrade.\n";
+    return;
+  }
+  my $conf = FS::Conf->new;
+  for my $format (keys %export_info) {
+    my $mod = "FS::pay_batch::$format";
+    if ( $mod->can('_upgrade_gateway') 
+        and $conf->exists("batchconfig-$format") ) {
+
+      local $@;
+      my ($module, %gw_options) = $mod->_upgrade_gateway;
+      my $gateway = FS::payment_gateway->new({
+          gateway_namespace => 'Business::BatchPayment',
+          gateway_module    => $module,
+      });
+      my $error = $gateway->insert(%gw_options);
+      if ( $error ) {
+        warn "Failed to migrate '$format' to a Business::BatchPayment::$module gateway:\n$error\n";
+        next;
+      }
+
+      # test whether it loads
+      my $processor = eval { $gateway->batch_processor };
+      if ( !$processor ) {
+        warn "Couldn't load Business::BatchPayment module for '$format'.\n";
+        # if not, remove it so it doesn't hang around and break things
+        $gateway->delete;
+      }
+      else {
+        # remove the batchconfig-*
+        warn "Created Business::BatchPayment gateway '".$gateway->label.
+             "' for '$format' batch processing.\n";
+        $conf->delete("batchconfig-$format");
+
+        # and if appropriate, make it the system default
+        for my $payby (qw(CARD CHEK)) {
+          if ( ($conf->config("batch-fixed_format-$payby") || '') eq $format ) {
+            warn "Setting as default for $payby.\n";
+            $conf->set("batch-gateway-$payby", $gateway->gatewaynum);
+            $conf->delete("batch-fixed_format-$payby");
+          }
+        }
+      } # if $processor
+    } #if can('_upgrade_gateway') and batchconfig-$format
+  } #for $format
+
+  '';
 }
 
 =back

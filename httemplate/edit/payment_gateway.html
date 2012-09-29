@@ -6,11 +6,12 @@
             'field_callback' => $field_callback,
             'labels'         => {
                                   'gatewaynum'           => 'Gateway',
+                                  'gateway_namespace'    => 'Gateway type',
                                   'gateway_module'       => 'Gateway',
                                   'gateway_username'     => 'Username',
                                   'gateway_password'     => 'Password',
                                   'gateway_action'       => 'Action',
-                                  'gateway_options'      => 'Options: (Name/Value pairs, one element per line)',
+                                  'gateway_options'      => 'Options (Name/Value pairs, <BR>one element per line)',
                                   'gateway_callback_url' => 'Callback URL',
                                 },
           )
@@ -18,18 +19,17 @@
 
 
 <SCRIPT TYPE="text/javascript">
-  var gatewayNamespace = new Array;
-
-% foreach my $module ( sort { lc($a) cmp lc ($b) } keys %modules ) {
-    gatewayNamespace.push('<% $modules{$module} %>')
-% } 
-
-  // document.getElementById('gateway_namespace').value = gatewayNamespace[0];
-  function setNamespace(what) {
-    document.getElementById('gateway_namespace').value =
-      gatewayNamespace[what.selectedIndex];
+  var modulesForNamespace = <% to_json(\%modules_for_namespace, {canonical=>1}) %>;
+  function changeNamespace(what) {
+    var ns = what.value;
+    var select_module = document.getElementById('gateway_module');
+    select_module.options.length = 0;
+    for (var x in modulesForNamespace[ns]) {
+      var o = document.createElement('option');
+      o.value = o.text = modulesForNamespace[ns][x];
+      select_module.add(o, null);
+    }
   }
-
 </SCRIPT>
 
 <%init>
@@ -88,7 +88,17 @@ my %modules =  (
   'VirtualNet'            => 'Business::OnlinePayment',
   'WesternACH'            => 'Business::OnlinePayment',
   'WorldPay'              => 'Business::OnlinePayment',
-); 
+
+  'KeyBank'               => 'Business::BatchPayment',
+  'Paymentech'            => 'Business::BatchPayment',
+  'TD_EFT'                => 'Business::BatchPayment',
+);
+
+my %modules_for_namespace;
+for (keys %modules) {
+  $modules_for_namespace{$modules{$_}} ||= [];
+  push @{ $modules_for_namespace{$modules{$_}} }, $_;
+}
 
 my @actions = (
                 'Normal Authorization',
@@ -99,17 +109,23 @@ my @actions = (
 my $fields = [
                {
                  field               => 'gateway_namespace',
-                 type                => 'hidden',
-                 curr_value_callback => sub { my($cgi, $object, $fref) = @_;
-                                              $modules{$object->gateway_module}
-                                              || 'Business::OnlinePayment'
-                                            },
+                 type                => 'select',
+                 options             => [ qw(
+                   Business::OnlinePayment
+                   Business::BatchPayment
+                   Business::OnlineThirdPartyPayment
+                 ) ],
+                 labels       => {
+                   'Business::OnlinePayment' => 'Direct',
+                   'Business::BatchPayment'  => 'Batch',
+                   'Business::OnlineThirdPartyPayment'  => 'Hosted',
+                 },
+                 onchange => 'changeNamespace',
                },
                {
                  field    => 'gateway_module',
                  type     => 'select',
                  options  => [ sort { lc($a) cmp lc ($b) } keys %modules ],
-                 onchange => 'setNamespace',
                },
                'gateway_username',
                'gateway_password',
@@ -126,6 +142,8 @@ my $fields = [
                {
                  field               => 'gateway_options',
                  type                => 'textarea',
+                 rows                => '12',
+                 cols                => '40', 
                  curr_value_callback => sub { my($cgi, $object, $fref) = @_;
                                               join("\r", $object->options );
                                             },
@@ -135,7 +153,7 @@ my $fields = [
 my $field_callback = sub {
   my ($cgi, $object, $field_hashref ) = @_;
   if ($object->gatewaynum) {
-    if ( $field_hashref->{field} eq 'gateway_module' ) {
+    if ( $field_hashref->{field} =~ /gateway_(module|namespace)/ ) {
       $field_hashref->{type} = 'fixed';
     }
   }

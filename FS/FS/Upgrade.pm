@@ -4,6 +4,7 @@ use strict;
 use vars qw( @ISA @EXPORT_OK $DEBUG );
 use Exporter;
 use Tie::IxHash;
+use File::Slurp;
 use FS::UID qw( dbh driver_name );
 use FS::Conf;
 use FS::Record qw(qsearchs qsearch str2time_sql);
@@ -63,7 +64,26 @@ sub upgrade_config {
 
   upgrade_overlimit_groups($conf);
   map { upgrade_overlimit_groups($conf,$_->agentnum) } qsearch('agent', {});
-  
+
+  my $DIST_CONF = '/usr/local/etc/freeside/default_conf/';#DIST_CONF in Makefile
+  $conf->set($_, scalar(read_file( "$DIST_CONF/$_" )) )
+    foreach grep { ! $conf->exists($_) && -s "$DIST_CONF/$_" }
+      qw( quotation_html quotation_latex quotation_latexnotes );
+
+  # change 'fslongtable' to 'longtable'
+  # in invoice and quotation main templates, and also in all secondary 
+  # invoice templates
+  my @latex_confs =
+    qsearch('conf', { 'name' => {op=>'LIKE', value=>'%latex%'} });
+
+  foreach my $c (@latex_confs) {
+    my $value = $c->value;
+    if (length($value) and $value =~ /fslongtable/) {
+      $value =~ s/fslongtable/longtable/g;
+      $conf->set($c->name, $value, $c->agentnum);
+    }
+  }
+
 }
 
 sub upgrade_overlimit_groups {
@@ -269,6 +289,15 @@ sub upgrade_data {
 
     #routernum/blocknum
     'svc_broadband' => [],
+
+    #set up payment gateways if needed
+    'pay_batch' => [],
+
+    #flag monthly tax exemptions
+    'cust_tax_exempt_pkg' => [],
+
+    #kick off tax location history upgrade
+    'cust_bill_pkg' => [],
   ;
 
   \%hash;

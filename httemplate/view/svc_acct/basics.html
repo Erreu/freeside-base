@@ -1,6 +1,9 @@
 <% &ntable("#cccccc") %><TR><TD><% &ntable("#cccccc",2) %>
 
 <& /view/elements/tr.html, label=>mt('Service'),  value=>$part_svc->svc &>
+% if ( $opt{cust_svc}->agent_svcid ) {
+  <& /view/elements/tr.html, label=>mt('Legacy ID'),  value=>$opt{cust_svc}->agent_svcid &>
+% }
 <& /view/elements/tr.html, label=>mt('Username'), value=>$svc_acct->username &>
 <& /view/elements/tr.html, label=>mt('Domain'),   value=>$domain &>
 
@@ -52,6 +55,11 @@
         value => $link. $tower_sector->description. ($link ? '</A>' : ''),
     &>
 % }
+
+<& /view/elements/tr-svc_export_machine.html,
+     'svc'      => $svc_acct,
+     'part_svc' => $part_svc,
+&>
 
 % if ($svc_acct->uid ne '') { 
   <& /view/elements/tr.html, label=>mt('UID'), value=>$svc_acct->uid &>

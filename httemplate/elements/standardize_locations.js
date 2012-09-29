@@ -7,7 +7,7 @@ function form_address_info() {
     'onlyship': 1,
 % } else {
 %   if ( $withfirm ) {
-    'company':  cf.elements['<% $main_prefix %>company'].value,
+    'company',  cf.elements['company'].value,
 %   }
     'address1': cf.elements['<% $main_prefix %>address1'].value,
     'address2': cf.elements['<% $main_prefix %>address2'].value,
@@ -15,9 +15,6 @@ function form_address_info() {
     'state':    state_el.options[ state_el.selectedIndex ].value,
     'zip':      cf.elements['<% $main_prefix %>zip'].value,
     'country':  cf.elements['<% $main_prefix %>country'].value,
-% }
-% if ( $withfirm ) {
-    'ship_company':  cf.elements['<% $ship_prefix %>company'].value,
 % }
 % if ( $withcensus ) {
     'ship_censustract': cf.elements['enter_censustract'].value,

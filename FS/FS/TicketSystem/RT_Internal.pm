@@ -50,7 +50,7 @@ sub access_right {
 sub session {
   my( $self, $session ) = @_;
 
-  if ( $session && $session->{'Current_User'} ) { # does this even work?
+  if ( $session && $session->{'CurrentUser'} ) { # does this even work?
     warn "$me session: using existing session and CurrentUser: \n".
          Dumper($session->{'CurrentUser'})
       if $DEBUG;
@@ -92,6 +92,7 @@ sub init {
   # this needs to be done on each fork
   warn "$me init: initializing RT\n" if $DEBUG;
   {
+    local $SIG{__WARN__};
     local $SIG{__DIE__};
     eval 'RT::Init("NoSignalHandlers"=>1);';
   }
@@ -107,10 +108,13 @@ properly.
 
 =cut
 
-sub _customer_tickets_search {
-  my ( $self, $custnum, $limit, $priority ) = @_;
+# create an RT::Tickets object for a specified custnum or svcnum
 
-  $custnum =~ /^\d+$/ or die "invalid custnum: $custnum";
+sub _tickets_search {
+  my ( $self, $type, $number, $limit, $priority ) = @_;
+
+  $type =~ /^Customer|Service$/ or die "invalid type: $type";
+  $number =~ /^\d+$/ or die "invalid custnum/svcnum: $number";
   $limit =~ /^\d+$/ or die "invalid limit: $limit";
 
   my $session = $self->session();
@@ -119,7 +123,8 @@ sub _customer_tickets_search {
 
   my $Tickets = RT::Tickets->new($CurrentUser);
 
-  my $rtql = "MemberOf = 'freeside://freeside/cust_main/$custnum'";
+  # "Customer.number" searches tickets linked via cust_svc also
+  my $rtql = "$type.number = $number";
 
   if ( defined( $priority ) ) {
     my $custom_priority = FS::Conf->new->config('ticket_system-custom_priority_field');
@@ -144,8 +149,25 @@ sub _customer_tickets_search {
   return $Tickets;
 }
 
+sub href_customer_tickets {
+  my ($self, $custnum) = (shift, shift);
+  if ($custnum =~ /^(\d+)$/) {
+    return $self->href_search_tickets("Customer.number = $custnum", @_);
+  }
+  warn "bad custnum $custnum"; '';
+}
+
+sub href_service_tickets {
+  my ($self, $svcnum) = (shift, shift);
+  if ($svcnum =~ /^(\d+)$/ ) {
+    return $self->href_search_tickets("Service.number = $svcnum", @_);
+  }
+  warn "bad svcnum $svcnum"; '';
+}
+
 sub customer_tickets {
-  my $Tickets = _customer_tickets_search(@_);
+  my $self = shift;
+  my $Tickets = $self->_tickets_search('Customer', @_);
 
   my $conf = FS::Conf->new;
   my $priority_order =
@@ -168,8 +190,30 @@ sub customer_tickets {
 
 sub num_customer_tickets {
   my ( $self, $custnum, $priority ) = @_;
-  my $Tickets = $self->_customer_tickets_search($custnum, 0, $priority);
-  return $Tickets->CountAll;
+  $self->_tickets_search('Customer', $custnum, 0, $priority)->CountAll;
+}
+
+sub service_tickets  {
+  my $self = shift;
+  my $Tickets = $self->_tickets_search('Service', @_);
+
+  my $conf = FS::Conf->new;
+  my $priority_order =
+    $conf->exists('ticket_system-priority_reverse') ? 'ASC' : 'DESC';
+
+  my @order_by = (
+    { FIELD => 'Priority', ORDER => $priority_order },
+    { FIELD => 'Id',       ORDER => 'DESC' },
+  );
+
+  $Tickets->OrderByCols(@order_by);
+
+  my @tickets;
+  while ( my $t = $Tickets->Next ) {
+    push @tickets, _ticket_info($t);
+  }
+
+  return \@tickets;
 }
 
 sub _ticket_info {
@@ -200,6 +244,12 @@ sub _ticket_info {
   if ( $ss_priority ) {
     $ticket_info{'_selfservice_priority'} = $ticket_info{"CF.{$ss_priority}"};
   }
+  my $svcnums = [ 
+    map { $_->Target =~ /cust_svc\/(\d+)/; $1 } 
+        @{ $t->Services->ItemsArrayRef }
+  ];
+  $ticket_info{'svcnums'} = $svcnums;
+
   return \%ticket_info;
 }
 

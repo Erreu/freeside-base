@@ -13,6 +13,7 @@ use FS::payby;
 use FS::conf;
 use FS::Record qw(qsearch qsearchs);
 use FS::UID qw(dbh datasrc use_confcompat);
+use FS::Misc::Invoicing qw( spool_formats );
 use FS::Misc::Geo;
 
 $base_dir = '%%%FREESIDE_CONF%%%';
@@ -183,12 +184,60 @@ sub exists {
   my $self = shift;
   return $self->_usecompat('exists', @_) if use_confcompat;
 
-  my($name, $agentnum)=@_;
+  #my($name, $agentnum)=@_;
 
   carp "FS::Conf->exists(". join(', ', @_). ") called"
     if $DEBUG > 1;
 
   defined($self->_config(@_));
+}
+
+#maybe this should just be the new exists instead of getting a method of its
+#own, but i wanted to avoid possible fallout
+
+sub config_bool {
+  my $self = shift;
+  return $self->_usecompat('exists', @_) if use_confcompat;
+
+  my($name,$agentnum,$agentonly) = @_;
+
+  carp "FS::Conf->config_bool(". join(', ', @_). ") called"
+    if $DEBUG > 1;
+
+  #defined($self->_config(@_));
+
+  #false laziness w/_config
+  my $hashref = { 'name' => $name };
+  local $FS::Record::conf = undef;  # XXX evil hack prevents recursion
+  my $cv;
+  my @a = (
+    ($agentnum || ()),
+    ($agentonly && $agentnum ? () : '')
+  );
+  my @l = (
+    ($self->{locale} || ()),
+    ($self->{localeonly} && $self->{locale} ? () : '')
+  );
+  # try with the agentnum first, then fall back to no agentnum if allowed
+  foreach my $a (@a) {
+    $hashref->{agentnum} = $a;
+    foreach my $l (@l) {
+      $hashref->{locale} = $l;
+      $cv = FS::Record::qsearchs('conf', $hashref);
+      if ( $cv ) {
+        if ( $cv->value eq '0'
+               && ($hashref->{agentnum} || $hashref->{locale} )
+           ) 
+        {
+          return 0; #an explicit false override, don't continue looking
+        } else {
+          return 1;
+        }
+      }
+    }
+  }
+  return 0;
+
 }
 
 =item config_orbase KEY SUFFIX
@@ -269,8 +318,13 @@ sub touch {
   return $self->_usecompat('touch', @_) if use_confcompat;
 
   my($name, $agentnum) = @_;
-  unless ( $self->exists($name, $agentnum) ) {
-    $self->set($name, '', $agentnum);
+  #unless ( $self->exists($name, $agentnum) ) {
+  unless ( $self->config_bool($name, $agentnum) ) {
+    if ( $agentnum && $self->exists($name) && $self->config($name,$agentnum) eq '0' ) {
+      $self->delete($name, $agentnum);
+    } else {
+      $self->set($name, '', $agentnum);
+    }
   }
 }
 
@@ -355,6 +409,31 @@ sub delete {
     $dbh->commit or die $dbh->errstr if $oldAutoCommit;
 
   }
+}
+
+#maybe this should just be the new delete instead of getting a method of its
+#own, but i wanted to avoid possible fallout
+
+sub delete_bool {
+  my $self = shift;
+  return $self->_usecompat('delete', @_) if use_confcompat;
+
+  my($name, $agentnum) = @_;
+
+  warn "[FS::Conf] DELETE $name\n" if $DEBUG;
+
+  my $cv = FS::Record::qsearchs('conf', { name     => $name,
+                                          agentnum => $agentnum,
+                                          locale   => $self->{locale},
+                                        });
+
+  if ( $cv ) {
+    my $error = $cv->delete;
+    die $error if $error;
+  } elsif ( $agentnum ) {
+    $self->set($name, '0', $agentnum);
+  }
+
 }
 
 =item import_config_item CONFITEM DIR 
@@ -611,12 +690,6 @@ my %msg_template_options = (
   'per_agent' => 1,
 );
 
-my $_gateway_name = sub {
-  my $g = shift;
-  return '' if !$g;
-  ($g->gateway_username . '@' . $g->gateway_module);
-};
-
 my %payment_gateway_options = (
   'type'        => 'select-sub',
   'options_sub' => sub {
@@ -624,11 +697,24 @@ my %payment_gateway_options = (
         'table' => 'payment_gateway',
         'hashref' => { 'disabled' => '' },
       });
-    map { $_->gatewaynum, $_gateway_name->($_) } @gateways;
+    map { $_->gatewaynum, $_->label } @gateways;
   },
   'option_sub'  => sub {
     my $gateway = FS::payment_gateway->by_key(shift);
-    $_gateway_name->($gateway);
+    $gateway ? $gateway->label : ''
+  },
+);
+
+my %batch_gateway_options = (
+  %payment_gateway_options,
+  'options_sub' => sub {
+    my @gateways = qsearch('payment_gateway',
+      {
+        'disabled'          => '',
+        'gateway_namespace' => 'Business::BatchPayment',
+      }
+    );
+    map { $_->gatewaynum, $_->label } @gateways;
   },
 );
 
@@ -749,6 +835,13 @@ sub reason_type_options {
     'key'         => 'cust_main-select-billday',
     'section'     => 'billing',
     'description' => 'When used with a specific billing event, allows the selection of the day of month on which to charge credit card / bank account automatically, on a per-customer basis',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'cust_main-select-prorate_day',
+    'section'     => 'billing',
+    'description' => 'When used with prorate or anniversary packages, allows the selection of the prorate day of month, on a per-customer basis',
     'type'        => 'checkbox',
   },
 
@@ -881,6 +974,13 @@ sub reason_type_options {
     'description' => 'Currency parameter for Business::OnlinePayment transactions.',
     'type'        => 'select',
     'select_enum' => [ '', qw( USD AUD CAD DKK EUR GBP ILS JPY NZD ) ],
+  },
+
+  {
+    'key'         => 'business-batchpayment-test_transaction',
+    'section'     => 'billing',
+    'description' => 'Turns on the Business::BatchPayment test_mode flag.  Note that not all gateway modules support this flag; if yours does not, using the batch gateway will fail.',
+    'type'        => 'checkbox',
   },
 
   {
@@ -1104,7 +1204,15 @@ sub reason_type_options {
   {
     'key'         => 'invoice_html',
     'section'     => 'invoicing',
-    'description' => 'Optional HTML template for invoices.  See the <a href="http://www.freeside.biz/mediawiki/index.php/Freeside:2.1:Documentation:Administration#HTML_invoice_templates">billing documentation</a> for details.',
+    'description' => 'HTML template for invoices.  See the <a href="http://www.freeside.biz/mediawiki/index.php/Freeside:2.1:Documentation:Administration#HTML_invoice_templates">billing documentation</a> for details.',
+
+    'type'        => 'textarea',
+  },
+
+  {
+    'key'         => 'quotation_html',
+    'section'     => '',
+    'description' => 'HTML template for quotations.',
 
     'type'        => 'textarea',
   },
@@ -1148,6 +1256,13 @@ sub reason_type_options {
     'key'         => 'invoice_latex',
     'section'     => 'invoicing',
     'description' => 'Optional LaTeX template for typeset PostScript invoices.  See the <a href="http://www.freeside.biz/mediawiki/index.php/Freeside:2.1:Documentation:Administration#Typeset_.28LaTeX.29_invoice_templates">billing documentation</a> for details.',
+    'type'        => 'textarea',
+  },
+
+  {
+    'key'         => 'quotation_latex',
+    'section'     => '',
+    'description' => 'LaTeX template for typeset PostScript quotations.',
     'type'        => 'textarea',
   },
 
@@ -1210,6 +1325,15 @@ and customer address. Include units.',
   },
 
   {
+    'key'         => 'quotation_latexnotes',
+    'section'     => '',
+    'description' => 'Notes section for LaTeX typeset PostScript quotations.',
+    'type'        => 'textarea',
+    'per_agent'   => 1,
+    'per_locale'  => 1,
+  },
+
+  {
     'key'         => 'invoice_latexfooter',
     'section'     => 'invoicing',
     'description' => 'Footer for LaTeX typeset PostScript invoices.',
@@ -1239,7 +1363,7 @@ and customer address. Include units.',
   {
     'key'         => 'invoice_latexextracouponspace',
     'section'     => 'invoicing',
-    'description' => 'Optional LaTeX invoice textheight space to reserve for a tear off coupon. Include units.',
+    'description' => 'Optional LaTeX invoice textheight space to reserve for a tear off coupon.  Include units.  Default is 3.6cm',
     'type'        => 'text',
     'per_agent'   => 1,
     'validate'    => sub { shift =~
@@ -1420,6 +1544,7 @@ and customer address. Include units.',
     'description' => 'Send payment receipts.',
     'type'        => 'checkbox',
     'per_agent'   => 1,
+    'agent_bool'  => 1,
   },
 
   {
@@ -1846,10 +1971,25 @@ and customer address. Include units.',
   },
 
   {
+    'key'         => 'unmask_ss',
+    'section'     => 'UI',
+    'description' => "Don't mask social security numbers in the web interface.",
+    'type'        => 'checkbox',
+  },
+
+  {
     'key'         => 'show_stateid',
     'section'     => 'UI',
     'description' => "Turns on display/collection of driver's license/state issued id numbers in the web interface.  Sometimes required by electronic check (ACH) processors.",
     'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'national_id-country',
+    'section'     => 'UI',
+    'description' => 'Track a national identification number, for specific countries.',
+    'type'        => 'select',
+    'select_enum' => [ '', 'MY' ],
   },
 
   {
@@ -2413,8 +2553,9 @@ and customer address. Include units.',
   {
     'key'         => 'manual_process-pkgpart',
     'section'     => 'billing',
-    'description' => 'Package to add to each manual credit card and ACH payments entered from the backend.  Enabling this option may be in violation of your merchant agreement(s), so please check them carefully before enabling this option.',
+    'description' => 'Package to add to each manual credit card and ACH payment entered by employees from the backend.  Enabling this option may be in violation of your merchant agreement(s), so please check it(/them) carefully before enabling this option.',
     'type'        => 'select-part_pkg',
+    'per_agent'   => 1,
   },
 
   {
@@ -2434,6 +2575,57 @@ and customer address. Include units.',
     'description' => "When using manual_process-pkgpart, omit the fee if it is the customer's first payment.",
     'type'        => 'checkbox',
   },
+
+  {
+    'key'         => 'selfservice_process-pkgpart',
+    'section'     => 'billing',
+    'description' => 'Package to add to each manual credit card and ACH payment entered by the customer themselves in the self-service interface.  Enabling this option may be in violation of your merchant agreement(s), so please check it(/them) carefully before enabling this option.',
+    'type'        => 'select-part_pkg',
+    'per_agent'   => 1,
+  },
+
+  {
+    'key'         => 'selfservice_process-display',
+    'section'     => 'billing',
+    'description' => 'When using selfservice_process-pkgpart, add the fee to the amount entered (default), or subtract the fee from the amount entered.',
+    'type'        => 'select',
+    'select_hash' => [
+                       'add'      => 'Add fee to amount entered',
+                       'subtract' => 'Subtract fee from amount entered',
+                     ],
+  },
+
+  {
+    'key'         => 'selfservice_process-skip_first',
+    'section'     => 'billing',
+    'description' => "When using selfservice_process-pkgpart, omit the fee if it is the customer's first payment.",
+    'type'        => 'checkbox',
+  },
+
+#  {
+#    'key'         => 'auto_process-pkgpart',
+#    'section'     => 'billing',
+#    'description' => 'Package to add to each automatic credit card and ACH payment processed by billing events.  Enabling this option may be in violation of your merchant agreement(s), so please check them carefully before enabling this option.',
+#    'type'        => 'select-part_pkg',
+#  },
+#
+##  {
+##    'key'         => 'auto_process-display',
+##    'section'     => 'billing',
+##    'description' => 'When using auto_process-pkgpart, add the fee to the amount entered (default), or subtract the fee from the amount entered.',
+##    'type'        => 'select',
+##    'select_hash' => [
+##                       'add'      => 'Add fee to amount entered',
+##                       'subtract' => 'Subtract fee from amount entered',
+##                     ],
+##  },
+#
+#  {
+#    'key'         => 'auto_process-skip_first',
+#    'section'     => 'billing',
+#    'description' => "When using auto_process-pkgpart, omit the fee if it is the customer's first payment.",
+#    'type'        => 'checkbox',
+#  },
 
   {
     'key'         => 'allow_negative_charges',
@@ -2955,7 +3147,7 @@ and customer address. Include units.',
     'section'     => 'invoicing',
     'description' => 'Enable FTP of raw invoice data - format.',
     'type'        => 'select',
-    'select_enum' => [ '', 'default', 'oneline', 'billco', ],
+    'options'     => [ spool_formats() ],
   },
 
   {
@@ -2991,7 +3183,7 @@ and customer address. Include units.',
     'section'     => 'invoicing',
     'description' => 'Enable spooling of raw invoice data - format.',
     'type'        => 'select',
-    'select_enum' => [ '', 'default', 'oneline', 'billco', ],
+    'options'     => [ spool_formats() ],
   },
 
   {
@@ -2999,6 +3191,32 @@ and customer address. Include units.',
     'section'     => 'invoicing',
     'description' => 'Enable per-agent spooling of raw invoice data.',
     'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'bridgestone-batch_counter',
+    'section'     => '',
+    'description' => 'Batch counter for spool files.  Increments every time a spool file is uploaded.',
+    'type'        => 'text',
+    'per_agent'   => 1,
+  },
+
+  {
+    'key'         => 'bridgestone-prefix',
+    'section'     => '',
+    'description' => 'Agent identifier for uploading to BABT printing service.',
+    'type'        => 'text',
+    'per_agent'   => 1,
+  },
+
+  {
+    'key'         => 'bridgestone-confirm_template',
+    'section'     => '',
+    'description' => 'Confirmation email template for uploading to BABT service.  Text::Template format, with variables "$zipfile" (name of the zipped file), "$seq" (sequence number), "$prefix" (user ID string), and "$rows" (number of records in the file).  Should include Subject: and To: headers, separated from the rest of the message by a blank line.',
+    # this could use a true message template, but it's hard to see how that
+    # would make the world a better place
+    'type'        => 'textarea',
+    'per_agent'   => 1,
   },
 
   {
@@ -3052,6 +3270,16 @@ and customer address. Include units.',
   },
 
   {
+    'key'         => 'cust_location-label_prefix',
+    'section'     => 'UI',
+    'description' => 'Optional "site ID" to show in the location label',
+    'type'        => 'select',
+    'select_hash' => [ '' => '',
+                       'CoStAg' => 'CoStAgXXXXX (country, state, agent name, locationnum)',
+                      ],
+  },
+
+  {
     'key'         => 'cust_pkg-display_times',
     'section'     => 'UI',
     'description' => 'Display full timestamps (not just dates) for customer packages.  Useful if you are doing real-time things like hourly prepaid.',
@@ -3075,7 +3303,7 @@ and customer address. Include units.',
   {
     'key'         => 'cust_pkg-show_fcc_voice_grade_equivalent',
     'section'     => 'UI',
-    'description' => "Show a field on package definitions for assigning a DS0 equivalency number suitable for use on FCC form 477.",
+    'description' => "Show fields on package definitions for FCC Form 477 classification",
     'type'        => 'checkbox',
   },
 
@@ -3212,7 +3440,7 @@ and customer address. Include units.',
   {
     'key'         => 'invoice-unitprice',
     'section'     => 'invoicing',
-    'description' => 'Enable unit pricing on invoices.',
+    'description' => 'Enable unit pricing on invoices and quantities on packages.',
     'type'        => 'checkbox',
   },
 
@@ -3241,7 +3469,7 @@ and customer address. Include units.',
   {
     'key'         => 'postal_invoice-recurring_only',
     'section'     => 'billing',
-    'description' => 'The postal invoice fee is omitted on invoices without reucrring charges when this is set.',
+    'description' => 'The postal invoice fee is omitted on invoices without recurring charges when this is set.',
     'type'        => 'checkbox',
   },
 
@@ -3278,6 +3506,47 @@ and customer address. Include units.',
                        'csv-chase_canada-E-xactBatch', 'BoM', 'PAP',
                        'paymentech', 'ach-spiritone', 'RBC'
                     ]
+  },
+
+  { 'key'         => 'batch-gateway-CARD',
+    'section'     => 'billing',
+    'description' => 'Business::BatchPayment gateway for credit card batches.',
+    %batch_gateway_options,
+  },
+
+  { 'key'         => 'batch-gateway-CHEK',
+    'section'     => 'billing', 
+    'description' => 'Business::BatchPayment gateway for check batches.',
+    %batch_gateway_options,
+  },
+
+  {
+    'key'         => 'batch-reconsider',
+    'section'     => 'billing',
+    'description' => 'Allow imported batch results to change the status of payments from previous imports.  Enable this only if your gateway is known to send both positive and negative results for the same batch.',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'batch-auto_resolve_days',
+    'section'     => 'billing',
+    'description' => 'Automatically resolve payment batches this many days after they were first downloaded.',
+    'type'        => 'text',
+  },
+
+  {
+    'key'         => 'batch-auto_resolve_status',
+    'section'     => 'billing',
+    'description' => 'When automatically resolving payment batches, take this action for payments of unknown status.',
+    'type'        => 'select',
+    'select_enum' => [ 'approve', 'decline' ],
+  },
+
+  {
+    'key'         => 'batch-errors_to',
+    'section'     => 'billing',
+    'description' => 'Email errors when processing batches to this address.  If unspecified, batch processing will stop immediately on error.',
+    'type'        => 'text',
   },
 
   #lists could be auto-generated from pay_batch info
@@ -3446,7 +3715,21 @@ and customer address. Include units.',
   {
     'key'         => 'cust_main-enable_birthdate',
     'section'     => 'UI',
-    'descritpion' => 'Enable tracking of a birth date with each customer record',
+    'description' => 'Enable tracking of a birth date with each customer record',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'cust_main-enable_spouse_birthdate',
+    'section'     => 'UI',
+    'description' => 'Enable tracking of a spouse birth date with each customer record',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'cust_main-enable_anniversary_date',
+    'section'     => 'UI',
+    'description' => 'Enable tracking of an anniversary date with each customer record',
     'type'        => 'checkbox',
   },
 
@@ -3726,7 +4009,7 @@ and customer address. Include units.',
   {
     'key'         => 'disable_previous_balance',
     'section'     => 'invoicing',
-    'description' => 'Disable inclusion of previous balance, payment, and credit lines on invoices',
+    'description' => 'Disable inclusion of previous balance, payment, and credit lines on invoices.',
     'type'        => 'checkbox',
     'per_agent'   => 1,
   },
@@ -3749,6 +4032,13 @@ and customer address. Include units.',
     'key'         => 'previous_balance-show_credit',
     'section'     => 'invoicing',
     'description' => 'Show the customer\'s credit balance on invoices when applicable.',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'previous_balance-show_on_statements',
+    'section'     => 'invoicing',
+    'description' => 'Show previous invoices on statements, without itemized charges.',
     'type'        => 'checkbox',
   },
 
@@ -3984,6 +4274,13 @@ and customer address. Include units.',
   },
 
   {
+    'key'         => 'unsuspend_email_admin',
+    'section'     => '',
+    'description' => 'Destination admin email address to enable unsuspension notices',
+    'type'        => 'text',
+  },
+  
+  {
     'key'         => 'email_report-subject',
     'section'     => '',
     'description' => 'Subject for reports emailed by freeside-fetch.  Defaults to "Freeside report".',
@@ -4028,6 +4325,22 @@ and customer address. Include units.',
     'key'         => 'selfservice-box_bgcolor',
     'section'     => 'self-service',
     'description' => 'HTML color for self-service interface input boxes, for example, #C0C0C0',
+    'type'        => 'text',
+    'per_agent'   => 1,
+  },
+
+  {
+    'key'         => 'selfservice-stripe1_bgcolor',
+    'section'     => 'self-service',
+    'description' => 'HTML color for self-service interface lists (primary stripe), for example, #FFFFFF',
+    'type'        => 'text',
+    'per_agent'   => 1,
+  },
+
+  {
+    'key'         => 'selfservice-stripe2_bgcolor',
+    'section'     => 'self-service',
+    'description' => 'HTML color for self-service interface lists (alternate stripe), for example, #DDDDDD',
     'type'        => 'text',
     'per_agent'   => 1,
   },
@@ -4393,34 +4706,6 @@ and customer address. Include units.',
   },
 
   {
-    'key'         => 'sg-multicustomer_hack',
-    'section'     => '',
-    'description' => "Don't use this.",
-    'type'        => 'checkbox',
-  },
-
-  {
-    'key'         => 'sg-ping_username',
-    'section'     => '',
-    'description' => "Don't use this.",
-    'type'        => 'text',
-  },
-
-  {
-    'key'         => 'sg-ping_password',
-    'section'     => '',
-    'description' => "Don't use this.",
-    'type'        => 'text',
-  },
-
-  {
-    'key'         => 'sg-login_username',
-    'section'     => '',
-    'description' => "Don't use this.",
-    'type'        => 'text',
-  },
-
-  {
     'key'         => 'mc-outbound_packages',
     'section'     => '',
     'description' => "Don't use this.",
@@ -4525,6 +4810,13 @@ and customer address. Include units.',
   },
 
   {
+    'key'         => 'tax-cust_exempt-groups-require_individual_nums',
+    'section'     => '',
+    'description' => 'When using tax-cust_exempt-groups, require an individual tax exemption number for each exemption from different taxes.',
+    'type'        => 'checkbox',
+  },
+
+  {
     'key'         => 'cust_main-default_view',
     'section'     => 'UI',
     'description' => 'Default customer view, for users who have not selected a default view in their preferences.',
@@ -4572,14 +4864,14 @@ and customer address. Include units.',
   {
     'key'         => 'cust_main-edit_signupdate',
     'section'     => 'UI',
-    'descritpion' => 'Enable manual editing of the signup date.',
+    'description' => 'Enable manual editing of the signup date.',
     'type'        => 'checkbox',
   },
 
   {
     'key'         => 'svc_acct-disable_access_number',
     'section'     => 'UI',
-    'descritpion' => 'Disable access number selection.',
+    'description' => 'Disable access number selection.',
     'type'        => 'checkbox',
   },
 
@@ -4678,6 +4970,13 @@ and customer address. Include units.',
     'key'         => 'cust_main-custom_link',
     'section'     => 'UI',
     'description' => 'URL to use as source for the "Custom" tab in the View Customer page.  The customer number will be appended, or you can insert "$custnum" to have it inserted elsewhere.  "$agentnum" will be replaced with the agent number, and "$usernum" will be replaced with the employee number.',
+    'type'        => 'textarea',
+  },
+
+  {
+    'key'         => 'cust_main-custom_content',
+    'section'     => 'UI',
+    'description' => 'As an alternative to cust_main-custom_link (leave it blank), the contant to display on this customer page, one item per line.  Available iems are: small_custview, birthdate, spouse_birthdate, svc_acct, svc_phone and svc_external.',
     'type'        => 'textarea',
   },
 
@@ -4889,6 +5188,13 @@ and customer address. Include units.',
     },
     'option_sub'  => sub { FS::Locales->description(shift) },
   },
+
+  {
+    'key'         => 'cust_main-require_locale',
+    'section'     => 'UI',
+    'description' => 'Require an explicit locale to be chosen for new customers.',
+    'type'        => 'checkbox',
+  },
   
   {
     'key'         => 'translate-auto-insert',
@@ -4941,6 +5247,44 @@ and customer address. Include units.',
     'type'        => 'select-agent',
   },
 
+  {
+    'key'         => 'cust_class-tax_exempt',
+    'section'     => 'billing',
+    'description' => 'Control the tax exemption flag per customer class rather than per indivual customer.',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'selfservice-billing_history-line_items',
+    'section'     => 'self-service',
+    'description' => 'Return line item billing detail for the self-service billing_history API call.',
+    'type'        => 'checkbox',
+  },
+
+  {
+    'key'         => 'logout-timeout',
+    'section'     => 'UI',
+    'description' => 'If set, automatically log users out of the backoffice after this many minutes.',
+    'type'       => 'text',
+  },
+  
+  {
+    'key'         => 'spreadsheet_format',
+    'section'     => 'UI',
+    'description' => 'Default format for spreadsheet download.',
+    'type'        => 'select',
+    'select_hash' => [
+      'XLS' => 'XLS (Excel 97/2000/XP)',
+      'XLSX' => 'XLSX (Excel 2007+)',
+    ],
+  },
+
+  {
+    'key'         => 'agent-email_day',
+    'section'     => '',
+    'description' => 'On this day of each month, agents with master customer records containing email addresses will be emailed a list of their customers and balances.',
+    'type'        => 'text',
+  },
 
   { key => "apacheroot", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },
   { key => "apachemachine", section => "deprecated", description => "<b>DEPRECATED</b>", type => "text" },

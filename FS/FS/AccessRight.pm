@@ -98,6 +98,7 @@ tie my %rights, 'Tie::IxHash',
     #'New contact',
     #'View customer contacts',
     #'List contacts',
+    'Generate quotation',
   ],
   
   ###
@@ -111,9 +112,12 @@ tie my %rights, 'Tie::IxHash',
     'Edit customer tags',
     'Edit referring customer',
     'View customer history',
+    'Suspend customer',
+    'Unsuspend customer',
     'Cancel customer',
     'Complimentary customer', #aka users-allow_comp 
     'Merge customer',
+    'Merge customer across agents',
     { rightname=>'Delete customer', desc=>"Enable customer deletions. Be very careful! Deleting a customer will remove all traces that this customer ever existed! It should probably only be used when auditing a legacy database. Normally, you cancel all of a customer's packages if they cancel service." }, #aka. deletecustomers
     'Bill customer now', #NEW
     'Bulk send customer notices', #NEW
@@ -138,6 +142,7 @@ tie my %rights, 'Tie::IxHash',
     'Unsuspend customer package',
     'Cancel customer package immediately',
     'Cancel customer package later',
+    'Un-cancel customer package',
     'Delay suspension events',
     'Add on-the-fly cancel reason', #NEW
     'Add on-the-fly suspend reason', #NEW
@@ -173,7 +178,9 @@ tie my %rights, 'Tie::IxHash',
   'Customer invoice / financial info rights' => [
     'View invoices',
     'Resend invoices', #NEWNEW
-    'Delete invoices', #new, but no need to phase in
+    'Void invoices',
+    'Unvoid invoices',
+    'Delete invoices',
     'View customer tax exemptions', #yow
     'Add customer tax adjustment', #new, but no need to phase in
     'View customer batched payments', #NEW
@@ -188,6 +195,7 @@ tie my %rights, 'Tie::IxHash',
   'Customer payment rights' => [
     'View payments',
     { rightname=>'Post payment', desc=>'Make check or cash payments.' },
+    { rightname=>'Backdate payment', desc=>'Enable payments to be posted for days other than today.' },
     'Post check payment',
     'Post cash payment',
     'Post payment batch',
@@ -222,11 +230,11 @@ tie my %rights, 'Tie::IxHash',
   ###
   # customer voiding rights..
   ###
-  'Customer void rights' => [
+  'Customer payment void rights' => [
     { rightname=>'Credit card void', desc=>'Enable local-only voiding of echeck payments in addition to refunds against the payment gateway.' }, #aka. cc-void 
     { rightname=>'Echeck void', desc=>'Enable local-only voiding of echeck payments in addition to refunds against the payment gateway.' }, #aka. echeck-void
-    'Regular void',
-    { rightname=>'Unvoid', desc=>'Enable unvoiding of voided payments' }, #aka. unvoid 
+    'Void payments',
+    { rightname=>'Unvoid payments', desc=>'Enable unvoiding of voided payments' }, #aka. unvoid 
     
   
   ],
@@ -254,7 +262,9 @@ tie my %rights, 'Tie::IxHash',
   'Reporting/listing rights' => [
     'List customers',
     'List all customers',
+    'Advanced customer search',
     'List zip codes', #NEW
+    'List quotations',
     'List invoices',
     'List packages',
     'Summarize packages',
@@ -269,6 +279,27 @@ tie my %rights, 'Tie::IxHash',
     { rightname=>'View email logs', global=>1 },
 
     'Download report data',
+    'Services: Accounts',
+    'Services: Accounts: Advanced search',
+    'Services: Domains',
+    'Services: Certificates',
+    'Services: Mail forwards',
+    'Services: Virtual hosting services',
+    'Services: Wireless broadband services',
+    'Services: Wireless broadband services: Advanced search',
+    'Services: DSLs',
+    'Services: Dish services',
+    'Services: Hardware',
+    'Services: Hardware: Advanced search',
+    'Services: Phone numbers',
+    'Services: PBXs',
+    'Services: Ports',
+    'Services: Mailing lists',
+    'Services: External services',
+    'Usage: RADIUS sessions',
+    'Usage: Call Detail Records (CDRs)',
+    'Usage: Unrateable CDRs',
+    'Usage: Time worked',
 
     #{ rightname => 'List customers of all agents', global=>1 },
   ],
@@ -310,6 +341,8 @@ tie my %rights, 'Tie::IxHash',
     'Edit billing events',
     { rightname=>'Edit global billing events', global=>1 },
 
+    'View templates',
+    { rightname=>'View global templates', global=>1 },
     'Edit templates',
     { rightname=>'Edit global templates', global=>1 },
 
@@ -367,6 +400,7 @@ sub default_superuser_rights {
     'Delete refund', #?
     'Edit customer package dates',
     'Time queue',
+    'Usage: Time worked',
     'Redownload resolved batches',
     'Raw SQL',
     'Configuration download',
@@ -375,6 +409,7 @@ sub default_superuser_rights {
     'Edit usage',
     'Credit card void',
     'Echeck void',
+    'Edit customer package dates',
   );
 
   no warnings 'uninitialized';

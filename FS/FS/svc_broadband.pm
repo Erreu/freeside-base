@@ -245,6 +245,12 @@ sub search {
     push @where, "svcpart = $1";
   }
 
+  #exportnum
+  if ( $params->{'exportnum'} =~ /^(\d+)$/ ) {
+    push @from, 'LEFT JOIN export_svc USING ( svcpart )';
+    push @where, "exportnum = $1";
+  }
+
   #ip_addr
   if ( $params->{'ip_addr'} =~ /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/ ) {
     push @where, "ip_addr = '$1'";
@@ -543,9 +549,9 @@ sub _check_ip_addr {
 
 sub _check_duplicate {
   my $self = shift;
-
-  $self->lock_table;
-
+  # Not a reliable check because the table isn't locked, but 
+  # that's why we have a unique index.  This is just to give a
+  # friendlier error message.
   my @dup;
   @dup = $self->find_duplicates('global', 'ip_addr');
   if ( @dup ) {

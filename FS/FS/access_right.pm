@@ -2,7 +2,9 @@ package FS::access_right;
 
 use strict;
 use vars qw( @ISA );
+use Tie::IxHash;
 use FS::Record qw( qsearch qsearchs );
+use FS::upgrade_journal;
 
 @ISA = qw(FS::Record);
 
@@ -150,6 +152,8 @@ sub _upgrade_data { # class method
     'Process payment' => [ 'Process credit card payment', 'Process Echeck payment' ],
     'Post refund'     => [ 'Post check refund', 'Post cash refund' ],
     'Refund payment'  => [ 'Refund credit card payment', 'Refund Echeck payment' ],
+    'Regular void'    => [ 'Void payments' ],
+    'Unvoid'          => [ 'Unvoid payments', 'Unvoid invoices' ],
   );
 
   foreach my $oldright (keys %migrate) {
@@ -172,9 +176,10 @@ sub _upgrade_data { # class method
         die $error if $error;
       }
 
-      #after the WEST stuff is sorted, etc.
-      #my $error = $old->delete;
-      #die $error if $error;
+      unless ( $oldright =~ / (payment|refund)$/ ) { #after the WEST stuff is sorted
+        my $error = $old->delete;
+        die $error if $error;
+      }
 
     }
 
@@ -182,19 +187,59 @@ sub _upgrade_data { # class method
 
   my @all_groups = qsearch('access_group', {});
 
-  my %onetime = (
-    'List customers' => 'List all customers',
-    'List packages'  => 'Summarize packages',
-  );
+  tie my %onetime, 'Tie::IxHash',
+    'List customers'                      => 'List all customers',
+    'List all customers'                  => 'Advanced customer search',
+    'List packages'                       => 'Summarize packages',
+    'Post payment'                        => 'Backdate payment',
+    'Cancel customer package immediately' => 'Un-cancel customer package',
+    'Suspend customer package'            => 'Suspend customer',
+    'Unsuspend customer package'          => 'Unsuspend customer',
+    'New prospect'                        => 'Generate quotation',
+    'Delete invoices'                     => 'Void invoices',
+    'List invoices'                       => 'List quotations',
+
+    'List services'    => [ 'Services: Accounts',
+                            'Services: Domains',
+                            'Services: Certificates',
+                            'Services: Mail forwards',
+                            'Services: Virtual hosting services',
+                            'Services: Wireless broadband services',
+                            'Services: DSLs',
+                            'Services: Dish services',
+                            'Services: Hardware',
+                            'Services: Phone numbers',
+                            'Services: PBXs',
+                            'Services: Ports',
+                            'Services: Mailing lists',
+                            'Services: External services',
+                          ],
+
+    'Services: Accounts' => 'Services: Accounts: Advanced search',
+    'Services: Wireless broadband services' => 'Services: Wireless broadband services: Advanced search',
+    'Services: Hardware' => 'Services: Hardware: Advanced search',
+
+    'List rating data' => [ 'Usage: RADIUS sessions',
+                            'Usage: Call Detail Records (CDRs)',
+                            'Usage: Unrateable CDRs',
+                          ],
+  ;
 
   foreach my $old_acl ( keys %onetime ) {
-    my $new_acl = $onetime{$old_acl}; #support arrayref too?
-    ( my $journal = 'ACL_'.lc($new_acl) ) =~ s/ /_/g;
-    next if FS::upgrade_journal->is_done($journal);
 
-    # grant $new_acl to all groups who have $old_acl
-    for my $group (@all_groups) {
-      if ( $group->access_right($old_acl) ) {
+    my @new_acl = ref($onetime{$old_acl})
+                    ? @{ $onetime{$old_acl} }
+                    :  ( $onetime{$old_acl} );
+
+    foreach my $new_acl ( @new_acl ) {
+
+      ( my $journal = 'ACL_'.lc($new_acl) ) =~ s/\W/_/g;
+      next if FS::upgrade_journal->is_done($journal);
+
+      # grant $new_acl to all groups who have $old_acl
+      for my $group (@all_groups) {
+        next unless $group->access_right($old_acl);
+        next if     $group->access_right($new_acl);
         my $access_right = FS::access_right->new( {
             'righttype'   => 'FS::access_group',
             'rightobjnum' => $group->groupnum,
@@ -203,9 +248,11 @@ sub _upgrade_data { # class method
         my $error = $access_right->insert;
         die $error if $error;
       }
-    }
     
-    FS::upgrade_journal->set_done($journal);
+      FS::upgrade_journal->set_done($journal);
+
+    }
+
   }
 
   ### ACL_download_report_data
@@ -219,7 +266,7 @@ sub _upgrade_data { # class method
           'rightname'   => 'Download report data',
       } );
       my $error = $access_right->insert;
-      die $error if $error;
+      warn $error if $error;
     }
 
     FS::upgrade_journal->set_done('ACL_download_report_data');

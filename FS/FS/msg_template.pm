@@ -465,14 +465,12 @@ sub substitutions {
       name name_short contact contact_firstlast
       address1 address2 city county state zip
       country
-      daytime night fax
+      daytime night mobile fax
 
       has_ship_address
-      ship_last ship_first ship_company
       ship_name ship_name_short ship_contact ship_contact_firstlast
       ship_address1 ship_address2 ship_city ship_county ship_state ship_zip
       ship_country
-      ship_daytime ship_night ship_fax
 
       paymask payname paytype payip
       num_cancelled_pkgs num_ncancelled_pkgs num_pkgs
@@ -485,6 +483,15 @@ sub substitutions {
       signupdate dundate
       packages recurdates
       ),
+      #compatibility: obsolete ship_ fields - use the non-ship versions
+      map (
+        { my $field = $_;
+          [ "ship_$field"   => sub { shift->$field } ]
+        }
+        qw( last first company daytime night fax )
+      ),
+      # ship_name, ship_name_short, ship_contact, ship_contact_firstlast
+      # still work, though
       [ expdate           => sub { shift->paydate_epoch } ], #compatibility
       [ signupdate_ymd    => sub { $ymd->(shift->signupdate) } ],
       [ dundate_ymd       => sub { $ymd->(shift->dundate) } ],
@@ -671,10 +678,20 @@ sub _upgrade_data {
     if ( $msg_template->subject || $msg_template->body ) {
       # create new default content
       my %content;
-      foreach ('subject','body') {
-        $content{$_} = $msg_template->$_;
-        $msg_template->setfield($_, '');
+      $content{subject} = $msg_template->subject;
+      $msg_template->set('subject', '');
+
+      # work around obscure Pg/DBD bug
+      # https://rt.cpan.org/Public/Bug/Display.html?id=60200
+      # (though the right fix is to upgrade DBD)
+      my $body = $msg_template->body;
+      if ( $body =~ /^x([0-9a-f]+)$/ ) {
+        # there should be no real message templates that look like that
+        warn "converting template body to TEXT\n";
+        $body = pack('H*', $1);
       }
+      $content{body} = $body;
+      $msg_template->set('body', '');
 
       my $error = $msg_template->replace(%content);
       die $error if $error;

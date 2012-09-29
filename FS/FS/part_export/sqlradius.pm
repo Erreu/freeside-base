@@ -110,7 +110,9 @@ END
   'desc'     => 'Real-time export to SQL-backed RADIUS (FreeRADIUS, ICRADIUS)',
   'options'  => \%options,
   'nodomain' => 'Y',
+  'no_machine' => 1,
   'nas'      => 'Y', # show export_nas selection in UI
+  'default_svc_class' => 'Internet',
   'notes'    => $notes1.
                 'This export does not export RADIUS realms (see also '.
                 'sqlradius_withdomain).  '.
@@ -250,6 +252,7 @@ sub _export_replace {
   '';
 }
 
+#false laziness w/broadband_sqlradius.pm
 sub _export_suspend {
   my( $self, $svc_acct ) = (shift, shift);
 
@@ -297,7 +300,7 @@ sub _export_suspend {
 }
 
 sub _export_unsuspend {
-  my( $self, $svc_acct ) = (shift, shift);
+  my( $self, $svc_x ) = (shift, shift);
 
   local $SIG{HUP} = 'IGNORE';
   local $SIG{INT} = 'IGNORE';
@@ -310,21 +313,21 @@ sub _export_unsuspend {
   local $FS::UID::AutoCommit = 0;
   my $dbh = dbh;
 
-  my $err_or_queue = $self->sqlradius_queue( $svc_acct->svcnum, 'insert',
-    'check', $self->export_username($svc_acct), $svc_acct->radius_check );
+  my $err_or_queue = $self->sqlradius_queue( $svc_x->svcnum, 'insert',
+    'check', $self->export_username($svc_x), $self->radius_check($svc_x) );
   unless ( ref($err_or_queue) ) {
     $dbh->rollback if $oldAutoCommit;
     return $err_or_queue;
   }
 
   my $error;
-  my (@oldgroups) = $self->suspended_usergroups($svc_acct);
+  my (@oldgroups) = $self->suspended_usergroups($svc_x);
   $error = $self->sqlreplace_usergroups(
-    $svc_acct->svcnum,
-    $self->export_username($svc_acct),
+    $svc_x->svcnum,
+    $self->export_username($svc_x),
     '',
     \@oldgroups,
-    [ $svc_acct->radius_groups('hashref') ],
+    [ $svc_x->radius_groups('hashref') ],
   );
   if ( $error ) {
     $dbh->rollback if $oldAutoCommit;
@@ -345,6 +348,7 @@ sub _export_delete {
 
 sub sqlradius_queue {
   my( $self, $svcnum, $method ) = (shift, shift, shift);
+  my %args = @_;
   my $queue = new FS::queue {
     'svcnum' => $svcnum,
     'job'    => "FS::part_export::sqlradius::sqlradius_$method",
@@ -358,14 +362,16 @@ sub sqlradius_queue {
 }
 
 sub suspended_usergroups {
-  my ($self, $svc_acct) = (shift, shift);
+  my ($self, $svc_x) = (shift, shift);
 
-  return () unless $svc_acct;
+  return () unless $svc_x;
+
+  my $svc_table = $svc_x->table;
 
   #false laziness with FS::part_export::shellcommands
   #subclass part_export?
 
-  my $r = $svc_acct->cust_svc->cust_pkg->last_reason('susp');
+  my $r = $svc_x->cust_svc->cust_pkg->last_reason('susp');
   my %reasonmap = $self->_groups_susp_reason_map;
   my $userspec = '';
   if ($r) {
@@ -374,19 +380,19 @@ sub suspended_usergroups {
     $userspec = $reasonmap{$r->reason}
       if (!$userspec && exists($reasonmap{$r->reason}));
   }
-  my $suspend_user;
-  if ($userspec =~ /^\d+$/ ){
-    $suspend_user = qsearchs( 'svc_acct', { 'svcnum' => $userspec } );
-  }elsif ($userspec =~ /^\S+\@\S+$/){
+  my $suspend_svc;
+  if ( $userspec =~ /^\d+$/ ){
+    $suspend_svc = qsearchs( $svc_table, { 'svcnum' => $userspec } );
+  } elsif ( $userspec =~ /^\S+\@\S+$/ && $svc_table eq 'svc_acct' ){
     my ($username,$domain) = split(/\@/, $userspec);
     for my $user (qsearch( 'svc_acct', { 'username' => $username } )){
-      $suspend_user = $user if $userspec eq $user->email;
+      $suspend_svc = $user if $userspec eq $user->email;
     }
-  }elsif ($userspec){
-    $suspend_user = qsearchs( 'svc_acct', { 'username' => $userspec } );
+  }elsif ( $userspec && $svc_table eq 'svc_acct'  ){
+    $suspend_svc = qsearchs( 'svc_acct', { 'username' => $userspec } );
   }
   #esalf
-  return $suspend_user->radius_groups('hashref') if $suspend_user;
+  return $suspend_svc->radius_groups('hashref') if $suspend_svc;
   ();
 }
 
@@ -756,7 +762,7 @@ sub usage_sessions {
 
 }
 
-=item update_svc_acct
+=item update_svc
 
 =cut
 
@@ -962,8 +968,7 @@ are identified by the combination of group name and attribute name.
 
 In the special case where attributes are being replaced because a group 
 name (L<FS::radius_group>->groupname) is changing, the pseudo-field 
-'groupname' must be set in OLD_RADIUS_ATTR.  It's probably best to do this
-
+'groupname' must be set in OLD_RADIUS_ATTR.
 
 =cut
 
@@ -978,41 +983,43 @@ sub export_attr_replace { shift->export_attr_action('replace', @_); }
 sub export_attr_action {
   my $self = shift;
   my ($action, $new, $old) = @_;
-  my ($attrname, $attrtype, $groupname) = 
-    ($new->attrname, $new->attrtype, $new->radius_group->groupname);
-  if ( $action eq 'replace' ) {
+  my $err_or_queue;
 
-    if ( $new->attrtype ne $old->attrtype ) {
-      # they're in separate tables in the target
-      return $self->export_attr_action('delete', $old) 
-          || $self->export_attr_action('insert', $new)
-      ;
-    }
-
-    # otherwise, just make sure we know the old attribute/group names 
-    # so we can find the existing record
-    $attrname = $old->attrname;
-    $groupname = $old->groupname || $old->radius_group->groupname;
-    # maybe this should be enforced more strictly
-    warn "WARNING: attribute replace without 'groupname' set; assuming '$groupname'\n"
-      if !defined($old->groupname);
+  if ( $action eq 'delete' ) {
+    $old = $new;
   }
-
-  my $err_or_queue = $self->sqlradius_queue('', "attr_$action",
-    attrnum => $new->attrnum,
-    attrname => $attrname,
-    attrtype => $attrtype,
-    groupname => $groupname,
-  );
-  return $err_or_queue unless ref $err_or_queue;
+  if ( $action eq 'delete' or $action eq 'replace' ) {
+    # delete based on an exact match
+    my %opt = (
+      attrname  => $old->attrname,
+      attrtype  => $old->attrtype,
+      groupname => $old->groupname || $old->radius_group->groupname,
+      op        => $old->op,
+      value     => $old->value,
+    );
+    $err_or_queue = $self->sqlradius_queue('', 'attr_delete', %opt);
+    return $err_or_queue unless ref $err_or_queue;
+  }
+  # this probably doesn't matter, but just to be safe...
+  my $jobnum = $err_or_queue->jobnum if $action eq 'replace';
+  if ( $action eq 'replace' or $action eq 'insert' ) {
+    my %opt = (
+      attrname  => $new->attrname,
+      attrtype  => $new->attrtype,
+      groupname => $new->radius_group->groupname,
+      op        => $new->op,
+      value     => $new->value,
+    );
+    $err_or_queue = $self->sqlradius_queue('', 'attr_insert', %opt);
+    $err_or_queue->depend_insert($jobnum) if $jobnum;
+    return $err_or_queue unless ref $err_or_queue;
+  }
   '';
 }
 
 sub sqlradius_attr_insert {
   my $dbh = sqlradius_connect(shift, shift, shift);
   my %opt = @_;
-  my $radius_attr = qsearchs('radius_attr', { attrnum => $opt{'attrnum'} })
-    or die 'attrnum '.$opt{'attrnum'}.' not found';
 
   my $table;
   # make sure $table is completely safe
@@ -1023,12 +1030,10 @@ sub sqlradius_attr_insert {
     $table = 'radgroupreply';
   }
   else {
-    die "unknown attribute type '".$radius_attr->attrtype."'";
+    die "unknown attribute type '$opt{attrtype}'";
   }
 
-  my @values = ( 
-    $opt{'groupname'}, map { $radius_attr->$_ } qw(attrname op value)
-  );
+  my @values = @opt{ qw(groupname attrname op value) };
   my $sth = $dbh->prepare(
     'INSERT INTO '.$table.' (groupname, attribute, op, value) VALUES (?,?,?,?)'
   );
@@ -1050,41 +1055,16 @@ sub sqlradius_attr_delete {
     die "unknown attribute type '".$opt{'attrtype'}."'";
   }
 
+  my @values = @opt{ qw(groupname attrname op value) };
   my $sth = $dbh->prepare(
-    'DELETE FROM '.$table.' WHERE groupname = ? AND attribute = ?'
+    'DELETE FROM '.$table.
+    ' WHERE groupname = ? AND attribute = ? AND op = ? AND value = ?'.
+    ' LIMIT 1'
   );
-  $sth->execute( @opt{'groupname', 'attrname'} ) or die $dbh->errstr;
+  $sth->execute(@values) or die $dbh->errstr;
 }
 
-sub sqlradius_attr_replace {
-  my $dbh = sqlradius_connect(shift, shift, shift);
-  my %opt = @_;
-  my $radius_attr = qsearchs('radius_attr', { attrnum => $opt{'attrnum'} })
-    or die 'attrnum '.$opt{'attrnum'}.' not found';
-
-  my $table;
-  if ( $opt{'attrtype'} eq 'C' ) {
-    $table = 'radgroupcheck';
-  }
-  elsif ( $opt{'attrtype'} eq 'R' ) {
-    $table = 'radgroupreply';
-  }
-  else {
-    die "unknown attribute type '".$opt{'attrtype'}."'";
-  }
-
-  my $sth = $dbh->prepare(
-    'UPDATE '.$table.' SET groupname = ?, attribute = ?, op = ?, value = ?
-     WHERE groupname = ? AND attribute = ?'
-  );
-
-  my $new_groupname = $radius_attr->radius_group->groupname;
-  my @new_values = ( 
-    $new_groupname, map { $radius_attr->$_ } qw(attrname op value) 
-  );
-  $sth->execute( @new_values, @opt{'groupname', 'attrname'} )
-    or die $dbh->errstr;
-}
+#sub sqlradius_attr_replace { no longer needed
 
 =item export_group_replace NEW OLD
 
@@ -1154,8 +1134,13 @@ sub _upgrade_exporttype {
 
 sub import_attrs {
   my $self = shift;
-  my $dbh = sqlradius_connect( map $self->option($_),
+  my $dbh =  DBI->connect( map $self->option($_),
                                    qw( datasrc username password ) );
+  unless ( $dbh ) {
+    warn "Error connecting to RADIUS server: $DBI::errstr\n";
+    return;
+  }
+
   my $usergroup = $self->option('usergroup') || 'usergroup';
   my $error;
   warn "Importing RADIUS groups and attributes from ".$self->option('datasrc').
@@ -1176,6 +1161,7 @@ sub import_attrs {
 SELECT groupname, attribute, op, value, \'C\' FROM radgroupcheck
 UNION
 SELECT groupname, attribute, op, value, \'R\' FROM radgroupreply';
+  my @fixes; # things that need to be changed on the radius db
   foreach my $row ( @{ $dbh->selectall_arrayref($sql) } ) {
     my ($groupname, $attrname, $op, $value, $attrtype) = @$row;
     warn "$groupname.$attrname\n";
@@ -1196,6 +1182,20 @@ SELECT groupname, attribute, op, value, \'R\' FROM radgroupreply';
     my $a = $attrs_of{$groupname};
     my $old = $a->{$attrname};
     my $new;
+
+    if ( $attrtype eq 'R' ) {
+      # Freeradius tolerates illegal operators in reply attributes.  We don't.
+      if ( !grep ($_ eq $op, FS::radius_attr->ops('R')) ) {
+        warn "$groupname.$attrname: changing $op to +=\n";
+        # Make a note to change it in the db
+        push @fixes, [
+          'UPDATE radgroupreply SET op = \'+=\' WHERE groupname = ? AND attribute = ? AND op = ? AND VALUE = ?',
+          $groupname, $attrname, $op, $value
+        ];
+        # and import it correctly.
+        $op = '+=';
+      }
+    }
 
     if ( defined $old ) {
       # replace
@@ -1226,6 +1226,13 @@ SELECT groupname, attribute, op, value, \'R\' FROM radgroupreply';
     }
     $attrs_of{$groupname}->{$attrname} = $new;
   } #foreach $row
+
+  foreach (@fixes) {
+    my ($sql, @args) = @$_;
+    my $sth = $dbh->prepare($sql);
+    $sth->execute(@args) or warn $sth->errstr;
+  }
+    
   return;
 }
 

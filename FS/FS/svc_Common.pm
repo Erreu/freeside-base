@@ -5,6 +5,7 @@ use vars qw( @ISA $noexport_hack $DEBUG $me
              $overlimit_missing_cust_svc_nonfatal_kludge );
 use Carp qw( cluck carp croak confess ); #specify cluck have to specify them all
 use Scalar::Util qw( blessed );
+use Lingua::EN::Inflect qw( PL_N );
 use FS::Conf;
 use FS::Record qw( qsearch qsearchs fields dbh );
 use FS::cust_main_Mixin;
@@ -199,12 +200,13 @@ I<depend_jobnum>.
 If I<jobnum> is set to an array reference, the jobnums of any export jobs will
 be added to the referenced array.
 
-If I<child_objects> is set to an array reference of FS::tablename objects (for
-example, FS::acct_snarf objects), they will have their svcnum field set and
-will be inserted after this record, but before any exports are run.  Each
-element of the array can also optionally be a two-element array reference
-containing the child object and the name of an alternate field to be filled in
-with the newly-inserted svcnum, for example C<[ $svc_forward, 'srcsvc' ]>
+If I<child_objects> is set to an array reference of FS::tablename objects
+(for example, FS::svc_export_machine or FS::acct_snarf objects), they
+will have their svcnum field set and will be inserted after this record,
+but before any exports are run.  Each element of the array can also
+optionally be a two-element array reference containing the child object
+and the name of an alternate field to be filled in with the newly-inserted
+svcnum, for example C<[ $svc_forward, 'srcsvc' ]>
 
 If I<depend_jobnum> is set (to a scalar jobnum or an array reference of
 jobnums), all provisioning jobs will have a dependancy on the supplied
@@ -243,6 +245,7 @@ sub insert {
 
   my $svcnum = $self->svcnum;
   my $cust_svc = $svcnum ? qsearchs('cust_svc',{'svcnum'=>$self->svcnum}) : '';
+  my $inserted_cust_svc = 0;
   #unless ( $svcnum ) {
   if ( !$svcnum or !$cust_svc ) {
     $cust_svc = new FS::cust_svc ( {
@@ -256,6 +259,7 @@ sub insert {
       $dbh->rollback if $oldAutoCommit;
       return $error;
     }
+    $inserted_cust_svc  = 1;
     $svcnum = $self->svcnum($cust_svc->svcnum);
   } else {
     #$cust_svc = qsearchs('cust_svc',{'svcnum'=>$self->svcnum});
@@ -274,6 +278,10 @@ sub insert {
               || $self->preinsert_hook
               || $self->SUPER::insert;
   if ( $error ) {
+    if ( $inserted_cust_svc ) {
+      my $derror = $cust_svc->delete;
+      die $derror if $derror;
+    }
     $dbh->rollback if $oldAutoCommit;
     return $error;
   }
@@ -432,7 +440,16 @@ sub expire {
 Replaces OLD_RECORD with this one.  If there is an error, returns the error,
 otherwise returns false.
 
-Currently available options are: I<export_args> and I<depend_jobnum>.
+Currently available options are: I<child_objects>, I<export_args> and
+I<depend_jobnum>.
+
+If I<child_objects> is set to an array reference of FS::tablename objects
+(for example, FS::svc_export_machine or FS::acct_snarf objects), they
+will have their svcnum field set and will be inserted or replaced after
+this record, but before any exports are run.  Each element of the array
+can also optionally be a two-element array reference containing the
+child object and the name of an alternate field to be filled in with
+the newly-inserted svcnum, for example C<[ $svc_forward, 'srcsvc' ]>
 
 If I<depend_jobnum> is set (to a scalar jobnum or an array reference of
 jobnums), all provisioning jobs will have a dependancy on the supplied
@@ -454,6 +471,8 @@ sub replace {
     ( ref($_[0]) eq 'HASH' )
       ? shift
       : { @_ };
+
+  my $objects = $options->{'child_objects'} || [];
 
   my @jobnums = ();
   local $FS::queue::jobnums = \@jobnums;
@@ -502,6 +521,34 @@ sub replace {
   if ($error) {
     $dbh->rollback if $oldAutoCommit;
     return $error;
+  }
+
+  foreach my $object ( @$objects ) {
+    my($field, $obj);
+    if ( ref($object) eq 'ARRAY' ) {
+      ($obj, $field) = @$object;
+    } else {
+      $obj = $object;
+      $field = 'svcnum';
+    }
+    $obj->$field($new->svcnum);
+
+    my $oldobj = qsearchs( $obj->table, {
+                             $field => $new->svcnum,
+                             map { $_ => $obj->$_ } $obj->_svc_child_partfields,
+                         });
+
+    if ( $oldobj ) {
+      my $pkey = $oldobj->primary_key;
+      $obj->$pkey($oldobj->$pkey);
+      $obj->replace($oldobj);
+    } else {
+      $error = $obj->insert;
+    }
+    if ( $error ) {
+      $dbh->rollback if $oldAutoCommit;
+      return $error;
+    }
   }
 
   #new-style exports!
@@ -844,8 +891,7 @@ sub set_auto_inventory {
         qsearchs('inventory_class', { 'classnum' => $classnum } );
       return "Can't find inventory_class.classnum $classnum"
         unless $inventory_class;
-      return "Out of ". $inventory_class->classname. "s\n"; #Lingua:: BS
-                                                            #for pluralizing
+      return "Out of ". PL_N($inventory_class->classname);
     }
 
     next if $columnflag eq 'M' && $inventory_item->svcnum == $self->svcnum;
@@ -853,29 +899,36 @@ sub set_auto_inventory {
     $self->setfield( $field, $inventory_item->item );
       #if $columnflag eq 'A' && $self->$field() eq '';
 
-    $inventory_item->svcnum( $self->svcnum );
-    my $ierror = $inventory_item->replace();
-    if ( $ierror ) {
-      $dbh->rollback if $oldAutoCommit;
-      return "Error provisioning inventory: $ierror";
-    }
-
     if ( $old && $old->$field() && $old->$field() ne $self->$field() ) {
       my $old_inv = qsearchs({
-        'table'   => 'inventory_item',
-        'hashref' => { 'classnum' => $classnum,
-                       'svcnum'   => $old->svcnum,
-                       'item'     => $old->$field(),
-                     },
+        'table'     => 'inventory_item',
+        'hashref'   => { 'classnum' => $classnum,
+                         'svcnum'   => $old->svcnum,
+                       },
+        'extra_sql' => ' AND '.
+          '( ( svc_field IS NOT NULL AND svc_field = '.$dbh->quote($field).' )'.
+          '  OR ( svc_field IS NULL AND item = '. dbh->quote($old->$field).' )'.
+          ')',
       });
       if ( $old_inv ) {
         $old_inv->svcnum('');
+        $old_inv->svc_field('');
         my $oerror = $old_inv->replace;
         if ( $oerror ) {
           $dbh->rollback if $oldAutoCommit;
           return "Error unprovisioning inventory: $oerror";
         }
+      } else {
+        warn "old inventory_item not found for $field ". $self->$field;
       }
+    }
+
+    $inventory_item->svcnum( $self->svcnum );
+    $inventory_item->svc_field( $field );
+    my $ierror = $inventory_item->replace();
+    if ( $ierror ) {
+      $dbh->rollback if $oldAutoCommit;
+      return "Error provisioning inventory: $ierror";
     }
 
   }
@@ -906,6 +959,7 @@ sub return_inventory {
 
   foreach my $inventory_item ( $self->inventory_item ) {
     $inventory_item->svcnum('');
+    $inventory_item->svc_field('');
     my $error = $inventory_item->replace();
     if ( $error ) {
       $dbh->rollback if $oldAutoCommit;

@@ -277,7 +277,9 @@
 %                  ? sprintf("$money_char\%.2f", $item->{'charge'})
 %                  : exists($item->{'charge_nobal'})
 %                    ? sprintf("$money_char\%.2f", $item->{'charge_nobal'})
-%                    : '';
+%                    : exists($item->{'void_charge'})
+%                      ? sprintf("<DEL>$money_char\%.2f</DEL>", $item->{'void_charge'})
+%                      : '';
 %
 %  my $payment = exists($item->{'payment'})
 %                  ? sprintf("-&nbsp;$money_char\%.2f", $item->{'payment'})
@@ -428,6 +430,15 @@ foreach my $cust_bill ($cust_main->cust_bill) {
   $num_cust_bill++;
 }
 
+#voided invoices
+foreach my $cust_bill_void ($cust_main->cust_bill_void) {
+  push @history, {
+    'date'        => $cust_bill_void->_date,
+    'desc'        => include('payment_history/voided_invoice.html', $cust_bill_void, %opt ),
+    'void_charge' => $cust_bill_void->charged,
+  };
+}
+
 #statements
 foreach my $cust_statement ($cust_main->cust_statement) {
   push @history, {
@@ -491,7 +502,7 @@ foreach my $cust_credit ($cust_main->cust_credit) {
 foreach my $cust_refund ($cust_main->cust_refund) {
   push @history, {
     'date'   => $cust_refund->_date,
-    'desc'   => include('payment_history/refund.html', $cust_refund),
+    'desc'   => include('payment_history/refund.html', $cust_refund, %opt),
     'refund' => $cust_refund->refund,
   };
 

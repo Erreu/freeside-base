@@ -32,7 +32,7 @@ Set($WebExternalAuto, 1);
 $RT::URI::freeside::IntegrationType = 'Internal';
 $RT::URI::freeside::URL = '%%%FREESIDE_URL%%%';
 
-$RT::URI::freeside::URL =~ m(^(https?://[^/]+)(/.*)$)i;
+$RT::URI::freeside::URL =~ m(^(https?://[^/]+)(/.*)?$)i;
 Set($WebBaseURL, $1);
 Set($WebPath, "$2/rt");
 
@@ -40,7 +40,6 @@ Set($DatabaseHost   , '');
 
 # These settings are user-editable.
 
-Set($WebDefaultStylesheet, 'freeside2.1');
 Set($UsernameFormat, 'verbose'); #back to concise to hide email addresses
 
 #uncomment to use
@@ -50,7 +49,7 @@ Set($MessageBoxWidth, 80);
 Set($MessageBoxRichTextHeight, 368);
 
 #redirects to ticket display on quick create
-#Set($QuickCreateRedirect, 1);
+#Set($DisplayTicketAfterQuickCreate, 1);
 
 #Set(@Plugins,(qw(Extension::QuickDelete RT::FM)));
 
