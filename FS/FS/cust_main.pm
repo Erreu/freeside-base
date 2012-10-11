@@ -1792,20 +1792,6 @@ sub check {
     || $self->ut_snumbern('spouse_birthdate')
     || $self->ut_snumbern('anniversary_date')
     || $self->ut_textn('company')
-<<<<<<< HEAD
-=======
-    || $self->ut_text('address1')
-    || $self->ut_textn('address2')
-    || $self->ut_text('city')
-    || $self->ut_textn('county')
-    || $self->ut_textn('state')
-    || $self->ut_country('country')
-    || $self->ut_coordn('latitude')
-    || $self->ut_coordn('longitude')
-    || $self->ut_enum('coord_auto', [ '', 'Y' ])
-    || $self->ut_enum('addr_clean', [ '', 'Y' ])
-    || $self->ut_numbern('censusyear')
->>>>>>> 13763
     || $self->ut_anything('comments')
     || $self->ut_numbern('referral_custnum')
     || $self->ut_textn('stateid')
@@ -1876,72 +1862,7 @@ sub check {
   
   }
 
-<<<<<<< HEAD
   #ship_ fields are gone
-=======
-  if ( $self->has_ship_address
-       && scalar ( grep { $self->getfield($_) ne $self->getfield("ship_$_") }
-                        $self->addr_fields )
-     )
-  {
-    my $error =
-      $self->ut_name('ship_last')
-      || $self->ut_name('ship_first')
-      || $self->ut_textn('ship_company')
-      || $self->ut_text('ship_address1')
-      || $self->ut_textn('ship_address2')
-      || $self->ut_text('ship_city')
-      || $self->ut_textn('ship_county')
-      || $self->ut_textn('ship_state')
-      || $self->ut_country('ship_country')
-      || $self->ut_coordn('ship_latitude')
-      || $self->ut_coordn('ship_longitude')
-      || $self->ut_enum('ship_coord_auto', [ '', 'Y' ] )
-    ;
-    return $error if $error;
-
-    #false laziness with above
-    unless ( qsearchs('cust_main_county', {
-      'country' => $self->ship_country,
-      'state'   => '',
-     } ) ) {
-      return "Unknown ship_state/ship_county/ship_country: ".
-        $self->ship_state. "/". $self->ship_county. "/". $self->ship_country
-        unless qsearch('cust_main_county',{
-          'state'   => $self->ship_state,
-          'county'  => $self->ship_county,
-          'country' => $self->ship_country,
-        } );
-    }
-    #eofalse
-
-    $error =
-         $self->ut_phonen('ship_daytime', $self->ship_country)
-      || $self->ut_phonen('ship_night',   $self->ship_country)
-      || $self->ut_phonen('ship_fax',     $self->ship_country)
-      || $self->ut_phonen('ship_mobile',  $self->ship_country)
-    ;
-    return $error if $error;
-
-    unless ( $ignore_illegal_zip ) {
-      $error = $self->ut_zip('ship_zip', $self->ship_country);
-      return $error if $error;
-    }
-    return "Unit # is required."
-      if $self->ship_address2 =~ /^\s*$/
-      && $conf->exists('cust_main-require_address2');
-
-  } else { # ship_ info eq billing info, so don't store dup info in database
-
-    $self->setfield("ship_$_", '')
-      foreach $self->addr_fields;
-
-    return "Unit # is required."
-      if $self->address2 =~ /^\s*$/
-      && $conf->exists('cust_main-require_address2');
-
-  }
->>>>>>> 13763
 
   #$self->payby =~ /^(CARD|DCRD|CHEK|DCHK|LECB|BILL|COMP|PREPAY|CASH|WEST|MCRD)$/
   #  or return "Illegal payby: ". $self->payby;
