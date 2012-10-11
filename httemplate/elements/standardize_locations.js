@@ -17,7 +17,7 @@ function form_address_info() {
     'country':  cf.elements['<% $main_prefix %>country'].value,
 % }
 % if ( $withcensus ) {
-    'ship_censustract': cf.elements['enter_censustract'].value,
+    'ship_censustract': cf.elements['<% $ship_prefix %>enter_censustract'].value,
 % }
     'ship_address1': cf.elements['<% $ship_prefix %>address1'].value,
     'ship_address2': cf.elements['<% $ship_prefix %>address2'].value,
@@ -86,9 +86,9 @@ function standardize_locations() {
     address_standardize(JSON.stringify(address_info), confirm_standardize);
   }
   else {
-    cf.elements['ship_addr_clean'].value = 'Y';
+    cf.elements['<% $ship_prefix %>addr_clean'].value = 'Y';
 %   if ( !$onlyship ) {
-    cf.elements['addr_clean'].value = 'Y';
+    cf.elements['<% $main_prefix %>addr_clean'].value = 'Y';
 %   }
     post_standardization();
   }
@@ -193,8 +193,8 @@ function confirm_manual_address() {
 %# not much to do in this case, just confirm the censustract
 % if ( $withcensus ) {
   var cf = document.<% $formname %>;
-  cf.elements['<% $main_prefix %>censustract'].value =
-  cf.elements['<% $main_prefix %>enter_censustract'].value;
+  cf.elements['<% $ship_prefix %>censustract'].value =
+  cf.elements['<% $ship_prefix %>enter_censustract'].value;
 % }
   post_standardization();
 }
@@ -292,6 +292,7 @@ my $withcensus = 1;
 
 my $formname =  $opt{form} || 'CustomerForm';
 my $onlyship =  $opt{onlyship} || '';
+# this whole "onlyship" thing is kind of backward...
 my $main_prefix =  $opt{main_prefix} || '';
 my $ship_prefix =  $opt{ship_prefix} || ($onlyship ? '' : 'ship_');
 my $taxpre = $main_prefix;

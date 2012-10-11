@@ -139,7 +139,7 @@ Example:
         >
 
 %    #XXX i don't work so well when the dropdown is changed :/  i probably need to be triggered by "default service address"
-%    $alt_err =~ s/(ship_)?address2/'<B>'.encode_entities($object->get($1.'address2')).'<\/B>'/e;
+%    $alt_err =~ s/(.*)?address2/'<B>'.encode_entities($object->get($1.'address2')).'<\/B>'/e;
      <% $alt_err %>
 
     </TD>
@@ -243,7 +243,6 @@ Example:
 <INPUT TYPE="hidden" NAME="old_<%$pre.$_%>" ID="old_<%$pre.$_%>" VALUE="<% $object->get($_) |h%>">
 % }
 %# Placeholders
-<INPUT TYPE="hidden" NAME="<%$pre%>cachenum" VALUE="">
 <INPUT TYPE="hidden" NAME="<%$pre%>addr_clean" VALUE="">
 <%init>
 

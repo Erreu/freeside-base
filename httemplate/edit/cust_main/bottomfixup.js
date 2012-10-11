@@ -5,7 +5,12 @@ my $conf = new FS::Conf;
 my $company_latitude  = $conf->config('company_latitude');
 my $company_longitude = $conf->config('company_longitude');
 
-my @fixups = ('copy_payby_fields', 'standardize_locations');
+my @fixups = (
+    'copy_if_same',
+    'copy_payby_fields',
+    'standardize_locations',
+    'confirm_censustract'
+    );
 
 push @fixups, 'confirm_censustract';
 
@@ -44,6 +49,29 @@ function bottomfixup(what) {
 
 function do_submit() {
   document.CustomerForm.submit();
+}
+
+%# if "same as billing" is checked, ensure that the invisible ship location
+%# fields are set to the values of the visible fields.
+function copy_if_same() {
+  var cf = document.CustomerForm;
+  if ( cf.same.checked ) {
+    var inputs = new Array(
+        'address1', 'address2', 'location_type', 'location_number', 'zip',
+        'latitude', 'longitude', 'coord_auto', 'geocode',
+        // these are selects, not inputs, but per the spec this still works
+        'city', 'county', 'state', 'country'
+    );
+    for ( var i = 0; i < inputs.length; i++ ) {
+      if ( cf['bill_' + inputs[i]] != undefined ) {
+        // because some of these fields don't always exist
+        cf['ship_' + inputs[i]].value = cf['bill_' + inputs[i]].value;
+      }
+    }
+    cf['ship_addr_clean'].checked = cf['bill_addr_clean'].checked;
+  }
+  // this can't really fail
+  submit_continue();
 }
 
 function copy_payby_fields() {
