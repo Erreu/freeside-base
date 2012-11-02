@@ -328,7 +328,7 @@ sub standardize_usps {
     addr_clean=> 'Y' }
 }
 
-my %teleatlas_error = ( # USA_Geo_002 documentation
+my %ezlocate_error = ( # USA_Geo_002 documentation
   10  => 'State not found',
   11  => 'City not found',
   12  => 'Invalid street address',
@@ -338,35 +338,37 @@ my %teleatlas_error = ( # USA_Geo_002 documentation
   17  => 'Intersection not found', #unused?
 );
 
-sub standardize_teleatlas {
+sub standardize_ezlocate {
   my $self = shift;
   my $location = shift;
   my $class;
-  if ( $location->{country} eq 'US' ) {
-    $class = 'USA_Geo_004Tool';
-  }
-  elsif ( $location->{country} eq 'CA' ) {
-    $class = 'CAN_Geo_001Tool';
-  }
-  else { # shouldn't be a fatal error, just pass through unverified address
-    warn "standardize_teleatlas: address lookup in '".$location->{country}.
-         "' not available\n";
-    return $location;
-  }
+  #if ( $location->{country} eq 'US' ) {
+  #  $class = 'USA_Geo_004Tool';
+  #}
+  #elsif ( $location->{country} eq 'CA' ) {
+  #  $class = 'CAN_Geo_001Tool';
+  #}
+  #else { # shouldn't be a fatal error, just pass through unverified address
+  #  warn "standardize_teleatlas: address lookup in '".$location->{country}.
+  #       "' not available\n";
+  #  return $location;
+  #}
+  #my $path = $conf->config('teleatlas-path') || '';
+  #local @INC = (@INC, $path);
+  #eval "use $class;";
+  #if ( $@ ) {
+  #  die "Loading $class failed:\n$@".
+  #      "\nMake sure the TeleAtlas Perl SDK is installed correctly.\n";
+  #}
 
-  my $path = $conf->config('teleatlas-path') || '';
-  local @INC = (@INC, $path);
-  eval "use $class;";
-  if ( $@ ) {
-    die "Loading $class failed:\n$@".
-        "\nMake sure the TeleAtlas Perl SDK is installed correctly.\n";
-  }
+  $class = 'Geo::EZLocate'; # use our own library
+  eval "use $class";
+  die $@ if $@;
 
-  my $userid = $conf->config('teleatlas-userid')
-    or die "no teleatlas-userid configured\n";
-  my $password = $conf->config('teleatlas-password')
-    or die "no teleatlas-password configured\n";
-
+  my $userid = $conf->config('ezlocate-userid')
+    or die "no ezlocate-userid configured\n";
+  my $password = $conf->config('ezlocate-password')
+    or die "no ezlocate-password configured\n";
   
   my $tool = $class->new($userid, $password);
   my $match = $tool->findAddress(
@@ -375,9 +377,9 @@ sub standardize_teleatlas {
     $location->{state},
     $location->{zip}, #12345-6789 format is allowed
   );
-  warn "teleatlas returned match:\n".Dumper($match) if $DEBUG > 1;
+  warn "ezlocate returned match:\n".Dumper($match) if $DEBUG > 1;
   # error handling - B codes indicate success
-  die $teleatlas_error{$match->{MAT_STAT}}."\n"
+  die $ezlocate_error{$match->{MAT_STAT}}."\n"
     unless $match->{MAT_STAT} =~ /^B\d$/;
 
   {

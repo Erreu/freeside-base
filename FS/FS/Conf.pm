@@ -4056,7 +4056,7 @@ and customer address. Include units.',
     'type'        => 'select',
     'select_hash' => [ '' => '', 
                        'usps' => 'U.S. Postal Service',
-                       'teleatlas' => 'TeleAtlas',
+                       'ezlocate' => 'EZLocate',
                      ],
   },
 
@@ -4075,24 +4075,17 @@ and customer address. Include units.',
   },
 
   {
-    'key'         => 'teleatlas-path',
+    'key'         => 'ezlocate-userid',
     'section'     => 'UI',
-    'description' => 'Path to TeleAtlas libraries on the Freeside server.',
+    'description' => 'User ID for EZ-Locate service.  See <a href="http://www.geocode.com/">the TomTom website</a> for access and pricing information.',
     'type'        => 'text',
   },
 
   {
-    'key'         => 'teleatlas-userid',
+    'key'         => 'ezlocate-password',
     'section'     => 'UI',
-    'description' => 'User ID for TeleAtlas EZ-Locate service.  See <a href="http://www.geocode.com/">the Tele Atlas website</a> for access and pricing information.',
-    'type'        => 'text',
-  },
-
-  {
-    'key'         => 'teleatlas-password',
-    'section'     => 'UI',
-    'description' => 'Password for TeleAtlas EZ-Locate service.',
-    'type'        => 'text',
+    'description' => 'Password for EZ-Locate service.',
+    'type'        => 'text'
   },
 
   {
