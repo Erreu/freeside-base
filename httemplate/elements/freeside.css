@@ -335,3 +335,11 @@ div.package-marker-change_from {
   border-left: solid #bbffbb 30px;
   display: inline-block;
 }
+
+/* elements/location.html and co. */
+fieldset.location {
+  padding: 0px;
+  margin: 0px;
+  border: none;
+}
+

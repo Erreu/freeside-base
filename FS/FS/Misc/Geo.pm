@@ -342,7 +342,7 @@ sub standardize_uscensus {
     die "Geocoding did not find a matching address.\n";
   } else {
     warn Dumper($result) if $DEBUG;
-    die $result->error_message;
+    die $result->error_message."\n";
   }
 }
 

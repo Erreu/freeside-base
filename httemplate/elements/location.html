@@ -19,6 +19,9 @@ Example:
 
 </%doc>
 
+<SCRIPT SRC="<% $fsurl %>elements/jquery.deserialize.min.js"></SCRIPT>
+<SCRIPT SRC="<% $fsurl %>elements/polyfill.js"></SCRIPT>
+
 % if ( $opt{'alt_format'} ) {
 
 <TR>
@@ -324,6 +327,89 @@ Example:
   }
 
 </&>
+
+function Location(fieldset) {
+  if ( typeof fieldset == 'String' ) {
+    fieldset = $('#' + fieldset);
+  }
+  this.fieldset = $(fieldset);
+  var errorbox = document.createElement('DIV');
+  errorbox.className = 'error';
+  fieldset.append(errorbox); // after the <table>
+  $(errorbox).position({
+    my: 'left',
+    at: 'right+20px',
+    of: fieldset
+  });
+  this.errorbox = $(errorbox); // so we can find it
+
+  var img_tick = $('<IMG SRC="http://localhost/freeside/images/tick.png">');
+  var img_wait = $('<IMG SRC="http://localhost/freeside/images/wait-orange.gif">');
+
+  // get/set the serialized (URL parameter string) contents of the form fields
+  this.value = function(newvalue) {
+    if (newvalue) {
+      try {
+        this.fieldset.deserialize(newvalue);
+        this.errorbox.empty();
+        if ( newvalue['error'] ) {
+          this.errorbox.text(newvalue['error']);
+        } else {
+          this.errorbox.append(img_tick);
+        }
+      } catch(err) {
+        console.log("Couldn't parse returned data:\n" + newvalue);
+        // show an error also
+      }
+    }
+    return this.fieldset.serialize();
+  };
+
+  // send a standardization request and do something with the result
+  this.standardize = function(callback) {
+    this.errorbox.empty();
+    this.errorbox.append(img_wait);
+    $.ajax({
+      type: 'POST',
+      url: '<% $fsurl %>misc/address_standardize.cgi',
+      success: callback,
+      data: this.value()
+    });
+  };
+
+  // check if required fields are filled, and if so, standardize
+  var standardize_if_ready = function() {
+    var loc = this;
+    var ready = true;
+    var required_fields = this.fieldset.find(':data(required)');
+    for ( var i = 0; ready && i < required_fields.length; i++ ) {
+      if ( required_fields[i].prop('value').length == 0 ) {
+        ready = false;
+      }
+    }
+
+    if ( ready ) {
+      // pass the "value" method, prebound to the location object
+      this.standardize( this.value.bind(loc) );
+    }
+  };
+
+  // event handler; the Location object is passed in event.data
+  var location_change_timer;
+  var location_changed = function( ev ) {
+    if ( location_change_timer ) {
+      window.clearTimeout(location_change_timer);
+    }
+    location_change_timer = window.setTimeout(
+      standardize_if_ready.bind(ev.data),
+      2000
+    );
+  };
+
+  fieldset.find('input').on('change', this, location_changed);
+  fieldset.find('select').on('change', this, location_changed);
+}
+
 </SCRIPT>
 
 <%init>

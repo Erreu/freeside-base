@@ -43,6 +43,7 @@
   <TD>
 %#; padding-right:2px; vertical-align:top">
     <FONT CLASS="fsinnerbox-title"><% mt('Billing address') |h %></FONT>
+    <FIELDSET ID="bill_location" CLASS="location">
     <TABLE CLASS="fsinnerbox" WIDTH="100%">
     <& cust_main/before_bill_location.html, $cust_main &>
     <& /elements/location.html,
@@ -54,6 +55,7 @@
     &>
     <& cust_main/after_bill_location.html, $cust_main &>
     </TABLE>
+    </FIELDSET>
   </TD>
 </TR>
 <TR><TD STYLE="height:14px"></TD></TR>
@@ -68,7 +70,7 @@
            VALUE="Y"
            <% $has_ship_address ? '' : 'CHECKED' %>
     ><% mt('same as billing address') |h %>
-    <DIV ID="div_ship_location">
+    <FIELDSET ID="ship_location" CLASS="location">
       <TABLE WIDTH="100%" CLASS="fsinnerbox">
       <& cust_main/before_ship_location.html, $cust_main &>
       <& /elements/location.html,
@@ -91,7 +93,7 @@
         </TR>
 % }
       </TABLE>
-    </DIV>
+    </FIELDSET>
   </TD>
 </TR></TABLE>
 
@@ -99,15 +101,19 @@
 
 function samechanged(what) {
   if ( what.checked ) {
-    $('#div_ship_location').slideUp();
+    $('#ship_location').slideUp();
   } else {
-    $('#div_ship_location').slideDown();
+    $('#ship_location').slideDown();
   }
 }
 
 % if ( ! $has_ship_address ) {
-  $('#div_ship_location').hide();
+  $('#ship_location').hide();
 % }
+
+$().ready( function() {
+  window.bill_location = new Location($('fieldset#bill_location'));
+});
 
 </SCRIPT>
 
