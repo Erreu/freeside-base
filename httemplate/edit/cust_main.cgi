@@ -107,12 +107,14 @@ function samechanged(what) {
   }
 }
 
-% if ( ! $has_ship_address ) {
-  $('#ship_location').hide();
-% }
-
 $().ready( function() {
-  window.bill_location = new Location($('fieldset#bill_location'));
+  window.bill_location = new Location($('fieldset#bill_location'), 'bill_');
+  window.ship_location = new Location($('fieldset#ship_location'), 'ship_');
+
+  if ($('#same').prop('checked')) {
+    $('#ship_location').hide();
+  }
+
 });
 
 </SCRIPT>

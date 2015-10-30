@@ -5,7 +5,8 @@ my $conf = new FS::Conf;
 my $company_latitude  = $conf->config('company_latitude');
 my $company_longitude = $conf->config('company_longitude');
 
-my @fixups = ('standardize_locations');
+my @fixups = ();
+# 'standardize_locations');
 
 push @fixups, 'confirm_censustract_bill', 'confirm_censustract_ship'
     if $conf->exists('cust_main-require_censustract');

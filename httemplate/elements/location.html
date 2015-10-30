@@ -271,9 +271,10 @@ Example:
 % }
 %# Placeholders
 <& hidden.html, field => $pre.'cachenum', value => '' &>
-<& hidden.html, field => $pre.'addr_clean', value => '' &>
+<& hidden.html, field => $pre.'addr_clean', value => $object->get('addr_clean') &>
 
 <SCRIPT TYPE="text/javascript">
+// XXX some of this should go away after address standardization changes...
 <&| /elements/onload.js &>
   var clear_coords_ids = [
     '<%$pre%>latitude',
@@ -328,11 +329,16 @@ Example:
 
 </&>
 
-function Location(fieldset) {
+% if (! $m->notes('location_js') ) {
+%   $m->notes('location_js', 1);
+
+function Location(fieldset, prefix) {
   if ( typeof fieldset == 'String' ) {
     fieldset = $('#' + fieldset);
   }
   this.fieldset = $(fieldset);
+  this.prefix = prefix || '';
+
   var errorbox = document.createElement('DIV');
   errorbox.className = 'error';
   fieldset.append(errorbox); // after the <table>
@@ -343,8 +349,12 @@ function Location(fieldset) {
   });
   this.errorbox = $(errorbox); // so we can find it
 
-  var img_tick = $('<IMG SRC="http://localhost/freeside/images/tick.png">');
-  var img_wait = $('<IMG SRC="http://localhost/freeside/images/wait-orange.gif">');
+  var img_tick = $('<IMG SRC="<% $fsurl %>images/tick.png">');
+  var img_wait = $('<IMG SRC="<% $fsurl %>images/wait-orange.gif">');
+
+  if ( $('#' + prefix + 'addr_clean').prop('value') ) {
+    $(errorbox).append(img_tick);
+  }
 
   // get/set the serialized (URL parameter string) contents of the form fields
   this.value = function(newvalue) {
@@ -365,51 +375,63 @@ function Location(fieldset) {
     return this.fieldset.serialize();
   };
 
-  // send a standardization request and do something with the result
+  // send a standardization request and push the result into this.value()
   this.standardize = function(callback) {
     this.errorbox.empty();
     this.errorbox.append(img_wait);
     $.ajax({
       type: 'POST',
       url: '<% $fsurl %>misc/address_standardize.cgi',
-      success: callback,
+      success: this.value.bind(this),
       data: this.value()
     });
   };
 
-  // check if required fields are filled, and if so, standardize
-  var standardize_if_ready = function() {
-    var loc = this;
-    var ready = true;
-    var required_fields = this.fieldset.find(':data(required)');
-    for ( var i = 0; ready && i < required_fields.length; i++ ) {
-      if ( required_fields[i].prop('value').length == 0 ) {
-        ready = false;
-      }
+  var location_change_timer;
+
+  // check if required fields are filled, and if so, wait 2 seconds, then
+  // call "standardize"
+  var standardize_if_ready = function( ev ) {
+    // pull the location object back out
+    var loc = ev.data;
+
+    if ( location_change_timer ) {
+      console.log("reset timer...");
+      window.clearTimeout(location_change_timer);
     }
 
+    // require address1 and either (zip) or (city and state)
+    // before trying to standardize
+    var ready =
+         $('#' + loc.prefix + 'address1').val()
+      && (
+           (    $('#' + loc.prefix + 'city').val()
+             && $('#' + loc.prefix + 'state').val()
+           )
+           || $('#' + loc.prefix + 'zip').val()
+         )
+    ;
+
     if ( ready ) {
-      // pass the "value" method, prebound to the location object
-      this.standardize( this.value.bind(loc) );
+      console.log("start timer...");
+      location_change_timer = window.setTimeout( loc.standardize.bind(loc),
+                                                 2000 );
     }
   };
 
   // event handler; the Location object is passed in event.data
-  var location_change_timer;
-  var location_changed = function( ev ) {
-    if ( location_change_timer ) {
-      window.clearTimeout(location_change_timer);
-    }
-    location_change_timer = window.setTimeout(
-      standardize_if_ready.bind(ev.data),
-      2000
-    );
-  };
+  var location_changed = standardize_if_ready;
 
-  fieldset.find('input').on('change', this, location_changed);
-  fieldset.find('select').on('change', this, location_changed);
+  // bind only to the fields that are used in standardization
+  // (so that it's possible to manually edit coords, etc.)
+  var onchange_fields = 
+    [ 'address1', 'address2', 'city', 'state', 'zip', 'country' ];
+  for ( var i = 0; i < onchange_fields.length; i++ ) {
+    $('#' + prefix + onchange_fields[i]).on('change', this, location_changed);
+  }
 }
 
+% }
 </SCRIPT>
 
 <%init>
