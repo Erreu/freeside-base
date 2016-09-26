@@ -117,8 +117,24 @@ function initMap() {
       // then pop up an info box with the feature content
       info.close();
       info.setPosition(feature.getGeometry().get());
-      info.setContent(feature.getProperty('content'));
-      info.open(map);
+
+      if ( feature.getProperty('content') ) {
+        info.setContent(feature.getProperty('content'));
+      } else {
+        info.setContent('');
+      }
+
+      if ( feature.getProperty('url') ) {
+        $.ajax({
+          url: feature.getProperty('url'),
+          success: function(data) {
+            info.setContent(data);
+          }
+        });
+        info.open(map);
+      } else {
+        info.open(map);
+      }
     }
 
     // snap to feature ROI if it has one

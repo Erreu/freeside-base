@@ -49,15 +49,24 @@ foreach my $svc_broadband (@rows) {
   push @coord, $svc_broadband->altitude + 0
     if length($svc_broadband->altitude); # it's optional
 
+  my $svcnum = $svc_broadband->svcnum;
+  my $color = $svc_broadband->addr_status_color;
+
   push @features,
   {
-    id        => 'svc_broadband/'.$svc_broadband->svcnum,
+    id        => 'svc_broadband/'.$svcnum,
     geometry  => {
       type        => 'Point',
       coordinates => \@coord,
     },
     properties => {
-      content => include('.svc_broadband', $svc_broadband),
+      #content => include('.svc_broadband', $svc_broadband),
+      url   => $fsurl . 'view/svc_broadband-popup.html?' . $svcnum,
+      style => {
+        icon => {
+          fillColor => $color,
+        },
+      },
     },
   };
   # look up tower location and draw connecting line
@@ -85,8 +94,8 @@ foreach my $svc_broadband (@rows) {
       },
       properties  => {
         style       => {
-          strokeColor  => ($tower->color || 'green'),
-          strokeWeight => 2,
+          strokeColor  => $color,
+          strokeWeight => 1,
         },
       },
     };
@@ -135,7 +144,7 @@ foreach my $tower (values(%towers)) {
       style     => {
         icon => {
           path        => undef,
-          url         => $fsurl.'images/jcartier-antenna-square-21x51.png',
+          url         => $fsurl.'images/antenna-square-21x51.png',
           anchor      => { x => 10, y => 4 }
         },
       },
@@ -159,22 +168,6 @@ foreach my $sector (values %sectors) {
 };
 
 </%init>
-<%def .svc_broadband>
-% my $svc = shift;
-% my @label = $svc->cust_svc->label;
-<H3>
-  <a target="_blank" href="<% $fsurl %>view/svc_broadband.cgi?<% $svc->svcnum %>">
-    <% $label[0] |h %> #<% $svc->svcnum %> | <% $label[1] %>
-  </a>
-</H3>
-% my $cust_main = $svc->cust_main;
-<a target="_blank" href="<% $fsurl %>view/cust_main.cgi?<% $cust_main->custnum %>">
-<& /elements/small_custview.html, {
-  cust_main => $svc->cust_main,
-  #url => $fsurl.'view/cust_main.cgi',
-} &>
-</a>
-</%def>
 <%def .tower>
 % my $tower = shift;
 % my $can_edit = $FS::CurrentUser::CurrentUser->access_right('Configuration');
