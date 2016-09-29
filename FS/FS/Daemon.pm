@@ -204,7 +204,7 @@ sub daemon_reconnect {
   unless ($dbh && $dbh->ping) {
     warn "WARNING: connection to database lost, reconnecting...\n";
 
-    eval { $FS::UID::dbh = myconnect; };
+    eval { $FS::UID::dbh = myconnect(); };
 
     unless ( !$@ && $FS::UID::dbh && $FS::UID::dbh->ping ) {
       warn "WARNING: still no connection to database, sleeping for retry...\n";

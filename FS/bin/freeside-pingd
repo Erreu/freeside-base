@@ -5,6 +5,7 @@ use FS::Daemon ':all';
 use FS::UID qw(dbh adminsuidsetup);
 use FS::Record qw( dbh qsearch qsearchs );
 use FS::addr_status;
+use FS::Conf;
 use Getopt::Std;
 use Net::Ping;
 
@@ -14,11 +15,12 @@ my @TARGETS = (
   # could add others here
 );
 
-my $interval = 300; # seconds
 my $timeout  = 5.0; # seconds
 
 # useful opts: scan interval, timeout, verbose, max forks
 # maybe useful opts: interface, protocol, packet size, no-fork
+
+my $interval;
 
 our %opt;
 getopts('vxi:', \%opt);
@@ -40,6 +42,15 @@ sub debug {
 
 adminsuidsetup($user);
 $FS::UID::AutoCommit = 1;
+
+if ( !$interval ) {
+  my $conf = FS::Conf->new;
+  $interval = $conf->config('pingd-interval');
+  if ( !$interval ) {
+    debug("no pingd-interval configured; exiting");
+    exit(0);
+  }
+}
 
 while(1) {
   daemon_reconnect();
