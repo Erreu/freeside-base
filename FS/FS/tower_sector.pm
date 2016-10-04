@@ -4,6 +4,7 @@ use base qw( FS::Record );
 use Class::Load qw(load_class);
 use File::Path qw(make_path);
 use Data::Dumper;
+use Cpanel::JSON::XS;
 
 use strict;
 
@@ -75,10 +76,13 @@ The antenna beam elevation in degrees below horizontal.
 
 The -3dB vertical beamwidth in degrees.
 
-=item margin
+=item db_high
 
-The signal loss margin allowed on the sector, in dB. This is normally
-transmitter EIRP minus receiver sensitivity.
+The signal loss margin to treat as "high quality".
+
+=item db_low
+
+The signal loss margin to treat as "low quality".
 
 =item image 
 
@@ -149,7 +153,8 @@ sub check {
     || $self->ut_numbern('v_width')
     || $self->ut_numbern('downtilt')
     || $self->ut_floatn('sector_range')
-    || $self->ut_numbern('margin')
+    || $self->ut_numbern('db_high')
+    || $self->ut_numbern('db_low')
     || $self->ut_anything('image')
     || $self->ut_sfloatn('west')
     || $self->ut_sfloatn('east')
@@ -201,7 +206,7 @@ sub need_fields_for_coverage {
     downtilt  => 'Downtilt',
     width     => 'Horiz. width',
     v_width   => 'Vert. width',
-    margin    => 'Signal margin',
+    db_high   => 'High quality',
     latitude  => 'Latitude',
     longitude => 'Longitude',
   );
@@ -261,6 +266,7 @@ sub process_generate_coverage {
   my $tower = $sector->tower;
 
   load_class('Map::Splat');
+
   # since this is still experimental, put it somewhere we can find later
   my $workdir = "$FS::UID::cache_dir/cache.$FS::UID::datasrc/" .
                 "generate_coverage/sector$sectornum-". time;
@@ -274,9 +280,9 @@ sub process_generate_coverage {
     h_width     => $sector->width,
     tilt        => $sector->downtilt,
     v_width     => $sector->v_width,
-    max_loss    => $sector->margin,
-    min_loss    => $sector->margin - 80,
+    db_levels   => [ $sector->db_low, $sector->db_high ],
     dir         => $workdir,
+    #simplify    => 0.0004, # remove stairstepping in SRTM3 data?
   );
   $splat->calculate;
 
@@ -284,10 +290,29 @@ sub process_generate_coverage {
   foreach (qw(west east south north)) {
     $sector->set($_, $box->{$_});
   }
-  $sector->set('image', $splat->mask);
-  # mask returns a PNG where everything below max_loss is solid colored,
-  # and everything above it is transparent. More useful for our purposes.
+  $sector->set('image', $splat->png);
   my $error = $sector->replace;
+  die $error if $error;
+
+  foreach ($sector->sector_coverage) {
+    $error = $_->delete;
+    die $error if $error;
+  }
+  # XXX undecided whether Map::Splat should even do this operation
+  # or how to store it
+  # or anything else
+  $DB::single = 1;
+  my $data = decode_json( $splat->polygonize_json );
+  for my $feature (@{ $data->{features} }) {
+    my $db = $feature->{properties}{level};
+    my $coverage = FS::sector_coverage->new({
+      sectornum => $sectornum,
+      db_loss   => $db,
+      geometry  => encode_json($feature->{geometry})
+    });
+    $error = $coverage->insert;
+  }
+
   die $error if $error;
 }
 

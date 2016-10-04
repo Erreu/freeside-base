@@ -143,7 +143,7 @@ default sector.
 sub process_o2m {
   my $self = shift;
   my %opt = @_;
-  my $params = $opt{params};
+  my $params = +{ %{$opt{params}} };
 
   # Adjust to make sure our default sector is in the list.
   my $default_sector = $self->default_sector

@@ -26,7 +26,23 @@ var baseMarkerStyle = {
     strokeWeight: 1,
   },
 };
-var featureStyle = function(feature) {
+
+var baseCoverageStyle = {
+  clickable: false,
+  strokeWeight: 0.2,
+};
+
+var coverageStyle = function(feature) {
+  var s = $.extend(true, {}, baseCoverageStyle, feature.getProperty('style'));
+  if ( feature.getProperty('low') ) {
+    s.fillOpacity = 0.1;
+  } else if ( feature.getProperty('high') ) {
+    s.fillOpacity = 0.4;
+  }
+  return s;
+}
+
+var markerStyle = function(feature) {
   return $.extend(true, {}, baseMarkerStyle, feature.getProperty('style'));
 }
 
@@ -78,11 +94,12 @@ var zoomLayer = function(layer) {
 // set up the main layer
 var tower_data = new google.maps.Data;
 tower_data.addGeoJson(<% encode_json($tower_data) %>);
-tower_data.setStyle(featureStyle);
+tower_data.setStyle(markerStyle);
 tower_data.addListener('click', clickHandler);
 
 var towernums = <% encode_json(\@towernums) %>;
 var tower_svc_data = {};
+var tower_coverage_data = {};
 
 var revertLayerStyles = function() {
   // mostly, just to re-hide all connecting lines when something is hidden
@@ -97,13 +114,20 @@ towernums.forEach(function(towernum) {
   layer.loadGeoJson(
     '<% $fsurl %>search/svc_broadband-json.cgi?towernum=' + towernum
   );
-  layer.setStyle(featureStyle);
+  layer.setStyle(markerStyle);
   layer.addListener('click', clickHandler);
   layer.addListener('click', function(ev) { // show connecting line
     var id = ev.feature.getId();
     var f_line = layer.getFeatureById(id + '/line');
     layer.overrideStyle(f_line, { visible: true});
   });
+
+  layer = new google.maps.Data;
+  layer.loadGeoJson(
+    '<% $fsurl %>misc/sector_coverage-json.cgi?towernum=' + towernum
+  );
+  layer.setStyle(coverageStyle);
+  tower_coverage_data[towernum] = layer;
 });
 
 function show_svc_data(towernum, show) {
@@ -111,6 +135,14 @@ function show_svc_data(towernum, show) {
     tower_svc_data[towernum].setMap(window.map);
   } else {
     tower_svc_data[towernum].setMap(null);
+  }
+};
+
+function show_coverage_data(towernum, show) {
+  if (show) {
+    tower_coverage_data[towernum].setMap(window.map);
+  } else {
+    tower_coverage_data[towernum].setMap(null);
   }
 };
 
@@ -122,6 +154,14 @@ infoWindow.addListener('domready', function(ev) {
   show_services_box.prop('checked', is_shown);
   show_services_box.on('click', function(clickev) {
     show_svc_data(towernum, this.checked);
+  });
+
+  var show_coverage_box = $('input[name=show_coverage]');
+  var towernum = show_coverage_box.val();
+  var is_shown = tower_coverage_data[towernum].getMap() == map;
+  show_coverage_box.prop('checked', is_shown);
+  show_coverage_box.on('click', function(clickev) {
+    show_coverage_data(towernum, this.checked);
   });
 });
 
@@ -256,4 +296,7 @@ Tower #<% $tower->towernum %> | <% $tower->towername %>
 <% emt('Show services') %>
 ( <% $num_up %> <SPAN CLASS="is_up"><% emt('UP') %></SPAN>
 <% $num_down %> <SPAN CLASS="is_down"><% emt('DOWN') %></SPAN> )
+<br>
+<input type="checkbox" name="show_coverage" value="<% $tower->towernum %>">
+<% emt('Show coverage') %>
 </%def>
