@@ -4,9 +4,10 @@
   
 <style>
 html { height: 100% }
-#map_canvas { height: 100%;  }
+#map_canvas { margin: 0 auto; height: 100%;  }
 span.is_up { font-weight: bold; color: green }
 span.is_down { font-weight: bold; color: red }
+#search_location { width: 300px }
 </style>
 
 <div id="map_canvas"></div>
@@ -172,8 +173,8 @@ var initMap = function() {
   var canvas = $('#map_canvas');
 
   // set window height correctly
-  canvas.css('height', window.innerHeight - (canvas.offset().top) - 1);
-  canvas.css('width', window.innerWidth - (canvas.offset().left) * 2);
+  canvas.css('height', window.innerHeight - (canvas.offset().top) - 30);
+  canvas.css('width', window.innerWidth - 30);
 
   map = new google.maps.Map(canvas[0], { zoom: 6 });
 
@@ -194,7 +195,7 @@ var initMap = function() {
         map.fitBounds(places[0].geometry.viewport);
       } else {
         map.setCenter(places[0].geometry.location);
-        map.setZoom(13);
+        map.setZoom(14);
       }
     }
   });
@@ -225,7 +226,6 @@ my @towers = qsearch('tower', {
   'longitude' => { op=>'!=', value=>''},
 });
 my %sectors; # towernum => arrayref
-my @overlays;
 my @towernums;
 
 foreach my $tower (@towers) {
@@ -257,17 +257,6 @@ foreach my $tower (@towers) {
   };
 
   $sectors{$towernum} = [ $tower->tower_sector ];
-  foreach my $sector (@{ $sectors{$towernum} }) {
-    if ( length($sector->image) > 0 ) {
-      my $o = {
-        url => $fsurl.'view/sector_map-png.cgi?' . $sector->sectornum
-      };
-      foreach (qw(south north west east)) {
-        $o->{$_} = $sector->get($_) + 0;
-      }
-      push @overlays, $o;
-    };
-  };
 
 } # foreach $tower
 

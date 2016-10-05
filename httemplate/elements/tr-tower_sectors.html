@@ -31,7 +31,7 @@ if ( $cgi->param('error') ) {
 my $id = $opt{id} || $opt{field} || 'sectornum';
 
 </%init>
-<& tablebreak-tr-title.html, %opt &>
+<& tablebreak-tr-title.html, value => 'Sectors' &>
 
 <style>
   .ui-tabs-nav a {
@@ -110,11 +110,11 @@ $(function() {
   var tabs = $( '#'+id+'_tabs' ).tabs();
 
   function changedSectorName() {
-    var this_panel = $(this).parent();
+    var this_panel = $(this).closest('div');
     var this_tab = tabs.find('#' + this_panel.prop('id') + '_tab');
     // if this is the last panel, make a new one
     if (this_panel.next().length == 0) {
-      addSector(this_panel);
+      addSector();
     }
     // and update the current tab's text with the sector name
     this_tab.find('a').text($(this).val());

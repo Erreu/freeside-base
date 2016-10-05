@@ -17,7 +17,7 @@ foreach my $sector (@sectors) {
   my $sectornum = $sector->sectornum;
   my $low = $sector->db_low;
   my $high = $sector->db_high;
-  my $color = $sector->tower->color || 'green';
+  my $color = '#' . ($sector->tower->color || 'ffffff');
   foreach my $coverage ( $sector->sector_coverage ) {
     #note $coverage->geometry is already JSON
     my $level = $coverage->db_loss;
