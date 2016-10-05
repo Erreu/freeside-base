@@ -114,6 +114,38 @@ sub table { 'tower_sector'; }
 Adds this record to the database.  If there is an error, returns the error,
 otherwise returns false.
 
+=cut
+
+sub insert {
+  my $self = shift;
+  my $error = $self->SUPER::insert;
+  return $error if $error;
+
+  if (scalar($self->need_fields_for_coverage) == 0) {
+    $self->queue_generate_coverage;
+  }
+}
+
+sub replace {
+  my $self = shift;
+  my $old = shift || $self->replace_old;
+  my $regen_coverage = 0;
+  if ( !$self->get('no_regen') ) {
+    foreach (qw(height freq_mhz direction width downtilt
+                v_width db_high db_low))
+    {
+      $regen_coverage = 1 if ($self->get($_) ne $old->get($_));
+    }
+  }
+
+  my $error = $self->SUPER::replace($old);
+  return $error if $error;
+
+  if ($regen_coverage) {
+    $self->queue_generate_coverage;
+  }
+}
+
 =item delete
 
 Delete this record from the database.
@@ -227,6 +259,9 @@ Starts a job to recalculate the coverage map.
 
 sub queue_generate_coverage {
   my $self = shift;
+  my $need_fields = join(',', $self->need_fields_for_coverage);
+  return "Sector needs fields $need_fields" if $need_fields;
+  $self->set('no_regen', 1); # avoid recursion
   if ( length($self->image) > 0 ) {
     foreach (qw(image west south east north)) {
       $self->set($_, '');
@@ -263,6 +298,7 @@ sub process_generate_coverage {
   my $sectornum = $param->{sectornum};
   my $sector = FS::tower_sector->by_key($sectornum)
     or die "sector $sectornum does not exist";
+  $sector->set('no_regen', 1); # avoid recursion
   my $tower = $sector->tower;
 
   load_class('Map::Splat');
