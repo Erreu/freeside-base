@@ -77,6 +77,17 @@ var clickHandler = function(ev) {
   }
 };
 
+var dblclickHandler = function(ev) {
+  // do everything as for single click
+  clickHandler(ev);
+  // plus zoom to the feature
+  var feature = ev.feature;
+  if (feature.getGeometry().getType() == 'Point') {
+    map.setCenter(feature.getGeometry().get());
+    map.setZoom(12);
+  }
+};
+
 var zoomLayer = function(layer) {
   // takes a google.maps.Data object
   var bounds = new google.maps.LatLngBounds;
@@ -97,6 +108,7 @@ var tower_data = new google.maps.Data;
 tower_data.addGeoJson(<% encode_json($tower_data) %>);
 tower_data.setStyle(markerStyle);
 tower_data.addListener('click', clickHandler);
+tower_data.addListener('dblclick', dblclickHandler);
 
 var towernums = <% encode_json(\@towernums) %>;
 var tower_svc_data = {};

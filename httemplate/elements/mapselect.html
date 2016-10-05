@@ -21,7 +21,7 @@ my %opt = @_;
   <input type="hidden" class="gllpLatitude" id="map_lat">
   <input type="hidden" class="gllpLongitude" id="map_lon">
   <input type="hidden" class="gllpElevation" id="map_alt">
-  <input type="hidden" class="gllpZoom" id="map_zoom" value="12">
+  <input type="hidden" class="gllpZoom" id="map_zoom">
   <div class="gllpMap"></div>
 </fieldset>
 <br/>
@@ -31,14 +31,6 @@ my %opt = @_;
 $(function() {
   var container = $('#latlonpicker');
   var map = gMapsLatLonPickerState['latlonpicker'].vars.map;
-
-  var lat = $('#latitude');
-  var lon = $('#longitude');
-  var alt = $('#altitude');
-  $('#map_lat').val(lat.val());
-  $('#map_lon').val(lon.val());
-  $('#map_alt').val(alt.val());
-  $(document).trigger('gllp_update_fields');
 
   $(document).on('location_changed', function(ev, obj) {
     lat.val($('#map_lat').val());
@@ -68,5 +60,23 @@ $(function() {
       $(document).trigger('gllp_update_fields');
     }
   });
+
+  // load initial values
+  var lat = $('#latitude');
+  var lon = $('#longitude');
+  var alt = $('#altitude');
+  if (lat.val() && lon.val()) {
+    $('#map_lat').val(lat.val());
+    $('#map_lon').val(lon.val());
+    $('#map_alt').val(alt.val());
+    $('#map_zoom').val(12);
+  } else {
+    // uh. North America? that's where Map::Splat works right now.
+    $('#map_lat').val(54.5259614);
+    $('#map_lon').val(-105.25511870000003);
+    $('#map_zoom').val(3);
+  }
+  $(document).trigger('gllp_update_fields');
+
 });
 </script>
